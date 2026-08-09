@@ -65,6 +65,35 @@ export function grantCredits(userId, amount) {
 }
 
 export const getCredits = (userId) => users[userId]?.credits ?? 0;
+export const getPoints = (userId) => users[userId]?.points ?? 0;
+
+/** Cagnotte dépensable, alimentée à chaque partie, distincte du classement. */
+export function grantPoints(userId, points) {
+  const user = users[userId];
+  if (!user || points <= 0) return;
+  user.points = (user.points ?? 0) + points;
+  saveUsers();
+}
+
+/**
+ * Convertit des points en tickets bonus.
+ * Le classement n'est pas touché : seule la cagnotte diminue.
+ */
+export function exchangePoints(userId, points, rate) {
+  const user = users[userId];
+  if (!user) return { error: "NOT_FOUND" };
+
+  const demande = Math.floor(Number(points) || 0);
+  if (demande < rate) return { error: "MIN_NOT_REACHED" };
+  if ((user.points ?? 0) < demande) return { error: "NOT_ENOUGH_POINTS" };
+
+  const tickets = Math.floor(demande / rate);
+  const consommes = tickets * rate;           // pas de perte sur l'appoint
+  user.points -= consommes;
+  user.credits = (user.credits ?? 0) + tickets;
+  saveUsers();
+  return { tickets, consommes, points: user.points, credits: user.credits };
+}
 
 /* ---------- administration ---------- */
 
@@ -76,6 +105,7 @@ export function adminUpdateUser(id, changes) {
   if (!user) return null;
   if (typeof changes.credits === "number") user.credits = Math.max(0, Math.round(changes.credits));
   if (typeof changes.totalScore === "number") user.totalScore = Math.max(0, Math.round(changes.totalScore));
+  if (typeof changes.points === "number") user.points = Math.max(0, Math.round(changes.points));
   if (typeof changes.pseudo === "string" && changes.pseudo.trim().length >= 2) {
     user.pseudo = changes.pseudo.trim().slice(0, 20);
     user.pseudoChosen = true;
@@ -104,7 +134,7 @@ export function grantAll(amount) {
 export function addRankedPoints(userId, points) {
   const user = users[userId];
   if (!user) return;
-  user.totalScore = (user.totalScore || 0) + points;
+  user.totalScore = (user.totalScore || 0) + points;   // classement : ne baisse jamais
   user.gamesPlayed = (user.gamesPlayed || 0) + 1;
   saveUsers();
 }
@@ -165,7 +195,7 @@ export function mountAuth(app) {
     console.warn("⚠️  X_CLIENT_ID absent : connexion de test activée. NE PAS DÉPLOYER AINSI.");
     app.get("/auth/x/login", (_req, res) => {
       const id = `dev-${crypto.randomBytes(4).toString("hex")}`;
-      users[id] = { id, pseudo: "", pseudoChosen: false, avatar: "🎬", totalScore: 0, gamesPlayed: 0, credits: STARTING_CREDITS };
+      users[id] = { id, pseudo: "", pseudoChosen: false, avatar: "🎬", totalScore: 0, gamesPlayed: 0, credits: STARTING_CREDITS, points: 0 };
       saveUsers();
       createSession(res, users[id]);
       res.redirect("/");
@@ -218,7 +248,7 @@ export function mountAuth(app) {
 
       const id = `x:${data.id}`;
       users[id] = users[id] || { id, pseudo: "", pseudoChosen: false, suggestion: data.username.slice(0, 20),
-        avatar: "🎬", totalScore: 0, gamesPlayed: 0, credits: STARTING_CREDITS };
+        avatar: "🎬", totalScore: 0, gamesPlayed: 0, credits: STARTING_CREDITS, points: 0 };
       users[id].xHandle = data.username;
       saveUsers();
       createSession(res, users[id]);
