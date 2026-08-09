@@ -113,6 +113,16 @@
   .wallet b{color:var(--beam);font-family:'JetBrains Mono',monospace;font-size:15px}
   .hints button.broke{opacity:.4;border-style:dotted}
   /* Chat */
+  #confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:60;display:none}
+  .bravo{position:fixed;top:22%;left:50%;transform:translateX(-50%);z-index:61;pointer-events:none;
+    font-family:'Anton',sans-serif;text-transform:uppercase;letter-spacing:.05em;
+    font-size:clamp(30px,9vw,54px);color:var(--beam);text-shadow:0 6px 30px rgba(0,0,0,.7);
+    animation:bravo 1.6s ease-out forwards}
+  @keyframes bravo{
+    0%{opacity:0;transform:translateX(-50%) scale(.6)}
+    18%{opacity:1;transform:translateX(-50%) scale(1.08)}
+    30%{transform:translateX(-50%) scale(1)}
+    100%{opacity:0;transform:translateX(-50%) translateY(-26px) scale(1)}}
   #chatToggle{position:fixed;right:18px;bottom:18px;width:56px;height:56px;border-radius:50%;
     font-size:24px;padding:0;box-shadow:0 8px 24px rgba(0,0,0,.5);z-index:20}
   #chatToggle .badge{position:absolute;top:-4px;right:-4px;background:var(--ticket);color:#fff;
@@ -348,6 +358,8 @@
     </div>
   </section>
 
+  <canvas id="confetti" aria-hidden="true"></canvas>
+
   <button id="chatToggle" class="hidden" title="Chat de la partie">✉️<span class="badge hidden" id="chatBadge">0</span></button>
   <div id="chatPanel" class="hidden">
     <p class="tag" style="margin:0">Chat de la partie</p>
@@ -469,6 +481,62 @@ $("btnSaveProfile").onclick = async () => {
 };
 $("btnToMenu").onclick = () => show("menu");
 
+/* ---------- Félicitations ---------- */
+const sobre = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const COULEURS = ["#F5B942","#E4586E","#4ECDC4","#EDE8DC","#9B7BF0"];
+
+function confettis(){
+  if (sobre) return;
+  const cv = $("confetti"), ctx = cv.getContext("2d");
+  cv.width = innerWidth; cv.height = innerHeight;
+  cv.style.display = "block";
+
+  // deux gerbes partant du bas, comme des canons de scène
+  const pieces = [];
+  for (const depart of [0.2, 0.8]) {
+    for (let i = 0; i < 70; i++) {
+      const angle = -Math.PI/2 + (Math.random()-0.5) * 1.1 + (depart < .5 ? .35 : -.35);
+      const vitesse = 9 + Math.random() * 9;
+      pieces.push({
+        x: cv.width * depart, y: cv.height + 10,
+        vx: Math.cos(angle) * vitesse, vy: Math.sin(angle) * vitesse,
+        l: 5 + Math.random() * 7, h: 8 + Math.random() * 10,
+        rot: Math.random() * 6.28, dRot: (Math.random()-0.5) * 0.35,
+        c: COULEURS[(Math.random() * COULEURS.length) | 0],
+      });
+    }
+  }
+
+  const debut = performance.now();
+  (function anime(t){
+    const age = t - debut;
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    for (const p of pieces) {
+      p.vy += 0.32;            // gravité
+      p.vx *= 0.995;           // frottement de l'air
+      p.x += p.vx; p.y += p.vy; p.rot += p.dRot;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.globalAlpha = Math.max(0, 1 - age / 2600);
+      ctx.fillStyle = p.c;
+      ctx.fillRect(-p.l/2, -p.h/2, p.l, p.h);
+      ctx.restore();
+    }
+    if (age < 2600) requestAnimationFrame(anime);
+    else { ctx.clearRect(0,0,cv.width,cv.height); cv.style.display = "none"; }
+  })(debut);
+}
+
+function bravo(points){
+  confettis();
+  const el = document.createElement("div");
+  el.className = "bravo";
+  el.textContent = `Bravo ! +${points}`;
+  document.body.append(el);
+  setTimeout(() => el.remove(), 1700);
+}
+
 /* ---------- Chat de la partie ---------- */
 let chatUnread = 0;
 const chatOpen = () => !$("chatPanel").classList.contains("hidden");
@@ -504,7 +572,7 @@ socket.on("chat:message", ({pseudo, avatar, text}) => {
 socket.on("chat:blocked", () =>
   chatLine("Message bloqué : il contenait la réponse de la manche en cours.", "sys"));
 
-/** Le chat n'existe que dans les parties à plusieurs. */
+/** Le chat est disponible dès qu'on est dans un salon. */
 function setChatVisible(on){
   $("chatToggle").classList.toggle("hidden", !on);
   if (!on){ $("chatPanel").classList.add("hidden"); $("chatLog").innerHTML = ""; chatUnread = 0; }
@@ -536,7 +604,7 @@ document.querySelectorAll(".mode").forEach(btn => btn.onclick = () => {
     if (!res?.ok) return ($("joinError").textContent =
       "Aucun film disponible pour ce niveau — choisissez-en un autre.");
     state.code = res.code; state.mode = mode;
-    setChatVisible(!["solo", "ranked"].includes(mode));
+    setChatVisible(true);
     if (mode === "solo" || mode === "ranked") return; // démarre tout seul
     renderLobby(res.state); show("lobby");
   });
@@ -638,6 +706,7 @@ function renderChoices(list){
       if (!res?.ok) return;
       state.answered = true;
       btn.classList.add(res.correct ? "good" : "bad");
+      if (res.correct) bravo(res.points);
       $("guessFeedback").textContent = res.correct
         ? `Trouvé ! +${res.points} points`
         : "Mauvaise réponse — la manche est terminée pour vous.";
