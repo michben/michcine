@@ -36,6 +36,7 @@ const CONFIG = {
   HINT_CREDITS: { year: 1, director: 1, actors: 2, poster: 2 },          // en crédits
   MAX_PLAYERS: 16,
   GRACE_AFTER_FIRST_MS: 15_000,   // délai laissé aux autres après la première bonne réponse
+  CHOICE_RATIO: 0.6,              // un titre saisi à la main rapporte plus qu'un choix cliqué
   TIP_URL: process.env.TIP_URL || "https://buymeacoffee.com/votre-pseudo",
 };
 
@@ -112,6 +113,7 @@ function sanitizeMovie(body) {
     director: String(body.director || "").trim(),
     actors: String(body.actors || "").trim(),
     poster: String(body.poster || "").trim(),
+    still: String(body.still || "").trim(),
   };
 }
 
@@ -158,6 +160,30 @@ function generateRoomCode() {
     ).join("");
   } while (rooms.has(code));
   return code;
+}
+
+/**
+ * Quatre propositions : la bonne, plus trois leurres pris de préférence
+ * dans la même décennie — sinon le bon titre saute aux yeux.
+ */
+function buildChoices(movie) {
+  const memeEpoque = movies.filter(
+    (m) => m.id !== movie.id && m.year && movie.year && Math.abs(m.year - movie.year) <= 12
+  );
+  const vivier = (memeEpoque.length >= 3 ? memeEpoque : movies.filter((m) => m.id !== movie.id))
+    .slice()
+    .sort(() => Math.random() - 0.5);
+
+  const leurres = [];
+  for (const m of vivier) {
+    if (leurres.length >= 3) break;
+    if (leurres.some((l) => l.title === m.title) || m.title === movie.title) continue;
+    leurres.push(m);
+  }
+
+  return [movie, ...leurres]
+    .map((m) => ({ id: m.id, title: m.title }))
+    .sort(() => Math.random() - 0.5);
 }
 
 /** Motif du titre : un tiret par lettre, espaces et ponctuation conservés. */
@@ -217,6 +243,7 @@ function startRound(room) {
 
   room.status = "playing";
   room.currentMovie = movie;
+  room.choices = buildChoices(movie);
   room.startedAt = Date.now();
   for (const p of room.players.values()) { p.hasAnswered = false; p.hints = []; }
 
@@ -228,6 +255,7 @@ function startRound(room) {
     duration: CONFIG.ROUND_DURATION_MS,
     hintCosts: CONFIG.HINT_COSTS,
     hintCredits: CONFIG.HINT_CREDITS,
+    choices: room.choices,
   });
 
   clearTimeout(room.timer);
@@ -335,23 +363,37 @@ io.on("connection", (socket) => {
       return cb?.({ ok: false, error: "NO_CREDITS" });
 
     player.hints.push(type);
-    cb?.({ ok: true, type, value: room.currentMovie[type], credits: getCredits(player.userId) });
+    const value = type === "poster"
+      ? (room.currentMovie.still || room.currentMovie.poster)   // le "still" ne porte pas le titre
+      : room.currentMovie[type];
+    cb?.({ ok: true, type, value, credits: getCredits(player.userId) });
   });
 
-  socket.on("answer:submit", ({ code, guess }, cb) => {
+  socket.on("answer:submit", ({ code, guess, choiceId }, cb) => {
     const room = rooms.get(code);
     const player = room?.players.get(socket.id);
     if (!room || !player || room.status !== "playing" || player.hasAnswered) return cb?.({ ok: false });
 
-    const guessed = normalize(guess);
-    const correct = room.currentMovie.acceptedAnswers.some((a) => normalize(a) === guessed);
-    if (!correct) return cb?.({ ok: true, correct: false });
+    const parClic = choiceId !== undefined && choiceId !== null;
+    const correct = parClic
+      ? Number(choiceId) === room.currentMovie.id
+      : room.currentMovie.acceptedAnswers.some((a) => normalize(a) === normalize(guess));
+
+    // un clic est définitif : sinon il suffirait de cliquer les quatre cases
+    if (!correct) {
+      if (!parClic) return cb?.({ ok: true, correct: false });
+      player.hasAnswered = true;
+      io.to(room.code).emit("player:answered", { id: player.id, pseudo: player.pseudo, team: player.team, points: 0 });
+      if ([...room.players.values()].every((p) => p.hasAnswered)) endRound(room);
+      return cb?.({ ok: true, correct: false, final: true });
+    }
 
     player.hasAnswered = true;
-    const points = computeScore({ elapsedMs: Date.now() - room.startedAt, hintsUsed: player.hints });
+    let points = computeScore({ elapsedMs: Date.now() - room.startedAt, hintsUsed: player.hints });
+    if (parClic) points = Math.max(30, Math.round(points * CONFIG.CHOICE_RATIO));
     player.score += points;
 
-    cb?.({ ok: true, correct: true, points });
+    cb?.({ ok: true, correct: true, points, movieId: room.currentMovie.id });
     io.to(room.code).emit("player:answered", { id: player.id, pseudo: player.pseudo, team: player.team, points });
 
     const tousTrouve = [...room.players.values()].every((p) => p.hasAnswered);

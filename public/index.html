@@ -51,6 +51,16 @@
   .beam{height:4px;background:var(--card);border-radius:99px;overflow:hidden;margin-bottom:18px}
   .beam i{display:block;height:100%;width:100%;transform-origin:left;background:linear-gradient(90deg,var(--ticket),var(--beam));transition:transform .25s linear}
   .synopsis{font-size:clamp(17px,4.4vw,22px);line-height:1.5;margin:0}
+  .choices{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px}
+  .choices button{background:var(--card);color:var(--chalk);border:1px solid rgba(237,232,220,.14);
+    font-weight:500;font-size:15px;padding:16px 12px;text-align:center;line-height:1.3;min-height:64px}
+  .choices button:hover:not(:disabled){border-color:var(--beam)}
+  .choices button.good{background:rgba(78,205,196,.16);border-color:var(--teal);color:var(--teal);font-weight:700}
+  .choices button.bad{background:rgba(228,88,110,.14);border-color:var(--ticket);color:var(--ticket)}
+  .typed{margin-top:16px}
+  .typed summary{cursor:pointer;color:var(--muted);font-size:13px;letter-spacing:.1em;text-transform:uppercase;list-style:none}
+  .typed summary::-webkit-details-marker{display:none}
+  .typed summary::before{content:"＋ ";color:var(--beam)}
   .hints{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
   .hints button{background:transparent;color:var(--chalk);border:1px dashed rgba(245,185,66,.45);font-weight:500;padding:10px 13px;font-size:14px}
   .hints button.bought{border-style:solid;border-color:var(--beam);color:var(--beam)}
@@ -59,7 +69,7 @@
   .feedback.bad{color:var(--ticket)}.feedback.good{color:var(--beam)}
   .reveal{font-family:'Anton',sans-serif;font-size:clamp(24px,6vw,34px);text-transform:uppercase;color:var(--beam);margin:4px 0 0;letter-spacing:.03em}
   .poster{width:140px;border-radius:10px;display:block;margin-top:14px;box-shadow:0 12px 30px rgba(0,0,0,.5)}
-  .poster.blurred{filter:blur(7px) saturate(.85)}
+  #hintPoster{width:min(100%,340px);aspect-ratio:16/9;object-fit:cover}
   ol.rank{list-style:none;counter-reset:r;padding:0;margin:14px 0 0}
   ol.rank li{counter-increment:r;display:flex;align-items:center;gap:10px;padding:11px 0;border-top:1px solid rgba(237,232,220,.1)}
   ol.rank li::before{content:counter(r);font-family:'JetBrains Mono',monospace;color:var(--muted);width:22px}
@@ -91,8 +101,6 @@
   .wallet{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--muted);
     background:var(--card);border-radius:999px;padding:7px 14px;margin-top:10px}
   .wallet b{color:var(--beam);font-family:'JetBrains Mono',monospace;font-size:15px}
-  #soundToggle{position:fixed;left:18px;bottom:18px;width:44px;height:44px;border-radius:50%;padding:0;
-    font-size:18px;background:var(--card);color:var(--chalk);border:1px solid rgba(237,232,220,.18);z-index:20}
   .hints button.broke{opacity:.4;border-style:dotted}
   .pattern{font-family:'JetBrains Mono',monospace;font-size:clamp(19px,5vw,26px);color:var(--beam);
     letter-spacing:.14em;margin:16px 0 0;word-break:break-word}
@@ -120,6 +128,31 @@
   .xbtn.ghostlink{background:transparent;color:var(--chalk);border:1px solid rgba(237,232,220,.25);font-weight:500}
   ul.how{list-style:none;padding:0;margin:0;color:var(--muted);font-size:15px;line-height:1.6}
   ul.how b{color:var(--beam);margin-right:6px}
+  /* Téléphones : cibles tactiles plus larges, chat plein écran, moins de marges. */
+  @media (max-width:600px){
+    .wrap{padding:18px 14px 96px}
+    .card{padding:16px;border-radius:12px}
+    .row{flex-wrap:wrap}
+    button,input{min-height:48px}
+    .flap{width:46px;height:60px;font-size:26px}
+    .mode{padding:14px;gap:10px}
+    .mode span.ic{font-size:22px}
+    .hints{gap:6px}
+      .hints button{flex:1 1 calc(50% - 6px);padding:12px 8px;font-size:13px;justify-content:center}
+    .choices{grid-template-columns:1fr;gap:8px}
+    .choices button{min-height:56px;font-size:15px}
+    .hints .cost{display:block;margin:2px 0 0}
+    #chatPanel{right:0;left:0;bottom:0;width:100%;max-height:72vh;border-radius:14px 14px 0 0}
+    #chatToggle{right:14px;bottom:14px}
+    .urow input{width:70px}
+    ol.rank li{font-size:15px}
+    .teamboard{flex-direction:column;gap:8px}
+    footer{margin-bottom:60px}
+  }
+  @media (max-width:380px){
+    .flap{width:40px;height:52px;font-size:22px}
+    .pattern{font-size:17px;letter-spacing:.1em}
+  }
   @media (prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important}}
 </style>
 </head>
@@ -142,6 +175,7 @@
         <a class="xbtn ghostlink" href="/auth/x/login">𝕏 &nbsp;J'ai déjà un compte — me connecter</a>
       </div>
       <p class="feedback bad" id="authError"></p>
+      <p class="note" style="margin-bottom:0">En vous inscrivant, vous acceptez les <a href="/regles.html" style="color:var(--beam)">règles et le code de bonne conduite</a>.</p>
       <p class="note">Le compte X sert uniquement à identifier votre profil et votre classement. Aucun message ne sera publié en votre nom.</p>
     </div>
 
@@ -233,13 +267,17 @@
       <p class="tag" id="roundLabel">Manche 1</p>
       <p class="synopsis" id="synopsis"></p>
       <p class="pattern" id="pattern"><small>Le titre à trouver</small><span id="patternText"></span></p>
-      <img id="hintPoster" class="poster blurred hidden" alt="Affiche floutée">
+      <img id="hintPoster" class="poster hidden" alt="Photo du film">
       <p class="wallet" id="walletRound">🎟️ <b>0</b> crédits</p>
       <div class="hints" id="hints"></div>
-      <div class="row">
-        <input id="guess" placeholder="Titre du film" autocomplete="off">
-        <button id="btnGuess" style="flex:0 0 auto">Valider</button>
-      </div>
+      <div class="choices" id="choices"></div>
+      <details class="typed">
+        <summary>Écrire le titre — rapporte davantage</summary>
+        <div class="row">
+          <input id="guess" placeholder="Titre du film" autocomplete="off">
+          <button id="btnGuess" style="flex:0 0 auto">Valider</button>
+        </div>
+      </details>
       <p class="feedback" id="guessFeedback"></p>
       <p class="grace hidden" id="grace"></p>
       <div class="row"><button id="btnSkip" class="ghost hidden">Passer à la manche suivante</button></div>
@@ -280,10 +318,6 @@
     </div>
   </section>
 
-  <audio id="sndStart" preload="auto" src="/sounds/start.mp3"></audio>
-  <audio id="sndEnd" preload="auto" src="/sounds/end.mp3"></audio>
-  <button id="soundToggle" title="Couper le son">🔊</button>
-
   <button id="chatToggle" class="hidden" title="Chat de la partie">✉️<span class="badge hidden" id="chatBadge">0</span></button>
   <div id="chatPanel" class="hidden">
     <p class="tag" style="margin:0">Chat de la partie</p>
@@ -296,6 +330,7 @@
 
   <footer>
     <p>MichBen Ciné Quizz est entièrement gratuit et le restera.<br>Si le jeu vous amuse, vous pouvez m'offrir un café.</p>
+    <p style="margin-bottom:14px"><a href="/regles.html" style="color:var(--muted);font-size:13px">Règles du jeu et code de bonne conduite</a></p>
     <a class="tip" id="tipLink" href="#" target="_blank" rel="noopener">☕ Offrir un café</a>
   </footer>
 </div>
@@ -305,7 +340,7 @@
 const socket = io();
 const $ = id => document.getElementById(id);
 const AVATARS = ["🎬","🍿","🎭","🕶️","👽","🦖","🤖","🧛","🐙","🌵","🎸","🚀"];
-const HINT_LABELS = {year:"Année", director:"Réalisateur", actors:"Acteurs", poster:"Affiche floutée"};
+const HINT_LABELS = {year:"Année", director:"Réalisateur", actors:"Acteurs", poster:"Photo du film"};
 const MODE_NAMES = {solo:"Solo", duel:"Duel", ffa:"Chacun pour soi", teams:"En équipes", ranked:"Partie classée"};
 let credits = 0;
 function setCredits(n){
@@ -397,48 +432,6 @@ $("btnSaveProfile").onclick = async () => {
   $("profileMsg").className = "feedback good";
 };
 $("btnToMenu").onclick = () => show("menu");
-
-/* ---------- Classement général ---------- */
-$("btnBoard").onclick = async () => {
-  const list = await fetch("/api/leaderboard").then(r => r.json()).catch(() => []);
-  $("globalRank").innerHTML = list.map(u =>
-    `<li>${u.avatar||"🎬"} ${esc(u.pseudo)}<b>${u.totalScore} pts</b></li>`).join("");
-  $("boardEmpty").textContent = list.length ? "" :
-    "Personne n'a encore terminé de partie classée. Soyez le premier.";
-  show("board");
-};
-$("btnBoardBack").onclick = () => show("menu");
-
-$("btnSkip").onclick = () => socket.emit("round:skip", {code: state.code});
-
-socket.on("round:grace", ({ms, pseudo}) => {
-  const el = $("grace");
-  el.classList.remove("hidden");
-  let left = Math.round(ms / 1000);
-  el.textContent = `${pseudo} a trouvé — ${left} s pour les autres`;
-  clearInterval(state.graceId);
-  state.graceId = setInterval(() => {
-    left--;
-    if (left <= 0) return clearInterval(state.graceId);
-    el.textContent = `${pseudo} a trouvé — ${left} s pour les autres`;
-  }, 1000);
-});
-let muted = localStorage.getItem("michben_muet") === "1";
-$("soundToggle").textContent = muted ? "🔇" : "🔊";
-$("soundToggle").onclick = () => {
-  muted = !muted;
-  localStorage.setItem("michben_muet", muted ? "1" : "0");
-  $("soundToggle").textContent = muted ? "🔇" : "🔊";
-};
-/** Les navigateurs bloquent l'audio tant que l'utilisateur n'a pas cliqué :
- *  l'échec est donc silencieux et sans conséquence. */
-function play(id){
-  if (muted) return;
-  const el = $(id);
-  if (!el) return;
-  el.currentTime = 0;
-  el.play().catch(() => {});
-}
 
 /* ---------- Chat de la partie ---------- */
 let chatUnread = 0;
@@ -550,10 +543,10 @@ socket.on("round:start", ({roundIndex,total,synopsis,duration,hintCosts,hintCred
     `<i class="${i < roundIndex ? "done" : i === roundIndex ? "now" : ""}"></i>`).join("");
   $("roomCode").textContent = state.code || "";
   $("roomCode").classList.toggle("hidden", ["solo","ranked"].includes(state.mode));
+  renderChoices(arguments[0].choices || []);
   $("grace").classList.add("hidden");
   $("btnSkip").classList.toggle("hidden", !["solo","ranked"].includes(state.mode));
   state.hintCredits = hintCredits || {};
-  play("sndStart");
   state.hintCosts = hintCosts; state.bought = {}; state.answered = false;
   $("roundLabel").textContent = `Manche ${roundIndex+1} sur ${total}`;
   $("synopsis").textContent = synopsis;
@@ -592,6 +585,27 @@ function renderHints(){
     }));
 }
 
+/** Quatre propositions cliquables : un clic vaut réponse définitive. */
+function renderChoices(list){
+  $("choices").innerHTML = list.map(c =>
+    `<button data-choice="${c.id}">${esc(c.title)}</button>`).join("");
+  $("choices").querySelectorAll("[data-choice]").forEach(btn => btn.onclick = () => {
+    if (state.answered) return;
+    $("choices").querySelectorAll("button").forEach(b => b.disabled = true);
+    socket.emit("answer:submit", {code: state.code, choiceId: Number(btn.dataset.choice)}, res => {
+      if (!res?.ok) return;
+      state.answered = true;
+      btn.classList.add(res.correct ? "good" : "bad");
+      $("guess").disabled = true; $("btnGuess").disabled = true;
+      $("guessFeedback").textContent = res.correct
+        ? `Trouvé ! +${res.points} points`
+        : "Mauvaise réponse — la manche est terminée pour vous.";
+      $("guessFeedback").className = res.correct ? "feedback good" : "feedback bad";
+      $("btnSkip").classList.remove("hidden");
+    });
+  });
+}
+
 function submitGuess(){
   const guess = $("guess").value.trim();
   if (!guess || state.answered) return;
@@ -602,6 +616,10 @@ function submitGuess(){
       $("guessFeedback").textContent = `Trouvé ! +${res.points} points`;
       $("guessFeedback").className = "feedback good";
       $("guess").disabled = true; $("btnGuess").disabled = true;
+      $("choices").querySelectorAll("button").forEach(b => {
+        b.disabled = true;
+        if (Number(b.dataset.choice) === res.movieId) b.classList.add("good");
+      });
       $("btnSkip").classList.remove("hidden");
     } else {
       $("guessFeedback").textContent = "Ce n'est pas ce film. Réessayez.";
@@ -612,6 +630,8 @@ function submitGuess(){
 }
 $("btnGuess").onclick = submitGuess;
 $("guess").addEventListener("keydown", e => { if (e.key === "Enter") submitGuess(); });
+$("guess").addEventListener("focus", () =>
+  setTimeout(() => $("guess").scrollIntoView({block:"center", behavior:"smooth"}), 250));
 socket.on("player:answered", ({pseudo, team}) => {
   const li = document.createElement("li");
   if (team) li.className = team;
@@ -648,7 +668,6 @@ socket.on("connect_error", err => {
 });
 
 socket.on("game:end", ({ranking, mode, teams, credits: solde}) => {
-  play("sndEnd");
   setCredits(solde);
   state.code = null;
   setChatVisible(false);
