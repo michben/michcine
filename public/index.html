@@ -49,6 +49,9 @@
   .flap:nth-child(2){animation-delay:.07s}.flap:nth-child(3){animation-delay:.14s}.flap:nth-child(4){animation-delay:.21s}
   @keyframes flip{from{transform:rotateX(-85deg);opacity:0}to{transform:none;opacity:1}}
   .players{list-style:none;padding:0;margin:12px 0 0;display:flex;flex-wrap:wrap;gap:8px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:0 0 auto}
+  .dot.on{background:#3DDC84;box-shadow:0 0 8px rgba(61,220,132,.7)}
+  .online{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);margin-top:10px}
   .players li{background:var(--card);border-radius:999px;padding:7px 14px;font-size:14px;display:flex;gap:7px;align-items:center}
   .players li.A{box-shadow:inset 0 0 0 1px var(--beam)}
   .players li.B{box-shadow:inset 0 0 0 1px var(--teal)}
@@ -257,6 +260,7 @@
   <section id="menu" class="hidden">
     <h2 id="hello">Bonjour</h2>
     <p class="wallet" id="walletMenu">🎟️ <b>0</b> crédits</p>
+    <p class="online"><span class="dot on"></span><span id="onlineCount">—</span></p>
     <p class="tag">Niveau</p>
     <div class="levels" id="levels">
       <button data-lvl="tous" aria-pressed="true">Tous</button>
@@ -636,7 +640,7 @@ function renderLobby(s){
   $("marquee").innerHTML = s.code.split("").map(c => `<span class="flap">${c}</span>`).join("");
   $("lobbyCount").textContent = `${MODE_NAMES[s.mode]} — ${s.players.length} joueur${s.players.length>1?"s":""}`;
   $("lobbyPlayers").innerHTML = s.players.map(p =>
-    `<li class="${p.team||""}">${p.avatar||"🎬"} ${esc(p.pseudo)}</li>`).join("");
+    `<li class="${p.team||""}"><span class="dot ${p.online ? "on" : ""}"></span>${p.avatar||"🎬"} ${esc(p.pseudo)}</li>`).join("");
   $("teamPicker").classList.toggle("hidden", s.mode !== "teams");
   state.isHost = s.hostId === socket.id;
   $("btnStart").classList.toggle("hidden", !state.isHost);
