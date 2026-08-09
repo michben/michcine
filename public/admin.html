@@ -32,6 +32,18 @@
   .msg{margin-top:12px;font-size:14px;min-height:20px}
   .msg.ok{color:var(--beam)}.msg.err{color:var(--ticket)}
   .hidden{display:none !important}
+  .tabs{display:flex;gap:8px;margin-top:18px}
+  .tabs button{flex:1;background:transparent;color:var(--muted);border:1px solid rgba(237,232,220,.16);font-weight:500}
+  .tabs button[aria-selected="true"]{background:var(--beam);color:#161207;border-color:var(--beam);font-weight:700}
+  .urow{display:flex;gap:10px;align-items:center;padding:14px 0;border-top:1px solid rgba(237,232,220,.1);flex-wrap:wrap}
+  .urow .who{flex:1;min-width:140px}
+  .urow .who strong{display:block}
+  .urow .who small{color:var(--muted)}
+  .urow input{width:80px;padding:8px 10px;font-size:15px;text-align:center}
+  .urow button{padding:9px 12px;font-size:14px}
+  .urow.banned{opacity:.5}
+  .chip{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ticket);
+    border:1px solid rgba(228,88,110,.5);border-radius:999px;padding:3px 9px;margin-left:6px}
 </style>
 </head>
 <body>
@@ -47,6 +59,12 @@
   </section>
 
   <section id="app" class="hidden">
+    <div class="tabs">
+      <button id="tabMovies" aria-selected="true">Films</button>
+      <button id="tabUsers" aria-selected="false">Joueurs</button>
+    </div>
+
+    <div id="paneMovies">
     <div class="card">
       <p class="tag" id="formTitle">Nouveau film</p>
       <label for="title">Titre</label>
@@ -73,6 +91,22 @@
     <div class="card">
       <p class="tag" id="countLabel">Films au catalogue</p>
       <div id="list"></div>
+    </div>
+    </div>
+
+    <div id="paneUsers" class="hidden">
+      <div class="card">
+        <p class="tag">Crédits pour tous</p>
+        <div class="row">
+          <input id="grantAmount" inputmode="numeric" placeholder="10" style="max-width:120px">
+          <button id="btnGrantAll">Offrir à tous les joueurs</button>
+        </div>
+        <p class="msg" id="grantMsg"></p>
+      </div>
+      <div class="card">
+        <p class="tag" id="userCount">Joueurs</p>
+        <div id="userList"></div>
+      </div>
     </div>
   </section>
 </div>
@@ -160,6 +194,70 @@ async function remove(id){
   if (editingId === id) resetForm();
   render();
 }
+
+/* ---------- Onglets ---------- */
+function tab(which){
+  const users = which === "users";
+  $("tabUsers").setAttribute("aria-selected", users);
+  $("tabMovies").setAttribute("aria-selected", !users);
+  $("paneUsers").classList.toggle("hidden", !users);
+  $("paneMovies").classList.toggle("hidden", users);
+  if (users) loadUsers();
+}
+$("tabMovies").onclick = () => tab("movies");
+$("tabUsers").onclick = () => tab("users");
+
+/* ---------- Joueurs ---------- */
+let players = [];
+async function loadUsers(){
+  const res = await api("/api/admin/users");
+  if (!res.ok) return;
+  players = await res.json();
+  renderUsers();
+}
+function renderUsers(){
+  $("userCount").textContent = `${players.length} joueur${players.length>1?"s":""} inscrit${players.length>1?"s":""}`;
+  $("userList").innerHTML = players.map(u => `
+    <div class="urow ${u.banned?"banned":""}">
+      <div class="who">
+        <strong>${u.avatar||"🎬"} ${esc(u.pseudo||"(sans pseudo)")}${u.banned?'<span class="chip">banni</span>':""}</strong>
+        <small>${u.totalScore||0} pts · ${u.gamesPlayed||0} parties${u.xHandle?" · @"+esc(u.xHandle):""}</small>
+      </div>
+      <input type="number" min="0" value="${u.credits??0}" data-credits="${u.id}" aria-label="Crédits">
+      <button class="ghost" data-save="${u.id}">Enregistrer</button>
+      <button class="ghost" data-ban="${u.id}">${u.banned?"Réactiver":"Bannir"}</button>
+      <button class="danger" data-del="${u.id}">Supprimer</button>
+    </div>`).join("");
+
+  $("userList").querySelectorAll("[data-save]").forEach(b => b.onclick = async () => {
+    const id = b.dataset.save;
+    const credits = Number($("userList").querySelector(`[data-credits="${CSS.escape(id)}"]`).value);
+    await api(`/api/admin/users/${encodeURIComponent(id)}`, {method:"PUT", body:JSON.stringify({credits})});
+    loadUsers();
+  });
+  $("userList").querySelectorAll("[data-ban]").forEach(b => b.onclick = async () => {
+    const u = players.find(p => p.id === b.dataset.ban);
+    await api(`/api/admin/users/${encodeURIComponent(u.id)}`, {method:"PUT", body:JSON.stringify({banned: !u.banned})});
+    loadUsers();
+  });
+  $("userList").querySelectorAll("[data-del]").forEach(b => b.onclick = async () => {
+    const u = players.find(p => p.id === b.dataset.del);
+    if (!confirm(`Supprimer définitivement le compte « ${u.pseudo || u.id} » ?`)) return;
+    await api(`/api/admin/users/${encodeURIComponent(u.id)}`, {method:"DELETE"});
+    loadUsers();
+  });
+}
+
+$("btnGrantAll").onclick = async () => {
+  const amount = Number($("grantAmount").value);
+  if (!amount) return ($("grantMsg").textContent = "Indiquez un nombre de crédits.", $("grantMsg").className = "msg err");
+  if (!confirm(`Offrir ${amount} crédits à tous les joueurs ?`)) return;
+  const res = await api("/api/admin/grant-all", {method:"POST", body:JSON.stringify({amount})});
+  const data = await res.json();
+  $("grantMsg").textContent = res.ok ? `${amount} crédits offerts à ${data.users} joueurs.` : "Échec.";
+  $("grantMsg").className = res.ok ? "msg ok" : "msg err";
+  loadUsers();
+};
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 </script>

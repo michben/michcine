@@ -15,7 +15,8 @@ import { Server } from "socket.io";
 import { readFileSync, writeFileSync } from "fs";
 import crypto from "crypto";
 import { mountAuth, userFromCookie, addRankedPoints,
-         spendCredits, grantCredits, getCredits, CREDITS_PER_GAME } from "./auth-x.js";
+         spendCredits, grantCredits, getCredits, CREDITS_PER_GAME,
+         listUsers, adminUpdateUser, adminDeleteUser, grantAll } from "./auth-x.js";
 
 const app = express();
 app.use(express.json());
@@ -34,6 +35,8 @@ const CONFIG = {
   HINT_COSTS: { year: 100, director: 200, actors: 300, poster: 250 },   // en points
   HINT_CREDITS: { year: 1, director: 1, actors: 2, poster: 2 },          // en crédits
   MAX_PLAYERS: 16,
+  GRACE_AFTER_FIRST_MS: 15_000,   // délai laissé aux autres après la première bonne réponse
+  CHOICE_RATIO: 0.6,              // un titre saisi à la main rapporte plus qu'un choix cliqué
   TIP_URL: process.env.TIP_URL || "https://buymeacoffee.com/votre-pseudo",
 };
 
@@ -54,6 +57,26 @@ function requireAdmin(req, res, next) {
 }
 
 app.get("/api/movies", requireAdmin, (_req, res) => res.json(movies));
+
+/* ---------- administration des joueurs ---------- */
+
+app.get("/api/admin/users", requireAdmin, (_req, res) => res.json(listUsers()));
+
+app.put("/api/admin/users/:id", requireAdmin, (req, res) => {
+  const user = adminUpdateUser(req.params.id, req.body);
+  if (!user) return res.status(404).json({ error: "NOT_FOUND" });
+  res.json(user);
+});
+
+app.delete("/api/admin/users/:id", requireAdmin, (req, res) =>
+  adminDeleteUser(req.params.id) ? res.status(204).end() : res.status(404).json({ error: "NOT_FOUND" })
+);
+
+app.post("/api/admin/grant-all", requireAdmin, (req, res) => {
+  const amount = Math.round(Number(req.body.amount) || 0);
+  if (!amount) return res.status(400).json({ error: "AMOUNT_REQUIRED" });
+  res.json({ users: grantAll(amount), amount });
+});
 
 app.post("/api/movies", requireAdmin, (req, res) => {
   const movie = sanitizeMovie(req.body);
@@ -90,6 +113,7 @@ function sanitizeMovie(body) {
     director: String(body.director || "").trim(),
     actors: String(body.actors || "").trim(),
     poster: String(body.poster || "").trim(),
+    still: String(body.still || "").trim(),
   };
 }
 
@@ -136,6 +160,30 @@ function generateRoomCode() {
     ).join("");
   } while (rooms.has(code));
   return code;
+}
+
+/**
+ * Quatre propositions : la bonne, plus trois leurres pris de préférence
+ * dans la même décennie — sinon le bon titre saute aux yeux.
+ */
+function buildChoices(movie) {
+  const memeEpoque = movies.filter(
+    (m) => m.id !== movie.id && m.year && movie.year && Math.abs(m.year - movie.year) <= 12
+  );
+  const vivier = (memeEpoque.length >= 3 ? memeEpoque : movies.filter((m) => m.id !== movie.id))
+    .slice()
+    .sort(() => Math.random() - 0.5);
+
+  const leurres = [];
+  for (const m of vivier) {
+    if (leurres.length >= 3) break;
+    if (leurres.some((l) => l.title === m.title) || m.title === movie.title) continue;
+    leurres.push(m);
+  }
+
+  return [movie, ...leurres]
+    .map((m) => ({ id: m.id, title: m.title }))
+    .sort(() => Math.random() - 0.5);
 }
 
 /** Motif du titre : un tiret par lettre, espaces et ponctuation conservés. */
@@ -188,11 +236,14 @@ function teamScores(room) {
 /* ------------------------------------------------------------------ */
 
 function startRound(room) {
+  clearTimeout(room.graceTimer);
+  room.graceTimer = null;
   const movie = room.playlist[room.roundIndex];
   if (!movie) return endGame(room);
 
   room.status = "playing";
   room.currentMovie = movie;
+  room.choices = buildChoices(movie);
   room.startedAt = Date.now();
   for (const p of room.players.values()) { p.hasAnswered = false; p.hints = []; }
 
@@ -204,6 +255,7 @@ function startRound(room) {
     duration: CONFIG.ROUND_DURATION_MS,
     hintCosts: CONFIG.HINT_COSTS,
     hintCredits: CONFIG.HINT_CREDITS,
+    choices: room.choices,
   });
 
   clearTimeout(room.timer);
@@ -211,7 +263,10 @@ function startRound(room) {
 }
 
 function endRound(room) {
+  if (room.status !== "playing") return;   // évite un double appel timer + grâce
   clearTimeout(room.timer);
+  clearTimeout(room.graceTimer);
+  room.graceTimer = null;
   io.to(room.code).emit("round:end", {
     answer: room.currentMovie.title,
     poster: room.currentMovie.poster,   // affiche révélée seulement maintenant
@@ -243,6 +298,7 @@ function endGame(room) {
 io.use((socket, next) => {
   const user = userFromCookie(socket.handshake.headers.cookie);
   if (!user) return next(new Error("NOT_AUTHENTICATED"));   // aucune partie sans compte
+  if (user.banned) return next(new Error("BANNED"));
   if (!user.pseudoChosen) return next(new Error("NO_PSEUDO")); // ni sans pseudo choisi
   socket.data.user = user;
   next();
@@ -260,7 +316,7 @@ io.on("connection", (socket) => {
       mode: ["solo", "ffa", "duel", "teams", "ranked"].includes(mode) ? mode : "ffa",
       players: new Map(),
       playlist: [...movies].sort(() => Math.random() - 0.5).slice(0, count),
-      currentMovie: null, startedAt: null, timer: null, nextTimer: null,
+      currentMovie: null, startedAt: null, timer: null, nextTimer: null, graceTimer: null,
     };
     rooms.set(code, room);
     joinRoom(socket, room, user);
@@ -273,9 +329,13 @@ io.on("connection", (socket) => {
     if (!room) return cb?.({ ok: false, error: "ROOM_NOT_FOUND" });
     const limit = room.mode === "duel" ? 2 : CONFIG.MAX_PLAYERS;
     if (room.players.size >= limit) return cb?.({ ok: false, error: "ROOM_FULL" });
-    if (room.status !== "lobby") return cb?.({ ok: false, error: "GAME_ALREADY_STARTED" });
+    if (room.status === "finished") return cb?.({ ok: false, error: "GAME_OVER" });
+
+    const enCours = room.status !== "lobby";
     joinRoom(socket, room, user);
-    cb?.({ ok: true, code: room.code, state: publicState(room) });
+    if (enCours) room.players.get(socket.id).hasAnswered = true; // n'entre qu'à la manche suivante
+    cb?.({ ok: true, code: room.code, state: publicState(room), waiting: enCours,
+           roundIndex: room.roundIndex, total: room.playlist.length });
   });
 
   socket.on("team:choose", ({ code, team }) => {
@@ -303,26 +363,47 @@ io.on("connection", (socket) => {
       return cb?.({ ok: false, error: "NO_CREDITS" });
 
     player.hints.push(type);
-    cb?.({ ok: true, type, value: room.currentMovie[type], credits: getCredits(player.userId) });
+    const value = type === "poster"
+      ? (room.currentMovie.still || room.currentMovie.poster)   // le "still" ne porte pas le titre
+      : room.currentMovie[type];
+    cb?.({ ok: true, type, value, credits: getCredits(player.userId) });
   });
 
-  socket.on("answer:submit", ({ code, guess }, cb) => {
+  socket.on("answer:submit", ({ code, guess, choiceId }, cb) => {
     const room = rooms.get(code);
     const player = room?.players.get(socket.id);
     if (!room || !player || room.status !== "playing" || player.hasAnswered) return cb?.({ ok: false });
 
-    const guessed = normalize(guess);
-    const correct = room.currentMovie.acceptedAnswers.some((a) => normalize(a) === guessed);
-    if (!correct) return cb?.({ ok: true, correct: false });
+    const parClic = choiceId !== undefined && choiceId !== null;
+    const correct = parClic
+      ? Number(choiceId) === room.currentMovie.id
+      : room.currentMovie.acceptedAnswers.some((a) => normalize(a) === normalize(guess));
+
+    // un clic est définitif : sinon il suffirait de cliquer les quatre cases
+    if (!correct) {
+      if (!parClic) return cb?.({ ok: true, correct: false });
+      player.hasAnswered = true;
+      io.to(room.code).emit("player:answered", { id: player.id, pseudo: player.pseudo, team: player.team, points: 0 });
+      if ([...room.players.values()].every((p) => p.hasAnswered)) endRound(room);
+      return cb?.({ ok: true, correct: false, final: true });
+    }
 
     player.hasAnswered = true;
-    const points = computeScore({ elapsedMs: Date.now() - room.startedAt, hintsUsed: player.hints });
+    let points = computeScore({ elapsedMs: Date.now() - room.startedAt, hintsUsed: player.hints });
+    if (parClic) points = Math.max(30, Math.round(points * CONFIG.CHOICE_RATIO));
     player.score += points;
 
-    cb?.({ ok: true, correct: true, points });
-    io.to(room.code).emit("player:answered", { id: player.id, pseudo: player.pseudo, points });
+    cb?.({ ok: true, correct: true, points, movieId: room.currentMovie.id });
+    io.to(room.code).emit("player:answered", { id: player.id, pseudo: player.pseudo, team: player.team, points });
 
-    if ([...room.players.values()].every((p) => p.hasAnswered)) endRound(room);
+    const tousTrouve = [...room.players.values()].every((p) => p.hasAnswered);
+    if (tousTrouve) return endRound(room);
+
+    // premier à trouver : les autres ont encore quelques secondes
+    if (!room.graceTimer) {
+      room.graceTimer = setTimeout(() => endRound(room), CONFIG.GRACE_AFTER_FIRST_MS);
+      io.to(room.code).emit("round:grace", { ms: CONFIG.GRACE_AFTER_FIRST_MS, pseudo: player.pseudo });
+    }
   });
 
   /** Chat réservé aux joueurs du salon. Les messages qui contiennent la
@@ -349,6 +430,14 @@ io.on("connection", (socket) => {
     });
   });
 
+  /** Un joueur qui a déjà répondu (ou qui joue seul) peut enchaîner. */
+  socket.on("round:skip", ({ code }) => {
+    const room = rooms.get(code);
+    const player = room?.players.get(socket.id);
+    if (!room || !player || room.status !== "playing") return;
+    if (["solo", "ranked"].includes(room.mode) || player.hasAnswered) endRound(room);
+  });
+
   socket.on("room:leave", () => leaveAllRooms(socket));
 
   socket.on("disconnect", () => leaveAllRooms(socket));
@@ -358,7 +447,7 @@ io.on("connection", (socket) => {
       if (!room.players.delete(socket.id)) continue;
       socket.leave(room.code);
       if (room.players.size === 0) {
-        clearTimeout(room.timer); clearTimeout(room.nextTimer);
+        clearTimeout(room.timer); clearTimeout(room.nextTimer); clearTimeout(room.graceTimer);
         rooms.delete(room.code);
       } else {
         if (room.hostId === socket.id) room.hostId = [...room.players.keys()][0];

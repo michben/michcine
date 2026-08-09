@@ -66,6 +66,40 @@ export function grantCredits(userId, amount) {
 
 export const getCredits = (userId) => users[userId]?.credits ?? 0;
 
+/* ---------- administration ---------- */
+
+export const listUsers = () =>
+  Object.values(users).sort((x, y) => (y.totalScore || 0) - (x.totalScore || 0));
+
+export function adminUpdateUser(id, changes) {
+  const user = users[id];
+  if (!user) return null;
+  if (typeof changes.credits === "number") user.credits = Math.max(0, Math.round(changes.credits));
+  if (typeof changes.totalScore === "number") user.totalScore = Math.max(0, Math.round(changes.totalScore));
+  if (typeof changes.pseudo === "string" && changes.pseudo.trim().length >= 2) {
+    user.pseudo = changes.pseudo.trim().slice(0, 20);
+    user.pseudoChosen = true;
+  }
+  if (changes.banned === true || changes.banned === false) user.banned = changes.banned;
+  saveUsers();
+  return user;
+}
+
+export function adminDeleteUser(id) {
+  if (!users[id]) return false;
+  delete users[id];
+  for (const [sid, s] of sessions) if (s.userId === id) sessions.delete(sid); // déconnexion immédiate
+  saveUsers();
+  return true;
+}
+
+/** Crédite tout le monde d'un coup (cadeau, compensation). */
+export function grantAll(amount) {
+  for (const u of Object.values(users)) u.credits = (u.credits ?? 0) + amount;
+  saveUsers();
+  return Object.keys(users).length;
+}
+
 /** Ajoute des points au total permanent d'un joueur (mode classé). */
 export function addRankedPoints(userId, points) {
   const user = users[userId];
