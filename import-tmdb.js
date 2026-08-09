@@ -186,8 +186,17 @@ const francais = await collecte("Films français",
   { ...commun, sort_by: "popularity.desc", with_original_language: "fr", "vote_count.gte": 60 },
   TARGET_FR, true);
 
-const movies = [...internationaux, ...francais]
-  .sort(() => Math.random() - 0.5)                 // mélange définitif des deux origines
+/** Fisher-Yates : chaque ordre possible est également probable. */
+function melange(tableau) {
+  const t = [...tableau];
+  for (let i = t.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [t[i], t[j]] = [t[j], t[i]];
+  }
+  return t;
+}
+
+const movies = melange([...internationaux, ...francais])   // les deux origines s'entremêlent
   .map((m, i) => ({ id: i + 1, ...m }));
 
 if (existsSync("movies.json")) copyFileSync("movies.json", "movies.backup.json");

@@ -16,7 +16,8 @@ import { readFileSync, writeFileSync } from "fs";
 import crypto from "crypto";
 import { mountAuth, userFromCookie, addRankedPoints,
          spendCredits, grantCredits, getCredits, CREDITS_PER_GAME,
-         listUsers, adminUpdateUser, adminDeleteUser, grantAll } from "./auth-x.js";
+         listUsers, adminUpdateUser, adminDeleteUser, grantAll,
+         grantPoints, getPoints, exchangePoints } from "./auth-x.js";
 
 const app = express();
 app.use(express.json());
@@ -32,11 +33,12 @@ const io = new Server(httpServer, { cors: { origin: "*" } });
 const CONFIG = {
   ROUND_DURATION_MS: 60_000,
   BASE_POINTS: 1000,
-  HINT_COSTS: { year: 100, director: 200, actors: 300, poster: 250 },   // en points
-  HINT_CREDITS: { year: 1, director: 1, actors: 2, poster: 2 },          // en crédits
+  HINT_COSTS: { letters: 150, year: 100, director: 200, actors: 300, poster: 250 },  // en points
+  HINT_CREDITS: { letters: 1, year: 1, director: 1, actors: 2, poster: 2 },         // en crédits
   MAX_PLAYERS: 16,
   GRACE_AFTER_FIRST_MS: 15_000,   // délai laissé aux autres après la première bonne réponse
-  CHOICE_RATIO: 0.6,              // un titre saisi à la main rapporte plus qu'un choix cliqué
+  POINTS_PAR_TICKET: 250,         // taux de conversion points → tickets bonus
+  CHOICE_RATIO: 1,                // le clic est le seul mode de réponse : score plein
   TIP_URL: process.env.TIP_URL || "https://buymeacoffee.com/votre-pseudo",
 };
 
@@ -49,6 +51,15 @@ const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ"; // sans I, O, 0, 1
 
 const MOVIES_FILE = new URL("./movies.json", import.meta.url);
 let movies = JSON.parse(readFileSync(MOVIES_FILE, "utf8"));
+
+/** Niveau déduit de la notoriété : un film très voté est facile à reconnaître. */
+const niveauDepuisVotes = (v = 0) => (v >= 8000 ? "facile" : v >= 2500 ? "moyen" : "difficile");
+
+// les anciens catalogues n'ont ni niveau ni activation : on les complète
+for (const m of movies) {
+  if (!m.difficulty) m.difficulty = niveauDepuisVotes(m.votes);
+  if (m.enabled === undefined) m.enabled = true;
+}
 const saveMovies = () => writeFileSync(MOVIES_FILE, JSON.stringify(movies, null, 2));
 
 function requireAdmin(req, res, next) {
@@ -57,6 +68,30 @@ function requireAdmin(req, res, next) {
 }
 
 app.get("/api/movies", requireAdmin, (_req, res) => res.json(movies));
+
+/** Active ou désactive des films en lot, selon niveau et note minimale. */
+app.post("/api/admin/movies/bulk", requireAdmin, (req, res) => {
+  const { difficulty, minRating, enabled } = req.body;
+  let touched = 0;
+  for (const m of movies) {
+    if (difficulty && difficulty !== "tous" && m.difficulty !== difficulty) continue;
+    if (minRating && (m.rating || 0) < Number(minRating)) continue;
+    m.enabled = enabled !== false;
+    touched++;
+  }
+  saveMovies();
+  res.json({ touched, actifs: movies.filter((m) => m.enabled).length });
+});
+
+app.get("/api/admin/stats", requireAdmin, (_req, res) => {
+  const parNiveau = {};
+  for (const n of ["facile", "moyen", "difficile"])
+    parNiveau[n] = {
+      total: movies.filter((m) => m.difficulty === n).length,
+      actifs: movies.filter((m) => m.difficulty === n && m.enabled).length,
+    };
+  res.json({ total: movies.length, actifs: movies.filter((m) => m.enabled).length, parNiveau });
+});
 
 /* ---------- administration des joueurs ---------- */
 
@@ -114,6 +149,11 @@ function sanitizeMovie(body) {
     actors: String(body.actors || "").trim(),
     poster: String(body.poster || "").trim(),
     still: String(body.still || "").trim(),
+    rating: Number(body.rating) || null,
+    votes: Number(body.votes) || 0,
+    difficulty: ["facile", "moyen", "difficile"].includes(body.difficulty)
+      ? body.difficulty : niveauDepuisVotes(Number(body.votes) || 0),
+    enabled: body.enabled !== false,
   };
 }
 
@@ -136,7 +176,19 @@ const verifyLicense = (lic) => {
   return Boolean(id && sig && signLicense(id) === `${id}.${sig}`);
 };
 
-app.get("/api/config", (_req, res) => res.json({ tipUrl: CONFIG.TIP_URL, maxPlayers: CONFIG.MAX_PLAYERS }));
+app.get("/api/config", (_req, res) => res.json({
+  tipUrl: CONFIG.TIP_URL, maxPlayers: CONFIG.MAX_PLAYERS, pointsParTicket: CONFIG.POINTS_PAR_TICKET,
+}));
+
+/** Espace échange : points gagnés → tickets bonus. */
+app.post("/api/exchange", (req, res) => {
+  const user = userFromCookie(req.headers.cookie);
+  if (!user) return res.status(401).json({ error: "NOT_AUTHENTICATED" });
+
+  const result = exchangePoints(user.id, req.body.points, CONFIG.POINTS_PAR_TICKET);
+  if (result.error) return res.status(400).json(result);
+  res.json(result);
+});
 
 app.post("/api/premium/checkout", (_req, res) => {
   // TODO : créer une session Stripe Checkout et renvoyer session.url
@@ -167,12 +219,11 @@ function generateRoomCode() {
  * dans la même décennie — sinon le bon titre saute aux yeux.
  */
 function buildChoices(movie) {
-  const memeEpoque = movies.filter(
+  const actifs = movies.filter((m) => m.enabled !== false);
+  const memeEpoque = actifs.filter(
     (m) => m.id !== movie.id && m.year && movie.year && Math.abs(m.year - movie.year) <= 12
   );
-  const vivier = (memeEpoque.length >= 3 ? memeEpoque : movies.filter((m) => m.id !== movie.id))
-    .slice()
-    .sort(() => Math.random() - 0.5);
+  const vivier = melange(memeEpoque.length >= 3 ? memeEpoque : actifs.filter((m) => m.id !== movie.id));
 
   const leurres = [];
   for (const m of vivier) {
@@ -181,14 +232,26 @@ function buildChoices(movie) {
     leurres.push(m);
   }
 
-  return [movie, ...leurres]
-    .map((m) => ({ id: m.id, title: m.title }))
-    .sort(() => Math.random() - 0.5);
+  return melange([movie, ...leurres].map((m) => ({ id: m.id, title: m.title })));
 }
 
 /** Motif du titre : un tiret par lettre, espaces et ponctuation conservés. */
 function titlePattern(title) {
   return [...title].map((c) => (/[\p{L}\p{N}]/u.test(c) ? "–" : c)).join("");
+}
+
+/**
+ * Mélange de Fisher-Yates : chaque permutation est équiprobable.
+ * (sort(() => Math.random() - 0.5) paraît équivalent mais ne l'est pas :
+ *  le comparateur est incohérent et l'ordre final reste biaisé.)
+ */
+function melange(tableau) {
+  const t = [...tableau];
+  for (let i = t.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [t[i], t[j]] = [t[j], t[i]];
+  }
+  return t;
 }
 
 /** Normalisation permissive : casse, accents, ponctuation, article initial. */
@@ -215,6 +278,7 @@ function publicState(room) {
     hostId: room.hostId,
     status: room.status,
     mode: room.mode,
+    difficulty: room.difficulty,
     roundIndex: room.roundIndex,
     players: [...room.players.values()].map((p) => ({
       id: p.id, pseudo: p.pseudo, avatar: p.avatar, score: p.score,
@@ -251,7 +315,6 @@ function startRound(room) {
     roundIndex: room.roundIndex,
     total: room.playlist.length,
     synopsis: movie.synopsis,        // le titre et l'affiche ne partent jamais au client
-    pattern: titlePattern(movie.title),   // "–––– –– ––––" : la forme, jamais les lettres
     duration: CONFIG.ROUND_DURATION_MS,
     hintCosts: CONFIG.HINT_COSTS,
     hintCredits: CONFIG.HINT_CREDITS,
@@ -272,6 +335,8 @@ function endRound(room) {
     poster: room.currentMovie.poster,   // affiche révélée seulement maintenant
     year: room.currentMovie.year,
     scores: publicState(room).players,
+    isHost: room.hostId,
+    mode: room.mode,
   });
   room.roundIndex++;
   room.status = "intermission";
@@ -283,11 +348,13 @@ function endGame(room) {
   const state = publicState(room);
   const ranking = state.players.sort((a, b) => b.score - a.score);
   for (const p of room.players.values()) {
-    if (room.mode === "ranked") addRankedPoints(p.userId, p.score);
-    grantCredits(p.userId, CREDITS_PER_GAME);   // toute partie terminée recharge le compte
+    if (room.mode === "ranked") addRankedPoints(p.userId, p.score); // classement permanent
+    grantPoints(p.userId, p.score);                                  // cagnotte échangeable
+    grantCredits(p.userId, CREDITS_PER_GAME);
   }
   for (const p of room.players.values())
-    io.to(p.id).emit("game:end", { ranking, mode: room.mode, teams: state.teams, credits: getCredits(p.userId) });
+    io.to(p.id).emit("game:end", { ranking, mode: room.mode, teams: state.teams,
+      credits: getCredits(p.userId), points: getPoints(p.userId) });
   // TODO : persister la partie et créditer les récompenses
 }
 
@@ -307,15 +374,21 @@ io.use((socket, next) => {
 io.on("connection", (socket) => {
   const user = socket.data.user;
 
-  socket.on("room:create", ({ rounds, mode }, cb) => {
-    if (movies.length === 0) return cb?.({ ok: false, error: "NO_MOVIES" });
+  socket.on("room:create", ({ rounds, mode, difficulty }, cb) => {
+    const vivier = movies.filter(
+      (m) => m.enabled !== false &&
+             (!difficulty || difficulty === "tous" || m.difficulty === difficulty)
+    );
+    if (vivier.length === 0) return cb?.({ ok: false, error: "NO_MOVIES" });
+
     const code = generateRoomCode();
-    const count = Math.min(Number(rounds) || 10, movies.length);
+    const count = Math.min(Number(rounds) || 10, vivier.length);
     const room = {
       code, hostId: socket.id, status: "lobby", roundIndex: 0,
       mode: ["solo", "ffa", "duel", "teams", "ranked"].includes(mode) ? mode : "ffa",
       players: new Map(),
-      playlist: [...movies].sort(() => Math.random() - 0.5).slice(0, count),
+      difficulty: difficulty || "tous",
+      playlist: melange(vivier).slice(0, count),
       currentMovie: null, startedAt: null, timer: null, nextTimer: null, graceTimer: null,
     };
     rooms.set(code, room);
@@ -363,9 +436,10 @@ io.on("connection", (socket) => {
       return cb?.({ ok: false, error: "NO_CREDITS" });
 
     player.hints.push(type);
-    const value = type === "poster"
-      ? (room.currentMovie.still || room.currentMovie.poster)   // le "still" ne porte pas le titre
-      : room.currentMovie[type];
+    const value =
+      type === "poster" ? (room.currentMovie.still || room.currentMovie.poster) // sans titre imprimé
+    : type === "letters" ? titlePattern(room.currentMovie.title)
+    : room.currentMovie[type];
     cb?.({ ok: true, type, value, credits: getCredits(player.userId) });
   });
 
@@ -436,6 +510,15 @@ io.on("connection", (socket) => {
     const player = room?.players.get(socket.id);
     if (!room || !player || room.status !== "playing") return;
     if (["solo", "ranked"].includes(room.mode) || player.hasAnswered) endRound(room);
+  });
+
+  /** Enchaîner sans attendre la fin de l'entracte. */
+  socket.on("round:next", ({ code }) => {
+    const room = rooms.get(code);
+    if (!room || !room.players.has(socket.id) || room.status !== "intermission") return;
+    if (!["solo", "ranked"].includes(room.mode) && room.hostId !== socket.id) return; // l'hôte décide
+    clearTimeout(room.nextTimer);
+    startRound(room);
   });
 
   socket.on("room:leave", () => leaveAllRooms(socket));
