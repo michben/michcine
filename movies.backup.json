@@ -1,0 +1,62 @@
+[
+  {
+    "id": 1,
+    "title": "Matrix",
+    "acceptedAnswers": ["matrix", "the matrix"],
+    "synopsis": "Un informaticien découvre que le monde qu'il habite est une simulation et rejoint une rébellion contre les machines.",
+    "year": 1999,
+    "director": "Lana et Lilly Wachowski",
+    "actors": "Keanu Reeves, Laurence Fishburne",
+    "poster": "https://image.tmdb.org/t/p/w500/f89U3ADr1oiB1s9GkdPOEpXUk5H.jpg"
+  },
+  {
+    "id": 2,
+    "title": "Inception",
+    "acceptedAnswers": ["inception"],
+    "synopsis": "Un voleur capable d'entrer dans les rêves se voit offrir l'effacement de son casier s'il parvient à implanter une idée dans un esprit.",
+    "year": 2010,
+    "director": "Christopher Nolan",
+    "actors": "Leonardo DiCaprio, Marion Cotillard",
+    "poster": "https://image.tmdb.org/t/p/w500/9gk7adHYeDvHkCSEqAvQNLV5Uge.jpg"
+  },
+  {
+    "id": 3,
+    "title": "Le Parrain",
+    "acceptedAnswers": ["le parrain", "the godfather", "parrain"],
+    "synopsis": "Le patriarche vieillissant d'une dynastie du crime organisé transmet le contrôle de son empire clandestin à son fils le plus réticent.",
+    "year": 1972,
+    "director": "Francis Ford Coppola",
+    "actors": "Marlon Brando, Al Pacino",
+    "poster": "https://image.tmdb.org/t/p/w500/3bhkrj58Vtu7enYsRolD1fZdja1.jpg"
+  },
+  {
+    "id": 4,
+    "title": "Forrest Gump",
+    "acceptedAnswers": ["forrest gump", "forest gump"],
+    "synopsis": "Un homme simple du Sud traverse quarante ans d'histoire américaine sans jamais cesser de courir après la femme qu'il aime.",
+    "year": 1994,
+    "director": "Robert Zemeckis",
+    "actors": "Tom Hanks, Robin Wright",
+    "poster": "https://image.tmdb.org/t/p/w500/arw2vcBveWOVZr6pxd9XTd1TdQa.jpg"
+  },
+  {
+    "id": 5,
+    "title": "Parasite",
+    "acceptedAnswers": ["parasite", "gisaengchung"],
+    "synopsis": "Une famille pauvre s'infiltre une par une au service d'un foyer richissime, jusqu'à ce qu'une découverte au sous-sol fasse basculer le plan.",
+    "year": 2019,
+    "director": "Bong Joon-ho",
+    "actors": "Song Kang-ho, Choi Woo-shik",
+    "poster": "https://image.tmdb.org/t/p/w500/7IiTTgloJzvGI1TAYymCfbfl3vT.jpg"
+  },
+  {
+    "id": 6,
+    "title": "Memento",
+    "acceptedAnswers": ["memento"],
+    "synopsis": "Un homme incapable de former de nouveaux souvenirs traque le meurtrier de sa femme à l'aide de photos et de tatouages.",
+    "year": 2000,
+    "director": "Christopher Nolan",
+    "actors": "Guy Pearce, Carrie-Anne Moss",
+    "poster": "https://image.tmdb.org/t/p/w500/yuNs09hvpHVU1cBTCAk9zxsL2oW.jpg"
+  }
+]

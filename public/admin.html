@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MichBen — Catalogue de films</title>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{--ink:#0A0C16;--velvet:#151A2E;--card:#1C2238;--beam:#F5B942;--ticket:#E4586E;--chalk:#EDE8DC;--muted:#7C819B}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--ink);color:var(--chalk);font-family:'Space Grotesk',system-ui,sans-serif}
+  .wrap{max-width:760px;margin:0 auto;padding:24px 18px 60px}
+  h1{font-family:'Anton',sans-serif;text-transform:uppercase;letter-spacing:.04em;font-size:clamp(24px,6vw,34px);margin:0 0 4px}
+  h1 em{font-style:normal;color:var(--beam)}
+  .tag{font-size:11px;letter-spacing:.26em;text-transform:uppercase;color:var(--muted);margin:0 0 14px}
+  .card{background:var(--velvet);border:1px solid rgba(237,232,220,.09);border-radius:14px;padding:20px;margin-top:16px}
+  label{display:block;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin:14px 0 6px}
+  input,textarea{width:100%;background:var(--card);border:1px solid rgba(237,232,220,.14);color:var(--chalk);
+    border-radius:10px;padding:12px 13px;font:inherit;font-size:16px;resize:vertical}
+  input:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px solid var(--beam);outline-offset:2px}
+  button{font:inherit;font-weight:700;border:0;border-radius:10px;padding:12px 16px;cursor:pointer;background:var(--beam);color:#161207}
+  button.ghost{background:transparent;color:var(--chalk);border:1px solid rgba(237,232,220,.22)}
+  button.danger{background:transparent;color:var(--ticket);border:1px solid rgba(228,88,110,.5)}
+  .row{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
+  @media(max-width:520px){.grid{grid-template-columns:1fr}}
+  .item{display:flex;gap:14px;align-items:center;padding:14px 0;border-top:1px solid rgba(237,232,220,.1)}
+  .item img{width:44px;height:66px;object-fit:cover;border-radius:6px;background:var(--card);flex:0 0 auto}
+  .item div{flex:1;min-width:0}
+  .item strong{display:block}
+  .item small{color:var(--muted)}
+  .msg{margin-top:12px;font-size:14px;min-height:20px}
+  .msg.ok{color:var(--beam)}.msg.err{color:var(--ticket)}
+  .hidden{display:none !important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Catalogue <em>MichBen</em></h1>
+  <p class="tag">Ajouter, modifier et supprimer les films du quiz</p>
+
+  <section id="auth" class="card">
+    <label for="token">Clé d'administration</label>
+    <input id="token" type="password" placeholder="michben-admin" autocomplete="current-password">
+    <div class="row"><button id="btnAuth">Ouvrir le catalogue</button></div>
+    <p class="msg err" id="authMsg"></p>
+  </section>
+
+  <section id="app" class="hidden">
+    <div class="card">
+      <p class="tag" id="formTitle">Nouveau film</p>
+      <label for="title">Titre</label>
+      <input id="title" placeholder="Le Parrain">
+      <label for="synopsis">Synopsis (sans citer le titre)</label>
+      <textarea id="synopsis" rows="4" placeholder="Le patriarche vieillissant d'une dynastie du crime…"></textarea>
+      <label for="acceptedAnswers">Réponses également acceptées (séparées par des virgules)</label>
+      <input id="acceptedAnswers" placeholder="the godfather, parrain">
+      <div class="grid">
+        <div><label for="year">Année</label><input id="year" inputmode="numeric" placeholder="1972"></div>
+        <div><label for="director">Réalisateur</label><input id="director" placeholder="Francis Ford Coppola"></div>
+      </div>
+      <label for="actors">Acteurs principaux</label>
+      <input id="actors" placeholder="Marlon Brando, Al Pacino">
+      <label for="poster">URL de l'affiche</label>
+      <input id="poster" placeholder="https://image.tmdb.org/t/p/w500/…">
+      <div class="row">
+        <button id="btnSave">Enregistrer</button>
+        <button id="btnCancel" class="ghost hidden">Annuler la modification</button>
+      </div>
+      <p class="msg" id="formMsg"></p>
+    </div>
+
+    <div class="card">
+      <p class="tag" id="countLabel">Films au catalogue</p>
+      <div id="list"></div>
+    </div>
+  </section>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const FIELDS = ["title","synopsis","acceptedAnswers","year","director","actors","poster"];
+let token = "", movies = [], editingId = null;
+
+const api = (path, options = {}) => fetch(path, {
+  ...options,
+  headers: {"Content-Type":"application/json", "x-admin-token": token, ...(options.headers||{})}
+});
+
+$("btnAuth").onclick = async () => {
+  token = $("token").value.trim();
+  const res = await api("/api/movies");
+  if (!res.ok) return ($("authMsg").textContent = "Clé refusée.");
+  movies = await res.json();
+  $("auth").classList.add("hidden"); $("app").classList.remove("hidden");
+  render();
+};
+$("token").addEventListener("keydown", e => { if (e.key === "Enter") $("btnAuth").click(); });
+
+function render(){
+  $("countLabel").textContent = `${movies.length} film${movies.length>1?"s":""} au catalogue`;
+  $("list").innerHTML = movies.map(m => `
+    <div class="item">
+      <img src="${m.poster||""}" alt="" onerror="this.style.visibility='hidden'">
+      <div>
+        <strong>${esc(m.title)}</strong>
+        <small>${m.year||"—"} · ${esc(m.director||"réalisateur non renseigné")}</small>
+      </div>
+      <button class="ghost" data-edit="${m.id}">Modifier</button>
+      <button class="danger" data-del="${m.id}">Supprimer</button>
+    </div>`).join("");
+  $("list").querySelectorAll("[data-edit]").forEach(b => b.onclick = () => edit(Number(b.dataset.edit)));
+  $("list").querySelectorAll("[data-del]").forEach(b => b.onclick = () => remove(Number(b.dataset.del)));
+}
+
+function edit(id){
+  const m = movies.find(x => x.id === id);
+  editingId = id;
+  FIELDS.forEach(f => $(f).value = Array.isArray(m[f]) ? m[f].filter(a=>a!==m.title).join(", ") : (m[f] ?? ""));
+  $("formTitle").textContent = `Modifier : ${m.title}`;
+  $("btnCancel").classList.remove("hidden");
+  window.scrollTo({top:0, behavior:"smooth"});
+}
+
+function resetForm(){
+  editingId = null;
+  FIELDS.forEach(f => $(f).value = "");
+  $("formTitle").textContent = "Nouveau film";
+  $("btnCancel").classList.add("hidden");
+}
+$("btnCancel").onclick = resetForm;
+
+$("btnSave").onclick = async () => {
+  const body = Object.fromEntries(FIELDS.map(f => [f, $(f).value.trim()]));
+  if (!body.title || !body.synopsis){
+    $("formMsg").textContent = "Le titre et le synopsis sont obligatoires.";
+    $("formMsg").className = "msg err"; return;
+  }
+  const res = editingId
+    ? await api(`/api/movies/${editingId}`, {method:"PUT", body:JSON.stringify(body)})
+    : await api("/api/movies", {method:"POST", body:JSON.stringify(body)});
+  if (!res.ok){
+    $("formMsg").textContent = "Enregistrement refusé par le serveur.";
+    $("formMsg").className = "msg err"; return;
+  }
+  const saved = await res.json();
+  if (editingId) movies = movies.map(m => m.id === editingId ? saved : m);
+  else movies.push(saved);
+  $("formMsg").textContent = `${saved.title} enregistré.`;
+  $("formMsg").className = "msg ok";
+  resetForm(); render();
+};
+
+async function remove(id){
+  const m = movies.find(x => x.id === id);
+  if (!confirm(`Supprimer « ${m.title} » du catalogue ?`)) return;
+  const res = await api(`/api/movies/${id}`, {method:"DELETE"});
+  if (!res.ok) return;
+  movies = movies.filter(x => x.id !== id);
+  if (editingId === id) resetForm();
+  render();
+}
+
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+</script>
+</body>
+</html>

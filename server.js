@@ -1,0 +1,394 @@
+/**
+ * MichBen Ciné Quizz — serveur de jeu (MVP)
+ * Node 18+ / Express / Socket.IO
+ *
+ *   npm install && npm start   →  http://localhost:3000
+ *   Interface d'administration →  http://localhost:3000/admin.html
+ *
+ * Les films sont stockés dans movies.json (éditable via l'admin).
+ * L'état des parties est en mémoire : Redis en production.
+ */
+
+import express from "express";
+import { createServer } from "http";
+import { Server } from "socket.io";
+import { readFileSync, writeFileSync } from "fs";
+import crypto from "crypto";
+import { mountAuth, userFromCookie, addRankedPoints,
+         spendCredits, grantCredits, getCredits, CREDITS_PER_GAME } from "./auth-x.js";
+
+const app = express();
+app.use(express.json());
+app.use(express.static("public"));
+mountAuth(app);                       // /auth/x/login, /auth/x/callback, /api/me, /api/leaderboard
+const httpServer = createServer(app);
+const io = new Server(httpServer, { cors: { origin: "*" } });
+
+/* ------------------------------------------------------------------ */
+/* Configuration                                                       */
+/* ------------------------------------------------------------------ */
+
+const CONFIG = {
+  ROUND_DURATION_MS: 60_000,
+  BASE_POINTS: 1000,
+  HINT_COSTS: { year: 100, director: 200, actors: 300, poster: 250 },   // en points
+  HINT_CREDITS: { year: 1, director: 1, actors: 2, poster: 2 },          // en crédits
+  MAX_PLAYERS: 16,
+  TIP_URL: process.env.TIP_URL || "https://buymeacoffee.com/votre-pseudo",
+};
+
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || "michben-admin"; // à changer avant toute mise en ligne
+const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ"; // sans I, O, 0, 1
+
+/* ------------------------------------------------------------------ */
+/* Catalogue de films (persisté dans movies.json)                      */
+/* ------------------------------------------------------------------ */
+
+const MOVIES_FILE = new URL("./movies.json", import.meta.url);
+let movies = JSON.parse(readFileSync(MOVIES_FILE, "utf8"));
+const saveMovies = () => writeFileSync(MOVIES_FILE, JSON.stringify(movies, null, 2));
+
+function requireAdmin(req, res, next) {
+  if (req.get("x-admin-token") !== ADMIN_TOKEN) return res.status(401).json({ error: "UNAUTHORIZED" });
+  next();
+}
+
+app.get("/api/movies", requireAdmin, (_req, res) => res.json(movies));
+
+app.post("/api/movies", requireAdmin, (req, res) => {
+  const movie = sanitizeMovie(req.body);
+  if (!movie.title || !movie.synopsis) return res.status(400).json({ error: "TITLE_AND_SYNOPSIS_REQUIRED" });
+  movie.id = Math.max(0, ...movies.map((m) => m.id)) + 1;
+  movies.push(movie);
+  saveMovies();
+  res.status(201).json(movie);
+});
+
+app.put("/api/movies/:id", requireAdmin, (req, res) => {
+  const index = movies.findIndex((m) => m.id === Number(req.params.id));
+  if (index === -1) return res.status(404).json({ error: "NOT_FOUND" });
+  movies[index] = { ...sanitizeMovie(req.body), id: movies[index].id };
+  saveMovies();
+  res.json(movies[index]);
+});
+
+app.delete("/api/movies/:id", requireAdmin, (req, res) => {
+  movies = movies.filter((m) => m.id !== Number(req.params.id));
+  saveMovies();
+  res.status(204).end();
+});
+
+function sanitizeMovie(body) {
+  const answers = Array.isArray(body.acceptedAnswers)
+    ? body.acceptedAnswers
+    : String(body.acceptedAnswers || "").split(",");
+  return {
+    title: String(body.title || "").trim(),
+    synopsis: String(body.synopsis || "").trim(),
+    acceptedAnswers: [String(body.title || ""), ...answers].map((a) => a.trim()).filter(Boolean),
+    year: Number(body.year) || null,
+    director: String(body.director || "").trim(),
+    actors: String(body.actors || "").trim(),
+    poster: String(body.poster || "").trim(),
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* Premium : suppression de la publicité                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * ATTENTION — implémentation de démonstration.
+ * En production : Stripe Checkout côté serveur, statut premium écrit en base
+ * depuis le WEBHOOK Stripe (jamais depuis le client), et licence liée au
+ * compte utilisateur. Ici, une licence signée est délivrée sans paiement réel
+ * pour que le flux soit testable de bout en bout.
+ */
+const LICENSE_SECRET = process.env.LICENSE_SECRET || "dev-secret-a-remplacer";
+const signLicense = (id) =>
+  `${id}.${crypto.createHmac("sha256", LICENSE_SECRET).update(id).digest("hex").slice(0, 24)}`;
+const verifyLicense = (lic) => {
+  const [id, sig] = String(lic || "").split(".");
+  return Boolean(id && sig && signLicense(id) === `${id}.${sig}`);
+};
+
+app.get("/api/config", (_req, res) => res.json({ tipUrl: CONFIG.TIP_URL, maxPlayers: CONFIG.MAX_PLAYERS }));
+
+app.post("/api/premium/checkout", (_req, res) => {
+  // TODO : créer une session Stripe Checkout et renvoyer session.url
+  // const session = await stripe.checkout.sessions.create({...});
+  res.json({ mode: "demo", license: signLicense(crypto.randomUUID()) });
+});
+
+app.post("/api/premium/verify", (req, res) => res.json({ premium: verifyLicense(req.body.license) }));
+
+/* ------------------------------------------------------------------ */
+/* Utilitaires de jeu                                                  */
+/* ------------------------------------------------------------------ */
+
+const rooms = new Map();
+
+function generateRoomCode() {
+  let code;
+  do {
+    code = Array.from({ length: 4 }, () =>
+      CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)]
+    ).join("");
+  } while (rooms.has(code));
+  return code;
+}
+
+/** Motif du titre : un tiret par lettre, espaces et ponctuation conservés. */
+function titlePattern(title) {
+  return [...title].map((c) => (/[\p{L}\p{N}]/u.test(c) ? "–" : c)).join("");
+}
+
+/** Normalisation permissive : casse, accents, ponctuation, article initial. */
+function normalize(str) {
+  return String(str)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9 ]/g, "")
+    .replace(/^(le |la |les |the |a |an )/, "")
+    .trim();
+}
+
+/** Score = base × facteur temps − coût des indices consommés. */
+function computeScore({ elapsedMs, hintsUsed }) {
+  const timeFactor = Math.max(0.1, 1 - elapsedMs / CONFIG.ROUND_DURATION_MS);
+  const penalty = hintsUsed.reduce((sum, h) => sum + (CONFIG.HINT_COSTS[h] ?? 0), 0);
+  return Math.max(50, Math.round(CONFIG.BASE_POINTS * timeFactor) - penalty);
+}
+
+function publicState(room) {
+  return {
+    code: room.code,
+    hostId: room.hostId,
+    status: room.status,
+    mode: room.mode,
+    roundIndex: room.roundIndex,
+    players: [...room.players.values()].map((p) => ({
+      id: p.id, pseudo: p.pseudo, avatar: p.avatar, score: p.score,
+      team: p.team, hasAnswered: p.hasAnswered,
+    })),
+    teams: room.mode === "teams" ? teamScores(room) : null,
+  };
+}
+
+/** Score cumulé par équipe, utilisé en mode équipes. */
+function teamScores(room) {
+  const totals = { A: 0, B: 0 };
+  for (const p of room.players.values()) if (p.team) totals[p.team] += p.score;
+  return totals;
+}
+
+/* ------------------------------------------------------------------ */
+/* Boucle de jeu                                                       */
+/* ------------------------------------------------------------------ */
+
+function startRound(room) {
+  const movie = room.playlist[room.roundIndex];
+  if (!movie) return endGame(room);
+
+  room.status = "playing";
+  room.currentMovie = movie;
+  room.startedAt = Date.now();
+  for (const p of room.players.values()) { p.hasAnswered = false; p.hints = []; }
+
+  io.to(room.code).emit("round:start", {
+    roundIndex: room.roundIndex,
+    total: room.playlist.length,
+    synopsis: movie.synopsis,        // le titre et l'affiche ne partent jamais au client
+    pattern: titlePattern(movie.title),   // "–––– –– ––––" : la forme, jamais les lettres
+    duration: CONFIG.ROUND_DURATION_MS,
+    hintCosts: CONFIG.HINT_COSTS,
+    hintCredits: CONFIG.HINT_CREDITS,
+  });
+
+  clearTimeout(room.timer);
+  room.timer = setTimeout(() => endRound(room), CONFIG.ROUND_DURATION_MS);
+}
+
+function endRound(room) {
+  clearTimeout(room.timer);
+  io.to(room.code).emit("round:end", {
+    answer: room.currentMovie.title,
+    poster: room.currentMovie.poster,   // affiche révélée seulement maintenant
+    year: room.currentMovie.year,
+    scores: publicState(room).players,
+  });
+  room.roundIndex++;
+  room.status = "intermission";
+  room.nextTimer = setTimeout(() => startRound(room), 6000);
+}
+
+function endGame(room) {
+  room.status = "finished";
+  const state = publicState(room);
+  const ranking = state.players.sort((a, b) => b.score - a.score);
+  for (const p of room.players.values()) {
+    if (room.mode === "ranked") addRankedPoints(p.userId, p.score);
+    grantCredits(p.userId, CREDITS_PER_GAME);   // toute partie terminée recharge le compte
+  }
+  for (const p of room.players.values())
+    io.to(p.id).emit("game:end", { ranking, mode: room.mode, teams: state.teams, credits: getCredits(p.userId) });
+  // TODO : persister la partie et créditer les récompenses
+}
+
+/* ------------------------------------------------------------------ */
+/* Événements Socket.IO                                                */
+/* ------------------------------------------------------------------ */
+
+io.use((socket, next) => {
+  const user = userFromCookie(socket.handshake.headers.cookie);
+  if (!user) return next(new Error("NOT_AUTHENTICATED"));   // aucune partie sans compte
+  if (!user.pseudoChosen) return next(new Error("NO_PSEUDO")); // ni sans pseudo choisi
+  socket.data.user = user;
+  next();
+});
+
+io.on("connection", (socket) => {
+  const user = socket.data.user;
+
+  socket.on("room:create", ({ rounds, mode }, cb) => {
+    if (movies.length === 0) return cb?.({ ok: false, error: "NO_MOVIES" });
+    const code = generateRoomCode();
+    const count = Math.min(Number(rounds) || 10, movies.length);
+    const room = {
+      code, hostId: socket.id, status: "lobby", roundIndex: 0,
+      mode: ["solo", "ffa", "duel", "teams", "ranked"].includes(mode) ? mode : "ffa",
+      players: new Map(),
+      playlist: [...movies].sort(() => Math.random() - 0.5).slice(0, count),
+      currentMovie: null, startedAt: null, timer: null, nextTimer: null,
+    };
+    rooms.set(code, room);
+    joinRoom(socket, room, user);
+    cb?.({ ok: true, code, state: publicState(room) });
+    if (room.mode === "solo" || room.mode === "ranked") startRound(room); // le solo démarre immédiatement
+  });
+
+  socket.on("room:join", ({ code }, cb) => {
+    const room = rooms.get(String(code || "").toUpperCase());
+    if (!room) return cb?.({ ok: false, error: "ROOM_NOT_FOUND" });
+    const limit = room.mode === "duel" ? 2 : CONFIG.MAX_PLAYERS;
+    if (room.players.size >= limit) return cb?.({ ok: false, error: "ROOM_FULL" });
+    if (room.status !== "lobby") return cb?.({ ok: false, error: "GAME_ALREADY_STARTED" });
+    joinRoom(socket, room, user);
+    cb?.({ ok: true, code: room.code, state: publicState(room) });
+  });
+
+  socket.on("team:choose", ({ code, team }) => {
+    const room = rooms.get(code);
+    const player = room?.players.get(socket.id);
+    if (!room || !player || room.status !== "lobby" || !["A", "B"].includes(team)) return;
+    player.team = team;
+    io.to(room.code).emit("room:update", publicState(room));
+  });
+
+  socket.on("game:start", ({ code }) => {
+    const room = rooms.get(code);
+    if (!room || room.hostId !== socket.id || room.status !== "lobby") return;
+    startRound(room);
+  });
+
+  socket.on("hint:buy", ({ code, type }, cb) => {
+    const room = rooms.get(code);
+    const player = room?.players.get(socket.id);
+    if (!room || !player || room.status !== "playing") return cb?.({ ok: false });
+    if (!CONFIG.HINT_COSTS[type]) return cb?.({ ok: false, error: "UNKNOWN_HINT" });
+    if (player.hints.includes(type)) return cb?.({ ok: false, error: "ALREADY_BOUGHT" });
+
+    if (!spendCredits(player.userId, CONFIG.HINT_CREDITS[type]))
+      return cb?.({ ok: false, error: "NO_CREDITS" });
+
+    player.hints.push(type);
+    cb?.({ ok: true, type, value: room.currentMovie[type], credits: getCredits(player.userId) });
+  });
+
+  socket.on("answer:submit", ({ code, guess }, cb) => {
+    const room = rooms.get(code);
+    const player = room?.players.get(socket.id);
+    if (!room || !player || room.status !== "playing" || player.hasAnswered) return cb?.({ ok: false });
+
+    const guessed = normalize(guess);
+    const correct = room.currentMovie.acceptedAnswers.some((a) => normalize(a) === guessed);
+    if (!correct) return cb?.({ ok: true, correct: false });
+
+    player.hasAnswered = true;
+    const points = computeScore({ elapsedMs: Date.now() - room.startedAt, hintsUsed: player.hints });
+    player.score += points;
+
+    cb?.({ ok: true, correct: true, points });
+    io.to(room.code).emit("player:answered", { id: player.id, pseudo: player.pseudo, points });
+
+    if ([...room.players.values()].every((p) => p.hasAnswered)) endRound(room);
+  });
+
+  /** Chat réservé aux joueurs du salon. Les messages qui contiennent la
+   *  réponse en cours sont bloqués : sinon le chat devient un anti-jeu. */
+  socket.on("chat:send", ({ code, text }) => {
+    const room = rooms.get(code);
+    const player = room?.players.get(socket.id);
+    if (!room || !player) return;
+
+    const message = String(text || "").trim().slice(0, 200);
+    if (!message) return;
+
+    if (room.status === "playing" && room.currentMovie) {
+      const said = normalize(message);
+      const leaks = room.currentMovie.acceptedAnswers.some((a) => {
+        const answer = normalize(a);
+        return answer.length > 2 && said.includes(answer);
+      });
+      if (leaks) return socket.emit("chat:blocked");
+    }
+
+    io.to(room.code).emit("chat:message", {
+      pseudo: player.pseudo, avatar: player.avatar, text: message, at: Date.now(),
+    });
+  });
+
+  socket.on("room:leave", () => leaveAllRooms(socket));
+
+  socket.on("disconnect", () => leaveAllRooms(socket));
+
+  function leaveAllRooms(socket) {
+    for (const room of rooms.values()) {
+      if (!room.players.delete(socket.id)) continue;
+      socket.leave(room.code);
+      if (room.players.size === 0) {
+        clearTimeout(room.timer); clearTimeout(room.nextTimer);
+        rooms.delete(room.code);
+      } else {
+        if (room.hostId === socket.id) room.hostId = [...room.players.keys()][0];
+        io.to(room.code).emit("room:update", publicState(room));
+      }
+    }
+  }
+});
+
+function joinRoom(socket, room, user) {
+  room.players.set(socket.id, {
+    id: socket.id,
+    userId: user.id,
+    pseudo: user.pseudo,
+    avatar: user.avatar || "🎬",
+    team: room.mode === "teams" ? balancedTeam(room) : null,
+    score: 0, hints: [], hasAnswered: false,
+  });
+  socket.join(room.code);
+  io.to(room.code).emit("room:update", publicState(room));
+}
+
+/** Place le nouvel arrivant dans l'équipe la moins nombreuse. */
+function balancedTeam(room) {
+  let a = 0, b = 0;
+  for (const p of room.players.values()) p.team === "A" ? a++ : p.team === "B" ? b++ : null;
+  return a <= b ? "A" : "B";
+}
+
+const PORT = process.env.PORT || 3000;
+httpServer.listen(PORT, "0.0.0.0", () =>
+  console.log(`MichBen Ciné Quizz → http://localhost:${PORT}  (admin : /admin.html)`)
+);

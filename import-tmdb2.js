@@ -1,0 +1,2 @@
+set TMDB_API_KEY=41b07e6025d6edfc166594b3cd445102
+node import-tmdb.js
