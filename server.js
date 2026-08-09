@@ -22,7 +22,17 @@ import { mountAuth, userFromCookie, addRankedPoints,
 
 const app = express();
 app.use(express.json());
-app.use(express.static("public"));
+/**
+ * Les pages HTML ne doivent jamais rester en cache : sinon un joueur garde
+ * l'ancienne version après une mise à jour et croit le jeu cassé.
+ * Le reste (images, polices) peut être mis en cache sans risque.
+ */
+app.use(express.static("public", {
+  setHeaders(res, chemin) {
+    res.setHeader("Cache-Control",
+      chemin.endsWith(".html") ? "no-cache, must-revalidate" : "public, max-age=86400");
+  },
+}));
 mountAuth(app);                       // /auth/x/login, /auth/x/callback, /api/me, /api/leaderboard
 const httpServer = createServer(app);
 const io = new Server(httpServer, { cors: { origin: "*" } });
