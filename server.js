@@ -15,7 +15,8 @@ import { Server } from "socket.io";
 import { readFileSync, writeFileSync } from "fs";
 import crypto from "crypto";
 import { mountAuth, userFromCookie, addRankedPoints,
-         spendCredits, grantCredits, getCredits, CREDITS_PER_GAME } from "./auth-x.js";
+         spendCredits, grantCredits, getCredits, CREDITS_PER_GAME,
+         listUsers, adminUpdateUser, adminDeleteUser, grantAll } from "./auth-x.js";
 
 const app = express();
 app.use(express.json());
@@ -54,6 +55,26 @@ function requireAdmin(req, res, next) {
 }
 
 app.get("/api/movies", requireAdmin, (_req, res) => res.json(movies));
+
+/* ---------- administration des joueurs ---------- */
+
+app.get("/api/admin/users", requireAdmin, (_req, res) => res.json(listUsers()));
+
+app.put("/api/admin/users/:id", requireAdmin, (req, res) => {
+  const user = adminUpdateUser(req.params.id, req.body);
+  if (!user) return res.status(404).json({ error: "NOT_FOUND" });
+  res.json(user);
+});
+
+app.delete("/api/admin/users/:id", requireAdmin, (req, res) =>
+  adminDeleteUser(req.params.id) ? res.status(204).end() : res.status(404).json({ error: "NOT_FOUND" })
+);
+
+app.post("/api/admin/grant-all", requireAdmin, (req, res) => {
+  const amount = Math.round(Number(req.body.amount) || 0);
+  if (!amount) return res.status(400).json({ error: "AMOUNT_REQUIRED" });
+  res.json({ users: grantAll(amount), amount });
+});
 
 app.post("/api/movies", requireAdmin, (req, res) => {
   const movie = sanitizeMovie(req.body);
@@ -243,6 +264,7 @@ function endGame(room) {
 io.use((socket, next) => {
   const user = userFromCookie(socket.handshake.headers.cookie);
   if (!user) return next(new Error("NOT_AUTHENTICATED"));   // aucune partie sans compte
+  if (user.banned) return next(new Error("BANNED"));
   if (!user.pseudoChosen) return next(new Error("NO_PSEUDO")); // ni sans pseudo choisi
   socket.data.user = user;
   next();
