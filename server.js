@@ -35,6 +35,7 @@ const CONFIG = {
   HINT_COSTS: { year: 100, director: 200, actors: 300, poster: 250 },   // en points
   HINT_CREDITS: { year: 1, director: 1, actors: 2, poster: 2 },          // en crédits
   MAX_PLAYERS: 16,
+  GRACE_AFTER_FIRST_MS: 15_000,   // délai laissé aux autres après la première bonne réponse
   TIP_URL: process.env.TIP_URL || "https://buymeacoffee.com/votre-pseudo",
 };
 
@@ -209,6 +210,8 @@ function teamScores(room) {
 /* ------------------------------------------------------------------ */
 
 function startRound(room) {
+  clearTimeout(room.graceTimer);
+  room.graceTimer = null;
   const movie = room.playlist[room.roundIndex];
   if (!movie) return endGame(room);
 
@@ -232,7 +235,10 @@ function startRound(room) {
 }
 
 function endRound(room) {
+  if (room.status !== "playing") return;   // évite un double appel timer + grâce
   clearTimeout(room.timer);
+  clearTimeout(room.graceTimer);
+  room.graceTimer = null;
   io.to(room.code).emit("round:end", {
     answer: room.currentMovie.title,
     poster: room.currentMovie.poster,   // affiche révélée seulement maintenant
@@ -282,7 +288,7 @@ io.on("connection", (socket) => {
       mode: ["solo", "ffa", "duel", "teams", "ranked"].includes(mode) ? mode : "ffa",
       players: new Map(),
       playlist: [...movies].sort(() => Math.random() - 0.5).slice(0, count),
-      currentMovie: null, startedAt: null, timer: null, nextTimer: null,
+      currentMovie: null, startedAt: null, timer: null, nextTimer: null, graceTimer: null,
     };
     rooms.set(code, room);
     joinRoom(socket, room, user);
@@ -295,9 +301,13 @@ io.on("connection", (socket) => {
     if (!room) return cb?.({ ok: false, error: "ROOM_NOT_FOUND" });
     const limit = room.mode === "duel" ? 2 : CONFIG.MAX_PLAYERS;
     if (room.players.size >= limit) return cb?.({ ok: false, error: "ROOM_FULL" });
-    if (room.status !== "lobby") return cb?.({ ok: false, error: "GAME_ALREADY_STARTED" });
+    if (room.status === "finished") return cb?.({ ok: false, error: "GAME_OVER" });
+
+    const enCours = room.status !== "lobby";
     joinRoom(socket, room, user);
-    cb?.({ ok: true, code: room.code, state: publicState(room) });
+    if (enCours) room.players.get(socket.id).hasAnswered = true; // n'entre qu'à la manche suivante
+    cb?.({ ok: true, code: room.code, state: publicState(room), waiting: enCours,
+           roundIndex: room.roundIndex, total: room.playlist.length });
   });
 
   socket.on("team:choose", ({ code, team }) => {
@@ -342,9 +352,16 @@ io.on("connection", (socket) => {
     player.score += points;
 
     cb?.({ ok: true, correct: true, points });
-    io.to(room.code).emit("player:answered", { id: player.id, pseudo: player.pseudo, points });
+    io.to(room.code).emit("player:answered", { id: player.id, pseudo: player.pseudo, team: player.team, points });
 
-    if ([...room.players.values()].every((p) => p.hasAnswered)) endRound(room);
+    const tousTrouve = [...room.players.values()].every((p) => p.hasAnswered);
+    if (tousTrouve) return endRound(room);
+
+    // premier à trouver : les autres ont encore quelques secondes
+    if (!room.graceTimer) {
+      room.graceTimer = setTimeout(() => endRound(room), CONFIG.GRACE_AFTER_FIRST_MS);
+      io.to(room.code).emit("round:grace", { ms: CONFIG.GRACE_AFTER_FIRST_MS, pseudo: player.pseudo });
+    }
   });
 
   /** Chat réservé aux joueurs du salon. Les messages qui contiennent la
@@ -371,6 +388,14 @@ io.on("connection", (socket) => {
     });
   });
 
+  /** Un joueur qui a déjà répondu (ou qui joue seul) peut enchaîner. */
+  socket.on("round:skip", ({ code }) => {
+    const room = rooms.get(code);
+    const player = room?.players.get(socket.id);
+    if (!room || !player || room.status !== "playing") return;
+    if (["solo", "ranked"].includes(room.mode) || player.hasAnswered) endRound(room);
+  });
+
   socket.on("room:leave", () => leaveAllRooms(socket));
 
   socket.on("disconnect", () => leaveAllRooms(socket));
@@ -380,7 +405,7 @@ io.on("connection", (socket) => {
       if (!room.players.delete(socket.id)) continue;
       socket.leave(room.code);
       if (room.players.size === 0) {
-        clearTimeout(room.timer); clearTimeout(room.nextTimer);
+        clearTimeout(room.timer); clearTimeout(room.nextTimer); clearTimeout(room.graceTimer);
         rooms.delete(room.code);
       } else {
         if (room.hostId === socket.id) room.hostId = [...room.players.keys()][0];

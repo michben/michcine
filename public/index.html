@@ -59,11 +59,16 @@
   .feedback.bad{color:var(--ticket)}.feedback.good{color:var(--beam)}
   .reveal{font-family:'Anton',sans-serif;font-size:clamp(24px,6vw,34px);text-transform:uppercase;color:var(--beam);margin:4px 0 0;letter-spacing:.03em}
   .poster{width:140px;border-radius:10px;display:block;margin-top:14px;box-shadow:0 12px 30px rgba(0,0,0,.5)}
-  .poster.blurred{filter:blur(16px) saturate(.6)}
+  .poster.blurred{filter:blur(7px) saturate(.85)}
   ol.rank{list-style:none;counter-reset:r;padding:0;margin:14px 0 0}
   ol.rank li{counter-increment:r;display:flex;align-items:center;gap:10px;padding:11px 0;border-top:1px solid rgba(237,232,220,.1)}
   ol.rank li::before{content:counter(r);font-family:'JetBrains Mono',monospace;color:var(--muted);width:22px}
   ol.rank li b{margin-left:auto;color:var(--beam)}
+  ol.rank li.A{border-left:3px solid var(--beam);padding-left:10px}
+  ol.rank li.B{border-left:3px solid var(--teal);padding-left:10px}
+  ol.rank li.B b{color:var(--teal)}
+  #roundPlayers li.A{box-shadow:inset 0 0 0 1px var(--beam)}
+  #roundPlayers li.B{box-shadow:inset 0 0 0 1px var(--teal)}
   .teamboard{display:flex;gap:12px;margin-top:14px}
   .teamboard div{flex:1;background:var(--card);border-radius:12px;padding:14px;text-align:center}
   .teamboard div b{display:block;font-family:'JetBrains Mono',monospace;font-size:26px;margin-top:4px}
@@ -73,6 +78,16 @@
   footer p{color:var(--muted);font-size:13px;margin:0 0 12px}
   .tip{display:inline-flex;align-items:center;gap:8px;text-decoration:none;font-weight:700;font-size:15px;
     background:transparent;color:var(--beam);border:1px solid var(--beam);border-radius:999px;padding:11px 20px}
+  .headline{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+  .dots{display:flex;gap:5px;flex:1;min-width:120px}
+  .dots i{flex:1;height:5px;border-radius:99px;background:var(--card)}
+  .dots i.done{background:var(--muted)}
+  .dots i.now{background:var(--beam)}
+  .roomcode{font-family:'JetBrains Mono',monospace;font-size:14px;letter-spacing:.24em;color:var(--beam);
+    background:var(--card);border-radius:8px;padding:6px 12px}
+  .grace{color:var(--ticket);font-size:14px;margin:12px 0 0}
+  .waiting{text-align:center;padding:26px 0}
+  .waiting b{display:block;font-family:'Anton',sans-serif;text-transform:uppercase;font-size:20px;color:var(--beam);margin-bottom:8px}
   .wallet{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--muted);
     background:var(--card);border-radius:999px;padding:7px 14px;margin-top:10px}
   .wallet b{color:var(--beam);font-family:'JetBrains Mono',monospace;font-size:15px}
@@ -211,6 +226,10 @@
   <section id="round" class="hidden">
     <div class="card">
       <div class="beam"><i id="beamBar"></i></div>
+      <div class="headline">
+        <div class="dots" id="dots"></div>
+        <span class="roomcode hidden" id="roomCode"></span>
+      </div>
       <p class="tag" id="roundLabel">Manche 1</p>
       <p class="synopsis" id="synopsis"></p>
       <p class="pattern" id="pattern"><small>Le titre à trouver</small><span id="patternText"></span></p>
@@ -222,7 +241,18 @@
         <button id="btnGuess" style="flex:0 0 auto">Valider</button>
       </div>
       <p class="feedback" id="guessFeedback"></p>
+      <p class="grace hidden" id="grace"></p>
+      <div class="row"><button id="btnSkip" class="ghost hidden">Passer à la manche suivante</button></div>
       <ul class="players" id="roundPlayers"></ul>
+    </div>
+  </section>
+
+  <!-- ARRIVÉE EN COURS DE PARTIE -->
+  <section id="waiting" class="hidden">
+    <div class="card waiting">
+      <b>Partie en cours</b>
+      <p class="note" style="margin:0" id="waitingInfo"></p>
+      <p class="roomcode" id="waitingCode" style="display:inline-block;margin-top:14px"></p>
     </div>
   </section>
 
@@ -284,7 +314,7 @@ function setCredits(n){
 }
 let state = {code:null, mode:"ffa", isHost:false, hintCosts:{}, bought:{}, answered:false, timerId:null};
 
-const show = id => ["landing","profile","board","menu","lobby","round","between","over"]
+const show = id => ["landing","profile","board","menu","lobby","waiting","round","between","over"]
   .forEach(s => $(s).classList.toggle("hidden", s !== id));
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
@@ -379,7 +409,20 @@ $("btnBoard").onclick = async () => {
 };
 $("btnBoardBack").onclick = () => show("menu");
 
-/* ---------- Sons ---------- */
+$("btnSkip").onclick = () => socket.emit("round:skip", {code: state.code});
+
+socket.on("round:grace", ({ms, pseudo}) => {
+  const el = $("grace");
+  el.classList.remove("hidden");
+  let left = Math.round(ms / 1000);
+  el.textContent = `${pseudo} a trouvé — ${left} s pour les autres`;
+  clearInterval(state.graceId);
+  state.graceId = setInterval(() => {
+    left--;
+    if (left <= 0) return clearInterval(state.graceId);
+    el.textContent = `${pseudo} a trouvé — ${left} s pour les autres`;
+  }, 1000);
+});
 let muted = localStorage.getItem("michben_muet") === "1";
 $("soundToggle").textContent = muted ? "🔇" : "🔊";
 $("soundToggle").onclick = () => {
@@ -473,6 +516,12 @@ $("btnJoin").onclick = () => {
       GAME_ALREADY_STARTED:"La partie a déjà commencé."}[res?.error] || "Impossible de rejoindre.");
     state.code = res.code; state.mode = res.state.mode;
     setChatVisible(true);
+    if (res.waiting){
+      $("waitingInfo").textContent =
+        `Vous entrerez en jeu à la manche ${res.roundIndex + 2} sur ${res.total}.`;
+      $("waitingCode").textContent = res.code;
+      return show("waiting");
+    }
     renderLobby(res.state); show("lobby");
   });
 };
@@ -497,6 +546,12 @@ socket.on("room:update", renderLobby);
 /* ---------- Manche ---------- */
 socket.on("round:start", ({roundIndex,total,synopsis,duration,hintCosts,hintCredits,pattern}) => {
   $("patternText").textContent = pattern || "";
+  $("dots").innerHTML = Array.from({length: total}, (_, i) =>
+    `<i class="${i < roundIndex ? "done" : i === roundIndex ? "now" : ""}"></i>`).join("");
+  $("roomCode").textContent = state.code || "";
+  $("roomCode").classList.toggle("hidden", ["solo","ranked"].includes(state.mode));
+  $("grace").classList.add("hidden");
+  $("btnSkip").classList.toggle("hidden", !["solo","ranked"].includes(state.mode));
   state.hintCredits = hintCredits || {};
   play("sndStart");
   state.hintCosts = hintCosts; state.bought = {}; state.answered = false;
@@ -547,6 +602,7 @@ function submitGuess(){
       $("guessFeedback").textContent = `Trouvé ! +${res.points} points`;
       $("guessFeedback").className = "feedback good";
       $("guess").disabled = true; $("btnGuess").disabled = true;
+      $("btnSkip").classList.remove("hidden");
     } else {
       $("guessFeedback").textContent = "Ce n'est pas ce film. Réessayez.";
       $("guessFeedback").className = "feedback bad";
@@ -556,8 +612,9 @@ function submitGuess(){
 }
 $("btnGuess").onclick = submitGuess;
 $("guess").addEventListener("keydown", e => { if (e.key === "Enter") submitGuess(); });
-socket.on("player:answered", ({pseudo}) => {
+socket.on("player:answered", ({pseudo, team}) => {
   const li = document.createElement("li");
+  if (team) li.className = team;
   li.textContent = `${pseudo} a trouvé`;
   $("roundPlayers").prepend(li);
 });
@@ -575,6 +632,8 @@ function runBeam(duration){
 /* ---------- Fins ---------- */
 socket.on("round:end", ({answer, poster, scores}) => {
   clearInterval(state.timerId);
+  clearInterval(state.graceId);
+  $("grace").classList.add("hidden");
   $("answer").textContent = answer;
   const img = $("answerPoster");
   if (poster){ img.src = poster; img.alt = `Affiche de ${answer}`; img.classList.remove("hidden"); }
@@ -602,8 +661,9 @@ socket.on("game:end", ({ranking, mode, teams, credits: solde}) => {
   show("over");
 });
 
+/* La couleur d'équipe suit le joueur jusqu'au classement final. */
 const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
-  .map(p => `<li>${p.avatar||"🎬"} ${esc(p.pseudo)}<b>${p.score} pts</b></li>`).join("");
+  .map(p => `<li class="${p.team||""}">${p.avatar||"🎬"} ${esc(p.pseudo)}<b>${p.score} pts</b></li>`).join("");
 </script>
 </body>
 </html>
