@@ -32,6 +32,10 @@
   .avatars{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:4px}
   .avatars button{background:var(--card);border:1px solid transparent;font-size:22px;padding:8px 10px;line-height:1}
   .avatars button[aria-pressed="true"]{border-color:var(--beam);background:rgba(245,185,66,.12)}
+  .levels{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px}
+  .levels button{flex:1 1 auto;background:var(--card);color:var(--muted);border:1px solid transparent;
+    font-weight:500;font-size:14px;padding:11px 12px}
+  .levels button[aria-pressed="true"]{color:#161207;background:var(--beam);font-weight:700}
   .modes{display:grid;gap:10px}
   .mode{display:flex;gap:14px;align-items:center;text-align:left;background:var(--card);
     border:1px solid rgba(237,232,220,.1);color:var(--chalk);padding:16px;border-radius:12px;font-weight:500}
@@ -93,6 +97,12 @@
   .dots i{flex:1;height:5px;border-radius:99px;background:var(--card)}
   .dots i.done{background:var(--muted)}
   .dots i.now{background:var(--beam)}
+  .pattern{font-family:'JetBrains Mono',monospace;font-size:clamp(19px,5vw,26px);color:var(--beam);
+    letter-spacing:.14em;margin:16px 0 0;word-break:break-word}
+  .clock{font-family:'JetBrains Mono',monospace;font-size:26px;color:var(--beam);min-width:44px;
+    text-align:center;font-variant-numeric:tabular-nums}
+  .clock.urgent{color:var(--ticket);animation:pulse .9s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
   .roomcode{font-family:'JetBrains Mono',monospace;font-size:14px;letter-spacing:.24em;color:var(--beam);
     background:var(--card);border-radius:8px;padding:6px 12px}
   .grace{color:var(--ticket);font-size:14px;margin:12px 0 0}
@@ -102,10 +112,6 @@
     background:var(--card);border-radius:999px;padding:7px 14px;margin-top:10px}
   .wallet b{color:var(--beam);font-family:'JetBrains Mono',monospace;font-size:15px}
   .hints button.broke{opacity:.4;border-style:dotted}
-  .pattern{font-family:'JetBrains Mono',monospace;font-size:clamp(19px,5vw,26px);color:var(--beam);
-    letter-spacing:.14em;margin:16px 0 0;word-break:break-word}
-  .pattern small{display:block;font-family:'Space Grotesk',sans-serif;font-size:11px;letter-spacing:.2em;
-    text-transform:uppercase;color:var(--muted);margin-bottom:6px}
   /* Chat */
   #chatToggle{position:fixed;right:18px;bottom:18px;width:56px;height:56px;border-radius:50%;
     font-size:24px;padding:0;box-shadow:0 8px 24px rgba(0,0,0,.5);z-index:20}
@@ -151,7 +157,6 @@
   }
   @media (max-width:380px){
     .flap{width:40px;height:52px;font-size:22px}
-    .pattern{font-size:17px;letter-spacing:.1em}
   }
   @media (prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important}}
 </style>
@@ -206,6 +211,28 @@
     </div>
   </section>
 
+  <!-- ESPACE ÉCHANGE -->
+  <section id="exchange" class="hidden">
+    <div class="card">
+      <p class="tag">Espace échange</p>
+      <p class="note" style="margin-top:0">Chaque partie terminée alimente votre cagnotte de points. Ici, vous les convertissez en tickets bonus, la monnaie qui sert à acheter les indices — année, réalisateur, acteurs, photo du film.</p>
+      <p class="note">Votre total au classement général n'est jamais entamé : échanger ne vous fait pas perdre votre place.</p>
+
+      <div class="teamboard" style="margin:18px 0">
+        <div class="a">Points en cagnotte<b id="xPoints">0</b></div>
+        <div class="b">Tickets bonus<b id="xCredits">0</b></div>
+      </div>
+
+      <p class="tag" id="xRate">Taux de conversion</p>
+      <div class="levels" id="xAmounts"></div>
+      <div class="row">
+        <button id="btnDoExchange" disabled>Échanger</button>
+        <button class="ghost" id="btnExchangeBack">Retour au menu</button>
+      </div>
+      <p class="feedback" id="xMsg"></p>
+    </div>
+  </section>
+
   <!-- CLASSEMENT GÉNÉRAL -->
   <section id="board" class="hidden">
     <div class="card">
@@ -220,7 +247,14 @@
   <section id="menu" class="hidden">
     <h2 id="hello">Bonjour</h2>
     <p class="wallet" id="walletMenu">🎟️ <b>0</b> crédits</p>
-    <p class="tag">Choisissez votre partie</p>
+    <p class="tag">Niveau</p>
+    <div class="levels" id="levels">
+      <button data-lvl="tous" aria-pressed="true">Tous</button>
+      <button data-lvl="facile" aria-pressed="false">Facile</button>
+      <button data-lvl="moyen" aria-pressed="false">Moyen</button>
+      <button data-lvl="difficile" aria-pressed="false">Difficile</button>
+    </div>
+    <p class="tag" style="margin-top:18px">Choisissez votre partie</p>
     <div class="modes">
       <button class="mode" data-mode="solo"><span class="ic">🎬</span><span><b>Solo</b><small>Contre le chrono, pour s'entraîner</small></span></button>
       <button class="mode" data-mode="duel"><span class="ic">⚔️</span><span><b>Duel</b><small>Deux joueurs, face à face</small></span></button>
@@ -229,8 +263,9 @@
       <button class="mode" data-mode="ranked"><span class="ic">📈</span><span><b>Partie classée</b><small>Vos points comptent au classement général</small></span></button>
     </div>
     <div class="row">
-      <button class="ghost" id="btnBoard">Classement général</button>
-      <button class="ghost" id="btnProfile">Mon profil</button>
+      <button class="ghost" id="btnExchange">Espace échange</button>
+      <button class="ghost" id="btnBoard">Classement</button>
+      <button class="ghost" id="btnProfile">Profil</button>
     </div>
     <div class="card">
       <label for="joinCode">Rejoindre un salon existant</label>
@@ -261,23 +296,17 @@
     <div class="card">
       <div class="beam"><i id="beamBar"></i></div>
       <div class="headline">
+        <span class="clock" id="clock">60</span>
         <div class="dots" id="dots"></div>
         <span class="roomcode hidden" id="roomCode"></span>
       </div>
       <p class="tag" id="roundLabel">Manche 1</p>
       <p class="synopsis" id="synopsis"></p>
-      <p class="pattern" id="pattern"><small>Le titre à trouver</small><span id="patternText"></span></p>
+      <p class="pattern hidden" id="pattern"></p>
       <img id="hintPoster" class="poster hidden" alt="Photo du film">
       <p class="wallet" id="walletRound">🎟️ <b>0</b> crédits</p>
       <div class="hints" id="hints"></div>
       <div class="choices" id="choices"></div>
-      <details class="typed">
-        <summary>Écrire le titre — rapporte davantage</summary>
-        <div class="row">
-          <input id="guess" placeholder="Titre du film" autocomplete="off">
-          <button id="btnGuess" style="flex:0 0 auto">Valider</button>
-        </div>
-      </details>
       <p class="feedback" id="guessFeedback"></p>
       <p class="grace hidden" id="grace"></p>
       <div class="row"><button id="btnSkip" class="ghost hidden">Passer à la manche suivante</button></div>
@@ -301,7 +330,8 @@
       <p class="reveal" id="answer"></p>
       <img id="answerPoster" class="poster hidden" alt="">
       <ol class="rank" id="interRank"></ol>
-      <p class="note">Manche suivante dans quelques secondes…</p>
+      <div class="row"><button id="btnNext">Question suivante</button></div>
+      <p class="note" id="nextNote">Enchaînement automatique dans quelques secondes.</p>
     </div>
   </section>
 
@@ -340,7 +370,8 @@
 const socket = io();
 const $ = id => document.getElementById(id);
 const AVATARS = ["🎬","🍿","🎭","🕶️","👽","🦖","🤖","🧛","🐙","🌵","🎸","🚀"];
-const HINT_LABELS = {year:"Année", director:"Réalisateur", actors:"Acteurs", poster:"Photo du film"};
+const HINT_LABELS = {letters:"Nombre de lettres", year:"Année", director:"Réalisateur",
+                     actors:"Acteurs", poster:"Photo du film"};
 const MODE_NAMES = {solo:"Solo", duel:"Duel", ffa:"Chacun pour soi", teams:"En équipes", ranked:"Partie classée"};
 let credits = 0;
 function setCredits(n){
@@ -349,13 +380,17 @@ function setCredits(n){
 }
 let state = {code:null, mode:"ffa", isHost:false, hintCosts:{}, bought:{}, answered:false, timerId:null};
 
-const show = id => ["landing","profile","board","menu","lobby","waiting","round","between","over"]
-  .forEach(s => $(s).classList.toggle("hidden", s !== id));
+/** Chaque écran commence en haut : personne ne doit remonter à la main. */
+const show = id => {
+  ["landing","profile","board","exchange","menu","lobby","waiting","round","between","over"]
+    .forEach(s => $(s).classList.toggle("hidden", s !== id));
+  window.scrollTo({top: 0, behavior: "instant"});
+};
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
 /* ---------- Pourboire ---------- */
 fetch("/api/config").then(r => r.json())
-  .then(c => { $("tipLink").href = c.tipUrl; })
+  .then(c => { $("tipLink").href = c.tipUrl; tauxTicket = c.pointsParTicket || tauxTicket; })
   .catch(() => $("tipLink").classList.add("hidden"));
 
 /* ---------- Session ---------- */
@@ -368,6 +403,7 @@ async function loadSession(){
     if (!res.ok) return show("landing");
     me = await res.json();
     setCredits(me.credits ?? 0);
+    setPoints(me.points ?? 0);
     if (!me.pseudoChosen) return firstVisit();
     $("hello").textContent = `Bonjour ${me.pseudo}`;
     show("menu");
@@ -488,10 +524,17 @@ $("banner").onclick = () => {
 };
 
 /* ---------- Choix du mode ---------- */
+let niveau = "tous";
+$("levels").querySelectorAll("[data-lvl]").forEach(b => b.onclick = () => {
+  niveau = b.dataset.lvl;
+  $("levels").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+});
+
 document.querySelectorAll(".mode").forEach(btn => btn.onclick = () => {
   const mode = btn.dataset.mode;
-  socket.emit("room:create", {mode}, res => {
-    if (!res?.ok) return ($("joinError").textContent = "Catalogue vide, ajoutez des films.");
+  socket.emit("room:create", {mode, difficulty: niveau}, res => {
+    if (!res?.ok) return ($("joinError").textContent =
+      "Aucun film disponible pour ce niveau — choisissez-en un autre.");
     state.code = res.code; state.mode = mode;
     setChatVisible(!["solo", "ranked"].includes(mode));
     if (mode === "solo" || mode === "ranked") return; // démarre tout seul
@@ -538,7 +581,6 @@ socket.on("room:update", renderLobby);
 
 /* ---------- Manche ---------- */
 socket.on("round:start", ({roundIndex,total,synopsis,duration,hintCosts,hintCredits,pattern,choices}) => {
-  $("patternText").textContent = pattern || "";
   $("dots").innerHTML = Array.from({length: total}, (_, i) =>
     `<i class="${i < roundIndex ? "done" : i === roundIndex ? "now" : ""}"></i>`).join("");
   $("roomCode").textContent = state.code || "";
@@ -551,16 +593,16 @@ socket.on("round:start", ({roundIndex,total,synopsis,duration,hintCosts,hintCred
   $("roundLabel").textContent = `Manche ${roundIndex+1} sur ${total}`;
   $("synopsis").textContent = synopsis;
   $("hintPoster").classList.add("hidden");
+  $("pattern").classList.add("hidden");
   $("roundPlayers").innerHTML = "";
-  $("guess").value=""; $("guess").disabled=false; $("btnGuess").disabled=false;
   $("guessFeedback").textContent=""; $("guessFeedback").className="feedback";
-  renderHints(); runBeam(duration); show("round"); $("guess").focus();
+  renderHints(); runBeam(duration); show("round");
 });
 
 function renderHints(){
   $("hints").innerHTML = Object.keys(HINT_LABELS).map(type => {
     if (state.bought[type] !== undefined){
-      const val = type === "poster" ? "" : ` : ${esc(String(state.bought[type]))}`;
+      const val = ["poster","letters"].includes(type) ? "" : ` : ${esc(String(state.bought[type]))}`;
       return `<button class="bought" disabled>${HINT_LABELS[type]}${val}</button>`;
     }
     const jetons = (state.hintCredits||{})[type] ?? 1;
@@ -596,7 +638,6 @@ function renderChoices(list){
       if (!res?.ok) return;
       state.answered = true;
       btn.classList.add(res.correct ? "good" : "bad");
-      $("guess").disabled = true; $("btnGuess").disabled = true;
       $("guessFeedback").textContent = res.correct
         ? `Trouvé ! +${res.points} points`
         : "Mauvaise réponse — la manche est terminée pour vous.";
@@ -606,32 +647,6 @@ function renderChoices(list){
   });
 }
 
-function submitGuess(){
-  const guess = $("guess").value.trim();
-  if (!guess || state.answered) return;
-  socket.emit("answer:submit", {code:state.code, guess}, res => {
-    if (!res?.ok) return;
-    if (res.correct){
-      state.answered = true;
-      $("guessFeedback").textContent = `Trouvé ! +${res.points} points`;
-      $("guessFeedback").className = "feedback good";
-      $("guess").disabled = true; $("btnGuess").disabled = true;
-      $("choices").querySelectorAll("button").forEach(b => {
-        b.disabled = true;
-        if (Number(b.dataset.choice) === res.movieId) b.classList.add("good");
-      });
-      $("btnSkip").classList.remove("hidden");
-    } else {
-      $("guessFeedback").textContent = "Ce n'est pas ce film. Réessayez.";
-      $("guessFeedback").className = "feedback bad";
-      $("guess").select();
-    }
-  });
-}
-$("btnGuess").onclick = submitGuess;
-$("guess").addEventListener("keydown", e => { if (e.key === "Enter") submitGuess(); });
-$("guess").addEventListener("focus", () =>
-  setTimeout(() => $("guess").scrollIntoView({block:"center", behavior:"smooth"}), 250));
 socket.on("player:answered", ({pseudo, team}) => {
   const li = document.createElement("li");
   if (team) li.className = team;
@@ -642,15 +657,25 @@ socket.on("player:answered", ({pseudo, team}) => {
 function runBeam(duration){
   const start = Date.now();
   clearInterval(state.timerId);
-  state.timerId = setInterval(() => {
-    const left = Math.max(0, 1 - (Date.now()-start)/duration);
-    $("beamBar").style.transform = `scaleX(${left})`;
-    if (left === 0) clearInterval(state.timerId);
-  }, 200);
+  const tick = () => {
+    const reste = Math.max(0, duration - (Date.now() - start));
+    $("beamBar").style.transform = `scaleX(${reste / duration})`;
+    const sec = Math.ceil(reste / 1000);
+    $("clock").textContent = sec;
+    $("clock").classList.toggle("urgent", sec <= 10 && sec > 0);
+    if (reste === 0) clearInterval(state.timerId);
+  };
+  tick();
+  state.timerId = setInterval(tick, 200);
 }
 
 /* ---------- Fins ---------- */
-socket.on("round:end", ({answer, poster, scores}) => {
+$("btnNext").onclick = () => {
+  $("btnNext").disabled = true;
+  socket.emit("round:next", {code: state.code});
+};
+
+socket.on("round:end", ({answer, poster, scores, isHost, mode}) => {
   clearInterval(state.timerId);
   clearInterval(state.graceId);
   $("grace").classList.add("hidden");
@@ -659,6 +684,13 @@ socket.on("round:end", ({answer, poster, scores}) => {
   if (poster){ img.src = poster; img.alt = `Affiche de ${answer}`; img.classList.remove("hidden"); }
   else img.classList.add("hidden");
   $("interRank").innerHTML = rankHtml(scores);
+  // en multijoueur, seul l'hôte décide d'enchaîner
+  const peutEnchainer = ["solo","ranked"].includes(mode) || isHost === socket.id;
+  $("btnNext").disabled = false;
+  $("btnNext").classList.toggle("hidden", !peutEnchainer);
+  $("nextNote").textContent = peutEnchainer
+    ? "Sinon, enchaînement automatique dans quelques secondes."
+    : "Manche suivante dans quelques secondes.";
   show("between");
 });
 
@@ -667,8 +699,9 @@ socket.on("connect_error", err => {
   if (err.message === "NO_PSEUDO" && me) firstVisit();
 });
 
-socket.on("game:end", ({ranking, mode, teams, credits: solde}) => {
+socket.on("game:end", ({ranking, mode, teams, credits: solde, points: cagnotte}) => {
   setCredits(solde);
+  setPoints(cagnotte);
   state.code = null;
   setChatVisible(false);
   $("finalRank").innerHTML = rankHtml(ranking);
