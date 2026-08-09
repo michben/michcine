@@ -36,7 +36,7 @@ const CONFIG = {
   HINT_CREDITS: { year: 1, director: 1, actors: 2, poster: 2 },          // en crédits
   MAX_PLAYERS: 16,
   GRACE_AFTER_FIRST_MS: 15_000,   // délai laissé aux autres après la première bonne réponse
-  CHOICE_RATIO: 0.6,              // un titre saisi à la main rapporte plus qu'un choix cliqué
+  CHOICE_RATIO: 1,                // le clic est le seul mode de réponse : score plein
   TIP_URL: process.env.TIP_URL || "https://buymeacoffee.com/votre-pseudo",
 };
 

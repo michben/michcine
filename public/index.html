@@ -537,13 +537,13 @@ $("btnStart").onclick = () => socket.emit("game:start", {code:state.code});
 socket.on("room:update", renderLobby);
 
 /* ---------- Manche ---------- */
-socket.on("round:start", ({roundIndex,total,synopsis,duration,hintCosts,hintCredits,pattern}) => {
+socket.on("round:start", ({roundIndex,total,synopsis,duration,hintCosts,hintCredits,pattern,choices}) => {
   $("patternText").textContent = pattern || "";
   $("dots").innerHTML = Array.from({length: total}, (_, i) =>
     `<i class="${i < roundIndex ? "done" : i === roundIndex ? "now" : ""}"></i>`).join("");
   $("roomCode").textContent = state.code || "";
   $("roomCode").classList.toggle("hidden", ["solo","ranked"].includes(state.mode));
-  renderChoices(arguments[0].choices || []);
+  renderChoices(choices || []);
   $("grace").classList.add("hidden");
   $("btnSkip").classList.toggle("hidden", !["solo","ranked"].includes(state.mode));
   state.hintCredits = hintCredits || {};
