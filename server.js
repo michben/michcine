@@ -17,7 +17,8 @@ import crypto from "crypto";
 import { mountAuth, userFromCookie, addRankedPoints,
          spendCredits, grantCredits, getCredits, CREDITS_PER_GAME,
          listUsers, adminUpdateUser, adminDeleteUser, grantAll,
-         grantPoints, getPoints, exchangePoints } from "./auth-x.js";
+         grantPoints, getPoints, exchangePoints,
+         marquerEnLigne, marquerHorsLigne, estEnLigne, nombreEnLigne } from "./auth-x.js";
 
 const app = express();
 app.use(express.json());
@@ -175,6 +176,8 @@ const verifyLicense = (lic) => {
   const [id, sig] = String(lic || "").split(".");
   return Boolean(id && sig && signLicense(id) === `${id}.${sig}`);
 };
+
+app.get("/api/presence", (_req, res) => res.json({ enLigne: nombreEnLigne() }));
 
 app.get("/api/config", (_req, res) => res.json({
   tipUrl: CONFIG.TIP_URL, maxPlayers: CONFIG.MAX_PLAYERS, pointsParTicket: CONFIG.POINTS_PAR_TICKET,
@@ -373,6 +376,13 @@ io.use((socket, next) => {
 
 io.on("connection", (socket) => {
   const user = socket.data.user;
+  marquerEnLigne(user.id);
+  io.emit("presence", { enLigne: nombreEnLigne() });
+
+  socket.on("disconnect", () => {
+    marquerHorsLigne(user.id);
+    io.emit("presence", { enLigne: nombreEnLigne() });
+  });
 
   socket.on("room:create", ({ rounds, mode, difficulty }, cb) => {
     const vivier = movies.filter(

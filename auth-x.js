@@ -26,6 +26,7 @@ let users = existsSync(USERS_FILE) ? JSON.parse(readFileSync(USERS_FILE, "utf8")
 const saveUsers = () => writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
 
 const sessions = new Map(); // sid -> { userId, createdAt }
+const connectes = new Map(); // userId -> nombre d'onglets ouverts
 const pending = new Map();  // state -> { verifier, createdAt }
 
 /* ---------- petites aides ---------- */
@@ -63,6 +64,17 @@ export function grantCredits(userId, amount) {
   user.credits = (user.credits ?? 0) + amount;
   saveUsers();
 }
+
+/** Présence : un joueur peut avoir plusieurs onglets, on compte les connexions. */
+export function marquerEnLigne(userId) {
+  connectes.set(userId, (connectes.get(userId) || 0) + 1);
+}
+export function marquerHorsLigne(userId) {
+  const n = (connectes.get(userId) || 1) - 1;
+  n <= 0 ? connectes.delete(userId) : connectes.set(userId, n);
+}
+export const estEnLigne = (userId) => connectes.has(userId);
+export const nombreEnLigne = () => connectes.size;
 
 export const getCredits = (userId) => users[userId]?.credits ?? 0;
 export const getPoints = (userId) => users[userId]?.points ?? 0;
@@ -139,12 +151,17 @@ export function addRankedPoints(userId, points) {
   saveUsers();
 }
 
+/** Tous les joueurs ayant terminé au moins une partie, classés au score permanent. */
 export const leaderboard = (limit = 50) =>
   Object.values(users)
-    .filter((u) => u.totalScore > 0)
-    .sort((a, b) => b.totalScore - a.totalScore)
+    .filter((u) => u.pseudoChosen && ((u.gamesPlayed || 0) > 0 || (u.totalScore || 0) > 0))
+    .sort((a, b) => (b.totalScore || 0) - (a.totalScore || 0))
     .slice(0, limit)
-    .map((u, i) => ({ rank: i + 1, pseudo: u.pseudo, avatar: u.avatar, totalScore: u.totalScore, gamesPlayed: u.gamesPlayed }));
+    .map((u, i) => ({
+      rank: i + 1, pseudo: u.pseudo, avatar: u.avatar,
+      totalScore: u.totalScore || 0, gamesPlayed: u.gamesPlayed || 0,
+      online: connectes.has(u.id),
+    }));
 
 function createSession(res, user) {
   const sid = b64url(crypto.randomBytes(24));
