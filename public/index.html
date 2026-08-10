@@ -586,10 +586,13 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
 /* ---------- Pourboire ---------- */
 if (!window.tempsReelDispo) {
   $("authError").textContent =
-    "Le mode temps réel est bloqué par votre navigateur ou votre réseau : les parties " +
-    "sont indisponibles, mais votre profil, l'espace échange et le classement fonctionnent. " +
-    "Désactivez votre bloqueur sur ce site, ou essayez un autre navigateur.";
-  document.querySelectorAll(".mode").forEach(b => { b.disabled = true; b.style.opacity = .4; });
+    "Le temps réel est bloqué par votre navigateur ou votre réseau : le multijoueur est " +
+    "indisponible, mais le solo et la partie classée restent jouables. Désactivez votre " +
+    "bloqueur sur ce site pour retrouver les parties à plusieurs.";
+  document.querySelectorAll(".mode").forEach(b => {
+    if (["solo", "ranked"].includes(b.dataset.mode)) return;   // ces modes restent jouables
+    b.disabled = true; b.style.opacity = .4;
+  });
   $("btnJoin").disabled = true;
 }
 
@@ -861,8 +864,111 @@ $("levels").querySelectorAll("[data-lvl]").forEach(b => b.onclick = () => {
   $("levels").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
 });
 
-document.querySelectorAll(".mode").forEach(btn => btn.onclick = () => {
+/* Solo et partie classée passent par de simples requêtes : ils restent
+   jouables même si le temps réel est bloqué par le navigateur ou le réseau. */
+const SANS_RESEAU = ["solo", "ranked"];
+
+async function solo(chemin, corps){
+  const res = await fetch(`/api/solo/${chemin}`, {method:"POST",
+    headers:{"Content-Type":"application/json"}, body: JSON.stringify(corps || {})});
+  return res.ok ? res.json() : null;
+}
+
+function afficherManche(m){
+  state.hintCosts = m.hintCosts; state.hintCredits = m.hintCredits;
+  state.bought = {}; state.answered = false;
+  $("roundLabel").textContent = `Manche ${m.roundIndex + 1} sur ${m.total}`;
+  $("synopsis").textContent = m.synopsis;
+  $("dots").innerHTML = Array.from({length: m.total}, (_, i) =>
+    `<i class="${i < m.roundIndex ? "done" : i === m.roundIndex ? "now" : ""}"></i>`).join("");
+  $("roomCode").classList.add("hidden");
+  $("emojiBar").classList.add("hidden");
+  $("hintPoster").classList.add("hidden");
+  $("pattern").classList.add("hidden");
+  $("grace").classList.add("hidden");
+  $("roundPlayers").innerHTML = "";
+  $("guessFeedback").textContent = ""; $("guessFeedback").className = "feedback";
+  $("btnSkip").classList.remove("hidden");
+  renderHintsSolo();
+  renderChoicesSolo(m.choices);
+  runBeam(m.duration);
+  show("round");
+}
+
+function renderHintsSolo(){
+  $("hints").innerHTML = Object.keys(HINT_LABELS).map(type => {
+    if (state.bought[type] !== undefined){
+      const val = ["poster","letters"].includes(type) ? "" : ` : ${esc(String(state.bought[type]))}`;
+      return `<button class="bought" disabled>${HINT_LABELS[type]}${val}</button>`;
+    }
+    const jetons = (state.hintCredits||{})[type] ?? 1;
+    return `<button class="${credits < jetons ? "broke" : ""}" data-hint="${type}">${HINT_LABELS[type]}
+      <span class="cost">🎟️${jetons} · −${state.hintCosts[type]} pts</span></button>`;
+  }).join("");
+  $("hints").querySelectorAll("[data-hint]").forEach(b => b.onclick = async () => {
+    const r = await solo("hint", {type: b.dataset.hint});
+    if (!r){
+      $("guessFeedback").textContent = "Crédits insuffisants — terminez une partie pour en regagner.";
+      $("guessFeedback").className = "feedback bad";
+      return;
+    }
+    state.bought[r.type] = r.value;
+    setCredits(r.credits);
+    if (r.type === "poster"){ $("hintPoster").src = r.value; $("hintPoster").classList.remove("hidden"); }
+    if (r.type === "letters"){ $("pattern").textContent = r.value; $("pattern").classList.remove("hidden"); }
+    renderHintsSolo();
+  });
+}
+
+function renderChoicesSolo(liste){
+  $("choices").innerHTML = liste.map(c => `<button data-choice="${c.id}">${esc(c.title)}</button>`).join("");
+  $("choices").querySelectorAll("[data-choice]").forEach(btn => btn.onclick = async () => {
+    if (state.answered) return;
+    state.answered = true;
+    $("choices").querySelectorAll("button").forEach(b => b.disabled = true);
+    const r = await solo("answer", {choiceId: Number(btn.dataset.choice)});
+    if (!r) return;
+    clearInterval(state.timerId);
+    btn.classList.add(r.correct ? "good" : "bad");
+    $("choices").querySelectorAll("button").forEach(b => {
+      if (Number(b.dataset.choice) === r.movieId) b.classList.add("good");
+    });
+    if (r.correct) bravo(r.points);
+    $("guessFeedback").textContent = r.correct
+      ? `Trouvé ! +${r.points} points` : `Raté — c'était ${r.answer}.`;
+    $("guessFeedback").className = r.correct ? "feedback good" : "feedback bad";
+    setTimeout(mancheSuivanteSolo, r.correct ? 1600 : 2600);
+  });
+}
+
+async function mancheSuivanteSolo(){
+  const r = await solo("next");
+  if (!r) return show("menu");
+  if (!r.fini) return afficherManche(r);
+
+  clearInterval(state.timerId);
+  setCredits(r.credits); setPoints(r.points);
+  $("winner").textContent = "Partie terminée";
+  $("myResult").textContent = `${me.pseudo} — ${r.score} points`;
+  $("finalRank").innerHTML = `<li>${me.avatar||"🎬"} ${esc(me.pseudo)}<b>${r.score} pts</b></li>`;
+  $("finalTeams").classList.add("hidden");
+  show("over");
+}
+
+document.querySelectorAll(".mode").forEach(btn => btn.onclick = async () => {
   const mode = btn.dataset.mode;
+
+  if (SANS_RESEAU.includes(mode)){
+    const m = await solo("start", {mode, difficulty: niveau});
+    if (!m) return ($("joinError").textContent = "Aucun film disponible pour ce niveau.");
+    state.mode = mode; state.code = null;
+    setChatVisible(false);
+    return afficherManche(m);
+  }
+
+  if (!window.tempsReelDispo)
+    return ($("joinError").textContent = "Le multijoueur exige la connexion temps réel, bloquée par votre navigateur.");
+
   socket.emit("room:create", {mode, difficulty: niveau}, res => {
     if (!res?.ok) return ($("joinError").textContent =
       "Aucun film disponible pour ce niveau — choisissez-en un autre.");
@@ -1000,7 +1106,17 @@ function runBeam(duration){
     const sec = Math.ceil(reste / 1000);
     $("clock").textContent = sec;
     $("clock").classList.toggle("urgent", sec <= 10 && sec > 0);
-    if (reste === 0) clearInterval(state.timerId);
+    if (reste === 0){
+      clearInterval(state.timerId);
+      if (SANS_RESEAU.includes(state.mode) && !state.answered){
+        state.answered = true;
+        solo("answer", {choiceId: -1}).then(r => {
+          if (r) $("guessFeedback").textContent = `Temps écoulé — c'était ${r.answer}.`;
+          $("guessFeedback").className = "feedback bad";
+          setTimeout(mancheSuivanteSolo, 2200);
+        });
+      }
+    }
   };
   tick();
   state.timerId = setInterval(tick, 200);

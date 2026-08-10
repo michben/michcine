@@ -23,7 +23,7 @@ import { mountAuth, userFromCookie, addRankedPoints,
          marquerEnLigne, marquerHorsLigne, estEnLigne, nombreEnLigne,
          estModerateur, definirRole, ROLES, chargerUtilisateurs,
          relations, demanderAmi, accepterAmi, retirerAmi, bloquer,
-         chercherJoueurs, statutRelation, estBloque } from "./auth-x.js";
+         chercherJoueurs, statutRelation, estBloque, emailAValider } from "./auth-x.js";
 
 const app = express();
 app.use(express.json());
@@ -314,14 +314,123 @@ app.put("/api/admin/users/:id/role", requireAdmin, (req, res) => {
   res.json(user);
 });
 
-/* ---------- amis ---------- */
-
 /** Renvoie l'utilisateur connecté, ou termine la requête en 401. */
 function exigeCompte(req, res) {
   const user = userFromCookie(req.headers.cookie);
   if (!user) { res.status(401).json({ error: "NOT_AUTHENTICATED" }); return null; }
   return user;
 }
+
+/* ------------------------------------------------------------------ */
+/* Solo et partie classée, sans temps réel                            */
+/*                                                                     */
+/* Ces modes ne concernent qu'un joueur : les faire passer par le      */
+/* WebSocket les rendait inutilement fragiles (bloqueurs, réseaux      */
+/* filtrants). Ici, tout se joue en requêtes HTTP ordinaires.          */
+/* ------------------------------------------------------------------ */
+
+const parties = new Map();   // userId -> partie en cours
+
+const vueManche = (p) => ({
+  roundIndex: p.index,
+  total: p.playlist.length,
+  synopsis: p.playlist[p.index].synopsis,
+  choices: p.choices,
+  duration: CONFIG.ROUND_DURATION_MS,
+  hintCosts: CONFIG.HINT_COSTS,
+  hintCredits: CONFIG.HINT_CREDITS,
+});
+
+function demarrerManche(p) {
+  const film = p.playlist[p.index];
+  p.choices = buildChoices(film);
+  p.startedAt = Date.now();
+  p.hints = [];
+  p.repondu = false;
+  return vueManche(p);
+}
+
+app.post("/api/solo/start", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (!user) return;
+
+  const { mode = "solo", difficulty = "tous", rounds } = req.body;
+  const vivier = movies.filter(
+    (m) => m.enabled !== false && (difficulty === "tous" || m.difficulty === difficulty)
+  );
+  if (!vivier.length) return res.status(400).json({ error: "NO_MOVIES" });
+
+  const p = {
+    mode: mode === "ranked" ? "ranked" : "solo",
+    playlist: melange(vivier).slice(0, Math.min(Number(rounds) || 10, vivier.length)),
+    index: 0, score: 0,
+  };
+  parties.set(user.id, p);
+  res.json({ ok: true, mode: p.mode, ...demarrerManche(p) });
+});
+
+app.post("/api/solo/hint", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (!user) return;
+  const p = parties.get(user.id);
+  if (!p || p.repondu) return res.status(400).json({ error: "PAS_DE_MANCHE" });
+
+  const type = req.body.type;
+  if (!CONFIG.HINT_COSTS[type]) return res.status(400).json({ error: "UNKNOWN_HINT" });
+  if (p.hints.includes(type)) return res.status(400).json({ error: "ALREADY_BOUGHT" });
+  if (!spendCredits(user.id, CONFIG.HINT_CREDITS[type]))
+    return res.status(400).json({ error: "NO_CREDITS" });
+
+  p.hints.push(type);
+  const film = p.playlist[p.index];
+  const value = type === "poster" ? (film.still || film.poster)
+              : type === "letters" ? titlePattern(film.title)
+              : film[type];
+  res.json({ ok: true, type, value, credits: getCredits(user.id) });
+});
+
+app.post("/api/solo/answer", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (!user) return;
+  const p = parties.get(user.id);
+  if (!p || p.repondu) return res.status(400).json({ error: "PAS_DE_MANCHE" });
+
+  const film = p.playlist[p.index];
+  const juste = Number(req.body.choiceId) === film.id;
+  p.repondu = true;
+
+  let points = 0;
+  if (juste) {
+    points = computeScore({ elapsedMs: Date.now() - p.startedAt, hintsUsed: p.hints });
+    p.score += points;
+  }
+  res.json({
+    ok: true, correct: juste, points, movieId: film.id,
+    answer: film.title, poster: film.poster, total: p.score,
+  });
+});
+
+app.post("/api/solo/next", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (!user) return;
+  const p = parties.get(user.id);
+  if (!p) return res.status(400).json({ error: "PAS_DE_PARTIE" });
+
+  p.index++;
+  if (p.index < p.playlist.length) return res.json({ ok: true, ...demarrerManche(p) });
+
+  // fin de partie : on crédite une seule fois, puis on oublie la partie
+  parties.delete(user.id);
+  if (p.mode === "ranked") addRankedPoints(user.id, p.score);
+  grantPoints(user.id, p.score);
+  grantCredits(user.id, CREDITS_PER_GAME);
+  res.json({
+    ok: true, fini: true, score: p.score, mode: p.mode,
+    credits: getCredits(user.id), points: getPoints(user.id),
+  });
+});
+
+/* ---------- amis ---------- */
 
 app.get("/api/friends", (req, res) => {
   const user = exigeCompte(req, res);
@@ -553,6 +662,7 @@ io.use((socket, next) => {
   const user = userFromCookie(socket.handshake.headers.cookie);
   if (!user) return next(new Error("NOT_AUTHENTICATED"));   // aucune partie sans compte
   if (user.banned) return next(new Error("BANNED"));
+  if (emailAValider(user)) return next(new Error("EMAIL_NON_VALIDE"));
   if (!user.pseudoChosen) return next(new Error("NO_PSEUDO")); // ni sans pseudo choisi
   socket.data.user = user;
   next();
