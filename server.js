@@ -36,7 +36,13 @@ app.use(express.static("public", {
 }));
 mountAuth(app);                       // /auth/x/login, /auth/x/callback, /api/me, /api/leaderboard
 const httpServer = createServer(app);
-const io = new Server(httpServer, { cors: { origin: "*" } });
+/**
+ * Le chemin par défaut « /socket.io » est filtré par de nombreux bloqueurs de
+ * publicité, qui reconnaissent le nom. On expose donc le même service sous
+ * « /rt », un nom neutre. Un seul serveur : tous les joueurs partagent
+ * bien les mêmes salons.
+ */
+const io = new Server(httpServer, { cors: { origin: "*" }, path: "/rt" });
 
 /* ------------------------------------------------------------------ */
 /* Configuration                                                       */
