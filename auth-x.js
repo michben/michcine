@@ -120,6 +120,51 @@ export function marquerHorsLigne(userId) {
 }
 export const estEnLigne = (userId) => connectes.has(userId);
 
+/* ---------- inscription par email ---------- */
+
+const normEmail = (e) => String(e || "").trim().toLowerCase();
+const emailValide = (e) => /^[^@\s]+@[^@\s.]+\.[^@\s]{2,}$/.test(e);
+
+/** Empreinte du mot de passe : scrypt avec sel, jamais le mot de passe en clair. */
+function hacher(motDePasse, sel = crypto.randomBytes(16).toString("hex")) {
+  const cle = crypto.scryptSync(motDePasse, sel, 64).toString("hex");
+  return `${sel}:${cle}`;
+}
+
+function verifierMotDePasse(motDePasse, empreinte) {
+  const [sel, attendu] = String(empreinte || "").split(":");
+  if (!sel || !attendu) return false;
+  const calcule = crypto.scryptSync(motDePasse, sel, 64).toString("hex");
+  return crypto.timingSafeEqual(Buffer.from(calcule), Buffer.from(attendu));
+}
+
+const parEmail = (email) => Object.values(users).find((u) => u.email === email);
+
+export function inscrireEmail(email, motDePasse) {
+  const e = normEmail(email);
+  if (!emailValide(e)) return { error: "EMAIL_INVALIDE" };
+  if (String(motDePasse || "").length < 8) return { error: "MOT_DE_PASSE_COURT" };
+  if (parEmail(e)) return { error: "EMAIL_DEJA_PRIS" };
+
+  const id = `mail:${crypto.randomBytes(8).toString("hex")}`;
+  users[id] = {
+    id, email: e, motDePasse: hacher(motDePasse),
+    pseudo: "", pseudoChosen: false, avatar: "🎬",
+    totalScore: 0, gamesPlayed: 0, credits: STARTING_CREDITS, points: 0, role: "joueur",
+    amis: [], demandesRecues: [], demandesEnvoyees: [], bloques: [],
+  };
+  saveUsers();
+  return { user: users[id] };
+}
+
+export function connecterEmail(email, motDePasse) {
+  const u = parEmail(normEmail(email));
+  // même message dans les deux cas : ne pas révéler quels emails existent
+  if (!u || !verifierMotDePasse(motDePasse, u.motDePasse)) return { error: "IDENTIFIANTS_INVALIDES" };
+  if (u.banned) return { error: "BANNI" };
+  return { user: u };
+}
+
 /* ---------- amis ---------- */
 
 const lien = (u) => ({ id: u.id, pseudo: u.pseudo, avatar: u.avatar,
@@ -270,7 +315,9 @@ export function exchangePoints(userId, points, rate) {
 /* ---------- administration ---------- */
 
 export const listUsers = () =>
-  Object.values(users).sort((x, y) => (y.totalScore || 0) - (x.totalScore || 0));
+  Object.values(users)
+    .sort((x, y) => (y.totalScore || 0) - (x.totalScore || 0))
+    .map(({ motDePasse, ...reste }) => reste);   // jamais d'empreinte hors du serveur
 
 export function adminUpdateUser(id, changes) {
   const user = users[id];
@@ -346,10 +393,26 @@ function createSession(res, user) {
 /* ---------- routes ---------- */
 
 export function mountAuth(app) {
+  const sansSecret = ({ motDePasse, ...reste }) => reste;
+
   app.get("/api/me", (req, res) => {
     const user = userFromCookie(req.headers.cookie);
     if (!user) return res.status(401).json({ error: "NOT_AUTHENTICATED", devMode: DEV_MODE });
-    res.json(user);
+    res.json(sansSecret(user));
+  });
+
+  app.post("/auth/email/inscription", (req, res) => {
+    const r = inscrireEmail(req.body.email, req.body.motDePasse);
+    if (r.error) return res.status(400).json(r);
+    createSession(res, r.user);
+    res.json(sansSecret(r.user));
+  });
+
+  app.post("/auth/email/connexion", (req, res) => {
+    const r = connecterEmail(req.body.email, req.body.motDePasse);
+    if (r.error) return res.status(401).json(r);
+    createSession(res, r.user);
+    res.json(sansSecret(r.user));
   });
 
   app.get("/api/leaderboard", (_req, res) => res.json(leaderboard()));
@@ -369,7 +432,7 @@ export function mountAuth(app) {
     user.pseudoChosen = true;
     if (typeof req.body.avatar === "string") user.avatar = req.body.avatar.slice(0, 8);
     saveUsers();
-    res.json(user);
+    res.json(sansSecret(user));
   });
 
   app.post("/auth/logout", (req, res) => {

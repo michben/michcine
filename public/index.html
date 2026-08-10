@@ -122,6 +122,9 @@
     0%{opacity:0;transform:translateY(0) scale(.6)}
     12%{opacity:1;transform:translateY(-14px) scale(1.15)}
     100%{opacity:0;transform:translateY(-190px) scale(.9)}}
+  #erreurJS{position:fixed;left:0;right:0;bottom:0;z-index:90;margin:0;padding:12px 16px;
+    background:var(--ticket);color:#fff;font-size:13px;font-family:'JetBrains Mono',monospace;
+    word-break:break-word}
   .tabsAmis{display:flex;gap:8px}
   .tabsAmis button{flex:1;background:transparent;color:var(--muted);border:1px solid rgba(237,232,220,.16);font-weight:500;font-size:14px;padding:10px 8px}
   .tabsAmis button[aria-pressed="true"]{background:var(--beam);color:#161207;font-weight:700;border-color:var(--beam)}
@@ -215,7 +218,7 @@
 <body>
 <div class="wrap">
 
-  <button id="banner" title="Revenir au menu principal">
+  <button id="banner" title="Revenir à l'accueil">
     <h1>MichBen <em>Ciné Quizz</em></h1>
   </button>
 
@@ -232,6 +235,17 @@
       </div>
       <p class="feedback bad" id="authError"></p>
       <p class="note" id="diag"></p>
+
+      <p class="tag" style="margin:22px 0 10px">Ou avec une adresse email</p>
+      <label for="mail">Email</label>
+      <input id="mail" type="email" autocomplete="email" placeholder="vous@exemple.fr">
+      <label for="mdp" style="margin-top:12px">Mot de passe</label>
+      <input id="mdp" type="password" autocomplete="current-password" placeholder="8 caractères minimum">
+      <div class="row">
+        <button id="btnMailConnexion">Se connecter</button>
+        <button id="btnMailInscription" class="ghost">Créer un compte</button>
+      </div>
+      <p class="feedback bad" id="mailError"></p>
       <p class="note" style="margin-bottom:0">En vous inscrivant, vous acceptez les <a href="/regles.html" style="color:var(--beam)">règles et le code de bonne conduite</a>.</p>
       <p class="note">Le compte X sert uniquement à identifier votre profil et votre classement. Aucun message ne sera publié en votre nom.</p>
     </div>
@@ -257,7 +271,7 @@
       <div class="avatars" id="avatars"></div>
       <div class="row">
         <button id="btnSaveProfile">Enregistrer</button>
-        <button id="btnToMenu" class="ghost">Retour au menu</button>
+        <button id="btnToMenu" class="ghost">Retour à l'accueil</button>
       </div>
       <p class="feedback" id="profileMsg"></p>
       <p class="note" id="compteInfo"></p>
@@ -281,7 +295,7 @@
       <div class="levels" id="xAmounts"></div>
       <div class="row">
         <button id="btnDoExchange" disabled>Échanger</button>
-        <button class="ghost" id="btnExchangeBack">Retour au menu</button>
+        <button class="ghost" id="btnExchangeBack">Retour à l'accueil</button>
       </div>
       <p class="feedback" id="xMsg"></p>
     </div>
@@ -306,7 +320,7 @@
 
       <div id="listeAmis" style="margin-top:14px"></div>
       <p class="note" id="amisVide"></p>
-      <div class="row"><button class="ghost" id="btnAmisBack">Retour au menu</button></div>
+      <div class="row"><button class="ghost" id="btnAmisBack">Retour à l'accueil</button></div>
     </div>
   </section>
 
@@ -316,7 +330,7 @@
       <p class="tag">Signalements</p>
       <div id="modList"></div>
       <p class="note" id="modEmpty"></p>
-      <div class="row"><button class="ghost" id="btnModBack">Retour au menu</button></div>
+      <div class="row"><button class="ghost" id="btnModBack">Retour à l'accueil</button></div>
     </div>
   </section>
 
@@ -326,7 +340,7 @@
       <p class="tag">Classement général — parties classées</p>
       <ol class="rank" id="globalRank"></ol>
       <p class="note" id="boardEmpty"></p>
-      <div class="row"><button class="ghost" id="btnBoardBack">Retour au menu</button></div>
+      <div class="row"><button class="ghost" id="btnBoardBack">Retour à l'accueil</button></div>
     </div>
   </section>
 
@@ -456,6 +470,8 @@
     </div>
   </section>
 
+  <p id="erreurJS" class="hidden"></p>
+
   <div id="popJoueur" class="hidden">
     <div class="boite">
       <h3 id="popNom"></h3>
@@ -486,6 +502,16 @@
 
 <!-- Moteur temps réel servi sous un nom neutre : les bloqueurs qui filtrent
      le mot « socket.io » ne le reconnaissent pas. -->
+<script>
+/* Toute erreur de script devient visible à l'écran : sans cela, une seule
+   ligne fautive fige l'interface sans que personne ne sache pourquoi. */
+window.addEventListener("error", (e) => {
+  const boite = document.getElementById("erreurJS");
+  if (!boite) return;
+  boite.textContent = `Erreur : ${e.message} (${(e.filename||"").split("/").pop()}:${e.lineno})`;
+  boite.classList.remove("hidden");
+});
+</script>
 <script src="/js/moteur.js"></script>
 <script>
 /* Dernier recours si le fichier local est lui aussi filtré. */
@@ -593,6 +619,37 @@ function firstVisit(){
   $("btnSaveProfile").textContent = "Commencer à jouer";
   show("profile");
 }
+
+/* ---------- Connexion par email ---------- */
+const MESSAGES_MAIL = {
+  EMAIL_INVALIDE: "Cette adresse email ne semble pas valide.",
+  MOT_DE_PASSE_COURT: "Le mot de passe doit faire au moins 8 caractères.",
+  EMAIL_DEJA_PRIS: "Un compte existe déjà avec cette adresse.",
+  IDENTIFIANTS_INVALIDES: "Email ou mot de passe incorrect.",
+  BANNI: "Ce compte a été banni.",
+};
+
+async function authMail(chemin){
+  const email = $("mail").value.trim(), motDePasse = $("mdp").value;
+  if (!email || !motDePasse) return ($("mailError").textContent = "Renseignez l'email et le mot de passe.");
+  const res = await fetch(`/auth/email/${chemin}`, {method:"POST",
+    headers:{"Content-Type":"application/json"}, body: JSON.stringify({email, motDePasse})});
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return ($("mailError").textContent = MESSAGES_MAIL[data.error] || "Connexion impossible.");
+
+  me = data;
+  $("mdp").value = "";
+  setCredits(me.credits ?? 0);
+  setPoints(me.points ?? 0);
+  socket.disconnect().connect();          // la session vient de changer
+  if (!me.pseudoChosen) return firstVisit();
+  $("hello").textContent = `Bonjour ${me.pseudo}`;
+  majBadgeAmis();
+  show("menu");
+}
+$("btnMailConnexion").onclick = () => authMail("connexion");
+$("btnMailInscription").onclick = () => authMail("inscription");
+$("mdp").addEventListener("keydown", e => { if (e.key === "Enter") authMail("connexion"); });
 
 /* ---------- Profil ---------- */
 $("avatars").innerHTML = AVATAR_LIST.map(a => `<button data-a="${a}">${a}</button>`).join("");
