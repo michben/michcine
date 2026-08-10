@@ -106,6 +106,16 @@
     text-align:center;font-variant-numeric:tabular-nums}
   .clock.urgent{color:var(--ticket);animation:pulse .9s ease-in-out infinite}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
+  select{width:100%;background:var(--card);border:1px solid rgba(237,232,220,.14);color:var(--chalk);
+    border-radius:10px;padding:12px 13px;font:inherit;font-size:16px}
+  .modrow{display:flex;gap:10px;align-items:flex-start;padding:14px 0;border-top:1px solid rgba(237,232,220,.1);flex-wrap:wrap}
+  .modrow .txt{flex:1;min-width:180px}
+  .modrow .txt strong{display:block}
+  .modrow .txt small{color:var(--muted)}
+  .modrow button{padding:9px 12px;font-size:14px}
+  .modrow.traite{opacity:.45}
+  .badge-role{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);
+    border:1px solid var(--teal);border-radius:999px;padding:3px 9px;margin-left:8px}
   .roomcode{font-family:'JetBrains Mono',monospace;font-size:14px;letter-spacing:.24em;color:var(--beam);
     background:var(--card);border-radius:8px;padding:6px 12px}
   .grace{color:var(--ticket);font-size:14px;margin:12px 0 0}
@@ -246,6 +256,16 @@
     </div>
   </section>
 
+  <!-- MODÉRATION -->
+  <section id="moderation" class="hidden">
+    <div class="card">
+      <p class="tag">Signalements</p>
+      <div id="modList"></div>
+      <p class="note" id="modEmpty"></p>
+      <div class="row"><button class="ghost" id="btnModBack">Retour au menu</button></div>
+    </div>
+  </section>
+
   <!-- CLASSEMENT GÉNÉRAL -->
   <section id="board" class="hidden">
     <div class="card">
@@ -281,6 +301,7 @@
       <button class="ghost" id="btnBoard">Classement</button>
       <button class="ghost" id="btnProfile">Profil</button>
     </div>
+    <div class="row"><button class="ghost hidden" id="btnModeration">Modération</button></div>
     <div class="card">
       <label for="joinCode">Rejoindre un salon existant</label>
       <input id="joinCode" maxlength="4" placeholder="ABCD" autocomplete="off">
@@ -344,7 +365,20 @@
       <p class="reveal" id="answer"></p>
       <img id="answerPoster" class="poster hidden" alt="">
       <ol class="rank" id="interRank"></ol>
-      <div class="row"><button id="btnNext">Question suivante</button></div>
+      <div class="row">
+        <button id="btnNext">Question suivante</button>
+        <button id="btnReport" class="ghost" style="flex:0 0 auto">⚑ Signaler</button>
+      </div>
+      <div id="reportBox" class="hidden" style="margin-top:14px">
+        <label for="reportMotif">Quel est le problème ?</label>
+        <select id="reportMotif"></select>
+        <input id="reportComment" maxlength="300" placeholder="Précision (facultatif)" style="margin-top:10px">
+        <div class="row">
+          <button id="btnReportSend">Envoyer le signalement</button>
+          <button id="btnReportCancel" class="ghost">Annuler</button>
+        </div>
+      </div>
+      <p class="feedback" id="reportMsg"></p>
       <p class="note" id="nextNote">Enchaînement automatique dans quelques secondes.</p>
     </div>
   </section>
@@ -383,6 +417,26 @@
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
+/* Certains bloqueurs de publicité et réseaux d'entreprise filtrent le fichier
+   socket.io servi par le site. On bascule alors sur un CDN public. */
+if (typeof io === "undefined") {
+  document.write('<scr' + 'ipt src="https://cdn.socket.io/4.7.5/socket.io.min.js"><\/scr' + 'ipt>');
+}
+</script>
+<script>
+if (typeof io === "undefined") {
+  document.body.innerHTML =
+    '<div style="max-width:520px;margin:16vh auto;padding:26px;font-family:system-ui,sans-serif;' +
+    'background:#151A2E;color:#EDE8DC;border-radius:14px;line-height:1.6">' +
+    '<h1 style="color:#F5B942;margin:0 0 12px;font-size:22px">Connexion impossible</h1>' +
+    '<p>Le jeu n\'a pas pu charger son moteur temps réel. C\'est presque toujours ' +
+    'un bloqueur de publicité ou une extension de confidentialité qui le filtre.</p>' +
+    '<p style="color:#7C819B">Essayez de désactiver vos extensions sur ce site, ' +
+    'ou ouvrez une fenêtre de navigation privée.</p></div>';
+  throw new Error("socket.io indisponible");
+}
+</script>
+<script>
 const socket = io();
 const $ = id => document.getElementById(id);
 const AVATARS = ["🎬","🍿","🎭","🕶️","👽","🦖","🤖","🧛","🐙","🌵","🎸","🚀"];
@@ -398,7 +452,7 @@ let state = {code:null, mode:"ffa", isHost:false, hintCosts:{}, bought:{}, answe
 
 /** Chaque écran commence en haut : personne ne doit remonter à la main. */
 const show = id => {
-  ["landing","profile","board","exchange","menu","lobby","waiting","round","between","over"]
+  ["landing","profile","board","exchange","moderation","menu","lobby","waiting","round","between","over"]
     .forEach(s => $(s).classList.toggle("hidden", s !== id));
   window.scrollTo({top: 0, behavior: "instant"});
 };
@@ -421,7 +475,9 @@ async function loadSession(){
     setCredits(me.credits ?? 0);
     setPoints(me.points ?? 0);
     if (!me.pseudoChosen) return firstVisit();
-    $("hello").textContent = `Bonjour ${me.pseudo}`;
+    $("hello").innerHTML = `Bonjour ${esc(me.pseudo)}` +
+      (["moderateur","admin"].includes(me.role) ? `<span class="badge-role">${esc(me.role)}</span>` : "");
+    $("btnModeration").classList.toggle("hidden", !["moderateur","admin"].includes(me.role));
     show("menu");
   } catch { show("landing"); }
 }
@@ -748,7 +804,10 @@ $("btnNext").onclick = () => {
   socket.emit("round:next", {code: state.code});
 };
 
-socket.on("round:end", ({answer, poster, scores, isHost, mode}) => {
+socket.on("round:end", ({answer, movieId, poster, scores, isHost, mode}) => {
+  filmCourant = movieId;
+  $("reportBox").classList.add("hidden");
+  $("reportMsg").textContent = "";
   clearInterval(state.timerId);
   clearInterval(state.graceId);
   $("grace").classList.add("hidden");

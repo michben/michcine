@@ -15,6 +15,15 @@
   .tag{font-size:11px;letter-spacing:.26em;text-transform:uppercase;color:var(--muted);margin:0 0 14px}
   .card{background:var(--velvet);border:1px solid rgba(237,232,220,.09);border-radius:14px;padding:20px;margin-top:16px}
   label{display:block;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin:14px 0 6px}
+  select{width:100%;background:var(--card);border:1px solid rgba(237,232,220,.14);color:var(--chalk);
+    border-radius:10px;padding:12px 13px;font:inherit;font-size:16px}
+  .filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+  .filters button{flex:1 1 auto;background:transparent;color:var(--muted);border:1px solid rgba(237,232,220,.16);
+    font-weight:500;font-size:13px;padding:9px 10px}
+  .filters button[aria-pressed="true"]{background:var(--beam);color:#161207;font-weight:700;border-color:var(--beam)}
+  .item.off{opacity:.4}
+  .lvl{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);
+    border:1px solid rgba(237,232,220,.2);border-radius:999px;padding:2px 8px;margin-left:6px}
   input,textarea{width:100%;background:var(--card);border:1px solid rgba(237,232,220,.14);color:var(--chalk);
     border-radius:10px;padding:12px 13px;font:inherit;font-size:16px;resize:vertical}
   input:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px solid var(--beam);outline-offset:2px}
@@ -39,6 +48,7 @@
   .urow .who{flex:1;min-width:140px}
   .urow .who strong{display:block}
   .urow .who small{color:var(--muted)}
+  .urow select{width:auto;padding:8px 10px;font-size:14px}
   .urow input{width:80px;padding:8px 10px;font-size:15px;text-align:center}
   .urow button{padding:9px 12px;font-size:14px}
   .urow.banned{opacity:.5}
@@ -62,9 +72,35 @@
     <div class="tabs">
       <button id="tabMovies" aria-selected="true">Films</button>
       <button id="tabUsers" aria-selected="false">Joueurs</button>
+      <button id="tabReports" aria-selected="false">Signalements</button>
     </div>
 
     <div id="paneMovies">
+    <div class="card">
+      <p class="tag">Sélection du catalogue</p>
+      <p class="msg" id="stats"></p>
+      <div class="grid">
+        <div>
+          <label for="bulkLevel">Niveau concerné</label>
+          <select id="bulkLevel">
+            <option value="tous">Tous les niveaux</option>
+            <option value="facile">Facile</option>
+            <option value="moyen">Moyen</option>
+            <option value="difficile">Difficile</option>
+          </select>
+        </div>
+        <div>
+          <label for="bulkRating">Note minimale (sur 10)</label>
+          <input id="bulkRating" inputmode="decimal" placeholder="6.5">
+        </div>
+      </div>
+      <div class="row">
+        <button id="btnEnable">Activer la sélection</button>
+        <button id="btnDisable" class="ghost">Désactiver</button>
+      </div>
+      <p class="msg" id="bulkMsg"></p>
+    </div>
+
     <div class="card">
       <p class="tag" id="formTitle">Nouveau film</p>
       <label for="title">Titre</label>
@@ -90,8 +126,22 @@
 
     <div class="card">
       <p class="tag" id="countLabel">Films au catalogue</p>
+      <div class="filters" id="filters">
+        <button data-f="tous" aria-pressed="true">Tous</button>
+        <button data-f="facile" aria-pressed="false">Facile</button>
+        <button data-f="moyen" aria-pressed="false">Moyen</button>
+        <button data-f="difficile" aria-pressed="false">Difficile</button>
+        <button data-f="off" aria-pressed="false">Désactivés</button>
+      </div>
       <div id="list"></div>
     </div>
+    </div>
+
+    <div id="paneReports" class="hidden">
+      <div class="card">
+        <p class="tag" id="reportCount">Signalements</p>
+        <div id="reportList"></div>
+      </div>
     </div>
 
     <div id="paneUsers" class="hidden">
@@ -127,22 +177,41 @@ $("btnAuth").onclick = async () => {
   if (!res.ok) return ($("authMsg").textContent = "Clé refusée.");
   movies = await res.json();
   $("auth").classList.add("hidden"); $("app").classList.remove("hidden");
-  render();
+  render(); loadStats();
 };
 $("token").addEventListener("keydown", e => { if (e.key === "Enter") $("btnAuth").click(); });
 
+let filtre = "tous";
+$("filters").querySelectorAll("[data-f]").forEach(b => b.onclick = () => {
+  filtre = b.dataset.f;
+  $("filters").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  render();
+});
+
 function render(){
-  $("countLabel").textContent = `${movies.length} film${movies.length>1?"s":""} au catalogue`;
-  $("list").innerHTML = movies.map(m => `
-    <div class="item">
+  const vus = movies.filter(m =>
+    filtre === "tous" ? true : filtre === "off" ? m.enabled === false : m.difficulty === filtre);
+  const actifs = movies.filter(m => m.enabled !== false).length;
+  $("countLabel").textContent =
+    `${vus.length} affiché${vus.length>1?"s":""} · ${actifs} actifs sur ${movies.length}`;
+  $("list").innerHTML = vus.map(m => `
+    <div class="item ${m.enabled === false ? "off" : ""}">
       <img src="${m.poster||""}" alt="" onerror="this.style.visibility='hidden'">
       <div>
-        <strong>${esc(m.title)}</strong>
-        <small>${m.year||"—"} · ${esc(m.director||"réalisateur non renseigné")}</small>
+        <strong>${esc(m.title)}<span class="lvl">${m.difficulty||"?"}</span></strong>
+        <small>${m.year||"—"} · ${m.rating ? m.rating+"/10 · " : ""}${esc(m.director||"réalisateur non renseigné")}</small>
       </div>
+      <button class="ghost" data-toggle="${m.id}">${m.enabled === false ? "Activer" : "Retirer"}</button>
       <button class="ghost" data-edit="${m.id}">Modifier</button>
       <button class="danger" data-del="${m.id}">Supprimer</button>
     </div>`).join("");
+
+  $("list").querySelectorAll("[data-toggle]").forEach(b => b.onclick = async () => {
+    const m = movies.find(x => x.id === Number(b.dataset.toggle));
+    const res = await api(`/api/movies/${m.id}`, {method:"PUT",
+      body: JSON.stringify({...m, enabled: m.enabled === false})});
+    if (res.ok){ Object.assign(m, await res.json()); render(); loadStats(); }
+  });
   $("list").querySelectorAll("[data-edit]").forEach(b => b.onclick = () => edit(Number(b.dataset.edit)));
   $("list").querySelectorAll("[data-del]").forEach(b => b.onclick = () => remove(Number(b.dataset.del)));
 }
@@ -163,6 +232,33 @@ function resetForm(){
   $("btnCancel").classList.add("hidden");
 }
 $("btnCancel").onclick = resetForm;
+
+async function loadStats(){
+  const res = await api("/api/admin/stats");
+  if (!res.ok) return;
+  const s = await res.json();
+  $("stats").textContent = `${s.actifs} films actifs sur ${s.total} — `
+    + Object.entries(s.parNiveau).map(([n,v]) => `${n} ${v.actifs}/${v.total}`).join(", ");
+  $("stats").className = "msg";
+}
+
+async function bulk(enabled){
+  const res = await api("/api/admin/movies/bulk", {method:"POST", body: JSON.stringify({
+    difficulty: $("bulkLevel").value,
+    minRating: $("bulkRating").value || 0,
+    enabled,
+  })});
+  const data = await res.json();
+  $("bulkMsg").textContent = res.ok
+    ? `${data.touched} films ${enabled ? "activés" : "désactivés"} — ${data.actifs} actifs au total.`
+    : "Échec.";
+  $("bulkMsg").className = res.ok ? "msg ok" : "msg err";
+  const liste = await api("/api/movies");
+  if (liste.ok){ movies = await liste.json(); render(); }
+  loadStats();
+}
+$("btnEnable").onclick = () => bulk(true);
+$("btnDisable").onclick = () => bulk(false);
 
 $("btnSave").onclick = async () => {
   const body = Object.fromEntries(FIELDS.map(f => [f, $(f).value.trim()]));
@@ -197,15 +293,50 @@ async function remove(id){
 
 /* ---------- Onglets ---------- */
 function tab(which){
-  const users = which === "users";
-  $("tabUsers").setAttribute("aria-selected", users);
-  $("tabMovies").setAttribute("aria-selected", !users);
-  $("paneUsers").classList.toggle("hidden", !users);
-  $("paneMovies").classList.toggle("hidden", users);
-  if (users) loadUsers();
+  for (const [nom, onglet, volet] of [["movies","tabMovies","paneMovies"],
+                                      ["users","tabUsers","paneUsers"],
+                                      ["reports","tabReports","paneReports"]]) {
+    $(onglet).setAttribute("aria-selected", which === nom);
+    $(volet).classList.toggle("hidden", which !== nom);
+  }
+  if (which === "users") loadUsers();
+  if (which === "reports") loadReports();
 }
 $("tabMovies").onclick = () => tab("movies");
 $("tabUsers").onclick = () => tab("users");
+$("tabReports").onclick = () => tab("reports");
+
+/* ---------- Signalements ---------- */
+let motifs = {};
+async function loadReports(){
+  if (!Object.keys(motifs).length)
+    motifs = await fetch("/api/reports/motifs").then(r => r.json()).catch(() => ({}));
+  const res = await api("/api/reports");
+  if (!res.ok) return;
+  const liste = await res.json();
+  const ouverts = liste.filter(r => r.statut === "ouvert").length;
+  $("reportCount").textContent = `${liste.length} signalement${liste.length>1?"s":""} · ${ouverts} en attente`;
+  $("reportList").innerHTML = liste.map(r => `
+    <div class="urow ${r.statut === "traite" ? "banned" : ""}">
+      <div class="who">
+        <strong>${esc(r.titre)}</strong>
+        <small>${esc(motifs[r.motif]||r.motif)}${r.commentaire ? " — "+esc(r.commentaire) : ""}</small>
+        <small>par ${esc(r.auteur)}${r.traitePar ? " · traité par "+esc(r.traitePar) : ""}</small>
+      </div>
+      ${r.statut === "traite" ? '<span class="chip">traité</span>' :
+        `<button class="ghost" data-clore="${r.id}">Classer</button>
+         <button class="danger" data-retirer="${r.id}">Retirer le film</button>`}
+    </div>`).join("") || "";
+
+  const agir = async (id, corps) => {
+    await api(`/api/reports/${id}`, {method:"PUT", body: JSON.stringify(corps)});
+    loadReports();
+  };
+  $("reportList").querySelectorAll("[data-clore]").forEach(b =>
+    b.onclick = () => agir(b.dataset.clore, {statut:"traite"}));
+  $("reportList").querySelectorAll("[data-retirer]").forEach(b =>
+    b.onclick = () => confirm("Retirer ce film du catalogue ?") && agir(b.dataset.retirer, {retirerFilm:true}));
+}
 
 /* ---------- Joueurs ---------- */
 let players = [];
@@ -221,8 +352,12 @@ function renderUsers(){
     <div class="urow ${u.banned?"banned":""}">
       <div class="who">
         <strong>${u.avatar||"🎬"} ${esc(u.pseudo||"(sans pseudo)")}${u.banned?'<span class="chip">banni</span>':""}</strong>
-        <small>${u.totalScore||0} pts · ${u.gamesPlayed||0} parties${u.xHandle?" · @"+esc(u.xHandle):""}</small>
+        <small>${u.totalScore||0} pts · ${u.gamesPlayed||0} parties${u.xHandle?" · @"+esc(u.xHandle):""}${u.online?" · en ligne":""}</small>
       </div>
+      <select data-role="${u.id}" aria-label="Rôle">
+        ${["joueur","moderateur","admin"].map(r =>
+          `<option value="${r}" ${(u.role||"joueur")===r?"selected":""}>${r}</option>`).join("")}
+      </select>
       <input type="number" min="0" value="${u.credits??0}" data-credits="${u.id}" aria-label="Crédits">
       <button class="ghost" data-save="${u.id}">Enregistrer</button>
       <button class="ghost" data-ban="${u.id}">${u.banned?"Réactiver":"Bannir"}</button>
@@ -232,7 +367,8 @@ function renderUsers(){
   $("userList").querySelectorAll("[data-save]").forEach(b => b.onclick = async () => {
     const id = b.dataset.save;
     const credits = Number($("userList").querySelector(`[data-credits="${CSS.escape(id)}"]`).value);
-    await api(`/api/admin/users/${encodeURIComponent(id)}`, {method:"PUT", body:JSON.stringify({credits})});
+    const role = $("userList").querySelector(`[data-role="${CSS.escape(id)}"]`).value;
+    await api(`/api/admin/users/${encodeURIComponent(id)}`, {method:"PUT", body:JSON.stringify({credits, role})});
     loadUsers();
   });
   $("userList").querySelectorAll("[data-ban]").forEach(b => b.onclick = async () => {
