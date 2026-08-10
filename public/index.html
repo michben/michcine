@@ -26,6 +26,7 @@
   #joinCode{font-family:'JetBrains Mono',monospace;letter-spacing:.5em;text-transform:uppercase;font-size:20px}
   button{font:inherit;font-weight:700;border:0;border-radius:10px;padding:13px 18px;cursor:pointer;background:var(--beam);color:#161207}
   button.ghost{background:transparent;color:var(--chalk);border:1px solid rgba(237,232,220,.22)}
+  button.danger{color:var(--ticket);border-color:rgba(228,88,110,.45)}
   button:disabled{opacity:.45;cursor:not-allowed}
   .row{display:flex;gap:10px;margin-top:14px}.row>*{flex:1}
   .hidden{display:none !important}
@@ -244,6 +245,8 @@
         <button id="btnToMenu" class="ghost">Retour au menu</button>
       </div>
       <p class="feedback" id="profileMsg"></p>
+      <p class="note" id="compteInfo"></p>
+      <div class="row"><button id="btnLogout" class="ghost danger">Se déconnecter</button></div>
     </div>
   </section>
 
@@ -433,31 +436,41 @@
   </footer>
 </div>
 
-<script src="/socket.io/socket.io.js"></script>
+<!-- Moteur temps réel servi sous un nom neutre : les bloqueurs qui filtrent
+     le mot « socket.io » ne le reconnaissent pas. -->
+<script src="/js/moteur.js"></script>
 <script>
-/* Certains bloqueurs de publicité et réseaux d'entreprise filtrent le fichier
-   socket.io servi par le site. On bascule alors sur un CDN public. */
+/* Dernier recours si le fichier local est lui aussi filtré. */
 if (typeof io === "undefined") {
-  document.write('<scr' + 'ipt src="https://cdn.socket.io/4.7.5/socket.io.min.js"><\/scr' + 'ipt>');
+  document.write('<scr' + 'ipt src="https://cdn.jsdelivr.net/npm/socket.io-client@4.8.1/dist/socket.io.min.js"><\/scr' + 'ipt>');
 }
 </script>
 <script>
-if (typeof io === "undefined") {
-  document.body.innerHTML =
-    '<div style="max-width:520px;margin:16vh auto;padding:26px;font-family:system-ui,sans-serif;' +
-    'background:#151A2E;color:#EDE8DC;border-radius:14px;line-height:1.6">' +
-    '<h1 style="color:#F5B942;margin:0 0 12px;font-size:22px">Connexion impossible</h1>' +
-    '<p>Le jeu n\'a pas pu charger son moteur temps réel. C\'est presque toujours ' +
-    'un bloqueur de publicité ou une extension de confidentialité qui le filtre.</p>' +
-    '<p style="color:#7C819B">Essayez de désactiver vos extensions sur ce site, ' +
-    'ou ouvrez une fenêtre de navigation privée.</p></div>';
-  throw new Error("socket.io indisponible");
+/**
+ * Si Socket.IO reste indisponible (bloqueur, pare-feu, réseau filtrant), on
+ * remplace l'objet par une coquille inerte. Le profil, l'espace échange, le
+ * classement et les règles continuent alors de fonctionner : seules les
+ * parties, qui exigent le temps réel, sont désactivées.
+ */
+window.tempsReelDispo = typeof io !== "undefined";
+window.cheminTempsReel = "/rt";
+if (!window.tempsReelDispo) {
+  window.io = () => {
+    const rien = () => coquille;
+    const coquille = {
+      id: null, on: rien, once: rien, off: rien, emit: rien,
+      connect: rien, disconnect: rien, close: rien,
+    };
+    return coquille;
+  };
 }
 </script>
 <script>
 // withCredentials garantit l'envoi du cookie de session, y compris après
 // une redirection entre le domaine avec et sans www.
-const socket = io({ withCredentials: true });
+/* Le chemin par défaut « /socket.io » est lui aussi filtré par certains
+   bloqueurs : on expose donc le même service sous « /rt ». */
+const socket = io({ withCredentials: true, path: window.cheminTempsReel });
 const $ = id => document.getElementById(id);
 const AVATARS = ["🎬","🍿","🎭","🕶️","👽","🦖","🤖","🧛","🐙","🌵","🎸","🚀"];
 const HINT_LABELS = {letters:"Nombre de lettres", year:"Année", director:"Réalisateur",
@@ -479,6 +492,15 @@ const show = id => {
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
 /* ---------- Pourboire ---------- */
+if (!window.tempsReelDispo) {
+  $("authError").textContent =
+    "Le mode temps réel est bloqué par votre navigateur ou votre réseau : les parties " +
+    "sont indisponibles, mais votre profil, l'espace échange et le classement fonctionnent. " +
+    "Désactivez votre bloqueur sur ce site, ou essayez un autre navigateur.";
+  document.querySelectorAll(".mode").forEach(b => { b.disabled = true; b.style.opacity = .4; });
+  $("btnJoin").disabled = true;
+}
+
 fetch("/api/config").then(r => r.json())
   .then(c => { $("tipLink").href = c.tipUrl; tauxTicket = c.pointsParTicket || tauxTicket; })
   .catch(() => $("tipLink").classList.add("hidden"));
@@ -517,6 +539,8 @@ function firstVisit(){
   $("welcomeNote").textContent = "Choisissez le pseudo sous lequel les autres joueurs vous verront. Vous pourrez le changer plus tard.";
   $("pseudo").value = me.suggestion || "";
   $("btnToMenu").classList.add("hidden");
+  $("btnLogout").classList.add("hidden");
+  $("compteInfo").textContent = "";
   $("btnSaveProfile").textContent = "Commencer à jouer";
   show("profile");
 }
@@ -530,8 +554,12 @@ $("btnProfile").onclick = () => {
   $("profileTitle").textContent = "Votre profil";
   $("welcomeNote").textContent = "";
   $("btnToMenu").classList.remove("hidden");
+  $("btnLogout").classList.remove("hidden");
   $("btnSaveProfile").textContent = "Enregistrer";
   $("pseudo").value = me.pseudo;
+  $("compteInfo").textContent = me.xHandle
+    ? `Connecté via X en tant que @${me.xHandle}`
+    : "Compte de test";
   $("avatars").querySelectorAll("[data-a]").forEach(b =>
     b.setAttribute("aria-pressed", b.dataset.a === me.avatar));
   $("profileMsg").textContent = "";
@@ -566,6 +594,15 @@ $("btnSaveProfile").onclick = async () => {
   $("profileMsg").className = "feedback good";
 };
 $("btnToMenu").onclick = () => show("menu");
+
+/** Déconnexion : le cookie est effacé côté serveur, puis la page repart à zéro. */
+$("btnLogout").onclick = async () => {
+  if (!confirm("Se déconnecter de ce compte ?")) return;
+  if (state.code) socket.emit("room:leave");
+  try { await fetch("/auth/logout", {method:"POST"}); } catch {}
+  socket.disconnect();
+  location.href = "/";
+};
 
 /* ---------- Félicitations ---------- */
 const sobre = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
