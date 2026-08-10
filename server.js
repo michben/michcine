@@ -21,7 +21,9 @@ import { mountAuth, userFromCookie, addRankedPoints,
          listUsers, adminUpdateUser, adminDeleteUser, grantAll,
          grantPoints, getPoints, exchangePoints,
          marquerEnLigne, marquerHorsLigne, estEnLigne, nombreEnLigne,
-         estModerateur, definirRole, ROLES, chargerUtilisateurs } from "./auth-x.js";
+         estModerateur, definirRole, ROLES, chargerUtilisateurs,
+         relations, demanderAmi, accepterAmi, retirerAmi, bloquer,
+         chercherJoueurs, statutRelation, estBloque } from "./auth-x.js";
 
 const app = express();
 app.use(express.json());
@@ -310,6 +312,52 @@ app.put("/api/admin/users/:id/role", requireAdmin, (req, res) => {
   const user = definirRole(req.params.id, req.body.role);
   if (!user) return res.status(400).json({ error: "ROLE_INVALIDE" });
   res.json(user);
+});
+
+/* ---------- amis ---------- */
+
+/** Renvoie l'utilisateur connecté, ou termine la requête en 401. */
+function exigeCompte(req, res) {
+  const user = userFromCookie(req.headers.cookie);
+  if (!user) { res.status(401).json({ error: "NOT_AUTHENTICATED" }); return null; }
+  return user;
+}
+
+app.get("/api/friends", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (user) res.json(relations(user.id));
+});
+
+app.get("/api/players/search", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (!user) return;
+  const trouves = chercherJoueurs(req.query.q, user.id)
+    .map((j) => ({ ...j, relation: statutRelation(user.id, j.id) }));
+  res.json(trouves);
+});
+
+app.get("/api/players/:id/relation", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (user) res.json({ relation: statutRelation(user.id, req.params.id) });
+});
+
+const ACTIONS = {
+  demander: demanderAmi,
+  accepter: accepterAmi,
+  retirer: retirerAmi,
+  bloquer: (a, b) => bloquer(a, b, true),
+  debloquer: (a, b) => bloquer(a, b, false),
+};
+
+app.post("/api/friends/:action", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (!user) return;
+  const action = ACTIONS[req.params.action];
+  if (!action) return res.status(400).json({ error: "ACTION_INCONNUE" });
+
+  const resultat = action(user.id, String(req.body.id || ""));
+  if (resultat?.error) return res.status(400).json(resultat);
+  res.json({ ...resultat, relation: statutRelation(user.id, req.body.id) });
 });
 
 app.get("/api/presence", (_req, res) => res.json({ enLigne: nombreEnLigne() }));
@@ -645,9 +693,13 @@ io.on("connection", (socket) => {
       if (leaks) return socket.emit("chat:blocked");
     }
 
-    io.to(room.code).emit("chat:message", {
-      pseudo: player.pseudo, avatar: player.avatar, text: message, at: Date.now(),
-    });
+    // un message n'atteint pas les joueurs qui ont bloqué son auteur
+    for (const autre of room.players.values()) {
+      if (estBloque(autre.userId, player.userId)) continue;
+      io.to(autre.id).emit("chat:message", {
+        pseudo: player.pseudo, avatar: player.avatar, text: message, at: Date.now(),
+      });
+    }
   });
 
   /** Un joueur qui a déjà répondu (ou qui joue seul) peut enchaîner. */

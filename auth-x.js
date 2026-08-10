@@ -28,6 +28,10 @@ const saveUsers = () => sauver("users", users, USERS_FILE);
 /** À appeler au démarrage, avant de servir la moindre requête. */
 export async function chargerUtilisateurs() {
   users = await charger("users", USERS_FILE, {});
+  // comptes créés avant l'arrivée des amis
+  for (const u of Object.values(users))
+    for (const champ of ["amis", "demandesRecues", "demandesEnvoyees", "bloques"])
+      if (!Array.isArray(u[champ])) u[champ] = [];
   console.log(`${Object.keys(users).length} compte(s) chargé(s).`);
 }
 
@@ -115,6 +119,108 @@ export function marquerHorsLigne(userId) {
   n <= 0 ? connectes.delete(userId) : connectes.set(userId, n);
 }
 export const estEnLigne = (userId) => connectes.has(userId);
+
+/* ---------- amis ---------- */
+
+const lien = (u) => ({ id: u.id, pseudo: u.pseudo, avatar: u.avatar,
+                       online: connectes.has(u.id), role: u.role || "joueur" });
+
+/** Listes d'amis, demandes reçues et envoyées, comptes bloqués. */
+export function relations(userId) {
+  const u = users[userId];
+  if (!u) return null;
+  const vus = (liste = []) => liste.map((id) => users[id]).filter(Boolean).map(lien);
+  return {
+    amis: vus(u.amis),
+    recues: vus(u.demandesRecues),
+    envoyees: vus(u.demandesEnvoyees),
+    bloques: vus(u.bloques),
+  };
+}
+
+const pousser = (liste, id) => (liste.includes(id) ? liste : [...liste, id]);
+const retirer = (liste, id) => liste.filter((x) => x !== id);
+
+export function demanderAmi(deId, versId) {
+  const a = users[deId], b = users[versId];
+  if (!a || !b || deId === versId) return { error: "INTROUVABLE" };
+  if ((b.bloques || []).includes(deId)) return { error: "BLOQUE" };
+  if ((a.amis || []).includes(versId)) return { error: "DEJA_AMIS" };
+
+  // demande croisée : on lie directement les deux comptes
+  if ((a.demandesRecues || []).includes(versId)) return accepterAmi(deId, versId);
+
+  a.demandesEnvoyees = pousser(a.demandesEnvoyees || [], versId);
+  b.demandesRecues = pousser(b.demandesRecues || [], deId);
+  saveUsers();
+  return { ok: true, statut: "envoyee" };
+}
+
+export function accepterAmi(userId, autreId) {
+  const a = users[userId], b = users[autreId];
+  if (!a || !b) return { error: "INTROUVABLE" };
+  if (!(a.demandesRecues || []).includes(autreId)) return { error: "AUCUNE_DEMANDE" };
+
+  a.demandesRecues = retirer(a.demandesRecues || [], autreId);
+  b.demandesEnvoyees = retirer(b.demandesEnvoyees || [], userId);
+  a.amis = pousser(a.amis || [], autreId);
+  b.amis = pousser(b.amis || [], userId);
+  saveUsers();
+  return { ok: true, statut: "amis" };
+}
+
+/** Retire l'amitié et toute demande en cours, dans les deux sens. */
+export function retirerAmi(userId, autreId) {
+  const a = users[userId], b = users[autreId];
+  if (!a || !b) return { error: "INTROUVABLE" };
+  for (const [x, y] of [[a, autreId], [b, userId]]) {
+    x.amis = retirer(x.amis || [], y);
+    x.demandesRecues = retirer(x.demandesRecues || [], y);
+    x.demandesEnvoyees = retirer(x.demandesEnvoyees || [], y);
+  }
+  saveUsers();
+  return { ok: true };
+}
+
+export function bloquer(userId, autreId, bloquerOuNon = true) {
+  const a = users[userId];
+  if (!a || !users[autreId] || userId === autreId) return { error: "INTROUVABLE" };
+  if (bloquerOuNon) {
+    retirerAmi(userId, autreId);        // bloquer rompt le lien
+    a.bloques = pousser(a.bloques || [], autreId);
+  } else {
+    a.bloques = retirer(a.bloques || [], autreId);
+  }
+  saveUsers();
+  return { ok: true, bloque: bloquerOuNon };
+}
+
+export const estBloque = (userId, autreId) =>
+  (users[userId]?.bloques || []).includes(autreId) ||
+  (users[autreId]?.bloques || []).includes(userId);
+
+/** Recherche par pseudo, insensible à la casse. */
+export function chercherJoueurs(requete, saufId, limite = 15) {
+  const q = String(requete || "").trim().toLowerCase();
+  if (q.length < 2) return [];
+  return Object.values(users)
+    .filter((u) => u.pseudoChosen && u.id !== saufId && !u.banned &&
+                   (u.pseudo || "").toLowerCase().includes(q) &&
+                   !(u.bloques || []).includes(saufId))
+    .slice(0, limite)
+    .map(lien);
+}
+
+/** Relation entre deux joueurs, pour afficher le bon bouton. */
+export function statutRelation(userId, autreId) {
+  const u = users[userId];
+  if (!u || userId === autreId) return "soi";
+  if ((u.bloques || []).includes(autreId)) return "bloque";
+  if ((u.amis || []).includes(autreId)) return "ami";
+  if ((u.demandesEnvoyees || []).includes(autreId)) return "envoyee";
+  if ((u.demandesRecues || []).includes(autreId)) return "recue";
+  return "aucun";
+}
 
 /* ---------- rôles ---------- */
 
@@ -276,7 +382,8 @@ export function mountAuth(app) {
     console.warn("⚠️  X_CLIENT_ID absent : connexion de test activée. NE PAS DÉPLOYER AINSI.");
     app.get("/auth/x/login", (_req, res) => {
       const id = `dev-${crypto.randomBytes(4).toString("hex")}`;
-      users[id] = { id, pseudo: "", pseudoChosen: false, avatar: "🎬", totalScore: 0, gamesPlayed: 0, credits: STARTING_CREDITS, points: 0, role: "joueur" };
+      users[id] = { id, pseudo: "", pseudoChosen: false, avatar: "🎬", totalScore: 0, gamesPlayed: 0, credits: STARTING_CREDITS, points: 0, role: "joueur",
+        amis: [], demandesRecues: [], demandesEnvoyees: [], bloques: [] };
       saveUsers();
       createSession(res, users[id]);
       res.redirect("/");
@@ -329,7 +436,8 @@ export function mountAuth(app) {
 
       const id = `x:${data.id}`;
       users[id] = users[id] || { id, pseudo: "", pseudoChosen: false, suggestion: data.username.slice(0, 20),
-        avatar: "🎬", totalScore: 0, gamesPlayed: 0, credits: STARTING_CREDITS, points: 0, role: "joueur" };
+        avatar: "🎬", totalScore: 0, gamesPlayed: 0, credits: STARTING_CREDITS, points: 0, role: "joueur",
+        amis: [], demandesRecues: [], demandesEnvoyees: [], bloques: [] };
       users[id].xHandle = data.username;
       saveUsers();
       createSession(res, users[id]);
