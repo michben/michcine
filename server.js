@@ -13,6 +13,8 @@ import express from "express";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import { charger, sauver, initStockage, enBase } from "./db.js";
+import { createRequire } from "module";
+import { dirname, join } from "path";
 import crypto from "crypto";
 import { mountAuth, userFromCookie, addRankedPoints,
          spendCredits, grantCredits, getCredits, CREDITS_PER_GAME,
@@ -34,6 +36,25 @@ app.use(express.static("public", {
       chemin.endsWith(".html") ? "no-cache, must-revalidate" : "public, max-age=86400");
   },
 }));
+/**
+ * Le moteur temps réel, servi sous un nom neutre depuis la bibliothèque
+ * installée : rien à copier dans le dépôt, et les bloqueurs qui filtrent
+ * le mot « socket.io » n'ont plus de nom à reconnaître.
+ */
+const MOTEUR = (() => {
+  const require = createRequire(import.meta.url);
+  // le paquet n'exporte pas ce chemin : on part du dossier du paquet
+  const racine = dirname(require.resolve("socket.io/package.json"));
+  return join(racine, "client-dist", "socket.io.min.js");
+})();
+
+app.get("/js/moteur.js", (_req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=86400");
+  res.type("application/javascript").sendFile(MOTEUR, (err) => {
+    if (err && !res.headersSent) res.status(404).send("// moteur introuvable");
+  });
+});
+
 mountAuth(app);                       // /auth/x/login, /auth/x/callback, /api/me, /api/leaderboard
 const httpServer = createServer(app);
 /**
