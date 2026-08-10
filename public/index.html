@@ -108,6 +108,18 @@
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
   select{width:100%;background:var(--card);border:1px solid rgba(237,232,220,.14);color:var(--chalk);
     border-radius:10px;padding:12px 13px;font:inherit;font-size:16px}
+  .emojis{display:flex;gap:6px;flex-wrap:wrap;margin-top:16px;justify-content:center}
+  .emojis button{background:var(--card);border:1px solid rgba(237,232,220,.12);font-size:22px;
+    padding:8px 11px;line-height:1;min-height:0}
+  .emojis button:hover{border-color:var(--beam)}
+  .flyEmoji{position:fixed;z-index:55;pointer-events:none;font-size:34px;
+    animation:monte 2.2s ease-out forwards}
+  .flyEmoji small{display:block;font-size:11px;color:var(--muted);text-align:center;
+    font-family:'Space Grotesk',sans-serif}
+  @keyframes monte{
+    0%{opacity:0;transform:translateY(0) scale(.6)}
+    12%{opacity:1;transform:translateY(-14px) scale(1.15)}
+    100%{opacity:0;transform:translateY(-190px) scale(.9)}}
   .modrow{display:flex;gap:10px;align-items:flex-start;padding:14px 0;border-top:1px solid rgba(237,232,220,.1);flex-wrap:wrap}
   .modrow .txt{flex:1;min-width:180px}
   .modrow .txt strong{display:block}
@@ -386,13 +398,18 @@
   <!-- FIN -->
   <section id="over" class="hidden">
     <div class="card">
-      <p class="tag">Classement final</p>
+      <p class="tag">Partie terminée</p>
+      <p class="reveal" id="winner"></p>
+      <p class="note" id="myResult" style="margin-top:6px"></p>
       <div class="teamboard hidden" id="finalTeams">
         <div class="a">Équipe jaune<b id="teamA">0</b></div>
         <div class="b">Équipe turquoise<b id="teamB">0</b></div>
       </div>
       <ol class="rank" id="finalRank"></ol>
-      <div class="row"><button class="ghost" onclick="location.reload()">Nouvelle partie</button></div>
+      <div class="row">
+        <button id="btnHome">Retour à l'accueil</button>
+        <button class="ghost" id="btnReplay">Rejouer</button>
+      </div>
     </div>
   </section>
 
@@ -437,7 +454,9 @@ if (typeof io === "undefined") {
 }
 </script>
 <script>
-const socket = io();
+// withCredentials garantit l'envoi du cookie de session, y compris après
+// une redirection entre le domaine avec et sans www.
+const socket = io({ withCredentials: true });
 const $ = id => document.getElementById(id);
 const AVATARS = ["🎬","🍿","🎭","🕶️","👽","🦖","🤖","🧛","🐙","🌵","🎸","🚀"];
 const HINT_LABELS = {letters:"Nombre de lettres", year:"Année", director:"Réalisateur",
@@ -716,6 +735,7 @@ socket.on("round:start", ({roundIndex,total,synopsis,duration,hintCosts,hintCred
   renderChoices(choices || []);
   $("grace").classList.add("hidden");
   $("btnSkip").classList.toggle("hidden", !["solo","ranked"].includes(state.mode));
+  $("emojiBar").classList.toggle("hidden", ["solo","ranked"].includes(state.mode));
   state.hintCredits = hintCredits || {};
   state.hintCosts = hintCosts; state.bought = {}; state.answered = false;
   $("roundLabel").textContent = `Manche ${roundIndex+1} sur ${total}`;
@@ -832,10 +852,23 @@ socket.on("connect_error", err => {
 });
 
 socket.on("game:end", ({ranking, mode, teams, credits: solde, points: cagnotte}) => {
+  clearInterval(state.timerId);
+  clearInterval(state.graceId);
   setCredits(solde);
   setPoints(cagnotte);
   state.code = null;
   setChatVisible(false);
+
+  const classes = [...ranking].sort((a,b) => b.score - a.score);
+  const gagnant = classes[0];
+  const moi = classes.find(p => p.id === socket.id);
+  $("winner").textContent = gagnant
+    ? (classes.length > 1 ? `${gagnant.avatar||"🎬"} ${gagnant.pseudo} l'emporte` : "Partie terminée")
+    : "Partie terminée";
+  $("myResult").textContent = moi
+    ? `${moi.pseudo} — ${moi.score} points` +
+      (classes.length > 1 ? ` · ${classes.indexOf(moi)+1}ᵉ sur ${classes.length}` : "")
+    : "";
   $("finalRank").innerHTML = rankHtml(ranking);
   const board = $("finalTeams");
   if (mode === "teams" && teams){
