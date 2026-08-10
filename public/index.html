@@ -236,18 +236,9 @@
       <p class="feedback bad" id="authError"></p>
       <p class="note" id="diag"></p>
 
-      <p class="tag" style="margin:22px 0 10px">Ou avec une adresse email</p>
-      <label for="mail">Email</label>
-      <input id="mail" type="email" autocomplete="email" placeholder="vous@exemple.fr">
-      <label for="mdp" style="margin-top:12px">Mot de passe</label>
-      <input id="mdp" type="password" autocomplete="current-password" placeholder="8 caractères minimum">
-      <div class="row">
-        <button id="btnMailConnexion">Se connecter</button>
-        <button id="btnMailInscription" class="ghost">Créer un compte</button>
-      </div>
-      <p class="feedback bad" id="mailError"></p>
+
       <p class="note" style="margin-bottom:0">En vous inscrivant, vous acceptez les <a href="/regles.html" style="color:var(--beam)">règles et le code de bonne conduite</a>.</p>
-      <p class="note">Le compte X sert uniquement à identifier votre profil et votre classement. Aucun message ne sera publié en votre nom.</p>
+      <p class="note">Le compte X sert uniquement à identifier votre profil et votre classement. Aucun message ne sera publié en votre nom, et aucune adresse email ne vous est demandée.</p>
     </div>
 
     <div class="card">
@@ -257,6 +248,23 @@
         <li><b>2.</b> Achetez des indices si vous séchez : année, réalisateur, acteurs, affiche floutée.</li>
         <li><b>3.</b> Répondez vite : le score fond avec le temps et le coût des indices.</li>
       </ul>
+    </div>
+  </section>
+
+  <!-- VALIDATION DE L'EMAIL -->
+  <section id="validation" class="hidden">
+    <div class="card">
+      <p class="tag">Validez votre adresse</p>
+      <p class="note" style="margin-top:0" id="valInfo"></p>
+      <label for="codeVal">Code à 4 chiffres</label>
+      <input id="codeVal" inputmode="numeric" maxlength="4" autocomplete="one-time-code"
+             placeholder="0000" style="font-family:'JetBrains Mono',monospace;letter-spacing:.5em;font-size:22px;text-align:center">
+      <div class="row">
+        <button id="btnValider">Valider mon compte</button>
+        <button id="btnRenvoyer" class="ghost">Renvoyer le code</button>
+      </div>
+      <p class="feedback" id="valMsg"></p>
+      <div class="row"><button class="ghost" id="btnValLogout">Utiliser un autre compte</button></div>
     </div>
   </section>
 
@@ -508,7 +516,17 @@
 window.addEventListener("error", (e) => {
   const boite = document.getElementById("erreurJS");
   if (!boite) return;
-  boite.textContent = `Erreur : ${e.message} (${(e.filename||"").split("/").pop()}:${e.lineno})`;
+
+  // Les extensions du navigateur (portefeuilles, bloqueurs) injectent leurs
+  // propres scripts et lèvent des erreurs qui ne concernent pas le jeu.
+  const source = e.filename || "";
+  const externe = source && !source.startsWith(location.origin);
+  if (externe || e.message === "Script error.") {
+    console.warn("Erreur externe au jeu, ignorée :", e.message, source);
+    return;
+  }
+
+  boite.textContent = `Erreur : ${e.message} (${source.split("/").pop()}:${e.lineno})`;
   boite.classList.remove("hidden");
 });
 </script>
@@ -559,7 +577,7 @@ let state = {code:null, mode:"ffa", isHost:false, hintCosts:{}, bought:{}, answe
 
 /** Chaque écran commence en haut : personne ne doit remonter à la main. */
 const show = id => {
-  ["landing","profile","board","exchange","friends","moderation","menu","lobby","waiting","round","between","over"]
+  ["landing","validation","profile","board","exchange","friends","moderation","menu","lobby","waiting","round","between","over"]
     .forEach(s => $(s).classList.toggle("hidden", s !== id));
   window.scrollTo({top: 0, behavior: "instant"});
 };
@@ -593,6 +611,7 @@ async function loadSession(){
     me = await res.json();
     setCredits(me.credits ?? 0);
     setPoints(me.points ?? 0);
+    if (me.email && !me.emailVerifie) return ecranValidation();
     if (!me.pseudoChosen) return firstVisit();
     majBadgeAmis();
     $("hello").innerHTML = `Bonjour ${esc(me.pseudo)}` +
@@ -620,36 +639,51 @@ function firstVisit(){
   show("profile");
 }
 
-/* ---------- Connexion par email ---------- */
-const MESSAGES_MAIL = {
-  EMAIL_INVALIDE: "Cette adresse email ne semble pas valide.",
-  MOT_DE_PASSE_COURT: "Le mot de passe doit faire au moins 8 caractères.",
-  EMAIL_DEJA_PRIS: "Un compte existe déjà avec cette adresse.",
-  IDENTIFIANTS_INVALIDES: "Email ou mot de passe incorrect.",
-  BANNI: "Ce compte a été banni.",
+/* ---------- Validation de l'adresse email ---------- */
+const MESSAGES_CODE = {
+  CODE_INCORRECT: "Code incorrect. Vérifiez votre boîte mail.",
+  CODE_EXPIRE: "Ce code a expiré, demandez-en un nouveau.",
+  TROP_D_ESSAIS: "Trop de tentatives. Demandez un nouveau code.",
+  TROP_TOT: "Patientez une minute avant de redemander un code.",
+  ENVOI_ECHOUE: "L'email n'a pas pu être envoyé.",
 };
 
-async function authMail(chemin){
-  const email = $("mail").value.trim(), motDePasse = $("mdp").value;
-  if (!email || !motDePasse) return ($("mailError").textContent = "Renseignez l'email et le mot de passe.");
-  const res = await fetch(`/auth/email/${chemin}`, {method:"POST",
-    headers:{"Content-Type":"application/json"}, body: JSON.stringify({email, motDePasse})});
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) return ($("mailError").textContent = MESSAGES_MAIL[data.error] || "Connexion impossible.");
+function ecranValidation(){
+  $("valInfo").textContent = `Un code à 4 chiffres a été envoyé à ${me.email}. Il expire dans 20 minutes.`;
+  $("valMsg").textContent = "";
+  $("codeVal").value = "";
+  show("validation");
+}
 
+/* L'écran de validation reste disponible pour les comptes email créés
+   avant ce changement : il n'est simplement plus proposé à l'inscription. */
+$("btnValider").onclick = async () => {
+  const res = await fetch("/auth/email/code", {method:"POST",
+    headers:{"Content-Type":"application/json"}, body: JSON.stringify({code: $("codeVal").value})});
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok){
+    $("valMsg").textContent = MESSAGES_CODE[data.error] || "Validation impossible.";
+    $("valMsg").className = "feedback bad";
+    return;
+  }
   me = data;
-  $("mdp").value = "";
-  setCredits(me.credits ?? 0);
-  setPoints(me.points ?? 0);
-  socket.disconnect().connect();          // la session vient de changer
+  socket.disconnect().connect();
   if (!me.pseudoChosen) return firstVisit();
   $("hello").textContent = `Bonjour ${me.pseudo}`;
-  majBadgeAmis();
   show("menu");
-}
-$("btnMailConnexion").onclick = () => authMail("connexion");
-$("btnMailInscription").onclick = () => authMail("inscription");
-$("mdp").addEventListener("keydown", e => { if (e.key === "Enter") authMail("connexion"); });
+};
+
+$("btnRenvoyer").onclick = async () => {
+  const res = await fetch("/auth/email/renvoyer", {method:"POST"});
+  const data = await res.json().catch(() => ({}));
+  $("valMsg").textContent = res.ok ? "Nouveau code envoyé." : (MESSAGES_CODE[data.error] || "Envoi impossible.");
+  $("valMsg").className = res.ok ? "feedback good" : "feedback bad";
+};
+
+$("btnValLogout").onclick = async () => {
+  try { await fetch("/auth/logout", {method:"POST"}); } catch {}
+  location.href = "/";
+};
 
 /* ---------- Profil ---------- */
 $("avatars").innerHTML = AVATAR_LIST.map(a => `<button data-a="${a}">${a}</button>`).join("");
@@ -1007,6 +1041,7 @@ socket.on("round:end", ({answer, movieId, poster, scores, isHost, mode}) => {
 socket.on("connect_error", err => {
   const raisons = {
     NOT_AUTHENTICATED: "Session non reconnue par le serveur temps réel.",
+    EMAIL_NON_VALIDE: "Validez votre adresse email pour jouer.",
     BANNED: "Ce compte a été banni.",
     NO_PSEUDO: "Choisissez d'abord un pseudo.",
   };
