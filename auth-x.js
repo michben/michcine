@@ -13,7 +13,7 @@
  */
 
 import crypto from "crypto";
-import { readFileSync, writeFileSync, existsSync } from "fs";
+import { charger, sauver } from "./db.js";
 
 const CLIENT_ID = process.env.X_CLIENT_ID;
 const CLIENT_SECRET = process.env.X_CLIENT_SECRET;
@@ -22,8 +22,14 @@ const CALLBACK = `${PUBLIC_URL}/auth/x/callback`;
 const DEV_MODE = !CLIENT_ID; // aucune clé X : connexion locale de test
 
 const USERS_FILE = new URL("./users.json", import.meta.url);
-let users = existsSync(USERS_FILE) ? JSON.parse(readFileSync(USERS_FILE, "utf8")) : {};
-const saveUsers = () => writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
+let users = {};
+const saveUsers = () => sauver("users", users, USERS_FILE);
+
+/** À appeler au démarrage, avant de servir la moindre requête. */
+export async function chargerUtilisateurs() {
+  users = await charger("users", USERS_FILE, {});
+  console.log(`${Object.keys(users).length} compte(s) chargé(s).`);
+}
 
 const sessions = new Map(); // sid -> { userId, createdAt }
 const connectes = new Map(); // userId -> nombre d'onglets ouverts

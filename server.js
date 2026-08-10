@@ -12,17 +12,28 @@
 import express from "express";
 import { createServer } from "http";
 import { Server } from "socket.io";
-import { readFileSync, writeFileSync } from "fs";
+import { charger, sauver, initStockage, enBase } from "./db.js";
 import crypto from "crypto";
 import { mountAuth, userFromCookie, addRankedPoints,
          spendCredits, grantCredits, getCredits, CREDITS_PER_GAME,
          listUsers, adminUpdateUser, adminDeleteUser, grantAll,
          grantPoints, getPoints, exchangePoints,
-         marquerEnLigne, marquerHorsLigne, estEnLigne, nombreEnLigne } from "./auth-x.js";
+         marquerEnLigne, marquerHorsLigne, estEnLigne, nombreEnLigne,
+         estModerateur, definirRole, ROLES, chargerUtilisateurs } from "./auth-x.js";
 
 const app = express();
 app.use(express.json());
-app.use(express.static("public"));
+/**
+ * Les pages HTML ne doivent jamais rester en cache : sinon un joueur garde
+ * l'ancienne version après une mise à jour et croit le jeu cassé.
+ * Le reste (images, polices) peut être mis en cache sans risque.
+ */
+app.use(express.static("public", {
+  setHeaders(res, chemin) {
+    res.setHeader("Cache-Control",
+      chemin.endsWith(".html") ? "no-cache, must-revalidate" : "public, max-age=86400");
+  },
+}));
 mountAuth(app);                       // /auth/x/login, /auth/x/callback, /api/me, /api/leaderboard
 const httpServer = createServer(app);
 const io = new Server(httpServer, { cors: { origin: "*" } });
@@ -51,17 +62,42 @@ const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ"; // sans I, O, 0, 1
 /* ------------------------------------------------------------------ */
 
 const MOVIES_FILE = new URL("./movies.json", import.meta.url);
-let movies = JSON.parse(readFileSync(MOVIES_FILE, "utf8"));
+let movies = [];
 
 /** Niveau déduit de la notoriété : un film très voté est facile à reconnaître. */
 const niveauDepuisVotes = (v = 0) => (v >= 8000 ? "facile" : v >= 2500 ? "moyen" : "difficile");
 
-// les anciens catalogues n'ont ni niveau ni activation : on les complète
-for (const m of movies) {
-  if (!m.difficulty) m.difficulty = niveauDepuisVotes(m.votes);
-  if (m.enabled === undefined) m.enabled = true;
+/** Complète les catalogues anciens, sans niveau ni activation. */
+function normaliserFilms() {
+  for (const m of movies) {
+    if (!m.difficulty) m.difficulty = niveauDepuisVotes(m.votes);
+    if (m.enabled === undefined) m.enabled = true;
+  }
 }
-const saveMovies = () => writeFileSync(MOVIES_FILE, JSON.stringify(movies, null, 2));
+const saveMovies = () => sauver("movies", movies, MOVIES_FILE);
+
+/* ---------- signalements d'anomalies ---------- */
+
+const REPORTS_FILE = new URL("./reports.json", import.meta.url);
+let reports = [];
+const saveReports = () => sauver("reports", reports, REPORTS_FILE);
+
+const MOTIFS = {
+  spoiler: "Le synopsis révèle le titre",
+  synopsis: "Synopsis incompréhensible ou trop court",
+  image: "Image ou affiche incorrecte",
+  reponse: "Mauvaise réponse acceptée",
+  inapproprie: "Contenu inapproprié",
+  autre: "Autre",
+};
+
+/** Accès réservé aux modérateurs (session) ou à la clé d'administration. */
+function requireModerateur(req, res, next) {
+  if (req.get("x-admin-token") === ADMIN_TOKEN) return next();
+  const user = userFromCookie(req.headers.cookie);
+  if (estModerateur(user)) { req.moderateur = user; return next(); }
+  res.status(403).json({ error: "FORBIDDEN" });
+}
 
 function requireAdmin(req, res, next) {
   if (req.get("x-admin-token") !== ADMIN_TOKEN) return res.status(401).json({ error: "UNAUTHORIZED" });
@@ -82,6 +118,21 @@ app.post("/api/admin/movies/bulk", requireAdmin, (req, res) => {
   }
   saveMovies();
   res.json({ touched, actifs: movies.filter((m) => m.enabled).length });
+});
+
+/** Réimporte movies.json du dépôt par-dessus le catalogue en base. */
+app.post("/api/admin/movies/reimport", requireAdmin, async (_req, res) => {
+  try {
+    const { readFileSync } = await import("fs");
+    const frais = JSON.parse(readFileSync(MOVIES_FILE, "utf8"));
+    if (!Array.isArray(frais) || !frais.length) throw new Error("fichier vide");
+    movies = frais;
+    normaliserFilms();
+    saveMovies();
+    res.json({ ok: true, films: movies.length });
+  } catch (e) {
+    res.status(400).json({ error: "IMPORT_ECHOUE", detail: e.message });
+  }
 });
 
 app.get("/api/admin/stats", requireAdmin, (_req, res) => {
@@ -176,6 +227,63 @@ const verifyLicense = (lic) => {
   const [id, sig] = String(lic || "").split(".");
   return Boolean(id && sig && signLicense(id) === `${id}.${sig}`);
 };
+
+app.get("/api/reports/motifs", (_req, res) => res.json(MOTIFS));
+
+/** Tout joueur connecté peut signaler une anomalie sur un film. */
+app.post("/api/reports", (req, res) => {
+  const user = userFromCookie(req.headers.cookie);
+  if (!user) return res.status(401).json({ error: "NOT_AUTHENTICATED" });
+
+  const movieId = Number(req.body.movieId);
+  const film = movies.find((m) => m.id === movieId);
+  if (!film) return res.status(404).json({ error: "MOVIE_NOT_FOUND" });
+  if (!MOTIFS[req.body.motif]) return res.status(400).json({ error: "MOTIF_INVALIDE" });
+
+  const doublon = reports.find(
+    (r) => r.movieId === movieId && r.auteurId === user.id && r.statut === "ouvert"
+  );
+  if (doublon) return res.json({ ok: true, deja: true });
+
+  reports.push({
+    id: (reports.at(-1)?.id || 0) + 1,
+    movieId, titre: film.title,
+    motif: req.body.motif,
+    commentaire: String(req.body.commentaire || "").trim().slice(0, 300),
+    auteurId: user.id, auteur: user.pseudo,
+    statut: "ouvert", date: new Date().toISOString(),
+  });
+  saveReports();
+  res.status(201).json({ ok: true });
+});
+
+app.get("/api/reports", requireModerateur, (_req, res) =>
+  res.json(reports.slice().reverse())
+);
+
+/** Traiter un signalement : le clore, ou retirer le film du catalogue. */
+app.put("/api/reports/:id", requireModerateur, (req, res) => {
+  const signalement = reports.find((r) => r.id === Number(req.params.id));
+  if (!signalement) return res.status(404).json({ error: "NOT_FOUND" });
+
+  if (req.body.statut === "ouvert" || req.body.statut === "traite")
+    signalement.statut = req.body.statut;
+
+  if (req.body.retirerFilm) {
+    const film = movies.find((m) => m.id === signalement.movieId);
+    if (film) { film.enabled = false; saveMovies(); }
+    signalement.statut = "traite";
+  }
+  signalement.traitePar = req.moderateur?.pseudo || "administration";
+  saveReports();
+  res.json(signalement);
+});
+
+app.put("/api/admin/users/:id/role", requireAdmin, (req, res) => {
+  const user = definirRole(req.params.id, req.body.role);
+  if (!user) return res.status(400).json({ error: "ROLE_INVALIDE" });
+  res.json(user);
+});
 
 app.get("/api/presence", (_req, res) => res.json({ enLigne: nombreEnLigne() }));
 
@@ -335,6 +443,7 @@ function endRound(room) {
   room.graceTimer = null;
   io.to(room.code).emit("round:end", {
     answer: room.currentMovie.title,
+    movieId: room.currentMovie.id,
     poster: room.currentMovie.poster,   // affiche révélée seulement maintenant
     year: room.currentMovie.year,
     scores: publicState(room).players,
@@ -531,6 +640,19 @@ io.on("connection", (socket) => {
     startRound(room);
   });
 
+  /** Réactions émoji pendant la partie, relayées à tout le salon. */
+  const EMOJIS = ["😂", "😀", "😮", "😡", "😭", "❤️", "👏", "🤔"];
+  let derniereReaction = 0;
+
+  socket.on("reaction", ({ code, emoji }) => {
+    const room = rooms.get(code);
+    const player = room?.players.get(socket.id);
+    if (!room || !player || !EMOJIS.includes(emoji)) return;
+    if (Date.now() - derniereReaction < 700) return;   // évite le matraquage
+    derniereReaction = Date.now();
+    io.to(room.code).emit("reaction", { emoji, pseudo: player.pseudo, avatar: player.avatar });
+  });
+
   socket.on("room:leave", () => leaveAllRooms(socket));
 
   socket.on("disconnect", () => leaveAllRooms(socket));
@@ -570,7 +692,19 @@ function balancedTeam(room) {
   return a <= b ? "A" : "B";
 }
 
+/* ------------------------------------------------------------------ */
+/* Démarrage : rien n'est servi avant que les données soient chargées   */
+/* ------------------------------------------------------------------ */
+
 const PORT = process.env.PORT || 3000;
-httpServer.listen(PORT, "0.0.0.0", () =>
-  console.log(`MichBen Ciné Quizz → http://localhost:${PORT}  (admin : /admin.html)`)
-);
+
+await initStockage();
+movies = await charger("movies", MOVIES_FILE, []);
+normaliserFilms();
+reports = await charger("reports", REPORTS_FILE, []);
+await chargerUtilisateurs();
+
+httpServer.listen(PORT, "0.0.0.0", () => {
+  console.log(`MichBen Ciné Quizz → http://localhost:${PORT}  (admin : /admin.html)`);
+  console.log(`${movies.length} films · stockage : ${enBase ? "Postgres" : "fichiers locaux"}`);
+});
