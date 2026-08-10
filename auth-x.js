@@ -31,8 +31,44 @@ export async function chargerUtilisateurs() {
   console.log(`${Object.keys(users).length} compte(s) chargé(s).`);
 }
 
-const sessions = new Map(); // sid -> { userId, createdAt }
 const connectes = new Map(); // userId -> nombre d'onglets ouverts
+
+/**
+ * Sessions signées plutôt que stockées.
+ *
+ * Le cookie contient l'identifiant, une date d'expiration et une signature.
+ * Le serveur n'a donc rien à mémoriser : une session survit aux redémarrages
+ * et aux redéploiements, ce qui n'était pas le cas avec une table en mémoire —
+ * les joueurs se retrouvaient déconnectés au moindre réveil du service.
+ */
+const SESSION_SECRET = process.env.SESSION_SECRET || process.env.LICENSE_SECRET;
+if (!SESSION_SECRET)
+  console.warn("⚠️  SESSION_SECRET absent : les sessions seront perdues à chaque redémarrage.");
+const CLE_SESSION = SESSION_SECRET || crypto.randomBytes(32).toString("hex");
+const DUREE_SESSION = 60 * 60 * 24 * 30; // 30 jours
+
+const signature = (donnees) =>
+  crypto.createHmac("sha256", CLE_SESSION).update(donnees).digest("base64url");
+
+function creerJeton(userId) {
+  const expire = Math.floor(Date.now() / 1000) + DUREE_SESSION;
+  const donnees = `${Buffer.from(userId).toString("base64url")}.${expire}`;
+  return `${donnees}.${signature(donnees)}`;
+}
+
+function lireJeton(jeton) {
+  const morceaux = String(jeton || "").split(".");
+  if (morceaux.length !== 3) return null;
+  const [idEncode, expire, sig] = morceaux;
+
+  // comparaison à durée constante : évite de laisser deviner la signature
+  const attendue = Buffer.from(signature(`${idEncode}.${expire}`));
+  const fournie = Buffer.from(sig);
+  if (attendue.length !== fournie.length || !crypto.timingSafeEqual(attendue, fournie)) return null;
+  if (Number(expire) < Date.now() / 1000) return null;
+
+  return Buffer.from(idEncode, "base64url").toString();
+}
 const pending = new Map();  // state -> { verifier, createdAt }
 
 /* ---------- petites aides ---------- */
@@ -46,9 +82,8 @@ const parseCookies = (header = "") =>
 
 /** Utilisateur associé à une requête (ou à une poignée de main Socket.IO). */
 export function userFromCookie(cookieHeader) {
-  const sid = parseCookies(cookieHeader).mb_sid;
-  const session = sid && sessions.get(sid);
-  return session ? users[session.userId] || null : null;
+  const userId = lireJeton(parseCookies(cookieHeader).mb_sid);
+  return userId ? users[userId] || null : null;
 }
 
 export const STARTING_CREDITS = 12;   // offerts à l'inscription
@@ -149,8 +184,7 @@ export function adminUpdateUser(id, changes) {
 
 export function adminDeleteUser(id) {
   if (!users[id]) return false;
-  delete users[id];
-  for (const [sid, s] of sessions) if (s.userId === id) sessions.delete(sid); // déconnexion immédiate
+  delete users[id];   // le jeton reste valide mais ne correspond plus à aucun compte
   saveUsers();
   return true;
 }
@@ -197,11 +231,10 @@ function domaineCookie() {
 }
 
 function createSession(res, user) {
-  const sid = b64url(crypto.randomBytes(24));
-  sessions.set(sid, { userId: user.id, createdAt: Date.now() });
+  const sid = creerJeton(user.id);
   const secure = PUBLIC_URL.startsWith("https") ? " Secure;" : "";
   res.setHeader("Set-Cookie",
-    `mb_sid=${sid}; HttpOnly;${secure}${domaineCookie()} SameSite=Lax; Path=/; Max-Age=${60 * 60 * 24 * 30}`);
+    `mb_sid=${sid}; HttpOnly;${secure}${domaineCookie()} SameSite=Lax; Path=/; Max-Age=${DUREE_SESSION}`);
 }
 
 /* ---------- routes ---------- */
@@ -234,8 +267,6 @@ export function mountAuth(app) {
   });
 
   app.post("/auth/logout", (req, res) => {
-    const sid = parseCookies(req.headers.cookie).mb_sid;
-    if (sid) sessions.delete(sid);
     res.setHeader("Set-Cookie", `mb_sid=;${domaineCookie()} HttpOnly; Path=/; Max-Age=0`);
     res.json({ ok: true });
   });
