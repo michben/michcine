@@ -215,6 +215,7 @@
         <a class="xbtn ghostlink" href="/auth/x/login">𝕏 &nbsp;J'ai déjà un compte — me connecter</a>
       </div>
       <p class="feedback bad" id="authError"></p>
+      <p class="note" id="diag"></p>
       <p class="note" style="margin-bottom:0">En vous inscrivant, vous acceptez les <a href="/regles.html" style="color:var(--beam)">règles et le code de bonne conduite</a>.</p>
       <p class="note">Le compte X sert uniquement à identifier votre profil et votre classement. Aucun message ne sera publié en votre nom.</p>
     </div>
@@ -488,8 +489,11 @@ const AVATAR_LIST = AVATARS;
 
 async function loadSession(){
   try {
-    const res = await fetch("/api/me");
-    if (!res.ok) return show("landing");
+    const res = await fetch("/api/me", { credentials: "same-origin" });
+    if (!res.ok) {
+      $("diag").textContent = `Non connecté (réponse ${res.status}).`;
+      return show("landing");
+    }
     me = await res.json();
     setCredits(me.credits ?? 0);
     setPoints(me.points ?? 0);
@@ -498,7 +502,10 @@ async function loadSession(){
       (["moderateur","admin"].includes(me.role) ? `<span class="badge-role">${esc(me.role)}</span>` : "");
     $("btnModeration").classList.toggle("hidden", !["moderateur","admin"].includes(me.role));
     show("menu");
-  } catch { show("landing"); }
+  } catch (e) {
+    $("diag").textContent = `Contact du serveur impossible : ${e.message}`;
+    show("landing");
+  }
 }
 if (new URLSearchParams(location.search).get("erreur"))
   $("authError").textContent = "La connexion avec X a échoué. Réessayez.";
@@ -846,9 +853,28 @@ socket.on("round:end", ({answer, movieId, poster, scores, isHost, mode}) => {
   show("between");
 });
 
+/**
+ * Une erreur de connexion doit être lisible par le joueur, jamais silencieuse :
+ * sinon il retombe sur l'accueil sans comprendre pourquoi.
+ */
 socket.on("connect_error", err => {
-  if (err.message === "NOT_AUTHENTICATED") show("landing");
-  if (err.message === "NO_PSEUDO" && me) firstVisit();
+  const raisons = {
+    NOT_AUTHENTICATED: "Session non reconnue par le serveur temps réel.",
+    BANNED: "Ce compte a été banni.",
+    NO_PSEUDO: "Choisissez d'abord un pseudo.",
+  };
+  if (err.message === "NO_PSEUDO" && me) return firstVisit();
+  if (err.message === "BANNED") { $("authError").textContent = raisons.BANNED; return show("landing"); }
+
+  $("authError").textContent =
+    (raisons[err.message] || `Connexion au serveur impossible (${err.message}).`) +
+    " Nouvelle tentative en cours…";
+  // on ne renvoie plus à l'accueil : Socket.IO retente tout seul
+});
+
+socket.on("connect", () => {
+  $("authError").textContent = "";
+  if (me && me.pseudoChosen && $("landing").classList.contains("hidden") === false) show("menu");
 });
 
 socket.on("game:end", ({ranking, mode, teams, credits: solde, points: cagnotte}) => {
