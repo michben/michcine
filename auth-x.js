@@ -183,12 +183,25 @@ export const leaderboard = (limit = 50) =>
       online: connectes.has(u.id), role: u.role || "joueur",
     }));
 
+/**
+ * Domaine du cookie : sans cela, une session ouverte sur www.exemple.fr
+ * n'est pas reconnue sur exemple.fr, et le joueur paraît déconnecté.
+ * On pose donc le cookie sur le domaine parent quand l'hôte commence par www.
+ */
+function domaineCookie() {
+  try {
+    const hote = new URL(PUBLIC_URL).hostname;
+    if (hote === "localhost" || /^[\d.]+$/.test(hote)) return "";      // local ou adresse IP
+    return hote.startsWith("www.") ? ` Domain=${hote.slice(4)};` : "";
+  } catch { return ""; }
+}
+
 function createSession(res, user) {
   const sid = b64url(crypto.randomBytes(24));
   sessions.set(sid, { userId: user.id, createdAt: Date.now() });
   const secure = PUBLIC_URL.startsWith("https") ? " Secure;" : "";
   res.setHeader("Set-Cookie",
-    `mb_sid=${sid}; HttpOnly;${secure} SameSite=Lax; Path=/; Max-Age=${60 * 60 * 24 * 30}`);
+    `mb_sid=${sid}; HttpOnly;${secure}${domaineCookie()} SameSite=Lax; Path=/; Max-Age=${60 * 60 * 24 * 30}`);
 }
 
 /* ---------- routes ---------- */
@@ -223,7 +236,7 @@ export function mountAuth(app) {
   app.post("/auth/logout", (req, res) => {
     const sid = parseCookies(req.headers.cookie).mb_sid;
     if (sid) sessions.delete(sid);
-    res.setHeader("Set-Cookie", "mb_sid=; HttpOnly; Path=/; Max-Age=0");
+    res.setHeader("Set-Cookie", `mb_sid=;${domaineCookie()} HttpOnly; Path=/; Max-Age=0`);
     res.json({ ok: true });
   });
 
