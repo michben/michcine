@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MichBen Ciné Quizz — devinez le film</title>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
+<style>
+  :root{--ink:#0A0C16;--velvet:#151A2E;--card:#1C2238;--beam:#F5B942;--ticket:#E4586E;--teal:#4ECDC4;--chalk:#EDE8DC;--muted:#7C819B}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;background:var(--ink);color:var(--chalk);
+    font-family:'Space Grotesk',system-ui,sans-serif;
+    background-image:radial-gradient(ellipse 80% 55% at 50% -10%, rgba(245,185,66,.16), transparent 70%)}
+  .wrap{max-width:720px;margin:0 auto;padding:26px 18px 40px}
+  h1{font-family:'Anton',sans-serif;font-size:clamp(30px,8vw,52px);letter-spacing:.04em;text-transform:uppercase;margin:0;line-height:.92}
+  h1 em{font-style:normal;color:var(--beam)}
+  h2{font-family:'Anton',sans-serif;text-transform:uppercase;letter-spacing:.03em;font-size:22px;margin:0 0 4px}
+  .baseline{color:var(--muted);font-size:16px;margin:10px 0 0;line-height:1.5;max-width:44ch}
+  .free{display:inline-block;margin-top:14px;font-size:11px;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--teal);border:1px solid var(--teal);border-radius:999px;padding:6px 14px}
+  .card{background:var(--velvet);border:1px solid rgba(237,232,220,.09);border-radius:14px;padding:20px;margin-top:16px}
+  .tag{font-size:11px;letter-spacing:.26em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+  label{display:block;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+  input{width:100%;background:var(--card);border:1px solid rgba(237,232,220,.14);color:var(--chalk);border-radius:10px;padding:13px 14px;font:inherit;font-size:16px}
+  input:focus-visible,button:focus-visible{outline:2px solid var(--beam);outline-offset:2px}
+  #joinCode{font-family:'JetBrains Mono',monospace;letter-spacing:.5em;text-transform:uppercase;font-size:20px}
+  button{font:inherit;font-weight:700;border:0;border-radius:10px;padding:13px 18px;cursor:pointer;background:var(--beam);color:#161207}
+  button.ghost{background:transparent;color:var(--chalk);border:1px solid rgba(237,232,220,.22)}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .row{display:flex;gap:10px;margin-top:14px}.row>*{flex:1}
+  .hidden{display:none !important}
+  .avatars{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:4px}
+  .avatars button{background:var(--card);border:1px solid transparent;font-size:22px;padding:8px 10px;line-height:1}
+  .avatars button[aria-pressed="true"]{border-color:var(--beam);background:rgba(245,185,66,.12)}
+  .levels{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px}
+  .levels button{flex:1 1 auto;background:var(--card);color:var(--muted);border:1px solid transparent;
+    font-weight:500;font-size:14px;padding:11px 12px}
+  .levels button[aria-pressed="true"]{color:#161207;background:var(--beam);font-weight:700}
+  .modes{display:grid;gap:10px}
+  .mode{display:flex;gap:14px;align-items:center;text-align:left;background:var(--card);
+    border:1px solid rgba(237,232,220,.1);color:var(--chalk);padding:16px;border-radius:12px;font-weight:500}
+  .mode span.ic{font-size:26px}
+  .mode b{display:block;font-family:'Anton',sans-serif;text-transform:uppercase;letter-spacing:.03em;font-size:17px;font-weight:400}
+  .mode small{color:var(--muted)}
+  .marquee{display:flex;gap:10px;justify-content:center;margin:6px 0 16px}
+  .flap{width:54px;height:70px;display:grid;place-items:center;border-radius:8px;
+    background:linear-gradient(180deg,#232A44 0 49%,#1A2034 51% 100%);box-shadow:inset 0 0 0 1px rgba(245,185,66,.25);
+    font-family:'JetBrains Mono',monospace;font-size:32px;color:var(--beam);animation:flip .35s ease both}
+  .flap:nth-child(2){animation-delay:.07s}.flap:nth-child(3){animation-delay:.14s}.flap:nth-child(4){animation-delay:.21s}
+  @keyframes flip{from{transform:rotateX(-85deg);opacity:0}to{transform:none;opacity:1}}
+  .players{list-style:none;padding:0;margin:12px 0 0;display:flex;flex-wrap:wrap;gap:8px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:0 0 auto}
+  .dot.on{background:#3DDC84;box-shadow:0 0 8px rgba(61,220,132,.7)}
+  .online{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);margin-top:10px}
+  .players li{background:var(--card);border-radius:999px;padding:7px 14px;font-size:14px;display:flex;gap:7px;align-items:center}
+  .players li.A{box-shadow:inset 0 0 0 1px var(--beam)}
+  .players li.B{box-shadow:inset 0 0 0 1px var(--teal)}
+  .beam{height:4px;background:var(--card);border-radius:99px;overflow:hidden;margin-bottom:18px}
+  .beam i{display:block;height:100%;width:100%;transform-origin:left;background:linear-gradient(90deg,var(--ticket),var(--beam));transition:transform .25s linear}
+  .synopsis{font-size:clamp(17px,4.4vw,22px);line-height:1.5;margin:0}
+  .choices{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px}
+  .choices button{background:var(--card);color:var(--chalk);border:1px solid rgba(237,232,220,.14);
+    font-weight:500;font-size:15px;padding:16px 12px;text-align:center;line-height:1.3;min-height:64px}
+  .choices button:hover:not(:disabled){border-color:var(--beam)}
+  .choices button.good{background:rgba(78,205,196,.16);border-color:var(--teal);color:var(--teal);font-weight:700}
+  .choices button.bad{background:rgba(228,88,110,.14);border-color:var(--ticket);color:var(--ticket)}
+  .typed{margin-top:16px}
+  .typed summary{cursor:pointer;color:var(--muted);font-size:13px;letter-spacing:.1em;text-transform:uppercase;list-style:none}
+  .typed summary::-webkit-details-marker{display:none}
+  .typed summary::before{content:"＋ ";color:var(--beam)}
+  .hints{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+  .hints button{background:transparent;color:var(--chalk);border:1px dashed rgba(245,185,66,.45);font-weight:500;padding:10px 13px;font-size:14px}
+  .hints button.bought{border-style:solid;border-color:var(--beam);color:var(--beam)}
+  .hints .cost{color:var(--muted);font-size:12px;margin-left:6px}
+  .feedback{margin-top:12px;font-size:15px;min-height:22px}
+  .feedback.bad{color:var(--ticket)}.feedback.good{color:var(--beam)}
+  .reveal{font-family:'Anton',sans-serif;font-size:clamp(24px,6vw,34px);text-transform:uppercase;color:var(--beam);margin:4px 0 0;letter-spacing:.03em}
+  .poster{width:140px;border-radius:10px;display:block;margin-top:14px;box-shadow:0 12px 30px rgba(0,0,0,.5)}
+  #hintPoster{width:min(100%,340px);aspect-ratio:16/9;object-fit:cover}
+  ol.rank{list-style:none;counter-reset:r;padding:0;margin:14px 0 0}
+  ol.rank li{counter-increment:r;display:flex;align-items:center;gap:10px;padding:11px 0;border-top:1px solid rgba(237,232,220,.1)}
+  ol.rank li::before{content:counter(r);font-family:'JetBrains Mono',monospace;color:var(--muted);width:22px}
+  ol.rank li b{margin-left:auto;color:var(--beam)}
+  ol.rank li.A{border-left:3px solid var(--beam);padding-left:10px}
+  ol.rank li.B{border-left:3px solid var(--teal);padding-left:10px}
+  ol.rank li.B b{color:var(--teal)}
+  #roundPlayers li.A{box-shadow:inset 0 0 0 1px var(--beam)}
+  #roundPlayers li.B{box-shadow:inset 0 0 0 1px var(--teal)}
+  .teamboard{display:flex;gap:12px;margin-top:14px}
+  .teamboard div{flex:1;background:var(--card);border-radius:12px;padding:14px;text-align:center}
+  .teamboard div b{display:block;font-family:'JetBrains Mono',monospace;font-size:26px;margin-top:4px}
+  .teamboard .a b{color:var(--beam)}.teamboard .b b{color:var(--teal)}
+  .note{color:var(--muted);font-size:13px;margin-top:14px;line-height:1.5}
+  footer{margin-top:34px;padding-top:20px;border-top:1px solid rgba(237,232,220,.1);text-align:center}
+  footer p{color:var(--muted);font-size:13px;margin:0 0 12px}
+  .tip{display:inline-flex;align-items:center;gap:8px;text-decoration:none;font-weight:700;font-size:15px;
+    background:transparent;color:var(--beam);border:1px solid var(--beam);border-radius:999px;padding:11px 20px}
+  .headline{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+  .dots{display:flex;gap:5px;flex:1;min-width:120px}
+  .dots i{flex:1;height:5px;border-radius:99px;background:var(--card)}
+  .dots i.done{background:var(--muted)}
+  .dots i.now{background:var(--beam)}
+  .pattern{font-family:'JetBrains Mono',monospace;font-size:clamp(19px,5vw,26px);color:var(--beam);
+    letter-spacing:.14em;margin:16px 0 0;word-break:break-word}
+  .clock{font-family:'JetBrains Mono',monospace;font-size:26px;color:var(--beam);min-width:44px;
+    text-align:center;font-variant-numeric:tabular-nums}
+  .clock.urgent{color:var(--ticket);animation:pulse .9s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
+  .roomcode{font-family:'JetBrains Mono',monospace;font-size:14px;letter-spacing:.24em;color:var(--beam);
+    background:var(--card);border-radius:8px;padding:6px 12px}
+  .grace{color:var(--ticket);font-size:14px;margin:12px 0 0}
+  .waiting{text-align:center;padding:26px 0}
+  .waiting b{display:block;font-family:'Anton',sans-serif;text-transform:uppercase;font-size:20px;color:var(--beam);margin-bottom:8px}
+  .wallet{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--muted);
+    background:var(--card);border-radius:999px;padding:7px 14px;margin-top:10px}
+  .wallet b{color:var(--beam);font-family:'JetBrains Mono',monospace;font-size:15px}
+  .hints button.broke{opacity:.4;border-style:dotted}
+  /* Chat */
+  #confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:60;display:none}
+  .bravo{position:fixed;top:22%;left:50%;transform:translateX(-50%);z-index:61;pointer-events:none;
+    font-family:'Anton',sans-serif;text-transform:uppercase;letter-spacing:.05em;
+    font-size:clamp(30px,9vw,54px);color:var(--beam);text-shadow:0 6px 30px rgba(0,0,0,.7);
+    animation:bravo 1.6s ease-out forwards}
+  @keyframes bravo{
+    0%{opacity:0;transform:translateX(-50%) scale(.6)}
+    18%{opacity:1;transform:translateX(-50%) scale(1.08)}
+    30%{transform:translateX(-50%) scale(1)}
+    100%{opacity:0;transform:translateX(-50%) translateY(-26px) scale(1)}}
+  #chatToggle{position:fixed;right:18px;bottom:18px;width:56px;height:56px;border-radius:50%;
+    font-size:24px;padding:0;box-shadow:0 8px 24px rgba(0,0,0,.5);z-index:20}
+  #chatToggle .badge{position:absolute;top:-4px;right:-4px;background:var(--ticket);color:#fff;
+    font-size:11px;min-width:20px;height:20px;border-radius:10px;display:grid;place-items:center;padding:0 5px}
+  #chatPanel{position:fixed;right:18px;bottom:84px;width:min(340px,calc(100vw - 36px));max-height:60vh;
+    background:var(--velvet);border:1px solid rgba(237,232,220,.14);border-radius:14px;padding:14px;
+    display:flex;flex-direction:column;gap:10px;z-index:20;box-shadow:0 16px 40px rgba(0,0,0,.6)}
+  #chatLog{flex:1;overflow-y:auto;min-height:120px;display:flex;flex-direction:column;gap:9px;font-size:14px}
+  #chatLog p{margin:0;line-height:1.4}
+  #chatLog b{color:var(--beam);font-weight:700}
+  #chatLog .sys{color:var(--ticket);font-size:13px}
+  #chatForm{display:flex;gap:8px}
+  #chatForm input{padding:10px 12px;font-size:15px}
+  #chatForm button{padding:10px 14px}
+  #banner{display:block;width:100%;background:transparent;border:0;padding:0;text-align:left;cursor:pointer;color:inherit}
+  #banner:hover h1 em{color:var(--ticket)}
+  .xbtn{display:block;text-align:center;text-decoration:none;font-weight:700;font-size:16px;
+    background:var(--chalk);color:#0A0C16;border-radius:10px;padding:14px 18px;margin-bottom:10px}
+  .xbtn.ghostlink{background:transparent;color:var(--chalk);border:1px solid rgba(237,232,220,.25);font-weight:500}
+  ul.how{list-style:none;padding:0;margin:0;color:var(--muted);font-size:15px;line-height:1.6}
+  ul.how b{color:var(--beam);margin-right:6px}
+  /* Téléphones : cibles tactiles plus larges, chat plein écran, moins de marges. */
+  @media (max-width:600px){
+    .wrap{padding:18px 14px 96px}
+    .card{padding:16px;border-radius:12px}
+    .row{flex-wrap:wrap}
+    button,input{min-height:48px}
+    .flap{width:46px;height:60px;font-size:26px}
+    .mode{padding:14px;gap:10px}
+    .mode span.ic{font-size:22px}
+    .hints{gap:6px}
+      .hints button{flex:1 1 calc(50% - 6px);padding:12px 8px;font-size:13px;justify-content:center}
+    .choices{grid-template-columns:1fr;gap:8px}
+    .choices button{min-height:56px;font-size:15px}
+    .hints .cost{display:block;margin:2px 0 0}
+    #chatPanel{right:0;left:0;bottom:0;width:100%;max-height:72vh;border-radius:14px 14px 0 0}
+    #chatToggle{right:14px;bottom:14px}
+    .urow input{width:70px}
+    ol.rank li{font-size:15px}
+    .teamboard{flex-direction:column;gap:8px}
+    footer{margin-bottom:60px}
+  }
+  @media (max-width:380px){
+    .flap{width:40px;height:52px;font-size:22px}
+  }
+  @media (prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <button id="banner" title="Revenir au menu principal">
+    <h1>MichBen <em>Ciné Quizz</em></h1>
+  </button>
+
+  <!-- PRÉSENTATION + CONNEXION -->
+  <section id="landing">
+    <p class="baseline">Un synopsis s'affiche, vous devinez le film. Plus vous répondez vite et sans indice, plus vous marquez. Seul ou jusqu'à 16 joueurs.</p>
+    <span class="free">100 % gratuit</span>
+
+    <div class="card">
+      <p class="tag">Rejoindre la partie</p>
+      <div class="row" style="flex-direction:column">
+        <a class="xbtn" href="/auth/x/login">𝕏 &nbsp;S'inscrire avec X</a>
+        <a class="xbtn ghostlink" href="/auth/x/login">𝕏 &nbsp;J'ai déjà un compte — me connecter</a>
+      </div>
+      <p class="feedback bad" id="authError"></p>
+      <p class="note" style="margin-bottom:0">En vous inscrivant, vous acceptez les <a href="/regles.html" style="color:var(--beam)">règles et le code de bonne conduite</a>.</p>
+      <p class="note">Le compte X sert uniquement à identifier votre profil et votre classement. Aucun message ne sera publié en votre nom.</p>
+    </div>
+
+    <div class="card">
+      <p class="tag">Comment ça marche</p>
+      <ul class="how">
+        <li><b>1.</b> Un synopsis s'affiche, sans le titre.</li>
+        <li><b>2.</b> Achetez des indices si vous séchez : année, réalisateur, acteurs, affiche floutée.</li>
+        <li><b>3.</b> Répondez vite : le score fond avec le temps et le coût des indices.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- PROFIL -->
+  <section id="profile" class="hidden">
+    <div class="card">
+      <p class="tag" id="profileTitle">Votre profil</p>
+      <p class="note" id="welcomeNote" style="margin-top:0"></p>
+      <label for="pseudo">Pseudo affiché</label>
+      <input id="pseudo" maxlength="20" autocomplete="nickname">
+      <label style="margin-top:16px">Avatar</label>
+      <div class="avatars" id="avatars"></div>
+      <div class="row">
+        <button id="btnSaveProfile">Enregistrer</button>
+        <button id="btnToMenu" class="ghost">Retour au menu</button>
+      </div>
+      <p class="feedback" id="profileMsg"></p>
+    </div>
+  </section>
+
+  <!-- ESPACE ÉCHANGE -->
+  <section id="exchange" class="hidden">
+    <div class="card">
+      <p class="tag">Espace échange</p>
+      <p class="note" style="margin-top:0">Chaque partie terminée alimente votre cagnotte de points. Ici, vous les convertissez en tickets bonus, la monnaie qui sert à acheter les indices — année, réalisateur, acteurs, photo du film.</p>
+      <p class="note">Votre total au classement général n'est jamais entamé : échanger ne vous fait pas perdre votre place.</p>
+
+      <div class="teamboard" style="margin:18px 0">
+        <div class="a">Points en cagnotte<b id="xPoints">0</b></div>
+        <div class="b">Tickets bonus<b id="xCredits">0</b></div>
+      </div>
+
+      <p class="tag" id="xRate">Taux de conversion</p>
+      <div class="levels" id="xAmounts"></div>
+      <div class="row">
+        <button id="btnDoExchange" disabled>Échanger</button>
+        <button class="ghost" id="btnExchangeBack">Retour au menu</button>
+      </div>
+      <p class="feedback" id="xMsg"></p>
+    </div>
+  </section>
+
+  <!-- CLASSEMENT GÉNÉRAL -->
+  <section id="board" class="hidden">
+    <div class="card">
+      <p class="tag">Classement général — parties classées</p>
+      <ol class="rank" id="globalRank"></ol>
+      <p class="note" id="boardEmpty"></p>
+      <div class="row"><button class="ghost" id="btnBoardBack">Retour au menu</button></div>
+    </div>
+  </section>
+
+  <!-- CHOIX DU MODE -->
+  <section id="menu" class="hidden">
+    <h2 id="hello">Bonjour</h2>
+    <p class="wallet" id="walletMenu">🎟️ <b>0</b> crédits</p>
+    <p class="online"><span class="dot on"></span><span id="onlineCount">—</span></p>
+    <p class="tag">Niveau</p>
+    <div class="levels" id="levels">
+      <button data-lvl="tous" aria-pressed="true">Tous</button>
+      <button data-lvl="facile" aria-pressed="false">Facile</button>
+      <button data-lvl="moyen" aria-pressed="false">Moyen</button>
+      <button data-lvl="difficile" aria-pressed="false">Difficile</button>
+    </div>
+    <p class="tag" style="margin-top:18px">Choisissez votre partie</p>
+    <div class="modes">
+      <button class="mode" data-mode="solo"><span class="ic">🎬</span><span><b>Solo</b><small>Contre le chrono, pour s'entraîner</small></span></button>
+      <button class="mode" data-mode="duel"><span class="ic">⚔️</span><span><b>Duel</b><small>Deux joueurs, face à face</small></span></button>
+      <button class="mode" data-mode="ffa"><span class="ic">🍿</span><span><b>Chacun pour soi</b><small>De 2 à 16 joueurs, classement individuel</small></span></button>
+      <button class="mode" data-mode="teams"><span class="ic">🏆</span><span><b>En équipes</b><small>Deux équipes, scores cumulés</small></span></button>
+      <button class="mode" data-mode="ranked"><span class="ic">📈</span><span><b>Partie classée</b><small>Vos points comptent au classement général</small></span></button>
+    </div>
+    <div class="row">
+      <button class="ghost" id="btnExchange">Espace échange</button>
+      <button class="ghost" id="btnBoard">Classement</button>
+      <button class="ghost" id="btnProfile">Profil</button>
+    </div>
+    <div class="card">
+      <label for="joinCode">Rejoindre un salon existant</label>
+      <input id="joinCode" maxlength="4" placeholder="ABCD" autocomplete="off">
+      <div class="row"><button id="btnJoin" class="ghost">Rejoindre</button></div>
+      <p class="feedback bad" id="joinError"></p>
+    </div>
+  </section>
+
+  <!-- LOBBY -->
+  <section id="lobby" class="hidden">
+    <div class="card">
+      <p class="tag" style="text-align:center">Partagez ce code</p>
+      <div class="marquee" id="marquee"></div>
+      <div id="teamPicker" class="row hidden">
+        <button class="ghost" data-team="A">Équipe jaune</button>
+        <button class="ghost" data-team="B">Équipe turquoise</button>
+      </div>
+      <p class="tag" style="margin-top:18px" id="lobbyCount">Joueurs</p>
+      <ul class="players" id="lobbyPlayers"></ul>
+      <div class="row"><button id="btnStart">Lancer la partie</button></div>
+      <p class="note" id="hostNote">En attente que l'hôte lance la partie.</p>
+    </div>
+  </section>
+
+  <!-- MANCHE -->
+  <section id="round" class="hidden">
+    <div class="card">
+      <div class="beam"><i id="beamBar"></i></div>
+      <div class="headline">
+        <span class="clock" id="clock">60</span>
+        <div class="dots" id="dots"></div>
+        <span class="roomcode hidden" id="roomCode"></span>
+      </div>
+      <p class="tag" id="roundLabel">Manche 1</p>
+      <p class="synopsis" id="synopsis"></p>
+      <p class="pattern hidden" id="pattern"></p>
+      <img id="hintPoster" class="poster hidden" alt="Photo du film">
+      <p class="wallet" id="walletRound">🎟️ <b>0</b> crédits</p>
+      <div class="hints" id="hints"></div>
+      <div class="choices" id="choices"></div>
+      <p class="feedback" id="guessFeedback"></p>
+      <p class="grace hidden" id="grace"></p>
+      <div class="row"><button id="btnSkip" class="ghost hidden">Passer à la manche suivante</button></div>
+      <ul class="players" id="roundPlayers"></ul>
+    </div>
+  </section>
+
+  <!-- ARRIVÉE EN COURS DE PARTIE -->
+  <section id="waiting" class="hidden">
+    <div class="card waiting">
+      <b>Partie en cours</b>
+      <p class="note" style="margin:0" id="waitingInfo"></p>
+      <p class="roomcode" id="waitingCode" style="display:inline-block;margin-top:14px"></p>
+    </div>
+  </section>
+
+  <!-- ENTRE-DEUX -->
+  <section id="between" class="hidden">
+    <div class="card">
+      <p class="tag">La réponse était</p>
+      <p class="reveal" id="answer"></p>
+      <img id="answerPoster" class="poster hidden" alt="">
+      <ol class="rank" id="interRank"></ol>
+      <div class="row"><button id="btnNext">Question suivante</button></div>
+      <p class="note" id="nextNote">Enchaînement automatique dans quelques secondes.</p>
+    </div>
+  </section>
+
+  <!-- FIN -->
+  <section id="over" class="hidden">
+    <div class="card">
+      <p class="tag">Classement final</p>
+      <div class="teamboard hidden" id="finalTeams">
+        <div class="a">Équipe jaune<b id="teamA">0</b></div>
+        <div class="b">Équipe turquoise<b id="teamB">0</b></div>
+      </div>
+      <ol class="rank" id="finalRank"></ol>
+      <div class="row"><button class="ghost" onclick="location.reload()">Nouvelle partie</button></div>
+    </div>
+  </section>
+
+  <canvas id="confetti" aria-hidden="true"></canvas>
+
+  <button id="chatToggle" class="hidden" title="Chat de la partie">✉️<span class="badge hidden" id="chatBadge">0</span></button>
+  <div id="chatPanel" class="hidden">
+    <p class="tag" style="margin:0">Chat de la partie</p>
+    <div id="chatLog"></div>
+    <div id="chatForm">
+      <input id="chatInput" maxlength="200" placeholder="Votre message" autocomplete="off" style="flex:1">
+      <button id="chatSend">↑</button>
+    </div>
+  </div>
+
+  <footer>
+    <p>MichBen Ciné Quizz est entièrement gratuit et le restera.<br>Si le jeu vous amuse, vous pouvez m'offrir un café.</p>
+    <p style="margin-bottom:14px"><a href="/regles.html" style="color:var(--muted);font-size:13px">Règles du jeu et code de bonne conduite</a></p>
+    <a class="tip" id="tipLink" href="#" target="_blank" rel="noopener">☕ Offrir un café</a>
+  </footer>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+/* Certains bloqueurs de publicité et réseaux d'entreprise filtrent le fichier
+   socket.io servi par le site. On bascule alors sur un CDN public. */
+if (typeof io === "undefined") {
+  document.write('<scr' + 'ipt src="https://cdn.socket.io/4.7.5/socket.io.min.js"><\/scr' + 'ipt>');
+}
+</script>
+<script>
+if (typeof io === "undefined") {
+  document.body.innerHTML =
+    '<div style="max-width:520px;margin:16vh auto;padding:26px;font-family:system-ui,sans-serif;' +
+    'background:#151A2E;color:#EDE8DC;border-radius:14px;line-height:1.6">' +
+    '<h1 style="color:#F5B942;margin:0 0 12px;font-size:22px">Connexion impossible</h1>' +
+    '<p>Le jeu n\'a pas pu charger son moteur temps réel. C\'est presque toujours ' +
+    'un bloqueur de publicité ou une extension de confidentialité qui le filtre.</p>' +
+    '<p style="color:#7C819B">Essayez de désactiver vos extensions sur ce site, ' +
+    'ou ouvrez une fenêtre de navigation privée.</p></div>';
+  throw new Error("socket.io indisponible");
+}
+</script>
+<script>
+const socket = io();
+const $ = id => document.getElementById(id);
+const AVATARS = ["🎬","🍿","🎭","🕶️","👽","🦖","🤖","🧛","🐙","🌵","🎸","🚀"];
+const HINT_LABELS = {letters:"Nombre de lettres", year:"Année", director:"Réalisateur",
+                     actors:"Acteurs", poster:"Photo du film"};
+const MODE_NAMES = {solo:"Solo", duel:"Duel", ffa:"Chacun pour soi", teams:"En équipes", ranked:"Partie classée"};
+let credits = 0;
+function setCredits(n){
+  if (typeof n === "number") credits = n;
+  document.querySelectorAll(".wallet b").forEach(el => el.textContent = credits);
+}
+let state = {code:null, mode:"ffa", isHost:false, hintCosts:{}, bought:{}, answered:false, timerId:null};
+
+/** Chaque écran commence en haut : personne ne doit remonter à la main. */
+const show = id => {
+  ["landing","profile","board","exchange","menu","lobby","waiting","round","between","over"]
+    .forEach(s => $(s).classList.toggle("hidden", s !== id));
+  window.scrollTo({top: 0, behavior: "instant"});
+};
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+/* ---------- Pourboire ---------- */
+fetch("/api/config").then(r => r.json())
+  .then(c => { $("tipLink").href = c.tipUrl; tauxTicket = c.pointsParTicket || tauxTicket; })
+  .catch(() => $("tipLink").classList.add("hidden"));
+
+/* ---------- Session ---------- */
+let me = null;
+const AVATAR_LIST = AVATARS;
+
+async function loadSession(){
+  try {
+    const res = await fetch("/api/me");
+    if (!res.ok) return show("landing");
+    me = await res.json();
+    setCredits(me.credits ?? 0);
+    setPoints(me.points ?? 0);
+    if (!me.pseudoChosen) return firstVisit();
+    $("hello").textContent = `Bonjour ${me.pseudo}`;
+    show("menu");
+  } catch { show("landing"); }
+}
+if (new URLSearchParams(location.search).get("erreur"))
+  $("authError").textContent = "La connexion avec X a échoué. Réessayez.";
+loadSession();
+
+/* ---------- Première visite : choix du pseudo ---------- */
+function firstVisit(){
+  $("profileTitle").textContent = "Bienvenue";
+  $("welcomeNote").textContent = "Choisissez le pseudo sous lequel les autres joueurs vous verront. Vous pourrez le changer plus tard.";
+  $("pseudo").value = me.suggestion || "";
+  $("btnToMenu").classList.add("hidden");
+  $("btnSaveProfile").textContent = "Commencer à jouer";
+  show("profile");
+}
+
+/* ---------- Profil ---------- */
+$("avatars").innerHTML = AVATAR_LIST.map(a => `<button data-a="${a}">${a}</button>`).join("");
+$("avatars").querySelectorAll("[data-a]").forEach(b => b.onclick = () => {
+  $("avatars").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+});
+$("btnProfile").onclick = () => {
+  $("profileTitle").textContent = "Votre profil";
+  $("welcomeNote").textContent = "";
+  $("btnToMenu").classList.remove("hidden");
+  $("btnSaveProfile").textContent = "Enregistrer";
+  $("pseudo").value = me.pseudo;
+  $("avatars").querySelectorAll("[data-a]").forEach(b =>
+    b.setAttribute("aria-pressed", b.dataset.a === me.avatar));
+  $("profileMsg").textContent = "";
+  show("profile");
+};
+$("btnSaveProfile").onclick = async () => {
+  const pseudo = $("pseudo").value.trim();
+  if (pseudo.length < 2){
+    $("profileMsg").textContent = "Le pseudo doit faire au moins 2 caractères.";
+    $("profileMsg").className = "feedback bad"; return;
+  }
+  const avatar = ($("avatars").querySelector('[aria-pressed="true"]') || {}).dataset?.a || me.avatar;
+  const res = await fetch("/api/profile", {method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({pseudo, avatar})});
+  if (!res.ok){
+    const err = await res.json().catch(() => ({}));
+    $("profileMsg").textContent = err.error === "PSEUDO_TAKEN"
+      ? "Ce pseudo est déjà pris, choisissez-en un autre."
+      : "Pseudo refusé, réessayez.";
+    $("profileMsg").className = "feedback bad";
+    return;
+  }
+  const premiere = !me.pseudoChosen;
+  me = await res.json();
+  setCredits(me.credits ?? credits);
+  $("hello").textContent = `Bonjour ${me.pseudo}`;
+  if (premiere){
+    socket.disconnect().connect();   // la session portait l'ancien profil sans pseudo
+    return show("menu");
+  }
+  $("profileMsg").textContent = "Profil enregistré.";
+  $("profileMsg").className = "feedback good";
+};
+$("btnToMenu").onclick = () => show("menu");
+
+/* ---------- Félicitations ---------- */
+const sobre = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const COULEURS = ["#F5B942","#E4586E","#4ECDC4","#EDE8DC","#9B7BF0"];
+
+function confettis(){
+  if (sobre) return;
+  const cv = $("confetti"), ctx = cv.getContext("2d");
+  cv.width = innerWidth; cv.height = innerHeight;
+  cv.style.display = "block";
+
+  // deux gerbes partant du bas, comme des canons de scène
+  const pieces = [];
+  for (const depart of [0.2, 0.8]) {
+    for (let i = 0; i < 70; i++) {
+      const angle = -Math.PI/2 + (Math.random()-0.5) * 1.1 + (depart < .5 ? .35 : -.35);
+      const vitesse = 9 + Math.random() * 9;
+      pieces.push({
+        x: cv.width * depart, y: cv.height + 10,
+        vx: Math.cos(angle) * vitesse, vy: Math.sin(angle) * vitesse,
+        l: 5 + Math.random() * 7, h: 8 + Math.random() * 10,
+        rot: Math.random() * 6.28, dRot: (Math.random()-0.5) * 0.35,
+        c: COULEURS[(Math.random() * COULEURS.length) | 0],
+      });
+    }
+  }
+
+  const debut = performance.now();
+  (function anime(t){
+    const age = t - debut;
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    for (const p of pieces) {
+      p.vy += 0.32;            // gravité
+      p.vx *= 0.995;           // frottement de l'air
+      p.x += p.vx; p.y += p.vy; p.rot += p.dRot;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.globalAlpha = Math.max(0, 1 - age / 2600);
+      ctx.fillStyle = p.c;
+      ctx.fillRect(-p.l/2, -p.h/2, p.l, p.h);
+      ctx.restore();
+    }
+    if (age < 2600) requestAnimationFrame(anime);
+    else { ctx.clearRect(0,0,cv.width,cv.height); cv.style.display = "none"; }
+  })(debut);
+}
+
+function bravo(points){
+  confettis();
+  const el = document.createElement("div");
+  el.className = "bravo";
+  el.textContent = `Bravo ! +${points}`;
+  document.body.append(el);
+  setTimeout(() => el.remove(), 1700);
+}
+
+/* ---------- Chat de la partie ---------- */
+let chatUnread = 0;
+const chatOpen = () => !$("chatPanel").classList.contains("hidden");
+
+$("chatToggle").onclick = () => {
+  $("chatPanel").classList.toggle("hidden");
+  if (chatOpen()){ chatUnread = 0; $("chatBadge").classList.add("hidden"); $("chatInput").focus(); }
+};
+function sendChat(){
+  const text = $("chatInput").value.trim();
+  if (!text || !state.code) return;
+  socket.emit("chat:send", {code: state.code, text});
+  $("chatInput").value = "";
+}
+$("chatSend").onclick = sendChat;
+$("chatInput").addEventListener("keydown", e => { if (e.key === "Enter") sendChat(); });
+
+function chatLine(html, cls){
+  const p = document.createElement("p");
+  if (cls) p.className = cls;
+  p.innerHTML = html;
+  $("chatLog").append(p);
+  $("chatLog").scrollTop = $("chatLog").scrollHeight;
+}
+socket.on("chat:message", ({pseudo, avatar, text}) => {
+  chatLine(`${avatar||"🎬"} <b>${esc(pseudo)}</b> ${esc(text)}`);
+  if (!chatOpen()){
+    chatUnread++;
+    $("chatBadge").textContent = chatUnread;
+    $("chatBadge").classList.remove("hidden");
+  }
+});
+socket.on("chat:blocked", () =>
+  chatLine("Message bloqué : il contenait la réponse de la manche en cours.", "sys"));
+
+/** Le chat est disponible dès qu'on est dans un salon. */
+function setChatVisible(on){
+  $("chatToggle").classList.toggle("hidden", !on);
+  if (!on){ $("chatPanel").classList.add("hidden"); $("chatLog").innerHTML = ""; chatUnread = 0; }
+}
+
+/* ---------- Bannière : retour au menu ---------- */
+$("banner").onclick = () => {
+  if (!me) return;
+  if (state.code && ["round","between","lobby"].some(s => !$(s).classList.contains("hidden"))){
+    if (!confirm("Quitter la partie en cours et revenir au menu principal ?")) return;
+    socket.emit("room:leave");
+    clearInterval(state.timerId);
+    state.code = null;
+    setChatVisible(false);
+  }
+  show("menu");
+};
+
+/* ---------- Choix du mode ---------- */
+let niveau = "tous";
+$("levels").querySelectorAll("[data-lvl]").forEach(b => b.onclick = () => {
+  niveau = b.dataset.lvl;
+  $("levels").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+});
+
+document.querySelectorAll(".mode").forEach(btn => btn.onclick = () => {
+  const mode = btn.dataset.mode;
+  socket.emit("room:create", {mode, difficulty: niveau}, res => {
+    if (!res?.ok) return ($("joinError").textContent =
+      "Aucun film disponible pour ce niveau — choisissez-en un autre.");
+    state.code = res.code; state.mode = mode;
+    setChatVisible(true);
+    if (mode === "solo" || mode === "ranked") return; // démarre tout seul
+    renderLobby(res.state); show("lobby");
+  });
+});
+
+$("joinCode").addEventListener("input", e => e.target.value = e.target.value.toUpperCase().replace(/[^A-Z]/g,""));
+$("btnJoin").onclick = () => {
+  const code = $("joinCode").value;
+  if (code.length !== 4) return ($("joinError").textContent = "Le code contient 4 lettres.");
+  socket.emit("room:join", {code}, res => {
+    if (!res?.ok) return ($("joinError").textContent = {
+      ROOM_NOT_FOUND:"Aucun salon avec ce code.", ROOM_FULL:"Ce salon est complet.",
+      GAME_ALREADY_STARTED:"La partie a déjà commencé."}[res?.error] || "Impossible de rejoindre.");
+    state.code = res.code; state.mode = res.state.mode;
+    setChatVisible(true);
+    if (res.waiting){
+      $("waitingInfo").textContent =
+        `Vous entrerez en jeu à la manche ${res.roundIndex + 2} sur ${res.total}.`;
+      $("waitingCode").textContent = res.code;
+      return show("waiting");
+    }
+    renderLobby(res.state); show("lobby");
+  });
+};
+
+/* ---------- Lobby ---------- */
+function renderLobby(s){
+  state.mode = s.mode;
+  $("marquee").innerHTML = s.code.split("").map(c => `<span class="flap">${c}</span>`).join("");
+  $("lobbyCount").textContent = `${MODE_NAMES[s.mode]} — ${s.players.length} joueur${s.players.length>1?"s":""}`;
+  $("lobbyPlayers").innerHTML = s.players.map(p =>
+    `<li class="${p.team||""}"><span class="dot ${p.online ? "on" : ""}"></span>${p.avatar||"🎬"} ${esc(p.pseudo)}</li>`).join("");
+  $("teamPicker").classList.toggle("hidden", s.mode !== "teams");
+  state.isHost = s.hostId === socket.id;
+  $("btnStart").classList.toggle("hidden", !state.isHost);
+  $("hostNote").classList.toggle("hidden", state.isHost);
+}
+document.querySelectorAll("[data-team]").forEach(b =>
+  b.onclick = () => socket.emit("team:choose", {code:state.code, team:b.dataset.team}));
+$("btnStart").onclick = () => socket.emit("game:start", {code:state.code});
+socket.on("room:update", renderLobby);
+
+/* ---------- Manche ---------- */
+socket.on("round:start", ({roundIndex,total,synopsis,duration,hintCosts,hintCredits,pattern,choices}) => {
+  $("dots").innerHTML = Array.from({length: total}, (_, i) =>
+    `<i class="${i < roundIndex ? "done" : i === roundIndex ? "now" : ""}"></i>`).join("");
+  $("roomCode").textContent = state.code || "";
+  $("roomCode").classList.toggle("hidden", ["solo","ranked"].includes(state.mode));
+  renderChoices(choices || []);
+  $("grace").classList.add("hidden");
+  $("btnSkip").classList.toggle("hidden", !["solo","ranked"].includes(state.mode));
+  state.hintCredits = hintCredits || {};
+  state.hintCosts = hintCosts; state.bought = {}; state.answered = false;
+  $("roundLabel").textContent = `Manche ${roundIndex+1} sur ${total}`;
+  $("synopsis").textContent = synopsis;
+  $("hintPoster").classList.add("hidden");
+  $("pattern").classList.add("hidden");
+  $("roundPlayers").innerHTML = "";
+  $("guessFeedback").textContent=""; $("guessFeedback").className="feedback";
+  renderHints(); runBeam(duration); show("round");
+});
+
+function renderHints(){
+  $("hints").innerHTML = Object.keys(HINT_LABELS).map(type => {
+    if (state.bought[type] !== undefined){
+      const val = ["poster","letters"].includes(type) ? "" : ` : ${esc(String(state.bought[type]))}`;
+      return `<button class="bought" disabled>${HINT_LABELS[type]}${val}</button>`;
+    }
+    const jetons = (state.hintCredits||{})[type] ?? 1;
+    const broke = credits < jetons ? " broke" : "";
+    return `<button class="${broke.trim()}" data-hint="${type}">${HINT_LABELS[type]}<span class="cost">🎟️${jetons} · −${state.hintCosts[type]} pts</span></button>`;
+  }).join("");
+  $("hints").querySelectorAll("[data-hint]").forEach(btn => btn.onclick = () =>
+    socket.emit("hint:buy", {code:state.code, type:btn.dataset.hint}, res => {
+      if (!res?.ok){
+        if (res?.error === "NO_CREDITS"){
+          $("guessFeedback").textContent = "Crédits insuffisants — terminez une partie pour en regagner.";
+          $("guessFeedback").className = "feedback bad";
+        }
+        return;
+      }
+      setCredits(res.credits);
+      state.bought[res.type] = res.value;
+      if (res.type === "poster" && res.value){
+        $("hintPoster").src = res.value; $("hintPoster").classList.remove("hidden");
+      }
+      renderHints();
+    }));
+}
+
+/** Quatre propositions cliquables : un clic vaut réponse définitive. */
+function renderChoices(list){
+  $("choices").innerHTML = list.map(c =>
+    `<button data-choice="${c.id}">${esc(c.title)}</button>`).join("");
+  $("choices").querySelectorAll("[data-choice]").forEach(btn => btn.onclick = () => {
+    if (state.answered) return;
+    $("choices").querySelectorAll("button").forEach(b => b.disabled = true);
+    socket.emit("answer:submit", {code: state.code, choiceId: Number(btn.dataset.choice)}, res => {
+      if (!res?.ok) return;
+      state.answered = true;
+      btn.classList.add(res.correct ? "good" : "bad");
+      if (res.correct) bravo(res.points);
+      $("guessFeedback").textContent = res.correct
+        ? `Trouvé ! +${res.points} points`
+        : "Mauvaise réponse — la manche est terminée pour vous.";
+      $("guessFeedback").className = res.correct ? "feedback good" : "feedback bad";
+      $("btnSkip").classList.remove("hidden");
+    });
+  });
+}
+
+socket.on("player:answered", ({pseudo, team}) => {
+  const li = document.createElement("li");
+  if (team) li.className = team;
+  li.textContent = `${pseudo} a trouvé`;
+  $("roundPlayers").prepend(li);
+});
+
+function runBeam(duration){
+  const start = Date.now();
+  clearInterval(state.timerId);
+  const tick = () => {
+    const reste = Math.max(0, duration - (Date.now() - start));
+    $("beamBar").style.transform = `scaleX(${reste / duration})`;
+    const sec = Math.ceil(reste / 1000);
+    $("clock").textContent = sec;
+    $("clock").classList.toggle("urgent", sec <= 10 && sec > 0);
+    if (reste === 0) clearInterval(state.timerId);
+  };
+  tick();
+  state.timerId = setInterval(tick, 200);
+}
+
+/* ---------- Fins ---------- */
+$("btnNext").onclick = () => {
+  $("btnNext").disabled = true;
+  socket.emit("round:next", {code: state.code});
+};
+
+socket.on("round:end", ({answer, poster, scores, isHost, mode}) => {
+  clearInterval(state.timerId);
+  clearInterval(state.graceId);
+  $("grace").classList.add("hidden");
+  $("answer").textContent = answer;
+  const img = $("answerPoster");
+  if (poster){ img.src = poster; img.alt = `Affiche de ${answer}`; img.classList.remove("hidden"); }
+  else img.classList.add("hidden");
+  $("interRank").innerHTML = rankHtml(scores);
+  // en multijoueur, seul l'hôte décide d'enchaîner
+  const peutEnchainer = ["solo","ranked"].includes(mode) || isHost === socket.id;
+  $("btnNext").disabled = false;
+  $("btnNext").classList.toggle("hidden", !peutEnchainer);
+  $("nextNote").textContent = peutEnchainer
+    ? "Sinon, enchaînement automatique dans quelques secondes."
+    : "Manche suivante dans quelques secondes.";
+  show("between");
+});
+
+socket.on("connect_error", err => {
+  if (err.message === "NOT_AUTHENTICATED") show("landing");
+  if (err.message === "NO_PSEUDO" && me) firstVisit();
+});
+
+socket.on("game:end", ({ranking, mode, teams, credits: solde, points: cagnotte}) => {
+  setCredits(solde);
+  setPoints(cagnotte);
+  state.code = null;
+  setChatVisible(false);
+  $("finalRank").innerHTML = rankHtml(ranking);
+  const board = $("finalTeams");
+  if (mode === "teams" && teams){
+    $("teamA").textContent = teams.A; $("teamB").textContent = teams.B;
+    board.classList.remove("hidden");
+  } else board.classList.add("hidden");
+  show("over");
+});
+
+/* La couleur d'équipe suit le joueur jusqu'au classement final. */
+const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
+  .map(p => `<li class="${p.team||""}">${p.avatar||"🎬"} ${esc(p.pseudo)}<b>${p.score} pts</b></li>`).join("");
+</script>
+</body>
+</html>
