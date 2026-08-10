@@ -13,7 +13,7 @@
  */
 
 import crypto from "crypto";
-import { readFileSync, writeFileSync, existsSync } from "fs";
+import { charger, sauver } from "./db.js";
 
 const CLIENT_ID = process.env.X_CLIENT_ID;
 const CLIENT_SECRET = process.env.X_CLIENT_SECRET;
@@ -22,8 +22,14 @@ const CALLBACK = `${PUBLIC_URL}/auth/x/callback`;
 const DEV_MODE = !CLIENT_ID; // aucune clé X : connexion locale de test
 
 const USERS_FILE = new URL("./users.json", import.meta.url);
-let users = existsSync(USERS_FILE) ? JSON.parse(readFileSync(USERS_FILE, "utf8")) : {};
-const saveUsers = () => writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
+let users = {};
+const saveUsers = () => sauver("users", users, USERS_FILE);
+
+/** À appeler au démarrage, avant de servir la moindre requête. */
+export async function chargerUtilisateurs() {
+  users = await charger("users", USERS_FILE, {});
+  console.log(`${Object.keys(users).length} compte(s) chargé(s).`);
+}
 
 const sessions = new Map(); // sid -> { userId, createdAt }
 const connectes = new Map(); // userId -> nombre d'onglets ouverts
@@ -74,6 +80,19 @@ export function marquerHorsLigne(userId) {
   n <= 0 ? connectes.delete(userId) : connectes.set(userId, n);
 }
 export const estEnLigne = (userId) => connectes.has(userId);
+
+/* ---------- rôles ---------- */
+
+export const ROLES = ["joueur", "moderateur", "admin"];
+export const estModerateur = (user) => user && ["moderateur", "admin"].includes(user.role);
+
+export function definirRole(id, role) {
+  const user = users[id];
+  if (!user || !ROLES.includes(role)) return null;
+  user.role = role;
+  saveUsers();
+  return user;
+}
 export const nombreEnLigne = () => connectes.size;
 
 export const getCredits = (userId) => users[userId]?.credits ?? 0;
@@ -123,6 +142,7 @@ export function adminUpdateUser(id, changes) {
     user.pseudoChosen = true;
   }
   if (changes.banned === true || changes.banned === false) user.banned = changes.banned;
+  if (ROLES.includes(changes.role)) user.role = changes.role;
   saveUsers();
   return user;
 }
@@ -160,7 +180,7 @@ export const leaderboard = (limit = 50) =>
     .map((u, i) => ({
       rank: i + 1, pseudo: u.pseudo, avatar: u.avatar,
       totalScore: u.totalScore || 0, gamesPlayed: u.gamesPlayed || 0,
-      online: connectes.has(u.id),
+      online: connectes.has(u.id), role: u.role || "joueur",
     }));
 
 function createSession(res, user) {
@@ -212,7 +232,7 @@ export function mountAuth(app) {
     console.warn("⚠️  X_CLIENT_ID absent : connexion de test activée. NE PAS DÉPLOYER AINSI.");
     app.get("/auth/x/login", (_req, res) => {
       const id = `dev-${crypto.randomBytes(4).toString("hex")}`;
-      users[id] = { id, pseudo: "", pseudoChosen: false, avatar: "🎬", totalScore: 0, gamesPlayed: 0, credits: STARTING_CREDITS, points: 0 };
+      users[id] = { id, pseudo: "", pseudoChosen: false, avatar: "🎬", totalScore: 0, gamesPlayed: 0, credits: STARTING_CREDITS, points: 0, role: "joueur" };
       saveUsers();
       createSession(res, users[id]);
       res.redirect("/");
@@ -265,7 +285,7 @@ export function mountAuth(app) {
 
       const id = `x:${data.id}`;
       users[id] = users[id] || { id, pseudo: "", pseudoChosen: false, suggestion: data.username.slice(0, 20),
-        avatar: "🎬", totalScore: 0, gamesPlayed: 0, credits: STARTING_CREDITS, points: 0 };
+        avatar: "🎬", totalScore: 0, gamesPlayed: 0, credits: STARTING_CREDITS, points: 0, role: "joueur" };
       users[id].xHandle = data.username;
       saveUsers();
       createSession(res, users[id]);
