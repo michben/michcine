@@ -8,8 +8,7 @@
  * Les films sont stockés dans movies.json (éditable via l'admin).
  * L'état des parties est en mémoire : Redis en production.
  */
- import { chargerFilms, sauvegarderFilm, supprimerFilm, chargerUtilisateursAdmin, modifierSolde } from "./db.js";
-import { demenager } from "./migrate.js";
+
 import express from "express";
 import { createServer } from "http";
 import { Server } from "socket.io";
@@ -133,43 +132,9 @@ function requireAdmin(req, res, next) {
   if (req.get("x-admin-token") !== ADMIN_TOKEN) return res.status(401).json({ error: "UNAUTHORIZED" });
   next();
 }
-/* --- NOUVELLES ROUTES ADMIN V2 (PostgreSQL) --- */
-app.get("/api/admin/v2/films", requireAdmin, async (req, res) => {
-  const films = await chargerFilms();
-  res.json(films);
-});
 
-app.post("/api/admin/v2/films", requireAdmin, async (req, res) => {
-  await sauvegarderFilm(req.body);
-  res.json({ ok: true });
-});
-
-app.delete("/api/admin/v2/films/:id", requireAdmin, async (req, res) => {
-  await supprimerFilm(req.params.id);
-  res.json({ ok: true });
-});
-/* ---------------------------------------------- */
 app.get("/api/movies", requireAdmin, (_req, res) => res.json(movies));
-/* --- SUITE ROUTES ADMIN V2 --- */
-app.get("/api/admin/v2/utilisateurs", requireAdmin, async (req, res) => {
-  try {
-    const users = await chargerUtilisateursAdmin();
-    res.json(users);
-  } catch (err) {
-    res.status(500).json({ error: "Erreur base de données" });
-  }
-});
 
-app.post("/api/admin/v2/utilisateurs/:id/solde", requireAdmin, async (req, res) => {
-  try {
-    const { points, tickets } = req.body;
-    await modifierSolde(req.params.id, Number(points) || 0, Number(tickets) || 0);
-    res.json({ ok: true });
-  } catch (err) {
-    res.status(500).json({ error: "Erreur base de données" });
-  }
-});
-/* ----------------------------- */
 /** Active ou désactive des films en lot, selon niveau et note minimale. */
 app.post("/api/admin/movies/bulk", requireAdmin, (req, res) => {
   const { difficulty, minRating, enabled } = req.body;
@@ -228,28 +193,7 @@ app.post("/api/admin/grant-all", requireAdmin, (req, res) => {
   if (!amount) return res.status(400).json({ error: "AMOUNT_REQUIRED" });
   res.json({ users: grantAll(amount), amount });
 });
-import { chargerFilms, sauvegarderFilm, supprimerFilm } from "./db.js"; // À mettre tout en haut du fichier avec les autres imports
 
-/* --- NOUVELLES ROUTES ADMIN V2 (PostgreSQL) --- */
-app.get("/api/admin/v2/films", requireAdmin, async (req, res) => {
-  try {
-    const films = await chargerFilms();
-    res.json(films);
-  } catch (err) {
-    res.status(500).json({ error: "Erreur base de données" });
-  }
-});
-
-app.post("/api/admin/v2/films", requireAdmin, async (req, res) => {
-  await sauvegarderFilm(req.body);
-  res.json({ ok: true });
-});
-
-app.delete("/api/admin/v2/films/:id", requireAdmin, async (req, res) => {
-  await supprimerFilm(req.params.id);
-  res.json({ ok: true });
-});
-/* ---------------------------------------------- */
 app.post("/api/movies", requireAdmin, (req, res) => {
   const movie = sanitizeMovie(req.body);
   if (!movie.title || !movie.synopsis) return res.status(400).json({ error: "TITLE_AND_SYNOPSIS_REQUIRED" });
@@ -948,7 +892,7 @@ movies = await charger("movies", MOVIES_FILE, []);
 normaliserFilms();
 reports = await charger("reports", REPORTS_FILE, []);
 await chargerUtilisateurs();
-//await demenager();
+
 httpServer.listen(PORT, "0.0.0.0", () => {
   console.log(`MichBen Ciné Quizz → http://localhost:${PORT}  (admin : /admin.html)`);
   console.log(`${movies.length} films · stockage : ${enBase ? "Postgres" : "fichiers locaux"}`);
