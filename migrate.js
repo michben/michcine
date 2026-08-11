@@ -1,27 +1,22 @@
 import pg from "pg";
-import dotenv from "dotenv";
-
-// Charge les variables d'environnement si tu le lances en local
-dotenv.config(); 
 
 const URL_BASE = process.env.DATABASE_URL;
 
-if (!URL_BASE) {
-  console.error("❌ Erreur : DATABASE_URL n'est pas défini.");
-  process.exit(1);
-}
+export async function demenager() {
+  if (!URL_BASE) {
+    console.log("⚠️ DATABASE_URL absent, migration ignorée.");
+    return;
+  }
 
-const pool = new pg.Pool({
-  connectionString: URL_BASE,
-  ssl: URL_BASE.includes("localhost") ? false : { rejectUnauthorized: false },
-});
+  const pool = new pg.Pool({
+    connectionString: URL_BASE,
+    ssl: URL_BASE.includes("localhost") ? false : { rejectUnauthorized: false },
+  });
 
-async function demenager() {
   console.log("🚚 Démarrage du transfert des données...");
 
   try {
-    // 1. Création des nouvelles fondations (Tableaux SQL propres)
-    console.log("🔨 Création des nouvelles tables SQL...");
+    // 1. Création des nouvelles tables
     await pool.query(`
       CREATE TABLE IF NOT EXISTS utilisateurs (
         id SERIAL PRIMARY KEY,
@@ -44,10 +39,8 @@ async function demenager() {
         actif BOOLEAN DEFAULT true
       );
     `);
-    console.log("✅ Tables créées avec succès !");
 
-    // 2. Transvasement des films
-    console.log("📦 Récupération de l'ancien carton des films...");
+    // 2. Transfert des films depuis l'ancien carton
     const resFilms = await pool.query("SELECT valeur FROM store WHERE cle = 'movies'");
     
     if (resFilms.rows.length > 0) {
@@ -55,7 +48,6 @@ async function demenager() {
       console.log(`🎬 ${films.length} films trouvés. Transfert en cours...`);
       
       for (const film of films) {
-         // On insère chaque film dans sa nouvelle case
          await pool.query(`
            INSERT INTO films (id, titre_reponse, synopsis, annee, realisateur, acteurs, image_url, difficulte, actif)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -73,20 +65,16 @@ async function demenager() {
          ]);
       }
       
-      // On met à jour le compteur d'ID pour que les prochains films aient le bon numéro
       await pool.query("SELECT setval('films_id_seq', (SELECT MAX(id) FROM films));");
       console.log("✅ Tous les films ont été transférés !");
     } else {
-      console.log("⚠️ Aucun film trouvé dans l'ancien système.");
+      console.log("⚠️ Aucun film trouvé dans l'ancien système (ou déjà transférés).");
     }
 
-    console.log("🎉 Migration terminée avec succès ! Tes données sont prêtes pour la V2.");
-    process.exit(0);
-
+    console.log("🎉 Migration terminée avec succès !");
   } catch (erreur) {
-    console.error("❌ Une erreur est survenue pendant le transfert :", erreur);
-    process.exit(1);
+    console.error("❌ Erreur pendant le transfert :", erreur.message);
+  } finally {
+    await pool.end();
   }
 }
-
-demenager();

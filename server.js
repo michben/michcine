@@ -8,7 +8,7 @@
  * Les films sont stockés dans movies.json (éditable via l'admin).
  * L'état des parties est en mémoire : Redis en production.
  */
-
+import { demenager } from "./migrate.js";
 import express from "express";
 import { createServer } from "http";
 import { Server } from "socket.io";
@@ -892,7 +892,7 @@ movies = await charger("movies", MOVIES_FILE, []);
 normaliserFilms();
 reports = await charger("reports", REPORTS_FILE, []);
 await chargerUtilisateurs();
-
+await demenager();
 httpServer.listen(PORT, "0.0.0.0", () => {
   console.log(`MichBen Ciné Quizz → http://localhost:${PORT}  (admin : /admin.html)`);
   console.log(`${movies.length} films · stockage : ${enBase ? "Postgres" : "fichiers locaux"}`);
