@@ -2,89 +2,150 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>MichBen Ciné - Console Admin</title>
-    <!-- On utilise Tailwind pour un design moderne instantané -->
+    <title>MichBen Ciné - Console Admin V2</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-100 p-8 font-sans">
     
-    <div class="max-w-5xl mx-auto bg-white p-8 rounded-xl shadow-lg border border-slate-200">
-        <h1 class="text-3xl font-extrabold text-slate-800 mb-6">🎬 Console d'Administration (V2)</h1>
+    <div class="max-w-6xl mx-auto bg-white p-8 rounded-xl shadow-lg border border-slate-200">
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-3xl font-extrabold text-slate-800">🎬 Console d'Administration (V2)</h1>
+            <div class="flex gap-2">
+                <input id="token" type="password" placeholder="Mot de passe Admin" class="border p-2 rounded-lg w-48" value="michben-admin">
+            </div>
+        </div>
         
-        <!-- Zone de connexion -->
-        <div class="mb-8 flex gap-3 bg-slate-50 p-4 rounded-lg border">
-            <input id="token" type="password" placeholder="Mot de passe Admin" class="border border-slate-300 p-3 rounded-lg w-64 focus:outline-none focus:ring-2 focus:ring-blue-500" value="michben-admin">
-            <button onclick="charger()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-lg transition-colors">
-                Charger mes films
-            </button>
+        <!-- Navigation Onglets -->
+        <div class="flex gap-4 border-b border-slate-200 mb-6 pb-2">
+            <button onclick="changerOnglet('films')" id="btn-films" class="font-bold text-blue-600 border-b-2 border-blue-600 pb-2 px-4">Gérer les Films</button>
+            <button onclick="changerOnglet('joueurs')" id="btn-joueurs" class="font-bold text-slate-500 hover:text-blue-600 pb-2 px-4">Gérer les Joueurs</button>
         </div>
 
-        <!-- Liste des films -->
-        <div id="liste" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <p class="text-slate-500 italic">Entrez votre mot de passe pour afficher la base de données.</p>
+        <!-- ONGLET 1 : FILMS -->
+        <div id="onglet-films" class="block">
+            <!-- Formulaire d'ajout de film -->
+            <div class="bg-blue-50 p-6 rounded-lg mb-8 border border-blue-100">
+                <h2 class="text-xl font-bold text-blue-800 mb-4">➕ Ajouter un nouveau film</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <input id="f-titre" type="text" placeholder="Titre de la réponse (ex: Gladiator)" class="p-2 border rounded">
+                    <input id="f-annee" type="number" placeholder="Année (ex: 2000)" class="p-2 border rounded">
+                    <input id="f-real" type="text" placeholder="Réalisateur" class="p-2 border rounded">
+                    <input id="f-acteurs" type="text" placeholder="Acteurs principaux" class="p-2 border rounded">
+                    <input id="f-image" type="text" placeholder="URL de l'image (Affiche)" class="p-2 border rounded md:col-span-2">
+                    <textarea id="f-synopsis" placeholder="Synopsis complet..." class="p-2 border rounded md:col-span-2 h-24"></textarea>
+                </div>
+                <button onclick="ajouterFilm()" class="mt-4 bg-green-500 hover:bg-green-600 text-white font-bold px-6 py-2 rounded-lg">Enregistrer le film</button>
+            </div>
+
+            <button onclick="chargerFilms()" class="bg-blue-600 text-white font-bold px-4 py-2 rounded mb-4">🔄 Rafraîchir la liste des films</button>
+            <div id="liste-films" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+        </div>
+
+        <!-- ONGLET 2 : JOUEURS -->
+        <div id="onglet-joueurs" class="hidden">
+            <button onclick="chargerJoueurs()" class="bg-blue-600 text-white font-bold px-4 py-2 rounded mb-4">🔄 Rafraîchir la liste des joueurs</button>
+            <div id="liste-joueurs" class="space-y-3"></div>
         </div>
     </div>
 
-    <!-- Le moteur de la page -->
     <script>
+        // Gestion des requêtes
         async function requete(url, method = 'GET', body = null) {
             const token = document.getElementById('token').value;
-            const options = { 
-                method, 
-                headers: { 'x-admin-token': token, 'Content-Type': 'application/json' } 
-            };
+            const options = { method, headers: { 'x-admin-token': token, 'Content-Type': 'application/json' } };
             if (body) options.body = JSON.stringify(body);
             const res = await fetch(url, options);
-            
-            if (!res.ok) {
-                throw new Error(`Le serveur a refusé (Code ${res.status}). Vérifie ton mot de passe.`);
-            }
+            if (!res.ok) throw new Error(`Le serveur a refusé (Code ${res.status})`);
             return res.json();
         }
 
-        async function charger() {
-            const liste = document.getElementById('liste');
-            liste.innerHTML = '<p class="text-blue-500 font-bold">Chargement en cours...</p>';
+        // Système d'onglets
+        function changerOnglet(onglet) {
+            document.getElementById('onglet-films').classList.toggle('hidden', onglet !== 'films');
+            document.getElementById('onglet-joueurs').classList.toggle('hidden', onglet !== 'joueurs');
             
+            document.getElementById('btn-films').className = onglet === 'films' ? 'font-bold text-blue-600 border-b-2 border-blue-600 pb-2 px-4' : 'font-bold text-slate-500 hover:text-blue-600 pb-2 px-4';
+            document.getElementById('btn-joueurs').className = onglet === 'joueurs' ? 'font-bold text-blue-600 border-b-2 border-blue-600 pb-2 px-4' : 'font-bold text-slate-500 hover:text-blue-600 pb-2 px-4';
+            
+            if(onglet === 'films') chargerFilms();
+            if(onglet === 'joueurs') chargerJoueurs();
+        }
+
+        /* --- LOGIQUE DES FILMS --- */
+        async function chargerFilms() {
+            const liste = document.getElementById('liste-films');
+            liste.innerHTML = 'Chargement...';
             try {
                 const films = await requete('/api/admin/v2/films');
-                
-                if (films.length === 0) {
-                    liste.innerHTML = '<p class="text-orange-500">La base de données est connectée, mais elle est vide !</p>';
-                    return;
-                }
-
                 liste.innerHTML = films.map(f => `
-                    <div class="border border-slate-200 p-4 rounded-lg bg-white shadow-sm flex justify-between items-center hover:shadow-md transition-shadow">
+                    <div class="border p-4 rounded-lg bg-white shadow-sm flex justify-between items-center">
                         <div>
-                            <strong class="text-lg text-slate-800">${f.title}</strong> 
-                            <span class="text-slate-500">(${f.year || 'Année inconnue'})</span><br>
-                            <span class="text-sm text-slate-600 bg-slate-100 px-2 py-1 rounded mt-1 inline-block">🎥 ${f.director || 'Inconnu'}</span>
+                            <strong class="text-lg">${f.title}</strong> <span class="text-slate-500">(${f.year || '?'})</span><br>
+                            <span class="text-sm text-slate-600">🎥 ${f.director || '?'}</span>
                         </div>
-                        <button onclick="supprimer(${f.id})" class="bg-red-100 text-red-600 hover:bg-red-600 hover:text-white font-bold px-3 py-2 rounded-lg transition-colors">
-                            Supprimer
-                        </button>
+                        <button onclick="supprimerFilm(${f.id})" class="text-red-500 font-bold px-2">X Supprimer</button>
                     </div>
                 `).join('');
-            } catch (erreur) {
-                // S'il y a un bug, on l'affiche en gros et en rouge !
-                liste.innerHTML = `<p class="text-red-600 font-bold p-4 bg-red-50 rounded-lg border border-red-200">
-                    ❌ Erreur de connexion : ${erreur.message} <br><br>
-                    💡 As-tu bien ajouté les routes "/api/admin/v2/films" dans ton fichier server.js ?
-                </p>`;
+            } catch (err) { alert(err.message); }
+        }
+
+        async function ajouterFilm() {
+            const film = {
+                title: document.getElementById('f-titre').value,
+                year: document.getElementById('f-annee').value,
+                director: document.getElementById('f-real').value,
+                actors: document.getElementById('f-acteurs').value,
+                poster: document.getElementById('f-image').value,
+                synopsis: document.getElementById('f-synopsis').value
+            };
+            if (!film.title || !film.synopsis) return alert("Le titre et le synopsis sont obligatoires !");
+            
+            try {
+                await requete('/api/admin/v2/films', 'POST', film);
+                alert("Film ajouté avec succès !");
+                chargerFilms();
+            } catch (err) { alert(err.message); }
+        }
+
+        async function supprimerFilm(id) {
+            if (confirm('Supprimer ce film ?')) {
+                await requete(`/api/admin/v2/films/${id}`, 'DELETE');
+                chargerFilms(); 
             }
         }
 
-        async function supprimer(id) {
-            if (confirm('Es-tu sûr de vouloir supprimer définitivement ce film ?')) {
-                try {
-                    await requete(`/api/admin/v2/films/${id}`, 'DELETE');
-                    charger(); 
-                } catch (erreur) {
-                    alert("Impossible de supprimer : " + erreur.message);
-                }
-            }
+        /* --- LOGIQUE DES JOUEURS --- */
+        async function chargerJoueurs() {
+            const liste = document.getElementById('liste-joueurs');
+            liste.innerHTML = 'Chargement...';
+            try {
+                const joueurs = await requete('/api/admin/v2/utilisateurs');
+                liste.innerHTML = joueurs.map(j => `
+                    <div class="border p-4 rounded-lg bg-white shadow-sm flex justify-between items-center">
+                        <div>
+                            <strong class="text-lg text-blue-700">${j.pseudo}</strong> 
+                            <span class="text-xs bg-slate-200 px-2 py-1 rounded ml-2">${j.role}</span><br>
+                            <span class="text-sm">🪙 Points : <b>${j.points}</b> | 🎟️ Tickets : <b>${j.tickets}</b></span>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="modifierSolde(${j.id}, 1000, 0)" class="bg-green-100 text-green-700 px-3 py-1 rounded font-bold hover:bg-green-200">+1000 Pts</button>
+                            <button onclick="modifierSolde(${j.id}, -1000, 0)" class="bg-red-100 text-red-700 px-3 py-1 rounded font-bold hover:bg-red-200">-1000 Pts</button>
+                            <button onclick="modifierSolde(${j.id}, 0, 1)" class="bg-yellow-100 text-yellow-700 px-3 py-1 rounded font-bold hover:bg-yellow-200">+1 Ticket</button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (err) { alert(err.message); }
         }
+
+        async function modifierSolde(id, points, tickets) {
+            try {
+                await requete(`/api/admin/v2/utilisateurs/${id}/solde`, 'POST', { points, tickets });
+                chargerJoueurs();
+            } catch (err) { alert(err.message); }
+        }
+
+        // Charger les films au démarrage
+        chargerFilms();
     </script>
 </body>
 </html>

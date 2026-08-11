@@ -8,6 +8,7 @@
  * Les films sont stockés dans movies.json (éditable via l'admin).
  * L'état des parties est en mémoire : Redis en production.
  */
+ import { chargerFilms, sauvegarderFilm, supprimerFilm, chargerUtilisateursAdmin, modifierSolde } from "./db.js";
 import { demenager } from "./migrate.js";
 import express from "express";
 import { createServer } from "http";
@@ -149,7 +150,26 @@ app.delete("/api/admin/v2/films/:id", requireAdmin, async (req, res) => {
 });
 /* ---------------------------------------------- */
 app.get("/api/movies", requireAdmin, (_req, res) => res.json(movies));
+/* --- SUITE ROUTES ADMIN V2 --- */
+app.get("/api/admin/v2/utilisateurs", requireAdmin, async (req, res) => {
+  try {
+    const users = await chargerUtilisateursAdmin();
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({ error: "Erreur base de données" });
+  }
+});
 
+app.post("/api/admin/v2/utilisateurs/:id/solde", requireAdmin, async (req, res) => {
+  try {
+    const { points, tickets } = req.body;
+    await modifierSolde(req.params.id, Number(points) || 0, Number(tickets) || 0);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: "Erreur base de données" });
+  }
+});
+/* ----------------------------- */
 /** Active ou désactive des films en lot, selon niveau et note minimale. */
 app.post("/api/admin/movies/bulk", requireAdmin, (req, res) => {
   const { difficulty, minRating, enabled } = req.body;

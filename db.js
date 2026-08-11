@@ -76,4 +76,35 @@ export async function charger(cle) {
 
 export function sauver() {
   // Désormais, chaque action sauvegarde directement en base
+  /* ------------------------------------------------------------------ */
+/* Gestion des Utilisateurs (Admin)                                   */
+/* ------------------------------------------------------------------ */
+
+/** Récupère tous les joueurs pour la console admin */
+export async function chargerUtilisateursAdmin() {
+  if (!enBase) return [];
+  try {
+    const { rows } = await pool.query(
+      "SELECT id, pseudo, email, tickets, points, role FROM utilisateurs ORDER BY points DESC"
+    );
+    return rows;
+  } catch (err) {
+    console.error("❌ Erreur chargement utilisateurs :", err.message);
+    return [];
+  }
+}
+
+/** Ajoute ou retire des points/tickets à un joueur */
+export async function modifierSolde(id, variationPoints, variationTickets) {
+  if (!enBase) return;
+  try {
+    await pool.query(
+      `UPDATE utilisateurs 
+       SET points = points + $1, tickets = tickets + $2 
+       WHERE id = $3`,
+      [variationPoints, variationTickets, id]
+    );
+  } catch (err) {
+    console.error("❌ Erreur modification solde :", err.message);
+  }
 }
