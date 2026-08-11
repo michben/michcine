@@ -132,7 +132,22 @@ function requireAdmin(req, res, next) {
   if (req.get("x-admin-token") !== ADMIN_TOKEN) return res.status(401).json({ error: "UNAUTHORIZED" });
   next();
 }
+/* --- NOUVELLES ROUTES ADMIN V2 (PostgreSQL) --- */
+app.get("/api/admin/v2/films", requireAdmin, async (req, res) => {
+  const films = await chargerFilms();
+  res.json(films);
+});
 
+app.post("/api/admin/v2/films", requireAdmin, async (req, res) => {
+  await sauvegarderFilm(req.body);
+  res.json({ ok: true });
+});
+
+app.delete("/api/admin/v2/films/:id", requireAdmin, async (req, res) => {
+  await supprimerFilm(req.params.id);
+  res.json({ ok: true });
+});
+/* ---------------------------------------------- */
 app.get("/api/movies", requireAdmin, (_req, res) => res.json(movies));
 
 /** Active ou désactive des films en lot, selon niveau et note minimale. */

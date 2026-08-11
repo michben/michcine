@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>MichBen Ciné - Console Admin</title>
+    <!-- On utilise Tailwind pour un design moderne instantané -->
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 p-8 font-sans">
+    
+    <div class="max-w-5xl mx-auto bg-white p-8 rounded-xl shadow-lg border border-slate-200">
+        <h1 class="text-3xl font-extrabold text-slate-800 mb-6">🎬 Console d'Administration (V2)</h1>
+        
+        <!-- Zone de connexion -->
+        <div class="mb-8 flex gap-3 bg-slate-50 p-4 rounded-lg border">
+            <input id="token" type="password" placeholder="Mot de passe Admin" class="border border-slate-300 p-3 rounded-lg w-64 focus:outline-none focus:ring-2 focus:ring-blue-500" value="michben-admin">
+            <button onclick="charger()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-lg transition-colors">
+                Charger mes films
+            </button>
+        </div>
+
+        <!-- Liste des films -->
+        <div id="liste" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <p class="text-slate-500 italic">Entrez votre mot de passe pour afficher la base de données.</p>
+        </div>
+    </div>
+
+    <!-- Le moteur de la page -->
+    <script>
+        // Fonction pour envoyer des requêtes sécurisées au serveur
+        async function requete(url, method = 'GET', body = null) {
+            const token = document.getElementById('token').value;
+            const options = { 
+                method, 
+                headers: { 'x-admin-token': token, 'Content-Type': 'application/json' } 
+            };
+            if (body) options.body = JSON.stringify(body);
+            const res = await fetch(url, options);
+            if (!res.ok) {
+                alert('Erreur : Mot de passe incorrect ou problème serveur.');
+                throw new Error('Échec requête');
+            }
+            return res.json();
+        }
+
+        // Afficher tous les films
+        async function charger() {
+            const liste = document.getElementById('liste');
+            liste.innerHTML = '<p class="text-blue-500 font-bold">Chargement en cours...</p>';
+            
+            const films = await requete('/api/admin/v2/films');
+            
+            liste.innerHTML = films.map(f => `
+                <div class="border border-slate-200 p-4 rounded-lg bg-white shadow-sm flex justify-between items-center hover:shadow-md transition-shadow">
+                    <div>
+                        <strong class="text-lg text-slate-800">${f.title}</strong> 
+                        <span class="text-slate-500">(${f.year || 'Année inconnue'})</span><br>
+                        <span class="text-sm text-slate-600 bg-slate-100 px-2 py-1 rounded mt-1 inline-block">🎥 ${f.director || 'Inconnu'}</span>
+                    </div>
+                    <button onclick="supprimer(${f.id})" class="bg-red-100 text-red-600 hover:bg-red-600 hover:text-white font-bold px-3 py-2 rounded-lg transition-colors">
+                        Supprimer
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        // Supprimer un film
+        async function supprimer(id) {
+            if (confirm('Es-tu sûr de vouloir supprimer définitivement ce film ?')) {
+                await requete(`/api/admin/v2/films/${id}`, 'DELETE');
+                charger(); // Recharge la liste après suppression
+            }
+        }
+    </script>
+</body>
+</html>
