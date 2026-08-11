@@ -83,7 +83,27 @@ const CONFIG = {
   TIP_URL: process.env.TIP_URL || "https://buymeacoffee.com/votre-pseudo",
 };
 
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN || "michben-admin"; // à changer avant toute mise en ligne
+/**
+ * Mot de passe d'administration.
+ *
+ * Il est stocké en base sous forme d'empreinte, ce qui permet de le changer
+ * depuis la console sans redéployer. La variable ADMIN_TOKEN ne sert plus
+ * qu'à la toute première ouverture, ou comme secours si la base est vide.
+ */
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || "michben-admin";
+let empreinteAdmin = null;   // chargée au démarrage
+
+const hacherAdmin = (mdp, sel = crypto.randomBytes(16).toString("hex")) =>
+  `${sel}:${crypto.scryptSync(mdp, sel, 64).toString("hex")}`;
+
+function motDePasseAdminValide(mdp) {
+  if (!mdp) return false;
+  if (!empreinteAdmin) return mdp === ADMIN_TOKEN;      // aucun mot de passe encore défini
+  const [sel, attendu] = empreinteAdmin.split(":");
+  const calcule = crypto.scryptSync(mdp, sel, 64).toString("hex");
+  return calcule.length === attendu.length &&
+         crypto.timingSafeEqual(Buffer.from(calcule), Buffer.from(attendu));
+}
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ"; // sans I, O, 0, 1
 
 /* ------------------------------------------------------------------ */
@@ -122,16 +142,33 @@ const MOTIFS = {
 
 /** Accès réservé aux modérateurs (session) ou à la clé d'administration. */
 function requireModerateur(req, res, next) {
-  if (req.get("x-admin-token") === ADMIN_TOKEN) return next();
+  if (motDePasseAdminValide(req.get("x-admin-token"))) return next();
   const user = userFromCookie(req.headers.cookie);
   if (estModerateur(user)) { req.moderateur = user; return next(); }
   res.status(403).json({ error: "FORBIDDEN" });
 }
 
 function requireAdmin(req, res, next) {
-  if (req.get("x-admin-token") !== ADMIN_TOKEN) return res.status(401).json({ error: "UNAUTHORIZED" });
+  if (!motDePasseAdminValide(req.get("x-admin-token")))
+    return res.status(401).json({ error: "UNAUTHORIZED" });
   next();
 }
+
+/** Change le mot de passe d'administration, après vérification de l'actuel. */
+app.post("/api/admin/password", requireAdmin, (req, res) => {
+  const nouveau = String(req.body.nouveau || "");
+  if (nouveau.length < 8) return res.status(400).json({ error: "TROP_COURT" });
+  if (nouveau === ADMIN_TOKEN) return res.status(400).json({ error: "TROP_EVIDENT" });
+
+  empreinteAdmin = hacherAdmin(nouveau);
+  sauver("adminPass", empreinteAdmin);
+  res.json({ ok: true });
+});
+
+/** Indique si le mot de passe par défaut est encore en usage. */
+app.get("/api/admin/etat", requireAdmin, (_req, res) =>
+  res.json({ motDePasseParDefaut: !empreinteAdmin })
+);
 
 app.get("/api/movies", requireAdmin, (_req, res) => res.json(movies));
 
@@ -891,6 +928,9 @@ await initStockage();
 movies = await charger("movies", MOVIES_FILE, []);
 normaliserFilms();
 reports = await charger("reports", REPORTS_FILE, []);
+empreinteAdmin = await charger("adminPass", null, null);
+if (!empreinteAdmin)
+  console.warn("⚠️  Mot de passe d'administration par défaut : changez-le depuis /admin.html");
 await chargerUtilisateurs();
 
 httpServer.listen(PORT, "0.0.0.0", () => {

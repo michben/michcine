@@ -73,6 +73,7 @@
       <button id="tabMovies" aria-selected="true">Films</button>
       <button id="tabUsers" aria-selected="false">Joueurs</button>
       <button id="tabReports" aria-selected="false">Signalements</button>
+      <button id="tabReglages" aria-selected="false">Réglages</button>
     </div>
 
     <div id="paneMovies">
@@ -141,6 +142,30 @@
       <div class="card">
         <p class="tag" id="reportCount">Signalements</p>
         <div id="reportList"></div>
+      </div>
+    </div>
+
+    <div id="paneReglages" class="hidden">
+      <div class="card" id="alerteMdp" style="border-color:rgba(228,88,110,.5)">
+        <p class="tag" style="color:var(--ticket)">Sécurité</p>
+        <p style="margin:0;line-height:1.6">Le mot de passe par défaut est encore actif. Toute personne
+        connaissant l'adresse de cette page peut modifier votre catalogue et les comptes de vos joueurs.
+        Changez-le maintenant.</p>
+      </div>
+
+      <div class="card">
+        <p class="tag">Changer le mot de passe d'administration</p>
+        <label for="mdpActuel">Mot de passe actuel</label>
+        <input id="mdpActuel" type="password" autocomplete="current-password">
+        <label for="mdpNouveau" style="margin-top:14px">Nouveau mot de passe</label>
+        <input id="mdpNouveau" type="password" autocomplete="new-password" placeholder="12 caractères ou plus">
+        <label for="mdpConfirme" style="margin-top:14px">Confirmer</label>
+        <input id="mdpConfirme" type="password" autocomplete="new-password">
+        <div class="row"><button id="btnChangerMdp">Enregistrer le nouveau mot de passe</button></div>
+        <p class="msg" id="mdpMsg"></p>
+        <p style="color:var(--muted);font-size:13px;line-height:1.6;margin-top:14px">
+          Le mot de passe est conservé en base sous forme d'empreinte, jamais en clair.
+          Il survit aux redéploiements. Notez-le : il n'existe aucun moyen de le retrouver.</p>
       </div>
     </div>
 
@@ -295,16 +320,49 @@ async function remove(id){
 function tab(which){
   for (const [nom, onglet, volet] of [["movies","tabMovies","paneMovies"],
                                       ["users","tabUsers","paneUsers"],
-                                      ["reports","tabReports","paneReports"]]) {
+                                      ["reports","tabReports","paneReports"],
+                                      ["reglages","tabReglages","paneReglages"]]) {
     $(onglet).setAttribute("aria-selected", which === nom);
     $(volet).classList.toggle("hidden", which !== nom);
   }
   if (which === "users") loadUsers();
   if (which === "reports") loadReports();
+  if (which === "reglages") etatSecurite();
 }
 $("tabMovies").onclick = () => tab("movies");
 $("tabUsers").onclick = () => tab("users");
 $("tabReports").onclick = () => tab("reports");
+$("tabReglages").onclick = () => tab("reglages");
+
+/* ---------- Mot de passe d'administration ---------- */
+async function etatSecurite(){
+  const res = await api("/api/admin/etat");
+  if (!res.ok) return;
+  const { motDePasseParDefaut } = await res.json();
+  $("alerteMdp").classList.toggle("hidden", !motDePasseParDefaut);
+}
+
+$("btnChangerMdp").onclick = async () => {
+  const actuel = $("mdpActuel").value, nouveau = $("mdpNouveau").value, confirme = $("mdpConfirme").value;
+  const dire = (texte, ok) => { $("mdpMsg").textContent = texte; $("mdpMsg").className = ok ? "msg ok" : "msg err"; };
+
+  if (actuel !== token) return dire("Le mot de passe actuel est incorrect.", false);
+  if (nouveau.length < 8) return dire("Le nouveau mot de passe doit faire au moins 8 caractères.", false);
+  if (nouveau !== confirme) return dire("Les deux saisies ne correspondent pas.", false);
+
+  const res = await api("/api/admin/password", {method:"POST", body: JSON.stringify({nouveau})});
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok){
+    const messages = { TROP_COURT: "Mot de passe trop court.",
+                       TROP_EVIDENT: "Ce mot de passe est celui par défaut, choisissez-en un autre." };
+    return dire(messages[data.error] || "Changement refusé.", false);
+  }
+
+  token = nouveau;   // les requêtes suivantes utilisent le nouveau mot de passe
+  $("mdpActuel").value = $("mdpNouveau").value = $("mdpConfirme").value = "";
+  dire("Mot de passe changé. Notez-le : il est irrécupérable.", true);
+  etatSecurite();
+};
 
 /* ---------- Signalements ---------- */
 let motifs = {};
