@@ -236,9 +236,21 @@
       <p class="feedback bad" id="authError"></p>
       <p class="note" id="diag"></p>
 
+      <p class="tag" style="margin:22px 0 10px">Ou avec une adresse email</p>
+      <label for="mail">Email</label>
+      <input id="mail" type="email" autocomplete="email" placeholder="vous@exemple.fr">
+      <label for="mdp" style="margin-top:12px">Mot de passe</label>
+      <input id="mdp" type="password" autocomplete="current-password" placeholder="8 caractères minimum">
+      <div id="captchaBoite" style="margin-top:14px"></div>
+      <div class="row">
+        <button id="btnMailConnexion">Se connecter</button>
+        <button id="btnMailInscription" class="ghost">Créer un compte</button>
+      </div>
+      <p class="feedback bad" id="mailError"></p>
+
 
       <p class="note" style="margin-bottom:0">En vous inscrivant, vous acceptez les <a href="/regles.html" style="color:var(--beam)">règles et le code de bonne conduite</a>.</p>
-      <p class="note">Le compte X sert uniquement à identifier votre profil et votre classement. Aucun message ne sera publié en votre nom, et aucune adresse email ne vous est demandée.</p>
+      <p class="note">Le compte X sert uniquement à identifier votre profil et votre classement. Aucun message ne sera publié en votre nom.</p>
     </div>
 
     <div class="card">
@@ -614,7 +626,6 @@ async function loadSession(){
     me = await res.json();
     setCredits(me.credits ?? 0);
     setPoints(me.points ?? 0);
-    if (me.email && !me.emailVerifie) return ecranValidation();
     if (!me.pseudoChosen) return firstVisit();
     majBadgeAmis();
     $("hello").innerHTML = `Bonjour ${esc(me.pseudo)}` +
@@ -641,6 +652,21 @@ function firstVisit(){
   $("btnSaveProfile").textContent = "Commencer à jouer";
   show("profile");
 }
+
+/* ---------- Captcha (actif seulement si une clé est configurée) ---------- */
+let captchaJeton = "";
+fetch("/api/captcha").then(r => r.json()).then(({siteKey}) => {
+  if (!siteKey) return;
+  window.captchaPret = () => turnstile.render("#captchaBoite", {
+    sitekey: siteKey,
+    callback: (t) => { captchaJeton = t; },
+    "expired-callback": () => { captchaJeton = ""; },
+  });
+  const s = document.createElement("script");
+  s.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?onload=captchaPret&render=explicit";
+  s.async = true;
+  document.head.append(s);
+}).catch(() => {});
 
 /* ---------- Validation de l'adresse email ---------- */
 const MESSAGES_CODE = {
@@ -687,6 +713,45 @@ $("btnValLogout").onclick = async () => {
   try { await fetch("/auth/logout", {method:"POST"}); } catch {}
   location.href = "/";
 };
+
+/* ---------- Connexion par email ---------- */
+const MESSAGES_MAIL = {
+  EMAIL_INVALIDE: "Cette adresse email ne semble pas valide.",
+  MOT_DE_PASSE_COURT: "Le mot de passe doit faire au moins 8 caractères.",
+  EMAIL_DEJA_PRIS: "Un compte existe déjà avec cette adresse.",
+  IDENTIFIANTS_INVALIDES: "Email ou mot de passe incorrect.",
+  BANNI: "Ce compte a été banni.",
+  CAPTCHA_INVALIDE: "Merci de valider le test anti-robot.",
+};
+
+async function authMail(chemin){
+  const email = $("mail").value.trim(), motDePasse = $("mdp").value;
+  if (!email || !motDePasse) return ($("mailError").textContent = "Renseignez l'email et le mot de passe.");
+
+  const res = await fetch(`/auth/email/${chemin}`, {method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({email, motDePasse, captcha: captchaJeton})});
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return ($("mailError").textContent = MESSAGES_MAIL[data.error] || "Connexion impossible.");
+
+  me = data;
+  $("mdp").value = "";
+  $("mailError").textContent = "";
+  setCredits(me.credits ?? 0);
+  setPoints(me.points ?? 0);
+
+  // un code n'est demandé que si l'envoi d'emails est configuré
+  if (me.email && me.emailVerifie === false && data.envoi && !data.envoi.simule) return ecranValidation();
+
+  if (window.tempsReelDispo) socket.disconnect().connect();
+  if (!me.pseudoChosen) return firstVisit();
+  $("hello").textContent = `Bonjour ${me.pseudo}`;
+  majBadgeAmis();
+  show("menu");
+}
+$("btnMailConnexion").onclick = () => authMail("connexion");
+$("btnMailInscription").onclick = () => authMail("inscription");
+$("mdp").addEventListener("keydown", e => { if (e.key === "Enter") authMail("connexion"); });
 
 /* ---------- Profil ---------- */
 $("avatars").innerHTML = AVATAR_LIST.map(a => `<button data-a="${a}">${a}</button>`).join("");

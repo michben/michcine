@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Diagnostic — MichBen Ciné Quizz</title>
+<style>
+  :root{--ink:#0A0C16;--velvet:#151A2E;--card:#1C2238;--beam:#F5B942;--ticket:#E4586E;
+        --vert:#3DDC84;--chalk:#EDE8DC;--muted:#7C819B}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--ink);color:var(--chalk);font-family:system-ui,sans-serif;padding:22px 16px}
+  .wrap{max-width:640px;margin:0 auto}
+  h1{font-size:22px;margin:0 0 4px}
+  p.sous{color:var(--muted);font-size:14px;margin:0 0 20px}
+  .test{display:flex;gap:12px;align-items:flex-start;padding:13px 0;border-top:1px solid rgba(237,232,220,.12)}
+  .etat{width:26px;flex:0 0 auto;font-size:17px;text-align:center}
+  .txt{flex:1;min-width:0}
+  .txt b{display:block;font-size:15px}
+  .txt small{color:var(--muted);font-size:13px;word-break:break-word;font-family:ui-monospace,monospace}
+  .ok b{color:var(--vert)} .ko b{color:var(--ticket)} .warn b{color:var(--beam)}
+  #resume{background:var(--velvet);border-radius:12px;padding:16px;margin-top:22px;font-size:14px;line-height:1.6}
+  #resume h2{font-size:16px;margin:0 0 8px;color:var(--beam)}
+  button{font:inherit;font-weight:700;background:var(--beam);color:#161207;border:0;border-radius:10px;
+    padding:12px 18px;margin-top:18px;cursor:pointer}
+  a{color:var(--beam)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Diagnostic</h1>
+  <p class="sous">Cette page teste chaque brique du jeu depuis <b>votre</b> navigateur.</p>
+  <div id="tests"></div>
+  <div id="resume" class="hidden"></div>
+  <button onclick="location.reload()">Relancer les tests</button>
+  <p style="margin-top:18px"><a href="/">Retour au jeu</a></p>
+</div>
+
+<script src="/js/moteur.js"></script>
+<script>
+const zone = document.getElementById("tests");
+const resultats = [];
+
+function ligne(nom, etat, detail){
+  resultats.push({nom, etat});
+  const icones = {ok:"✅", ko:"❌", warn:"⚠️"};
+  const d = document.createElement("div");
+  d.className = `test ${etat}`;
+  d.innerHTML = `<span class="etat">${icones[etat]}</span>
+    <span class="txt"><b>${nom}</b><small>${detail || ""}</small></span>`;
+  zone.append(d);
+}
+
+async function json(url, options){
+  const res = await fetch(url, options);
+  const texte = await res.text();
+  let corps = null;
+  try { corps = JSON.parse(texte); } catch {}
+  return { statut: res.status, ok: res.ok, corps, texte: texte.slice(0, 160) };
+}
+
+(async () => {
+  /* 1. Version du client déployé --------------------------------- */
+  const page = await fetch("/").then(r => r.text()).catch(() => "");
+  const marqueurs = {
+    "mode solo hors ligne": "SANS_RESEAU",
+    "moteur sous nom neutre": "/js/moteur.js",
+    "amis": "btnFriends",
+    "espace échange": "btnExchange",
+  };
+  for (const [nom, mot] of Object.entries(marqueurs))
+    ligne(`Client à jour — ${nom}`, page.includes(mot) ? "ok" : "ko",
+          page.includes(mot) ? "présent dans la page servie" : `« ${mot} » absent : fichier périmé en ligne`);
+
+  /* 2. Moteur temps réel ------------------------------------------ */
+  try {
+    const r = await fetch("/js/moteur.js");
+    ligne("Moteur temps réel téléchargeable", r.ok ? "ok" : "ko", `${r.status} · ${(await r.text()).length} octets`);
+  } catch (e) {
+    ligne("Moteur temps réel téléchargeable", "ko", `bloqué : ${e.message}`);
+  }
+
+  /* 3. Session ----------------------------------------------------- */
+  const moi = await json("/api/me");
+  ligne("Session reconnue", moi.ok ? "ok" : "warn",
+        moi.ok ? `${moi.corps.pseudo || "(sans pseudo)"} · ${moi.corps.credits} tickets`
+               : "pas connecté — connectez-vous d'abord sur le jeu");
+
+  /* 4. Catalogue --------------------------------------------------- */
+  const cfg = await json("/api/config");
+  ligne("Configuration du serveur", cfg.ok ? "ok" : "ko", cfg.texte);
+
+  /* 5. Solo (sans temps réel) -------------------------------------- */
+  if (moi.ok && moi.corps.pseudoChosen) {
+    const solo = await json("/api/solo/start", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({mode: "solo", rounds: 1}),
+    });
+    ligne("Lancement d'une partie solo", solo.ok ? "ok" : "ko",
+          solo.ok ? `${solo.corps.total} manche(s), ${solo.corps.choices.length} propositions`
+                  : `${solo.statut} · ${solo.texte}`);
+  } else {
+    ligne("Lancement d'une partie solo", "warn", "test ignoré : connectez-vous et choisissez un pseudo");
+  }
+
+  /* 6. Espace échange, classement, amis ---------------------------- */
+  for (const [nom, url] of [["Classement général", "/api/leaderboard"],
+                            ["Liste d'amis", "/api/friends"],
+                            ["Présence en ligne", "/api/presence"]]) {
+    const r = await json(url);
+    ligne(nom, r.ok ? "ok" : (r.statut === 401 ? "warn" : "ko"),
+          r.ok ? "répond correctement" : `${r.statut} · ${r.texte}`);
+  }
+
+  /* 7. Connexion temps réel ---------------------------------------- */
+  await new Promise((fini) => {
+    if (typeof io === "undefined") {
+      ligne("Connexion temps réel", "ko", "le moteur n'a pas pu être chargé par le navigateur");
+      return fini();
+    }
+    const s = io({ withCredentials: true, path: "/rt", timeout: 8000 });
+    const stop = setTimeout(() => {
+      ligne("Connexion temps réel", "ko", "aucune réponse en 8 secondes");
+      s.close(); fini();
+    }, 8500);
+    s.on("connect", () => {
+      clearTimeout(stop);
+      ligne("Connexion temps réel", "ok", "établie — le multijoueur est disponible");
+      s.close(); fini();
+    });
+    s.on("connect_error", (err) => {
+      clearTimeout(stop);
+      ligne("Connexion temps réel", "ko", `refusée : ${err.message}`);
+      s.close(); fini();
+    });
+  });
+
+  /* Résumé ---------------------------------------------------------- */
+  const echecs = resultats.filter(r => r.etat === "ko").map(r => r.nom);
+  const boite = document.getElementById("resume");
+  boite.classList.remove("hidden");
+  boite.innerHTML = echecs.length
+    ? `<h2>${echecs.length} problème(s)</h2>` +
+      `<p>${echecs.map(e => "• " + e).join("<br>")}</p>` +
+      `<p style="color:var(--muted)">Copiez cet écran et transmettez-le : chaque ligne rouge désigne une cause précise.</p>`
+    : `<h2>Tout fonctionne</h2><p>Aucun défaut détecté depuis ce navigateur.</p>`;
+})();
+</script>
+</body>
+</html>

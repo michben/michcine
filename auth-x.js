@@ -120,6 +120,103 @@ export function marquerHorsLigne(userId) {
 }
 export const estEnLigne = (userId) => connectes.has(userId);
 
+/* ---------- captcha et validation par email ---------- */
+
+const TURNSTILE_SECRET = process.env.TURNSTILE_SECRET;
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const EMAIL_EXPEDITEUR = process.env.EMAIL_EXPEDITEUR || "MichBen Ciné Quizz <onboarding@resend.dev>";
+
+/**
+ * Vérifie le jeton Cloudflare Turnstile auprès de leurs serveurs.
+ * Sans clé configurée, la vérification est ignorée : pratique en local,
+ * à ne surtout pas laisser ainsi en production.
+ */
+export async function captchaValide(jeton, ip) {
+  if (!TURNSTILE_SECRET) return true;
+  try {
+    const res = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ secret: TURNSTILE_SECRET, response: jeton || "", remoteip: ip || "" }),
+    });
+    const data = await res.json();
+    return data.success === true;
+  } catch (e) {
+    console.error("Captcha injoignable :", e.message);
+    return false;   // en cas de panne, on refuse plutôt que d'ouvrir la porte
+  }
+}
+
+const codeQuatreChiffres = () => String(crypto.randomInt(1000, 10000));
+
+/** Envoi du code par email. Sans clé, le code est écrit dans les logs. */
+async function envoyerCode(email, code) {
+  if (!RESEND_API_KEY) {
+    console.warn(`⚠️  Pas d'envoi d'email configuré. Code pour ${email} : ${code}`);
+    return { simule: true };
+  }
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      from: EMAIL_EXPEDITEUR,
+      to: [email],
+      subject: `${code} — votre code MichBen Ciné Quizz`,
+      text: `Votre code de validation est ${code}.\n\n` +
+            `Il expire dans 20 minutes. Si vous n'êtes pas à l'origine de cette inscription, ignorez ce message.`,
+    }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return { envoye: true };
+}
+
+export async function envoyerCodeValidation(userId) {
+  const u = users[userId];
+  if (!u || !u.email) return { error: "INTROUVABLE" };
+  if (u.emailVerifie) return { error: "DEJA_VERIFIE" };
+
+  // au maximum un envoi par minute, pour ne pas servir de robot d'envoi
+  if (u.codeEnvoyeA && Date.now() - u.codeEnvoyeA < 60_000) return { error: "TROP_TOT" };
+
+  u.code = codeQuatreChiffres();
+  u.codeExpire = Date.now() + 20 * 60 * 1000;
+  u.codeEnvoyeA = Date.now();
+  u.codeEssais = 0;
+  saveUsers();
+
+  try {
+    const r = await envoyerCode(u.email, u.code);
+    return { ok: true, ...r };
+  } catch (e) {
+    console.error("Envoi du code échoué :", e.message);
+    return { error: "ENVOI_ECHOUE" };
+  }
+}
+
+export function validerCode(userId, code) {
+  const u = users[userId];
+  if (!u) return { error: "INTROUVABLE" };
+  if (u.emailVerifie) return { ok: true };
+  if (!u.code || Date.now() > (u.codeExpire || 0)) return { error: "CODE_EXPIRE" };
+  if ((u.codeEssais || 0) >= 5) return { error: "TROP_D_ESSAIS" };
+
+  u.codeEssais = (u.codeEssais || 0) + 1;
+  if (String(code || "").trim() !== u.code) { saveUsers(); return { error: "CODE_INCORRECT" }; }
+
+  u.emailVerifie = true;
+  delete u.code; delete u.codeExpire; delete u.codeEssais;
+  saveUsers();
+  return { ok: true };
+}
+
+/**
+ * Un compte email doit être validé avant de jouer — mais seulement si
+ * l'envoi d'emails est configuré. Sans clé, exiger un code bloquerait
+ * les joueurs devant un écran dont ils ne recevraient jamais le message.
+ */
+export const emailAValider = (u) =>
+  Boolean(RESEND_API_KEY) && Boolean(u?.email) && !u.emailVerifie;
+
 /* ---------- inscription par email ---------- */
 
 const normEmail = (e) => String(e || "").trim().toLowerCase();
@@ -393,7 +490,7 @@ function createSession(res, user) {
 /* ---------- routes ---------- */
 
 export function mountAuth(app) {
-  const sansSecret = ({ motDePasse, ...reste }) => reste;
+  const sansSecret = ({ motDePasse, code, codeExpire, codeEssais, ...reste }) => reste;
 
   app.get("/api/me", (req, res) => {
     const user = userFromCookie(req.headers.cookie);
@@ -401,12 +498,35 @@ export function mountAuth(app) {
     res.json(sansSecret(user));
   });
 
-  app.post("/auth/email/inscription", (req, res) => {
+  app.post("/auth/email/inscription", async (req, res) => {
+    if (!(await captchaValide(req.body.captcha, req.ip)))
+      return res.status(400).json({ error: "CAPTCHA_INVALIDE" });
+
     const r = inscrireEmail(req.body.email, req.body.motDePasse);
     if (r.error) return res.status(400).json(r);
     createSession(res, r.user);
-    res.json(sansSecret(r.user));
+    const envoi = await envoyerCodeValidation(r.user.id);
+    res.json({ ...sansSecret(r.user), envoi });
   });
+
+  app.post("/auth/email/code", async (req, res) => {
+    const user = userFromCookie(req.headers.cookie);
+    if (!user) return res.status(401).json({ error: "NOT_AUTHENTICATED" });
+    const r = validerCode(user.id, req.body.code);
+    if (r.error) return res.status(400).json(r);
+    res.json(sansSecret(user));
+  });
+
+  app.post("/auth/email/renvoyer", async (req, res) => {
+    const user = userFromCookie(req.headers.cookie);
+    if (!user) return res.status(401).json({ error: "NOT_AUTHENTICATED" });
+    const r = await envoyerCodeValidation(user.id);
+    if (r.error) return res.status(400).json(r);
+    res.json(r);
+  });
+
+  app.get("/api/captcha", (_req, res) =>
+    res.json({ siteKey: process.env.TURNSTILE_SITE_KEY || null }));
 
   app.post("/auth/email/connexion", (req, res) => {
     const r = connecterEmail(req.body.email, req.body.motDePasse);
