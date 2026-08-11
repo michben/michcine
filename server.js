@@ -892,7 +892,7 @@ movies = await charger("movies", MOVIES_FILE, []);
 normaliserFilms();
 reports = await charger("reports", REPORTS_FILE, []);
 await chargerUtilisateurs();
-await demenager();
+//await demenager();
 httpServer.listen(PORT, "0.0.0.0", () => {
   console.log(`MichBen Ciné Quizz → http://localhost:${PORT}  (admin : /admin.html)`);
   console.log(`${movies.length} films · stockage : ${enBase ? "Postgres" : "fichiers locaux"}`);
