@@ -27,7 +27,8 @@
 
     <!-- Le moteur de la page -->
     <script>
-        // Fonction pour envoyer des requêtes sécurisées au serveur
+<!-- Le moteur de la page -->
+    <script>
         async function requete(url, method = 'GET', body = null) {
             const token = document.getElementById('token').value;
             const options = { 
@@ -36,39 +37,54 @@
             };
             if (body) options.body = JSON.stringify(body);
             const res = await fetch(url, options);
+            
             if (!res.ok) {
-                alert('Erreur : Mot de passe incorrect ou problème serveur.');
-                throw new Error('Échec requête');
+                throw new Error(`Le serveur a refusé (Code ${res.status}). Vérifie ton mot de passe.`);
             }
             return res.json();
         }
 
-        // Afficher tous les films
         async function charger() {
             const liste = document.getElementById('liste');
             liste.innerHTML = '<p class="text-blue-500 font-bold">Chargement en cours...</p>';
             
-            const films = await requete('/api/admin/v2/films');
-            
-            liste.innerHTML = films.map(f => `
-                <div class="border border-slate-200 p-4 rounded-lg bg-white shadow-sm flex justify-between items-center hover:shadow-md transition-shadow">
-                    <div>
-                        <strong class="text-lg text-slate-800">${f.title}</strong> 
-                        <span class="text-slate-500">(${f.year || 'Année inconnue'})</span><br>
-                        <span class="text-sm text-slate-600 bg-slate-100 px-2 py-1 rounded mt-1 inline-block">🎥 ${f.director || 'Inconnu'}</span>
+            try {
+                const films = await requete('/api/admin/v2/films');
+                
+                if (films.length === 0) {
+                    liste.innerHTML = '<p class="text-orange-500">La base de données est connectée, mais elle est vide !</p>';
+                    return;
+                }
+
+                liste.innerHTML = films.map(f => `
+                    <div class="border border-slate-200 p-4 rounded-lg bg-white shadow-sm flex justify-between items-center hover:shadow-md transition-shadow">
+                        <div>
+                            <strong class="text-lg text-slate-800">${f.title}</strong> 
+                            <span class="text-slate-500">(${f.year || 'Année inconnue'})</span><br>
+                            <span class="text-sm text-slate-600 bg-slate-100 px-2 py-1 rounded mt-1 inline-block">🎥 ${f.director || 'Inconnu'}</span>
+                        </div>
+                        <button onclick="supprimer(${f.id})" class="bg-red-100 text-red-600 hover:bg-red-600 hover:text-white font-bold px-3 py-2 rounded-lg transition-colors">
+                            Supprimer
+                        </button>
                     </div>
-                    <button onclick="supprimer(${f.id})" class="bg-red-100 text-red-600 hover:bg-red-600 hover:text-white font-bold px-3 py-2 rounded-lg transition-colors">
-                        Supprimer
-                    </button>
-                </div>
-            `).join('');
+                `).join('');
+            } catch (erreur) {
+                // S'il y a un bug, on l'affiche en gros et en rouge !
+                liste.innerHTML = `<p class="text-red-600 font-bold p-4 bg-red-50 rounded-lg border border-red-200">
+                    ❌ Erreur de connexion : ${erreur.message} <br><br>
+                    💡 As-tu bien ajouté les routes "/api/admin/v2/films" dans ton fichier server.js ?
+                </p>`;
+            }
         }
 
-        // Supprimer un film
         async function supprimer(id) {
             if (confirm('Es-tu sûr de vouloir supprimer définitivement ce film ?')) {
-                await requete(`/api/admin/v2/films/${id}`, 'DELETE');
-                charger(); // Recharge la liste après suppression
+                try {
+                    await requete(`/api/admin/v2/films/${id}`, 'DELETE');
+                    charger(); 
+                } catch (erreur) {
+                    alert("Impossible de supprimer : " + erreur.message);
+                }
             }
         }
     </script>

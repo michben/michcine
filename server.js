@@ -208,7 +208,28 @@ app.post("/api/admin/grant-all", requireAdmin, (req, res) => {
   if (!amount) return res.status(400).json({ error: "AMOUNT_REQUIRED" });
   res.json({ users: grantAll(amount), amount });
 });
+import { chargerFilms, sauvegarderFilm, supprimerFilm } from "./db.js"; // À mettre tout en haut du fichier avec les autres imports
 
+/* --- NOUVELLES ROUTES ADMIN V2 (PostgreSQL) --- */
+app.get("/api/admin/v2/films", requireAdmin, async (req, res) => {
+  try {
+    const films = await chargerFilms();
+    res.json(films);
+  } catch (err) {
+    res.status(500).json({ error: "Erreur base de données" });
+  }
+});
+
+app.post("/api/admin/v2/films", requireAdmin, async (req, res) => {
+  await sauvegarderFilm(req.body);
+  res.json({ ok: true });
+});
+
+app.delete("/api/admin/v2/films/:id", requireAdmin, async (req, res) => {
+  await supprimerFilm(req.params.id);
+  res.json({ ok: true });
+});
+/* ---------------------------------------------- */
 app.post("/api/movies", requireAdmin, (req, res) => {
   const movie = sanitizeMovie(req.body);
   if (!movie.title || !movie.synopsis) return res.status(400).json({ error: "TITLE_AND_SYNOPSIS_REQUIRED" });
