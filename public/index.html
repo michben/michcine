@@ -433,6 +433,7 @@
       <div class="choices" id="choices"></div>
       <p class="feedback" id="guessFeedback"></p>
       <p class="grace hidden" id="grace"></p>
+      <div class="emojis hidden" id="emojiBar"></div>
       <div class="row"><button id="btnSkip" class="ghost hidden">Passer à la manche suivante</button></div>
       <ul class="players" id="roundPlayers"></ul>
     </div>
@@ -575,7 +576,24 @@ if (!window.tempsReelDispo) {
 /* Le chemin par défaut « /socket.io » est lui aussi filtré par certains
    bloqueurs : on expose donc le même service sous « /rt ». */
 const socket = io({ withCredentials: true, path: window.cheminTempsReel });
-const $ = id => document.getElementById(id);
+/**
+ * Un élément absent ne doit pas interrompre tout le script : on renvoie un
+ * objet inerte plutôt que null. Une seule ligne manquante dans le balisage
+ * a déjà suffi à bloquer le lancement des parties.
+ */
+const INERTE = {
+  textContent: "", innerHTML: "", value: "", src: "", disabled: false,
+  style: {}, dataset: {},
+  classList: { add(){}, remove(){}, toggle(){}, contains(){ return false; } },
+  querySelectorAll: () => [], querySelector: () => null,
+  append(){}, prepend(){}, setAttribute(){}, addEventListener(){},
+  focus(){}, select(){}, scrollIntoView(){}, click(){},
+};
+const $ = (id) => {
+  const el = document.getElementById(id);
+  if (!el) console.warn(`Élément « ${id} » absent du balisage.`);
+  return el || INERTE;
+};
 const AVATARS = ["🎬","🍿","🎭","🕶️","👽","🦖","🤖","🧛","🐙","🌵","🎸","🚀"];
 const HINT_LABELS = {letters:"Nombre de lettres", year:"Année", director:"Réalisateur",
                      actors:"Acteurs", poster:"Photo du film"};
