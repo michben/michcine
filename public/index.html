@@ -771,6 +771,266 @@ $("btnMailConnexion").onclick = () => authMail("connexion");
 $("btnMailInscription").onclick = () => authMail("inscription");
 $("mdp").addEventListener("keydown", e => { if (e.key === "Enter") authMail("connexion"); });
 
+
+/* ---------- Présence ---------- */
+function majPresence(n){
+  $("onlineNb").textContent = n;
+  $("onlineCount").textContent = n > 1 ? "joueurs en ligne" : "joueur en ligne";
+}
+socket.on("presence", ({enLigne}) => majPresence(enLigne));
+fetch("/api/presence").then(r => r.json()).then(d => majPresence(d.enLigne)).catch(() => {});
+
+/* ---------- Espace échange ---------- */
+let points = 0, tauxTicket = 250, choixEchange = 0;
+const setPoints = n => { if (typeof n === "number") points = n; $("xPoints").textContent = points; };
+
+$("btnExchange").onclick = () => {
+  $("xPoints").textContent = points;
+  $("xCredits").textContent = credits;
+  $("xRate").textContent = `${tauxTicket} points = 1 ticket bonus`;
+  $("xMsg").textContent = "";
+  renderAmounts();
+  show("exchange");
+};
+$("btnExchangeBack").onclick = () => show("menu");
+
+/** Propose des paliers réalistes selon ce que le joueur possède. */
+function renderAmounts(){
+  const max = Math.floor(points / tauxTicket);
+  choixEchange = 0;
+  if (max < 1){
+    $("xAmounts").innerHTML = "";
+    $("btnDoExchange").disabled = true;
+    $("xMsg").textContent = `Il vous faut au moins ${tauxTicket} points pour un premier ticket.`;
+    $("xMsg").className = "feedback";
+    return;
+  }
+  const paliers = [...new Set([1, 3, 5, max])].filter(n => n >= 1 && n <= max);
+  $("xAmounts").innerHTML = paliers.map(n =>
+    `<button data-t="${n}" aria-pressed="false">${n} ticket${n>1?"s":""}<br><small>${n*tauxTicket} pts</small></button>`).join("");
+  $("xAmounts").querySelectorAll("[data-t]").forEach(b => b.onclick = () => {
+    choixEchange = Number(b.dataset.t);
+    $("xAmounts").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+    $("btnDoExchange").disabled = false;
+  });
+}
+
+$("btnDoExchange").onclick = async () => {
+  if (!choixEchange) return;
+  const res = await fetch("/api/exchange", {method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({points: choixEchange * tauxTicket})});
+  const data = await res.json();
+  if (!res.ok){
+    $("xMsg").textContent = data.error === "NOT_ENOUGH_POINTS" ? "Cagnotte insuffisante." : "Échange impossible.";
+    $("xMsg").className = "feedback bad";
+    return;
+  }
+  setPoints(data.points); setCredits(data.credits);
+  $("xCredits").textContent = data.credits;
+  $("xMsg").textContent = `${data.tickets} ticket${data.tickets>1?"s":""} crédité${data.tickets>1?"s":""}.`;
+  $("xMsg").className = "feedback good";
+  renderAmounts();
+};
+
+/* ---------- Amis ---------- */
+let ongletAmis = "amis";
+
+const ACTIONS_AMI = {
+  aucun:    [["demander", "Ajouter en ami"], ["bloquer", "Bloquer"]],
+  envoyee:  [["retirer", "Annuler la demande"], ["bloquer", "Bloquer"]],
+  recue:    [["accepter", "Accepter la demande"], ["retirer", "Refuser"], ["bloquer", "Bloquer"]],
+  ami:      [["retirer", "Retirer des amis"], ["bloquer", "Bloquer"]],
+  bloque:   [["debloquer", "Débloquer"]],
+};
+const ETATS = {
+  aucun: "Vous ne vous connaissez pas encore.",
+  envoyee: "Demande envoyée, en attente de réponse.",
+  recue: "Ce joueur souhaite vous ajouter.",
+  ami: "Vous êtes amis.",
+  bloque: "Vous avez bloqué ce joueur.",
+};
+
+async function agirAmi(action, id){
+  const res = await fetch(`/api/friends/${action}`, {method:"POST",
+    headers:{"Content-Type":"application/json"}, body: JSON.stringify({id})});
+  return res.ok ? res.json() : null;
+}
+
+/** Fenêtre d'action, ouverte en cliquant un joueur en partie ou dans une liste. */
+async function ouvrirJoueur(id, pseudo, avatar){
+  if (!me || id === me.id) return;
+  $("popNom").textContent = `${avatar || "🎬"} ${pseudo}`;
+  $("popJoueur").classList.remove("hidden");
+
+  const { relation } = await fetch(`/api/players/${encodeURIComponent(id)}/relation`)
+    .then(r => r.json()).catch(() => ({relation:"aucun"}));
+  $("popEtat").textContent = ETATS[relation] || "";
+  $("popActions").innerHTML = (ACTIONS_AMI[relation] || []).map(([a, libelle]) =>
+    `<button class="${a === "bloquer" ? "ghost danger" : ""}" data-act="${a}">${libelle}</button>`).join("");
+
+  $("popActions").querySelectorAll("[data-act]").forEach(b => b.onclick = async () => {
+    if (b.dataset.act === "bloquer" && !confirm(`Bloquer ${pseudo} ?`)) return;
+    await agirAmi(b.dataset.act, id);
+    $("popJoueur").classList.add("hidden");
+    if (!$("friends").classList.contains("hidden")) chargerAmis();
+    majBadgeAmis();
+  });
+}
+$("popFermer").onclick = () => $("popJoueur").classList.add("hidden");
+$("popJoueur").onclick = e => { if (e.target.id === "popJoueur") $("popJoueur").classList.add("hidden"); };
+
+$("tabsAmis").querySelectorAll("[data-onglet]").forEach(b => b.onclick = () => {
+  ongletAmis = b.dataset.onglet;
+  $("tabsAmis").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  $("voletRecherche").classList.toggle("hidden", ongletAmis !== "recherche");
+  ongletAmis === "recherche" ? ($("listeAmis").innerHTML = "", $("amisVide").textContent = "") : chargerAmis();
+});
+
+$("btnFriends").onclick = () => { chargerAmis(); show("friends"); };
+$("btnAmisBack").onclick = () => show("menu");
+
+function ligneJoueur(j, boutons){
+  return `<div class="amiLigne">
+    <span class="dot ${j.online ? "on" : ""}"></span>
+    <span class="nom">${j.avatar||"🎬"} ${esc(j.pseudo)}</span>
+    ${boutons.map(([a, l]) =>
+      `<button class="ghost" data-act="${a}" data-id="${esc(j.id)}">${l}</button>`).join("")}
+  </div>`;
+}
+
+function brancher(){
+  $("listeAmis").querySelectorAll("[data-act]").forEach(b => b.onclick = async () => {
+    if (b.dataset.act === "bloquer" && !confirm("Bloquer ce joueur ?")) return;
+    await agirAmi(b.dataset.act, b.dataset.id);
+    ongletAmis === "recherche" ? chercher() : chargerAmis();
+    majBadgeAmis();
+  });
+}
+
+async function chargerAmis(){
+  const brut = await fetch("/api/friends").then(x => x.json()).catch(() => null);
+  const r = { amis: [], recues: [], envoyees: [], bloques: [], ...(brut || {}) };
+  if (ongletAmis === "amis"){
+    $("listeAmis").innerHTML = r.amis.map(j => ligneJoueur(j, [["retirer","Retirer"],["bloquer","Bloquer"]])).join("");
+    $("amisVide").textContent = r.amis.length ? "" :
+      "Aucun ami pour l'instant. Cherchez un pseudo dans l'onglet Rechercher.";
+  } else if (ongletAmis === "demandes"){
+    $("listeAmis").innerHTML =
+      r.recues.map(j => ligneJoueur(j, [["accepter","Accepter"],["retirer","Refuser"]])).join("") +
+      r.envoyees.map(j => ligneJoueur(j, [["retirer","Annuler"]])).join("") +
+      r.bloques.map(j => ligneJoueur(j, [["debloquer","Débloquer"]])).join("");
+    $("amisVide").textContent = (r.recues.length + r.envoyees.length + r.bloques.length)
+      ? "" : "Aucune demande en attente.";
+  }
+  brancher();
+}
+
+async function chercher(){
+  const q = $("quiChercher").value.trim();
+  if (q.length < 2) return ($("amisVide").textContent = "Entrez au moins 2 lettres.");
+  const trouves = await fetch(`/api/players/search?q=${encodeURIComponent(q)}`)
+    .then(r => r.json()).catch(() => []);
+  if (!Array.isArray(trouves)) return ($("amisVide").textContent = "Recherche indisponible.");
+  $("listeAmis").innerHTML = trouves.map(j =>
+    ligneJoueur(j, ACTIONS_AMI[j.relation] || ACTIONS_AMI.aucun)).join("");
+  $("amisVide").textContent = trouves.length ? "" : "Aucun joueur trouvé.";
+  brancher();
+}
+$("btnChercher").onclick = chercher;
+$("quiChercher").addEventListener("keydown", e => { if (e.key === "Enter") chercher(); });
+
+/** Pastille rouge sur le bouton Amis quand une demande attend. */
+async function majBadgeAmis(){
+  const r = await fetch("/api/friends").then(x => x.json()).catch(() => null);
+  const attente = r?.recues?.length ?? 0;   // le serveur peut répondre partiellement
+  $("badgeAmis").textContent = attente;
+  $("badgeAmis").classList.toggle("hidden", attente === 0);
+}
+
+/* ---------- Modération ---------- */
+let motifs = {}, filmCourant = null;
+fetch("/api/reports/motifs").then(r => r.json()).then(m => {
+  motifs = m;
+  $("reportMotif").innerHTML = Object.entries(m)
+    .map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("");
+}).catch(() => {});
+
+$("btnReport").onclick = () => {
+  $("reportBox").classList.toggle("hidden");
+  $("reportMsg").textContent = "";
+};
+$("btnReportCancel").onclick = () => $("reportBox").classList.add("hidden");
+$("btnReportSend").onclick = async () => {
+  if (!filmCourant) return;
+  const res = await fetch("/api/reports", {method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({movieId: filmCourant, motif: $("reportMotif").value,
+                          commentaire: $("reportComment").value})});
+  const data = await res.json().catch(() => ({}));
+  $("reportBox").classList.add("hidden");
+  $("reportComment").value = "";
+  $("reportMsg").textContent = res.ok
+    ? (data.deja ? "Vous avez déjà signalé ce film." : "Merci, le signalement a été transmis.")
+    : "Signalement impossible.";
+  $("reportMsg").className = res.ok ? "feedback good" : "feedback bad";
+};
+
+$("btnModeration").onclick = async () => {
+  $("modList").innerHTML = "";
+  $("modEmpty").textContent = "Chargement…";
+  show("moderation");
+  let liste = [];
+  try { liste = await fetch("/api/reports").then(r => r.json()); }
+  catch { $("modEmpty").textContent = "Accès refusé."; return; }
+
+  if (!Array.isArray(liste)) liste = [];
+  $("modEmpty").textContent = liste.length ? "" : "Aucun signalement pour le moment.";
+  $("modList").innerHTML = liste.map(r => `
+    <div class="modrow ${r.statut === "traite" ? "traite" : ""}">
+      <div class="txt">
+        <strong>${esc(r.titre)}</strong>
+        <small>${esc(motifs[r.motif] || r.motif)}${r.commentaire ? " — " + esc(r.commentaire) : ""}</small>
+        <small>signalé par ${esc(r.auteur)}${r.traitePar ? " · traité par " + esc(r.traitePar) : ""}</small>
+      </div>
+      ${r.statut === "traite" ? "" :
+        `<button class="ghost" data-clore="${r.id}">Classer sans suite</button>
+         <button class="ghost" data-retirer="${r.id}">Retirer le film</button>`}
+    </div>`).join("");
+
+  const agir = async (id, corps) => {
+    await fetch(`/api/reports/${id}`, {method:"PUT", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify(corps)});
+    $("btnModeration").click();
+  };
+  $("modList").querySelectorAll("[data-clore]").forEach(b =>
+    b.onclick = () => agir(b.dataset.clore, {statut:"traite"}));
+  $("modList").querySelectorAll("[data-retirer]").forEach(b =>
+    b.onclick = () => confirm("Retirer ce film du catalogue ?") && agir(b.dataset.retirer, {retirerFilm:true}));
+};
+$("btnModBack").onclick = () => show("menu");
+
+/* ---------- Classement général ---------- */
+$("btnBoard").onclick = async () => {
+  $("globalRank").innerHTML = "";
+  $("boardEmpty").textContent = "Chargement…";
+  show("board");
+  let list = [];
+  try { list = await fetch("/api/leaderboard").then(r => r.json()); }
+  catch { $("boardEmpty").textContent = "Classement indisponible pour le moment."; return; }
+
+  if (!Array.isArray(list)) list = [];
+  $("globalRank").innerHTML = list.map(u =>
+    `<li><span class="dot ${u.online ? "on" : ""}"></span>${u.avatar||"🎬"} ${esc(u.pseudo)}` +
+    (u.role && u.role !== "joueur" ? `<span class="badge-role">${esc(u.role)}</span>` : "") +
+    `<b>${u.totalScore} pts</b></li>`).join("");
+  $("boardEmpty").textContent = list.length
+    ? `${list.length} joueur${list.length>1?"s":""} classé${list.length>1?"s":""} · une partie classée fait monter votre total.`
+    : "Aucune partie terminée pour l'instant. Lancez une partie classée pour ouvrir le classement.";
+};
+$("btnBoardBack").onclick = () => show("menu");
+
+$("btnHome").onclick = () => show("menu");
+$("btnReplay").onclick = () => show("menu");
+
 /* ---------- Profil ---------- */
 $("avatars").innerHTML = AVATAR_LIST.map(a => `<button data-a="${a}">${a}</button>`).join("");
 $("avatars").querySelectorAll("[data-a]").forEach(b => b.onclick = () => {
