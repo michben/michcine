@@ -24,6 +24,8 @@
   .item.off{opacity:.4}
   .lvl{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);
     border:1px solid rgba(237,232,220,.2);border-radius:999px;padding:2px 8px;margin-left:6px}
+  input[type="range"]{width:100%;accent-color:var(--beam);padding:0}
+  input[type="checkbox"]{accent-color:var(--beam);width:20px;height:20px}
   input,textarea{width:100%;background:var(--card);border:1px solid rgba(237,232,220,.14);color:var(--chalk);
     border-radius:10px;padding:12px 13px;font:inherit;font-size:16px;resize:vertical}
   input:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px solid var(--beam);outline-offset:2px}
@@ -146,6 +148,60 @@
     </div>
 
     <div id="paneReglages" class="hidden">
+      <div class="card">
+        <p class="tag">Indices proposés aux joueurs</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 6px;line-height:1.6">
+          Décochez un indice pour le retirer du jeu. Les points sont retranchés du score de
+          la manche, les tickets débités du compte du joueur.</p>
+        <div id="listeIndices"></div>
+      </div>
+
+      <div class="card">
+        <p class="tag">Cadrage de l'image d'indice</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6">
+          Un zoom supérieur à 100 % rogne les bords : le titre imprimé et les visages en gros
+          plan disparaissent souvent, ce qui rend l'indice utile sans livrer la réponse.</p>
+        <div class="grid">
+          <div>
+            <label for="rZoom">Zoom : <b id="rZoomVal">160</b> %</label>
+            <input id="rZoom" type="range" min="100" max="400" step="10">
+          </div>
+          <div>
+            <label for="rFlou">Flou : <b id="rFlouVal">0</b></label>
+            <input id="rFlou" type="range" min="0" max="30" step="1">
+          </div>
+        </div>
+        <label for="rCadrage" style="margin-top:12px">Zone conservée</label>
+        <select id="rCadrage">
+          <option value="center">Centre</option>
+          <option value="top">Haut</option>
+          <option value="bottom">Bas</option>
+          <option value="left">Gauche</option>
+          <option value="right">Droite</option>
+        </select>
+        <p class="tag" style="margin:18px 0 8px">Aperçu</p>
+        <div id="apercuCadre" style="width:260px;aspect-ratio:16/9;overflow:hidden;border-radius:10px;background:var(--card)">
+          <img id="apercuImg" alt="" style="width:100%;height:100%;object-fit:cover;display:block">
+        </div>
+      </div>
+
+      <div class="card">
+        <p class="tag">Rythme et économie</p>
+        <div class="grid">
+          <div><label for="rDuree">Durée d'une manche (secondes)</label><input id="rDuree" type="number" min="10" max="300"></div>
+          <div><label for="rBase">Points maximum par manche</label><input id="rBase" type="number" min="100" max="10000"></div>
+          <div><label for="rDepart">Tickets offerts à l'inscription</label><input id="rDepart" type="number" min="0" max="1000"></div>
+          <div><label for="rPartie">Tickets gagnés par partie</label><input id="rPartie" type="number" min="0" max="100"></div>
+          <div><label for="rTaux">Points pour 1 ticket (échange)</label><input id="rTaux" type="number" min="10" max="100000"></div>
+          <div><label for="rGrace">Délai après la 1re bonne réponse (s)</label><input id="rGrace" type="number" min="0" max="120"></div>
+        </div>
+        <div class="row">
+          <button id="btnSaveReglages">Enregistrer les réglages</button>
+          <button id="btnResetReglages" class="ghost">Valeurs par défaut</button>
+        </div>
+        <p class="msg" id="reglagesMsg"></p>
+      </div>
+
       <div class="card" id="alerteMdp" style="border-color:rgba(228,88,110,.5)">
         <p class="tag" style="color:var(--ticket)">Sécurité</p>
         <p style="margin:0;line-height:1.6">Le mot de passe par défaut est encore actif. Toute personne
@@ -327,12 +383,91 @@ function tab(which){
   }
   if (which === "users") loadUsers();
   if (which === "reports") loadReports();
-  if (which === "reglages") etatSecurite();
+  if (which === "reglages"){ etatSecurite(); chargerReglages(); }
 }
 $("tabMovies").onclick = () => tab("movies");
 $("tabUsers").onclick = () => tab("users");
 $("tabReports").onclick = () => tab("reports");
 $("tabReglages").onclick = () => tab("reglages");
+
+/* ---------- Réglages du jeu ---------- */
+let reglages = null;
+
+const CHAMPS = { rDuree:"roundDuration", rBase:"basePoints", rDepart:"creditsDepart",
+                 rPartie:"creditsParPartie", rTaux:"pointsParTicket", rGrace:"graceApresPremier" };
+
+async function chargerReglages(){
+  const res = await api("/api/admin/reglages");
+  if (!res.ok) return;
+  reglages = await res.json();
+  for (const [champ, cle] of Object.entries(CHAMPS)) $(champ).value = reglages[cle];
+
+  const p = reglages.indices.poster;
+  $("rZoom").value = p.zoom; $("rZoomVal").textContent = p.zoom;
+  $("rFlou").value = p.flou; $("rFlouVal").textContent = p.flou;
+  $("rCadrage").value = p.cadrage;
+  majApercu();
+
+  $("listeIndices").innerHTML = Object.entries(reglages.indices).map(([cle, v]) => `
+    <div class="urow">
+      <div class="who">
+        <label style="display:flex;align-items:center;gap:8px;margin:0;text-transform:none;letter-spacing:0;font-size:15px;color:var(--chalk)">
+          <input type="checkbox" data-actif="${cle}" ${v.actif ? "checked" : ""} style="width:auto">
+          <input type="text" data-libelle="${cle}" value="${esc(v.libelle)}" style="flex:1;min-width:120px">
+        </label>
+      </div>
+      <input type="number" min="0" max="5000" data-points="${cle}" value="${v.points}" aria-label="Points" title="Points retranchés">
+      <input type="number" min="0" max="50" data-tickets="${cle}" value="${v.tickets}" aria-label="Tickets" title="Tickets débités">
+    </div>`).join("");
+}
+
+/** Aperçu du recadrage, avec une affiche réelle du catalogue. */
+function majApercu(){
+  const avecImage = movies.find(m => m.still || m.poster);
+  $("apercuImg").src = avecImage ? (avecImage.still || avecImage.poster) : "";
+  $("apercuImg").style.transform = `scale(${$("rZoom").value / 100})`;
+  $("apercuImg").style.objectPosition = $("rCadrage").value;
+  const f = Number($("rFlou").value);
+  $("apercuImg").style.filter = f ? `blur(${f / 10}px)` : "";
+}
+for (const id of ["rZoom","rFlou","rCadrage"])
+  $(id).addEventListener("input", () => {
+    $("rZoomVal").textContent = $("rZoom").value;
+    $("rFlouVal").textContent = $("rFlou").value;
+    majApercu();
+  });
+
+$("btnSaveReglages").onclick = async () => {
+  const corps = { indices: {} };
+  for (const [champ, cle] of Object.entries(CHAMPS)) corps[cle] = Number($(champ).value);
+
+  for (const cle of Object.keys(reglages.indices)) {
+    corps.indices[cle] = {
+      actif:   $("listeIndices").querySelector(`[data-actif="${cle}"]`).checked,
+      libelle: $("listeIndices").querySelector(`[data-libelle="${cle}"]`).value,
+      points:  Number($("listeIndices").querySelector(`[data-points="${cle}"]`).value),
+      tickets: Number($("listeIndices").querySelector(`[data-tickets="${cle}"]`).value),
+    };
+  }
+  Object.assign(corps.indices.poster, {
+    zoom: Number($("rZoom").value), flou: Number($("rFlou").value), cadrage: $("rCadrage").value,
+  });
+
+  const res = await api("/api/admin/reglages", {method:"PUT", body: JSON.stringify(corps)});
+  $("reglagesMsg").textContent = res.ok
+    ? "Réglages enregistrés. Ils s'appliquent dès la prochaine manche."
+    : "Enregistrement refusé.";
+  $("reglagesMsg").className = res.ok ? "msg ok" : "msg err";
+  if (res.ok) chargerReglages();
+};
+
+$("btnResetReglages").onclick = async () => {
+  if (!confirm("Rétablir tous les réglages par défaut ?")) return;
+  await api("/api/admin/reglages/defaut", {method:"POST"});
+  chargerReglages();
+  $("reglagesMsg").textContent = "Réglages remis à leurs valeurs d'origine.";
+  $("reglagesMsg").className = "msg ok";
+};
 
 /* ---------- Mot de passe d'administration ---------- */
 async function etatSecurite(){

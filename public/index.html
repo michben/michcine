@@ -78,7 +78,7 @@
   .feedback.bad{color:var(--ticket)}.feedback.good{color:var(--beam)}
   .reveal{font-family:'Anton',sans-serif;font-size:clamp(24px,6vw,34px);text-transform:uppercase;color:var(--beam);margin:4px 0 0;letter-spacing:.03em}
   .poster{width:140px;border-radius:10px;display:block;margin-top:14px;box-shadow:0 12px 30px rgba(0,0,0,.5)}
-  #hintPoster{width:min(100%,340px);aspect-ratio:16/9;object-fit:cover}
+  #hintPoster{width:min(100%,340px);aspect-ratio:16/9;object-fit:cover;overflow:hidden}
   ol.rank{list-style:none;counter-reset:r;padding:0;margin:14px 0 0}
   ol.rank li{counter-increment:r;display:flex;align-items:center;gap:10px;padding:11px 0;border-top:1px solid rgba(237,232,220,.1)}
   ol.rank li::before{content:counter(r);font-family:'JetBrains Mono',monospace;color:var(--muted);width:22px}
@@ -1219,6 +1219,8 @@ async function solo(chemin, corps){
 
 function afficherManche(m){
   state.hintCosts = m.hintCosts; state.hintCredits = m.hintCredits;
+  state.posterStyle = m.posterStyle;
+  if (m.hintLabels) Object.assign(HINT_LABELS, m.hintLabels);
   state.bought = {}; state.answered = false;
   $("roundLabel").textContent = `Manche ${m.roundIndex + 1} sur ${m.total}`;
   $("synopsis").textContent = m.synopsis;
@@ -1238,14 +1240,29 @@ function afficherManche(m){
   show("round");
 }
 
+/**
+ * Applique le recadrage défini dans l'administration : le zoom rogne les
+ * bords, où figurent souvent le titre imprimé et les visages en gros plan.
+ */
+function appliquerAffiche(url){
+  const img = $("hintPoster");
+  const s = state.posterStyle || {};
+  img.src = url;
+  img.style.transform = `scale(${(s.zoom ?? 100) / 100})`;
+  img.style.objectPosition = s.cadrage || "center";
+  img.style.filter = s.flou ? `blur(${s.flou / 10}px)` : "";
+  img.classList.remove("hidden");
+}
+
 function renderHintsSolo(){
-  $("hints").innerHTML = Object.keys(HINT_LABELS).map(type => {
+  $("hints").innerHTML = Object.keys(state.hintCosts || {}).map(type => {
+    const libelle = HINT_LABELS[type] || type;
     if (state.bought[type] !== undefined){
       const val = ["poster","letters"].includes(type) ? "" : ` : ${esc(String(state.bought[type]))}`;
-      return `<button class="bought" disabled>${HINT_LABELS[type]}${val}</button>`;
+      return `<button class="bought" disabled>${libelle}${val}</button>`;
     }
     const jetons = (state.hintCredits||{})[type] ?? 1;
-    return `<button class="${credits < jetons ? "broke" : ""}" data-hint="${type}">${HINT_LABELS[type]}
+    return `<button class="${credits < jetons ? "broke" : ""}" data-hint="${type}">${libelle}
       <span class="cost">🎟️${jetons} · −${state.hintCosts[type]} pts</span></button>`;
   }).join("");
   $("hints").querySelectorAll("[data-hint]").forEach(b => b.onclick = async () => {
@@ -1257,7 +1274,7 @@ function renderHintsSolo(){
     }
     state.bought[r.type] = r.value;
     setCredits(r.credits);
-    if (r.type === "poster"){ $("hintPoster").src = r.value; $("hintPoster").classList.remove("hidden"); }
+    if (r.type === "poster") appliquerAffiche(r.value);
     if (r.type === "letters"){ $("pattern").textContent = r.value; $("pattern").classList.remove("hidden"); }
     renderHintsSolo();
   });
@@ -1364,7 +1381,7 @@ $("btnStart").onclick = () => socket.emit("game:start", {code:state.code});
 socket.on("room:update", renderLobby);
 
 /* ---------- Manche ---------- */
-socket.on("round:start", ({roundIndex,total,synopsis,duration,hintCosts,hintCredits,pattern,choices}) => {
+socket.on("round:start", ({roundIndex,total,synopsis,duration,hintCosts,hintCredits,choices,posterStyle,hintLabels}) => {
   $("dots").innerHTML = Array.from({length: total}, (_, i) =>
     `<i class="${i < roundIndex ? "done" : i === roundIndex ? "now" : ""}"></i>`).join("");
   $("roomCode").textContent = state.code || "";
@@ -1374,6 +1391,8 @@ socket.on("round:start", ({roundIndex,total,synopsis,duration,hintCosts,hintCred
   $("btnSkip").classList.toggle("hidden", !["solo","ranked"].includes(state.mode));
   $("emojiBar").classList.toggle("hidden", ["solo","ranked"].includes(state.mode));
   state.hintCredits = hintCredits || {};
+  state.posterStyle = posterStyle;
+  if (hintLabels) Object.assign(HINT_LABELS, hintLabels);
   state.hintCosts = hintCosts; state.bought = {}; state.answered = false;
   $("roundLabel").textContent = `Manche ${roundIndex+1} sur ${total}`;
   $("synopsis").textContent = synopsis;
@@ -1385,14 +1404,16 @@ socket.on("round:start", ({roundIndex,total,synopsis,duration,hintCosts,hintCred
 });
 
 function renderHints(){
-  $("hints").innerHTML = Object.keys(HINT_LABELS).map(type => {
+  // seuls les indices activés dans l'administration sont proposés
+  $("hints").innerHTML = Object.keys(state.hintCosts || {}).map(type => {
+    const libelle = HINT_LABELS[type] || type;
     if (state.bought[type] !== undefined){
       const val = ["poster","letters"].includes(type) ? "" : ` : ${esc(String(state.bought[type]))}`;
-      return `<button class="bought" disabled>${HINT_LABELS[type]}${val}</button>`;
+      return `<button class="bought" disabled>${libelle}${val}</button>`;
     }
     const jetons = (state.hintCredits||{})[type] ?? 1;
     const broke = credits < jetons ? " broke" : "";
-    return `<button class="${broke.trim()}" data-hint="${type}">${HINT_LABELS[type]}<span class="cost">🎟️${jetons} · −${state.hintCosts[type]} pts</span></button>`;
+    return `<button class="${broke.trim()}" data-hint="${type}">${libelle}<span class="cost">🎟️${jetons} · −${state.hintCosts[type]} pts</span></button>`;
   }).join("");
   $("hints").querySelectorAll("[data-hint]").forEach(btn => btn.onclick = () =>
     socket.emit("hint:buy", {code:state.code, type:btn.dataset.hint}, res => {

@@ -71,14 +71,43 @@ const io = new Server(httpServer, { cors: { origin: "*" }, path: "/rt" });
 /* Configuration                                                       */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Réglages du jeu, modifiables depuis la console d'administration.
+ * Ils sont conservés en base : un changement survit aux redéploiements.
+ */
+const REGLAGES_DEFAUT = {
+  roundDuration: 60,                 // secondes
+  basePoints: 1000,
+  creditsDepart: 12,
+  creditsParPartie: 4,
+  pointsParTicket: 250,
+  graceApresPremier: 15,             // secondes
+  indices: {
+    letters:  { actif: true, points: 150, tickets: 1, libelle: "Nombre de lettres" },
+    year:     { actif: true, points: 100, tickets: 1, libelle: "Année" },
+    director: { actif: true, points: 200, tickets: 1, libelle: "Réalisateur" },
+    actors:   { actif: true, points: 300, tickets: 2, libelle: "Acteurs" },
+    poster:   { actif: true, points: 250, tickets: 2, libelle: "Photo du film",
+                zoom: 160, cadrage: "center", flou: 0 },
+  },
+};
+
+let REGLAGES = structuredClone(REGLAGES_DEFAUT);
+
 const CONFIG = {
-  ROUND_DURATION_MS: 60_000,
-  BASE_POINTS: 1000,
-  HINT_COSTS: { letters: 150, year: 100, director: 200, actors: 300, poster: 250 },  // en points
-  HINT_CREDITS: { letters: 1, year: 1, director: 1, actors: 2, poster: 2 },         // en crédits
+  get ROUND_DURATION_MS() { return REGLAGES.roundDuration * 1000; },
+  get BASE_POINTS() { return REGLAGES.basePoints; },
+  get HINT_COSTS() {
+    return Object.fromEntries(Object.entries(REGLAGES.indices)
+      .filter(([, v]) => v.actif).map(([k, v]) => [k, v.points]));
+  },
+  get HINT_CREDITS() {
+    return Object.fromEntries(Object.entries(REGLAGES.indices)
+      .filter(([, v]) => v.actif).map(([k, v]) => [k, v.tickets]));
+  },
+  get GRACE_AFTER_FIRST_MS() { return REGLAGES.graceApresPremier * 1000; },
+  get POINTS_PAR_TICKET() { return REGLAGES.pointsParTicket; },
   MAX_PLAYERS: 16,
-  GRACE_AFTER_FIRST_MS: 15_000,   // délai laissé aux autres après la première bonne réponse
-  POINTS_PAR_TICKET: 250,         // taux de conversion points → tickets bonus
   CHOICE_RATIO: 1,                // le clic est le seul mode de réponse : score plein
   TIP_URL: process.env.TIP_URL || "https://buymeacoffee.com/votre-pseudo",
 };
@@ -163,6 +192,52 @@ app.post("/api/admin/password", requireAdmin, (req, res) => {
   empreinteAdmin = hacherAdmin(nouveau);
   sauver("adminPass", empreinteAdmin);
   res.json({ ok: true });
+});
+
+app.get("/api/admin/reglages", requireAdmin, (_req, res) => res.json(REGLAGES));
+
+app.put("/api/admin/reglages", requireAdmin, (req, res) => {
+  const r = req.body || {};
+  const borne = (v, min, max, defaut) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : defaut;
+  };
+
+  REGLAGES.roundDuration    = borne(r.roundDuration, 10, 300, REGLAGES.roundDuration);
+  REGLAGES.basePoints       = borne(r.basePoints, 100, 10000, REGLAGES.basePoints);
+  REGLAGES.creditsDepart    = borne(r.creditsDepart, 0, 1000, REGLAGES.creditsDepart);
+  REGLAGES.creditsParPartie = borne(r.creditsParPartie, 0, 100, REGLAGES.creditsParPartie);
+  REGLAGES.pointsParTicket  = borne(r.pointsParTicket, 10, 100000, REGLAGES.pointsParTicket);
+  REGLAGES.graceApresPremier= borne(r.graceApresPremier, 0, 120, REGLAGES.graceApresPremier);
+
+  for (const [cle, valeurs] of Object.entries(r.indices || {})) {
+    const cible = REGLAGES.indices[cle];
+    if (!cible) continue;
+    cible.actif   = valeurs.actif !== false;
+    cible.points  = borne(valeurs.points, 0, 5000, cible.points);
+    cible.tickets = borne(valeurs.tickets, 0, 50, cible.tickets);
+    if (typeof valeurs.libelle === "string" && valeurs.libelle.trim())
+      cible.libelle = valeurs.libelle.trim().slice(0, 40);
+    if (cle === "poster") {
+      cible.zoom = borne(valeurs.zoom, 100, 400, cible.zoom);
+      cible.flou = borne(valeurs.flou, 0, 30, cible.flou);
+      if (["center","top","bottom","left","right"].includes(valeurs.cadrage))
+        cible.cadrage = valeurs.cadrage;
+    }
+  }
+
+  // au moins un indice doit rester actif, sinon la boutique est vide
+  if (!Object.values(REGLAGES.indices).some((i) => i.actif))
+    REGLAGES.indices.year.actif = true;
+
+  sauver("reglages", REGLAGES);
+  res.json(REGLAGES);
+});
+
+app.post("/api/admin/reglages/defaut", requireAdmin, (_req, res) => {
+  REGLAGES = structuredClone(REGLAGES_DEFAUT);
+  sauver("reglages", REGLAGES);
+  res.json(REGLAGES);
 });
 
 /** Indique si le mot de passe par défaut est encore en usage. */
@@ -376,6 +451,8 @@ const vueManche = (p) => ({
   duration: CONFIG.ROUND_DURATION_MS,
   hintCosts: CONFIG.HINT_COSTS,
   hintCredits: CONFIG.HINT_CREDITS,
+  hintLabels: libellesIndices(),
+  posterStyle: styleAffiche(),
 });
 
 function demarrerManche(p) {
@@ -460,7 +537,7 @@ app.post("/api/solo/next", (req, res) => {
   parties.delete(user.id);
   if (p.mode === "ranked") addRankedPoints(user.id, p.score);
   grantPoints(user.id, p.score);
-  grantCredits(user.id, CREDITS_PER_GAME);
+  grantCredits(user.id, REGLAGES.creditsParPartie);
   res.json({
     ok: true, fini: true, score: p.score, mode: p.mode,
     credits: getCredits(user.id), points: getPoints(user.id),
@@ -567,6 +644,21 @@ function buildChoices(movie) {
   return melange([movie, ...leurres].map((m) => ({ id: m.id, title: m.title })));
 }
 
+/** Libellés des indices actifs, tels que définis dans l'administration. */
+const libellesIndices = () =>
+  Object.fromEntries(Object.entries(REGLAGES.indices)
+    .filter(([, v]) => v.actif).map(([k, v]) => [k, v.libelle]));
+
+/**
+ * Recadrage de l'image d'indice. Un zoom supérieur à 100 % rogne les bords :
+ * le titre imprimé et les visages en gros plan disparaissent souvent, ce qui
+ * rend l'indice utile sans donner la réponse.
+ */
+const styleAffiche = () => {
+  const p = REGLAGES.indices.poster;
+  return { zoom: p.zoom ?? 100, cadrage: p.cadrage || "center", flou: p.flou ?? 0 };
+};
+
 /** Motif du titre : un tiret par lettre, espaces et ponctuation conservés. */
 function titlePattern(title) {
   return [...title].map((c) => (/[\p{L}\p{N}]/u.test(c) ? "–" : c)).join("");
@@ -650,6 +742,8 @@ function startRound(room) {
     duration: CONFIG.ROUND_DURATION_MS,
     hintCosts: CONFIG.HINT_COSTS,
     hintCredits: CONFIG.HINT_CREDITS,
+    hintLabels: libellesIndices(),
+    posterStyle: styleAffiche(),
     choices: room.choices,
   });
 
@@ -683,7 +777,7 @@ function endGame(room) {
   for (const p of room.players.values()) {
     if (room.mode === "ranked") addRankedPoints(p.userId, p.score); // classement permanent
     grantPoints(p.userId, p.score);                                  // cagnotte échangeable
-    grantCredits(p.userId, CREDITS_PER_GAME);
+    grantCredits(p.userId, REGLAGES.creditsParPartie);
   }
   for (const p of room.players.values())
     io.to(p.id).emit("game:end", { ranking, mode: room.mode, teams: state.teams,
@@ -929,6 +1023,7 @@ movies = await charger("movies", MOVIES_FILE, []);
 normaliserFilms();
 reports = await charger("reports", REPORTS_FILE, []);
 empreinteAdmin = await charger("adminPass", null, null);
+REGLAGES = { ...structuredClone(REGLAGES_DEFAUT), ...(await charger("reglages", null, {})) };
 if (!empreinteAdmin)
   console.warn("⚠️  Mot de passe d'administration par défaut : changez-le depuis /admin.html");
 await chargerUtilisateurs();
