@@ -110,6 +110,15 @@
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
   select{width:100%;background:var(--card);border:1px solid rgba(237,232,220,.14);color:var(--chalk);
     border-radius:10px;padding:12px 13px;font:inherit;font-size:16px}
+  .invitation{position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:80;
+    background:var(--velvet);border:1px solid var(--beam);border-radius:14px;padding:16px 18px;
+    max-width:min(360px,calc(100vw - 24px));box-shadow:0 14px 40px rgba(0,0,0,.6);
+    animation:descend .3s ease both}
+  .invitation b{display:block;font-size:15px}
+  .invitation small{display:block;color:var(--muted);font-size:13px;margin:2px 0 12px}
+  .invitation span{display:flex;gap:8px}
+  .invitation button{flex:1;padding:10px;font-size:14px}
+  @keyframes descend{from{opacity:0;transform:translateX(-50%) translateY(-18px)}to{opacity:1;transform:translateX(-50%)}}
   .emojis{display:flex;gap:6px;flex-wrap:wrap;margin-top:16px;justify-content:center}
   .emojis button{background:var(--card);border:1px solid rgba(237,232,220,.12);font-size:22px;
     padding:8px 11px;line-height:1;min-height:0}
@@ -122,6 +131,9 @@
     0%{opacity:0;transform:translateY(0) scale(.6)}
     12%{opacity:1;transform:translateY(-14px) scale(1.15)}
     100%{opacity:0;transform:translateY(-190px) scale(.9)}}
+  #voilePause{position:fixed;inset:0;z-index:75;background:rgba(10,12,22,.94);display:grid;place-items:center;padding:20px}
+  .boitePause{text-align:center;max-width:340px}
+  .grosChiffre{font-family:'JetBrains Mono',monospace;font-size:52px;color:var(--beam);margin:0 0 4px}
   #erreurJS{position:fixed;left:0;right:0;bottom:0;z-index:90;margin:0;padding:12px 16px;
     background:var(--ticket);color:#fff;font-size:13px;font-family:'JetBrains Mono',monospace;
     word-break:break-word}
@@ -338,6 +350,19 @@
         </div>
       </div>
 
+      <div id="inviterBloc" class="hidden" style="margin-top:16px;padding:14px;background:var(--card);border-radius:12px">
+        <p class="tag" style="margin-bottom:8px">Jouer avec vos amis</p>
+        <p class="note" style="margin:0 0 10px">Créez un salon, puis invitez vos amis en ligne
+        d'un clic. Ils recevront une notification.</p>
+        <div class="levels" id="modeAmis">
+          <button data-m="duel" aria-pressed="true">Duel</button>
+          <button data-m="ffa" aria-pressed="false">Chacun pour soi</button>
+          <button data-m="teams" aria-pressed="false">En équipes</button>
+        </div>
+        <div class="row"><button id="btnSalonAmis">Créer le salon</button></div>
+        <p class="feedback" id="amisMsg"></p>
+      </div>
+
       <div id="listeAmis" style="margin-top:14px"></div>
       <p class="note" id="amisVide"></p>
       <div class="row"><button class="ghost" id="btnAmisBack">Retour à l'accueil</button></div>
@@ -434,7 +459,10 @@
       <p class="feedback" id="guessFeedback"></p>
       <p class="grace hidden" id="grace"></p>
       <div class="emojis hidden" id="emojiBar"></div>
-      <div class="row"><button id="btnSkip" class="ghost hidden">Passer à la manche suivante</button></div>
+      <div class="row">
+        <button id="btnPause" class="ghost" style="flex:0 0 auto">⏸ Pause</button>
+        <button id="btnSkip" class="ghost hidden">Passer à la manche suivante</button>
+      </div>
       <ul class="players" id="roundPlayers"></ul>
     </div>
   </section>
@@ -490,6 +518,15 @@
       </div>
     </div>
   </section>
+
+  <div id="voilePause" class="hidden">
+    <div class="boitePause">
+      <p class="tag" style="margin-bottom:6px">Partie en pause</p>
+      <p class="grosChiffre" id="pauseReste">--</p>
+      <p class="note" id="pauseQui" style="margin:0 0 18px"></p>
+      <button id="btnReprendre">Reprendre la partie</button>
+    </div>
+  </div>
 
   <p id="erreurJS" class="hidden"></p>
 
@@ -772,6 +809,66 @@ $("btnMailInscription").onclick = () => authMail("inscription");
 $("mdp").addEventListener("keydown", e => { if (e.key === "Enter") authMail("connexion"); });
 
 
+
+/* ---------- Pause ---------- */
+let enPause = false;
+
+function afficherPause(actif, reste, par){
+  enPause = actif;
+  $("voilePause").classList.toggle("hidden", !actif);
+  $("btnPause").textContent = actif ? "▶ Reprendre" : "⏸ Pause";
+  if (actif){
+    clearInterval(state.timerId);            // le chronomètre s'arrête vraiment
+    $("pauseReste").textContent = `${Math.ceil((reste || 0) / 1000)} s`;
+    $("pauseQui").textContent = par ? `Mise en pause par ${par}.` : "Le temps est suspendu.";
+  } else if (reste > 0){
+    runBeam(reste);                          // il repart d'où il s'était arrêté
+  }
+}
+
+async function basculerPause(){
+  if (SANS_RESEAU.includes(state.mode)){
+    const r = await solo("pause", {reprendre: enPause});
+    if (r) afficherPause(r.enPause, r.reste);
+    return;
+  }
+  socket.emit("game:pause", {code: state.code, reprendre: enPause});
+}
+$("btnPause").onclick = basculerPause;
+$("btnReprendre").onclick = basculerPause;
+socket.on("game:paused", ({enPause: actif, reste, par}) => afficherPause(actif, reste, par));
+
+/** Enchaîner la manche suivante : disponible en solo, ou après avoir répondu. */
+$("btnSkip").onclick = () => {
+  if (SANS_RESEAU.includes(state.mode)) return mancheSuivanteSolo();
+  socket.emit("round:skip", {code: state.code});
+};
+
+/* ---------- Invitations reçues ---------- */
+socket.on("invite:recue", ({code, mode, de, avatar, joueurs}) => {
+  const noms = {duel:"Duel", ffa:"Chacun pour soi", teams:"En équipes"};
+  const el = document.createElement("div");
+  el.className = "invitation";
+  el.innerHTML = `<b>${avatar||"🎬"} ${esc(de)}</b> vous invite
+    <small>${noms[mode] || mode} · ${joueurs} joueur${joueurs>1?"s":""} · code ${code}</small>
+    <span><button data-oui>Rejoindre</button><button data-non class="ghost">Plus tard</button></span>`;
+  document.body.append(el);
+
+  const fermer = () => el.remove();
+  el.querySelector("[data-non]").onclick = fermer;
+  el.querySelector("[data-oui]").onclick = () => {
+    fermer();
+    socket.emit("room:join", {code}, res => {
+      if (!res?.ok) return;
+      state.code = res.code; state.mode = res.state.mode;
+      setChatVisible(true);
+      renderLobby(res.state);
+      show("lobby");
+    });
+  };
+  setTimeout(fermer, 45000);   // une invitation ne reste pas indéfiniment
+});
+
 /* ---------- Présence ---------- */
 function majPresence(n){
   $("onlineNb").textContent = n;
@@ -900,6 +997,7 @@ function ligneJoueur(j, boutons){
 
 function brancher(){
   $("listeAmis").querySelectorAll("[data-act]").forEach(b => b.onclick = async () => {
+    if (b.dataset.act === "inviter") return inviter(b.dataset.id, b);
     if (b.dataset.act === "bloquer" && !confirm("Bloquer ce joueur ?")) return;
     await agirAmi(b.dataset.act, b.dataset.id);
     ongletAmis === "recherche" ? chercher() : chargerAmis();
@@ -910,8 +1008,16 @@ function brancher(){
 async function chargerAmis(){
   const brut = await fetch("/api/friends").then(x => x.json()).catch(() => null);
   const r = { amis: [], recues: [], envoyees: [], bloques: [], ...(brut || {}) };
+  // le bloc d'invitation n'a de sens qu'avec au moins un ami, et en multijoueur
+  $("inviterBloc").classList.toggle("hidden",
+    ongletAmis !== "amis" || !r.amis.length || !window.tempsReelDispo);
+
   if (ongletAmis === "amis"){
-    $("listeAmis").innerHTML = r.amis.map(j => ligneJoueur(j, [["retirer","Retirer"],["bloquer","Bloquer"]])).join("");
+    const enSalon = Boolean(state.code);
+    $("listeAmis").innerHTML = r.amis.map(j => ligneJoueur(j,
+      enSalon && j.online
+        ? [["inviter","Inviter"], ["retirer","Retirer"], ["bloquer","Bloquer"]]
+        : [["retirer","Retirer"], ["bloquer","Bloquer"]])).join("");
     $("amisVide").textContent = r.amis.length ? "" :
       "Aucun ami pour l'instant. Cherchez un pseudo dans l'onglet Rechercher.";
   } else if (ongletAmis === "demandes"){
@@ -938,6 +1044,42 @@ async function chercher(){
 }
 $("btnChercher").onclick = chercher;
 $("quiChercher").addEventListener("keydown", e => { if (e.key === "Enter") chercher(); });
+
+/** Crée un salon depuis l'écran Amis, sans repasser par le menu. */
+let modeAmis = "duel";
+$("modeAmis").querySelectorAll("[data-m]").forEach(b => b.onclick = () => {
+  modeAmis = b.dataset.m;
+  $("modeAmis").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+});
+
+$("btnSalonAmis").onclick = () => {
+  if (state.code){
+    $("amisMsg").textContent = `Salon ${state.code} déjà ouvert — invitez vos amis ci-dessous.`;
+    $("amisMsg").className = "feedback good";
+    return chargerAmis();
+  }
+  socket.emit("room:create", {mode: modeAmis, difficulty: niveau}, res => {
+    if (!res?.ok) return ($("amisMsg").textContent = "Création impossible.");
+    state.code = res.code; state.mode = modeAmis; state.hostId = res.state.hostId;
+    setChatVisible(true);
+    $("amisMsg").textContent = `Salon ${res.code} créé. Invitez vos amis en ligne ci-dessous.`;
+    $("amisMsg").className = "feedback good";
+    chargerAmis();
+  });
+};
+
+/** Envoie une invitation à un ami connecté. */
+function inviter(amiId, bouton){
+  socket.emit("invite:send", {code: state.code, amiId}, res => {
+    if (!res?.ok){
+      $("amisMsg").textContent = "Invitation impossible.";
+      $("amisMsg").className = "feedback bad";
+      return;
+    }
+    bouton.textContent = res.livree ? "Invité ✓" : "Hors ligne";
+    bouton.disabled = true;
+  });
+}
 
 /** Pastille rouge sur le bouton Amis quand une demande attend. */
 async function majBadgeAmis(){
@@ -1231,6 +1373,7 @@ function afficherManche(m){
   $("hintPoster").classList.add("hidden");
   $("pattern").classList.add("hidden");
   $("grace").classList.add("hidden");
+  afficherPause(false, 0);
   $("roundPlayers").innerHTML = "";
   $("guessFeedback").textContent = ""; $("guessFeedback").className = "feedback";
   $("btnSkip").classList.remove("hidden");
@@ -1362,6 +1505,7 @@ $("btnJoin").onclick = () => {
 /* ---------- Lobby ---------- */
 function renderLobby(s){
   state.mode = s.mode;
+  state.hostId = s.hostId;
   $("marquee").innerHTML = s.code.split("").map(c => `<span class="flap">${c}</span>`).join("");
   $("lobbyCount").textContent = `${MODE_NAMES[s.mode]} — ${s.players.length} joueur${s.players.length>1?"s":""}`;
   $("lobbyPlayers").innerHTML = s.players.map(p =>
@@ -1388,8 +1532,11 @@ socket.on("round:start", ({roundIndex,total,synopsis,duration,hintCosts,hintCred
   $("roomCode").classList.toggle("hidden", ["solo","ranked"].includes(state.mode));
   renderChoices(choices || []);
   $("grace").classList.add("hidden");
+  afficherPause(false, 0);
   $("btnSkip").classList.toggle("hidden", !["solo","ranked"].includes(state.mode));
   $("emojiBar").classList.toggle("hidden", ["solo","ranked"].includes(state.mode));
+  $("btnPause").classList.toggle("hidden",
+    !SANS_RESEAU.includes(state.mode) && state.hostId !== socket.id);
   state.hintCredits = hintCredits || {};
   state.posterStyle = posterStyle;
   if (hintLabels) Object.assign(HINT_LABELS, hintLabels);

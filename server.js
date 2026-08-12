@@ -478,6 +478,7 @@ function demarrerManche(p) {
   p.startedAt = Date.now();
   p.hints = [];
   p.repondu = false;
+  p.pauseA = null;
   return vueManche(p);
 }
 
@@ -500,11 +501,31 @@ app.post("/api/solo/start", (req, res) => {
   res.json({ ok: true, mode: p.mode, ...demarrerManche(p) });
 });
 
+/**
+ * Pause en solo. Le temps écoulé est figé côté serveur, sinon un joueur
+ * pourrait mettre en pause, chercher la réponse, et marquer le score maximum.
+ */
+app.post("/api/solo/pause", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (!user) return;
+  const p = parties.get(user.id);
+  if (!p || p.repondu) return res.status(400).json({ error: "PAS_DE_MANCHE" });
+
+  if (req.body.reprendre) {
+    if (p.pauseA) { p.startedAt += Date.now() - p.pauseA; p.pauseA = null; }
+  } else if (!p.pauseA) {
+    p.pauseA = Date.now();
+  }
+  const reste = Math.max(0, CONFIG.ROUND_DURATION_MS - ((p.pauseA || Date.now()) - p.startedAt));
+  res.json({ ok: true, enPause: Boolean(p.pauseA), reste });
+});
+
 app.post("/api/solo/hint", (req, res) => {
   const user = exigeCompte(req, res);
   if (!user) return;
   const p = parties.get(user.id);
   if (!p || p.repondu) return res.status(400).json({ error: "PAS_DE_MANCHE" });
+  if (p.pauseA) return res.status(400).json({ error: "EN_PAUSE" });
 
   const type = req.body.type;
   if (!CONFIG.HINT_COSTS[type]) return res.status(400).json({ error: "UNKNOWN_HINT" });
@@ -525,6 +546,8 @@ app.post("/api/solo/answer", (req, res) => {
   if (!user) return;
   const p = parties.get(user.id);
   if (!p || p.repondu) return res.status(400).json({ error: "PAS_DE_MANCHE" });
+
+  if (p.pauseA) return res.status(400).json({ error: "EN_PAUSE" });
 
   const film = p.playlist[p.index];
   const juste = Number(req.body.choiceId) === film.id;
@@ -751,6 +774,8 @@ function startRound(room) {
   room.currentMovie = movie;
   room.choices = buildChoices(movie);
   room.startedAt = Date.now();
+  room.pauseA = null;
+  room.graceRestant = null;
   for (const p of room.players.values()) { p.hasAnswered = false; p.hints = []; }
 
   io.to(room.code).emit("round:start", {
@@ -882,6 +907,7 @@ io.on("connection", (socket) => {
     const room = rooms.get(code);
     const player = room?.players.get(socket.id);
     if (!room || !player || room.status !== "playing") return cb?.({ ok: false });
+    if (room.pauseA) return cb?.({ ok: false, error: "EN_PAUSE" });
     if (!CONFIG.HINT_COSTS[type]) return cb?.({ ok: false, error: "UNKNOWN_HINT" });
     if (player.hints.includes(type)) return cb?.({ ok: false, error: "ALREADY_BOUGHT" });
 
@@ -900,6 +926,7 @@ io.on("connection", (socket) => {
     const room = rooms.get(code);
     const player = room?.players.get(socket.id);
     if (!room || !player || room.status !== "playing" || player.hasAnswered) return cb?.({ ok: false });
+    if (room.pauseA) return cb?.({ ok: false, error: "EN_PAUSE" });
 
     const parClic = choiceId !== undefined && choiceId !== null;
     const correct = parClic
@@ -928,6 +955,7 @@ io.on("connection", (socket) => {
 
     // premier à trouver : les autres ont encore quelques secondes
     if (!room.graceTimer) {
+      room.graceDebut = Date.now();
       room.graceTimer = setTimeout(() => endRound(room), CONFIG.GRACE_AFTER_FIRST_MS);
       io.to(room.code).emit("round:grace", { ms: CONFIG.GRACE_AFTER_FIRST_MS, pseudo: player.pseudo });
     }
@@ -978,6 +1006,41 @@ io.on("connection", (socket) => {
     startRound(room);
   });
 
+  /**
+   * Pause d'une partie à plusieurs, réservée à l'hôte : sinon n'importe quel
+   * joueur pourrait figer la manche des autres. Le chronomètre est réellement
+   * suspendu, pas seulement masqué.
+   */
+  socket.on("game:pause", ({ code, reprendre }) => {
+    const room = rooms.get(code);
+    if (!room || room.hostId !== socket.id || room.status !== "playing") return;
+
+    if (reprendre) {
+      if (!room.pauseA) return;
+      const duree = Date.now() - room.pauseA;
+      room.startedAt += duree;
+      room.pauseA = null;
+      const reste = CONFIG.ROUND_DURATION_MS - (Date.now() - room.startedAt);
+      room.timer = setTimeout(() => endRound(room), Math.max(0, reste));
+      if (room.graceRestant) {
+        room.graceTimer = setTimeout(() => endRound(room), room.graceRestant);
+        room.graceRestant = null;
+      }
+      io.to(room.code).emit("game:paused", { enPause: false, reste });
+      return;
+    }
+
+    if (room.pauseA) return;
+    room.pauseA = Date.now();
+    clearTimeout(room.timer);
+    if (room.graceTimer) {
+      room.graceRestant = Math.max(0, CONFIG.GRACE_AFTER_FIRST_MS - (Date.now() - room.graceDebut || 0));
+      clearTimeout(room.graceTimer);
+    }
+    const reste = Math.max(0, CONFIG.ROUND_DURATION_MS - (room.pauseA - room.startedAt));
+    io.to(room.code).emit("game:paused", { enPause: true, reste, par: socket.data.user.pseudo });
+  });
+
   /** Réactions émoji pendant la partie, relayées à tout le salon. */
   const EMOJIS = ["😂", "😀", "😮", "😡", "😭", "❤️", "👏", "🤔"];
   let derniereReaction = 0;
@@ -989,6 +1052,26 @@ io.on("connection", (socket) => {
     if (Date.now() - derniereReaction < 700) return;   // évite le matraquage
     derniereReaction = Date.now();
     io.to(room.code).emit("reaction", { emoji, pseudo: player.pseudo, avatar: player.avatar });
+  });
+
+  /** Invite un ami dans le salon en cours. Il reçoit une notification. */
+  socket.on("invite:send", ({ code, amiId }, cb) => {
+    const room = rooms.get(code);
+    if (!room || !room.players.has(socket.id)) return cb?.({ ok: false });
+    if (statutRelation(user.id, amiId) !== "ami") return cb?.({ ok: false, error: "PAS_AMI" });
+    if (estBloque(user.id, amiId)) return cb?.({ ok: false, error: "BLOQUE" });
+
+    let livree = false;
+    for (const [, s] of io.of("/").sockets) {
+      if (s.data.user?.id !== amiId) continue;
+      s.emit("invite:recue", {
+        code: room.code, mode: room.mode,
+        de: user.pseudo, avatar: user.avatar,
+        joueurs: room.players.size,
+      });
+      livree = true;
+    }
+    cb?.({ ok: true, livree });
   });
 
   socket.on("room:leave", () => leaveAllRooms(socket));
