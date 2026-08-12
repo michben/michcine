@@ -329,6 +329,21 @@ app.delete("/api/movies/:id", requireAdmin, (req, res) => {
   res.status(204).end();
 });
 
+/** Cadrage spécifique à un film, ou null pour suivre le réglage global. */
+function cadragePropre(valeur) {
+  if (!valeur || valeur.suivreGlobal) return null;
+  const borne = (v, min, max, defaut) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : defaut;
+  };
+  return {
+    zoom: borne(valeur.zoom, 100, 400, 160),
+    flou: borne(valeur.flou, 0, 30, 0),
+    cadrage: ["center", "top", "bottom", "left", "right"].includes(valeur.cadrage)
+      ? valeur.cadrage : "center",
+  };
+}
+
 function sanitizeMovie(body) {
   const answers = Array.isArray(body.acceptedAnswers)
     ? body.acceptedAnswers
@@ -342,6 +357,8 @@ function sanitizeMovie(body) {
     actors: String(body.actors || "").trim(),
     poster: String(body.poster || "").trim(),
     still: String(body.still || "").trim(),
+    // cadrage propre à ce film : remplace le réglage global quand il est défini
+    cadrageImage: cadragePropre(body.cadrageImage),
     rating: Number(body.rating) || null,
     votes: Number(body.votes) || 0,
     difficulty: ["facile", "moyen", "difficile"].includes(body.difficulty)
@@ -452,7 +469,7 @@ const vueManche = (p) => ({
   hintCosts: CONFIG.HINT_COSTS,
   hintCredits: CONFIG.HINT_CREDITS,
   hintLabels: libellesIndices(),
-  posterStyle: styleAffiche(),
+  posterStyle: styleAffiche(p.playlist[p.index]),
 });
 
 function demarrerManche(p) {
@@ -654,7 +671,8 @@ const libellesIndices = () =>
  * le titre imprimé et les visages en gros plan disparaissent souvent, ce qui
  * rend l'indice utile sans donner la réponse.
  */
-const styleAffiche = () => {
+const styleAffiche = (film) => {
+  if (film?.cadrageImage) return film.cadrageImage;   // réglage propre au film
   const p = REGLAGES.indices.poster;
   return { zoom: p.zoom ?? 100, cadrage: p.cadrage || "center", flou: p.flou ?? 0 };
 };
@@ -743,7 +761,7 @@ function startRound(room) {
     hintCosts: CONFIG.HINT_COSTS,
     hintCredits: CONFIG.HINT_CREDITS,
     hintLabels: libellesIndices(),
-    posterStyle: styleAffiche(),
+    posterStyle: styleAffiche(movie),
     choices: room.choices,
   });
 

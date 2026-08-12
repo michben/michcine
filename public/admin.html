@@ -120,6 +120,43 @@
       <input id="actors" placeholder="Marlon Brando, Al Pacino">
       <label for="poster">URL de l'affiche</label>
       <input id="poster" placeholder="https://image.tmdb.org/t/p/w500/…">
+      <label for="still" style="margin-top:14px">Image d'indice (sans titre imprimé)</label>
+      <input id="still" placeholder="https://image.tmdb.org/t/p/w780/…">
+
+      <div style="margin-top:20px;padding-top:18px;border-top:1px solid rgba(237,232,220,.12)">
+        <p class="tag" style="margin-bottom:8px">Cadrage de l'image d'indice pour ce film</p>
+        <label style="display:flex;align-items:center;gap:9px;text-transform:none;letter-spacing:0;font-size:15px;color:var(--chalk);margin-bottom:12px">
+          <input type="checkbox" id="fSuivreGlobal" checked style="width:auto">
+          Utiliser le réglage général
+        </label>
+
+        <div id="fCadrageBloc" class="hidden">
+          <div class="grid">
+            <div>
+              <label for="fZoom">Zoom : <b id="fZoomVal">160</b> %</label>
+              <input id="fZoom" type="range" min="100" max="400" step="10" value="160">
+            </div>
+            <div>
+              <label for="fFlou">Flou : <b id="fFlouVal">0</b></label>
+              <input id="fFlou" type="range" min="0" max="30" step="1" value="0">
+            </div>
+          </div>
+          <label for="fCadrage" style="margin-top:10px">Zone conservée</label>
+          <select id="fCadrage">
+            <option value="center">Centre</option>
+            <option value="top">Haut</option>
+            <option value="bottom">Bas</option>
+            <option value="left">Gauche</option>
+            <option value="right">Droite</option>
+          </select>
+        </div>
+
+        <p class="tag" style="margin:16px 0 8px">Ce que verra le joueur</p>
+        <div style="width:280px;aspect-ratio:16/9;overflow:hidden;border-radius:10px;background:var(--card)">
+          <img id="fApercu" alt="" style="width:100%;height:100%;object-fit:cover;display:block">
+        </div>
+        <p class="msg" id="fApercuMsg" style="margin-top:8px"></p>
+      </div>
       <div class="row">
         <button id="btnSave">Enregistrer</button>
         <button id="btnCancel" class="ghost hidden">Annuler la modification</button>
@@ -244,7 +281,7 @@
 
 <script>
 const $ = id => document.getElementById(id);
-const FIELDS = ["title","synopsis","acceptedAnswers","year","director","actors","poster"];
+const FIELDS = ["title","synopsis","acceptedAnswers","year","director","actors","poster","still"];
 let token = "", movies = [], editingId = null;
 
 const api = (path, options = {}) => fetch(path, {
@@ -258,7 +295,7 @@ $("btnAuth").onclick = async () => {
   if (!res.ok) return ($("authMsg").textContent = "Clé refusée.");
   movies = await res.json();
   $("auth").classList.add("hidden"); $("app").classList.remove("hidden");
-  render(); loadStats();
+  render(); loadStats(); chargerReglages();
 };
 $("token").addEventListener("keydown", e => { if (e.key === "Enter") $("btnAuth").click(); });
 
@@ -279,7 +316,7 @@ function render(){
     <div class="item ${m.enabled === false ? "off" : ""}">
       <img src="${m.poster||""}" alt="" onerror="this.style.visibility='hidden'">
       <div>
-        <strong>${esc(m.title)}<span class="lvl">${m.difficulty||"?"}</span></strong>
+        <strong>${esc(m.title)}<span class="lvl">${m.difficulty||"?"}</span>${m.cadrageImage ? '<span class="lvl" style="border-color:var(--beam);color:var(--beam)">cadrage</span>' : ""}</strong>
         <small>${m.year||"—"} · ${m.rating ? m.rating+"/10 · " : ""}${esc(m.director||"réalisateur non renseigné")}</small>
       </div>
       <button class="ghost" data-toggle="${m.id}">${m.enabled === false ? "Activer" : "Retirer"}</button>
@@ -297,10 +334,57 @@ function render(){
   $("list").querySelectorAll("[data-del]").forEach(b => b.onclick = () => remove(Number(b.dataset.del)));
 }
 
+/* ---------- Cadrage propre à un film ---------- */
+function majApercuFilm(){
+  const url = $("still").value.trim() || $("poster").value.trim();
+  const img = $("fApercu");
+  img.src = url;
+  $("fApercuMsg").textContent = url ? "" : "Renseignez une image pour voir l'aperçu.";
+  $("fApercuMsg").className = "msg";
+
+  const global = $("fSuivreGlobal").checked;
+  $("fCadrageBloc").classList.toggle("hidden", global);
+
+  const source = global && reglages
+    ? reglages.indices.poster
+    : { zoom: $("fZoom").value, flou: $("fFlou").value, cadrage: $("fCadrage").value };
+
+  img.style.transform = `scale(${Number(source.zoom) / 100})`;
+  img.style.objectPosition = source.cadrage;
+  img.style.filter = Number(source.flou) ? `blur(${Number(source.flou) / 10}px)` : "";
+
+  if (global) $("fApercuMsg").textContent =
+    "Réglage général appliqué. Décochez pour ajuster ce film en particulier.";
+}
+
+for (const id of ["fSuivreGlobal","fZoom","fFlou","fCadrage","still","poster"])
+  $(id).addEventListener("input", () => {
+    $("fZoomVal").textContent = $("fZoom").value;
+    $("fFlouVal").textContent = $("fFlou").value;
+    majApercuFilm();
+  });
+
+/** Le formulaire lit et écrit le cadrage du film en cours d'édition. */
+function chargerCadrage(m){
+  const c = m?.cadrageImage;
+  $("fSuivreGlobal").checked = !c;
+  $("fZoom").value = c?.zoom ?? 160;
+  $("fFlou").value = c?.flou ?? 0;
+  $("fCadrage").value = c?.cadrage ?? "center";
+  $("fZoomVal").textContent = $("fZoom").value;
+  $("fFlouVal").textContent = $("fFlou").value;
+  majApercuFilm();
+}
+
+const cadrageSaisi = () => $("fSuivreGlobal").checked ? null : {
+  zoom: Number($("fZoom").value), flou: Number($("fFlou").value), cadrage: $("fCadrage").value,
+};
+
 function edit(id){
   const m = movies.find(x => x.id === id);
   editingId = id;
   FIELDS.forEach(f => $(f).value = Array.isArray(m[f]) ? m[f].filter(a=>a!==m.title).join(", ") : (m[f] ?? ""));
+  chargerCadrage(m);
   $("formTitle").textContent = `Modifier : ${m.title}`;
   $("btnCancel").classList.remove("hidden");
   window.scrollTo({top:0, behavior:"smooth"});
@@ -309,6 +393,7 @@ function edit(id){
 function resetForm(){
   editingId = null;
   FIELDS.forEach(f => $(f).value = "");
+  chargerCadrage(null);
   $("formTitle").textContent = "Nouveau film";
   $("btnCancel").classList.add("hidden");
 }
@@ -343,6 +428,7 @@ $("btnDisable").onclick = () => bulk(false);
 
 $("btnSave").onclick = async () => {
   const body = Object.fromEntries(FIELDS.map(f => [f, $(f).value.trim()]));
+  body.cadrageImage = cadrageSaisi();
   if (!body.title || !body.synopsis){
     $("formMsg").textContent = "Le titre et le synopsis sont obligatoires.";
     $("formMsg").className = "msg err"; return;
