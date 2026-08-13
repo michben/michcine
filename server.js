@@ -23,7 +23,8 @@ import { mountAuth, userFromCookie, addRankedPoints,
          marquerEnLigne, marquerHorsLigne, estEnLigne, nombreEnLigne,
          estModerateur, definirRole, ROLES, chargerUtilisateurs,
          relations, demanderAmi, accepterAmi, retirerAmi, bloquer,
-         chercherJoueurs, statutRelation, estBloque, emailAValider } from "./auth-x.js";
+         chercherJoueurs, statutRelation, estBloque, emailAValider,
+         leaderboard, reinitialiserClassement } from "./auth-x.js";
 
 const app = express();
 app.use(express.json());
@@ -81,6 +82,8 @@ const REGLAGES_DEFAUT = {
   creditsDepart: 12,
   creditsParPartie: 4,
   pointsParTicket: 250,
+  saisonJours: 20,                   // durée d'une saison classée
+  partiesClasseesParSaison: 5,       // parties classées autorisées par joueur
   graceApresPremier: 15,             // secondes
   indices: {
     letters:  { actif: true, points: 150, tickets: 1, libelle: "Nombre de lettres" },
@@ -158,6 +161,7 @@ const saveMovies = () => sauver("movies", movies, MOVIES_FILE);
 
 const REPORTS_FILE = new URL("./reports.json", import.meta.url);
 let reports = [];
+let palmares = [];   // podiums des saisons écoulées
 const saveReports = () => sauver("reports", reports, REPORTS_FILE);
 
 const MOTIFS = {
@@ -492,6 +496,9 @@ app.post("/api/solo/start", (req, res) => {
   );
   if (!vivier.length) return res.status(400).json({ error: "NO_MOVIES" });
 
+  if (mode === "ranked" && partiesRestantes(user.id) <= 0)
+    return res.status(400).json({ error: "PLUS_DE_PARTIES", ...infoSaison() });
+
   const p = {
     mode: mode === "ranked" ? "ranked" : "solo",
     playlist: melange(vivier).slice(0, Math.min(Number(rounds) || 10, vivier.length)),
@@ -575,7 +582,10 @@ app.post("/api/solo/next", (req, res) => {
 
   // fin de partie : on crédite une seule fois, puis on oublie la partie
   parties.delete(user.id);
-  if (p.mode === "ranked") addRankedPoints(user.id, p.score);
+  if (p.mode === "ranked") {
+    addRankedPoints(user.id, p.score);
+    consommerPartieClassee(user.id);
+  }
   grantPoints(user.id, p.score);
   grantCredits(user.id, REGLAGES.creditsParPartie);
   res.json({
@@ -624,6 +634,19 @@ app.post("/api/friends/:action", (req, res) => {
 });
 
 app.get("/api/presence", (_req, res) => res.json({ enLigne: nombreEnLigne() }));
+
+app.get("/api/leaderboard", (req, res) =>
+  res.json(leaderboard(50, req.query.type === "global" ? "global" : "saison"))
+);
+
+app.get("/api/saison", (req, res) => {
+  const user = userFromCookie(req.headers.cookie);
+  res.json({
+    ...infoSaison(),
+    partiesRestantes: user ? partiesRestantes(user.id) : null,
+    palmares: palmares.slice(-3).reverse(),
+  });
+});
 
 app.get("/api/config", (_req, res) => res.json({
   tipUrl: CONFIG.TIP_URL, maxPlayers: CONFIG.MAX_PLAYERS, pointsParTicket: CONFIG.POINTS_PAR_TICKET,
@@ -682,6 +705,64 @@ function buildChoices(movie) {
   }
 
   return melange([movie, ...leurres].map((m) => ({ id: m.id, title: m.title })));
+}
+
+/* ------------------------------------------------------------------ */
+/* Saisons classées                                                    */
+/*                                                                     */
+/* Le classement classé se réinitialise tous les N jours. Chaque joueur */
+/* dispose d'un nombre limité de parties : le classement récompense la  */
+/* régularité et la justesse, pas le temps passé.                      */
+/* ------------------------------------------------------------------ */
+
+let saison = null;
+
+function chargerSaison(brut) {
+  saison = brut || { numero: 1, debut: Date.now(), participations: {} };
+  verifierSaison();
+}
+
+/** Ouvre une nouvelle saison si la précédente est arrivée à échéance. */
+function verifierSaison() {
+  const duree = REGLAGES.saisonJours * 24 * 60 * 60 * 1000;
+  if (Date.now() - saison.debut < duree) return false;
+
+  archiverSaison();
+  saison = { numero: saison.numero + 1, debut: Date.now(), participations: {} };
+  sauver("saison", saison);
+  console.log(`Nouvelle saison classée : n° ${saison.numero}`);
+  return true;
+}
+
+/** Conserve le podium de la saison écoulée, puis remet les scores à zéro. */
+function archiverSaison() {
+  const podium = leaderboard(10).map(({ rank, pseudo, avatar, totalScore }) =>
+    ({ rank, pseudo, avatar, totalScore }));
+  palmares.push({ numero: saison.numero, fin: Date.now(), podium });
+  sauver("palmares", palmares);
+  reinitialiserClassement();
+}
+
+const infoSaison = () => {
+  verifierSaison();
+  const fin = saison.debut + REGLAGES.saisonJours * 24 * 60 * 60 * 1000;
+  return {
+    numero: saison.numero,
+    debut: saison.debut,
+    fin,
+    joursRestants: Math.max(0, Math.ceil((fin - Date.now()) / 86400000)),
+    partiesMax: REGLAGES.partiesClasseesParSaison,
+  };
+};
+
+const partiesRestantes = (userId) => {
+  verifierSaison();
+  return Math.max(0, REGLAGES.partiesClasseesParSaison - (saison.participations[userId] || 0));
+};
+
+function consommerPartieClassee(userId) {
+  saison.participations[userId] = (saison.participations[userId] || 0) + 1;
+  sauver("saison", saison);
 }
 
 /** Libellés des indices actifs, tels que définis dans l'administration. */
@@ -1124,6 +1205,8 @@ movies = await charger("movies", MOVIES_FILE, []);
 normaliserFilms();
 reports = await charger("reports", REPORTS_FILE, []);
 empreinteAdmin = await charger("adminPass", null, null);
+palmares = await charger("palmares", null, []);
+chargerSaison(await charger("saison", null, null));
 REGLAGES = { ...structuredClone(REGLAGES_DEFAUT), ...(await charger("reglages", null, {})) };
 if (!empreinteAdmin)
   console.warn("⚠️  Mot de passe d'administration par défaut : changez-le depuis /admin.html");

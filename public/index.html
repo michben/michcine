@@ -131,7 +131,12 @@
     0%{opacity:0;transform:translateY(0) scale(.6)}
     12%{opacity:1;transform:translateY(-14px) scale(1.15)}
     100%{opacity:0;transform:translateY(-190px) scale(.9)}}
-  #voilePause{position:fixed;inset:0;z-index:75;background:rgba(10,12,22,.94);display:grid;place-items:center;padding:20px}
+  /* La pause doit rendre le synopsis réellement illisible : un simple voile
+     opaque se contourne en jouant sur le contraste ou en sélectionnant le
+     texte. On floute donc la page elle-même, en plus du voile. */
+  body.enPause > .wrap{filter:blur(14px) saturate(.4);pointer-events:none;user-select:none}
+  #voilePause{position:fixed;inset:0;z-index:75;display:grid;place-items:center;padding:20px;
+    background:rgba(10,12,22,.97);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
   .boitePause{text-align:center;max-width:340px}
   .grosChiffre{font-family:'JetBrains Mono',monospace;font-size:52px;color:var(--beam);margin:0 0 4px}
   #erreurJS{position:fixed;left:0;right:0;bottom:0;z-index:90;margin:0;padding:12px 16px;
@@ -382,7 +387,20 @@
   <!-- CLASSEMENT GÉNÉRAL -->
   <section id="board" class="hidden">
     <div class="card">
-      <p class="tag">Classement général — parties classées</p>
+      <div class="tabsAmis" id="tabsClassement">
+        <button data-c="saison" aria-pressed="true">Saison en cours</button>
+        <button data-c="global" aria-pressed="false">Classement global</button>
+      </div>
+
+      <div id="bandeauSaison" style="background:var(--card);border-radius:12px;padding:14px;margin-top:14px">
+        <p style="margin:0;font-size:15px"><b id="saisonNum" style="color:var(--beam)">Saison 1</b>
+          <span id="saisonReste" style="color:var(--muted)"></span></p>
+        <p style="margin:8px 0 0;font-size:14px;color:var(--muted)" id="saisonParties"></p>
+        <p style="margin:10px 0 0;font-size:13px;line-height:1.5;color:var(--muted)">
+          🎁 Les meilleures places de fin de saison réservent des surprises.
+          Le podium est conservé au palmarès.</p>
+      </div>
+
       <ol class="rank" id="globalRank"></ol>
       <p class="note" id="boardEmpty"></p>
       <div class="row"><button class="ghost" id="btnBoardBack">Retour à l'accueil</button></div>
@@ -407,7 +425,7 @@
       <button class="mode" data-mode="duel"><span class="ic">⚔️</span><span><b>Duel</b><small>Deux joueurs, face à face</small></span></button>
       <button class="mode" data-mode="ffa"><span class="ic">🍿</span><span><b>Chacun pour soi</b><small>De 2 à 16 joueurs, classement individuel</small></span></button>
       <button class="mode" data-mode="teams"><span class="ic">🏆</span><span><b>En équipes</b><small>Deux équipes, scores cumulés</small></span></button>
-      <button class="mode" data-mode="ranked"><span class="ic">📈</span><span><b>Partie classée</b><small>Vos points comptent au classement général</small></span></button>
+      <button class="mode" data-mode="ranked"><span class="ic">📈</span><span><b>Partie classée</b><small id="rankedSous">Vos points comptent au classement de la saison</small></span></button>
     </div>
     <div class="row">
       <button class="ghost" id="btnExchange">Espace échange</button>
@@ -816,6 +834,7 @@ let enPause = false;
 function afficherPause(actif, reste, par){
   enPause = actif;
   $("voilePause").classList.toggle("hidden", !actif);
+  document.body.classList.toggle("enPause", actif);
   $("btnPause").textContent = actif ? "▶ Reprendre" : "⏸ Pause";
   if (actif){
     clearInterval(state.timerId);            // le chronomètre s'arrête vraiment
@@ -878,7 +897,7 @@ socket.on("presence", ({enLigne}) => majPresence(enLigne));
 fetch("/api/presence").then(r => r.json()).then(d => majPresence(d.enLigne)).catch(() => {});
 
 /* ---------- Espace échange ---------- */
-let points = 0, tauxTicket = 250, choixEchange = 0;
+let points = 0, tauxTicket = 250, choixEchange = 0, saisonInfo = null;
 const setPoints = n => { if (typeof n === "number") points = n; $("xPoints").textContent = points; };
 
 $("btnExchange").onclick = () => {
@@ -1151,12 +1170,37 @@ $("btnModeration").onclick = async () => {
 $("btnModBack").onclick = () => show("menu");
 
 /* ---------- Classement général ---------- */
+let typeClassement = "saison";
+
+$("tabsClassement").querySelectorAll("[data-c]").forEach(b => b.onclick = () => {
+  typeClassement = b.dataset.c;
+  $("tabsClassement").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  $("bandeauSaison").classList.toggle("hidden", typeClassement !== "saison");
+  $("btnBoard").click();
+});
+
+/** Informations de saison : durée restante et parties classées disponibles. */
+async function chargerSaison(){
+  const s = await fetch("/api/saison").then(r => r.json()).catch(() => null);
+  if (!s) return;
+  saisonInfo = s;
+  $("saisonNum").textContent = `Saison ${s.numero}`;
+  $("saisonReste").textContent = s.joursRestants > 1
+    ? ` — encore ${s.joursRestants} jours`
+    : s.joursRestants === 1 ? " — dernier jour" : " — dernières heures";
+  $("saisonParties").textContent = s.partiesRestantes === null ? ""
+    : s.partiesRestantes > 0
+      ? `Il vous reste ${s.partiesRestantes} partie${s.partiesRestantes>1?"s":""} classée${s.partiesRestantes>1?"s":""} sur ${s.partiesMax} cette saison.`
+      : `Vous avez utilisé vos ${s.partiesMax} parties classées. Rendez-vous à la saison prochaine.`;
+}
+
 $("btnBoard").onclick = async () => {
   $("globalRank").innerHTML = "";
   $("boardEmpty").textContent = "Chargement…";
   show("board");
+  if (typeClassement === "saison") chargerSaison();
   let list = [];
-  try { list = await fetch("/api/leaderboard").then(r => r.json()); }
+  try { list = await fetch(`/api/leaderboard?type=${typeClassement}`).then(r => r.json()); }
   catch { $("boardEmpty").textContent = "Classement indisponible pour le moment."; return; }
 
   if (!Array.isArray(list)) list = [];
@@ -1165,8 +1209,12 @@ $("btnBoard").onclick = async () => {
     (u.role && u.role !== "joueur" ? `<span class="badge-role">${esc(u.role)}</span>` : "") +
     `<b>${u.totalScore} pts</b></li>`).join("");
   $("boardEmpty").textContent = list.length
-    ? `${list.length} joueur${list.length>1?"s":""} classé${list.length>1?"s":""} · une partie classée fait monter votre total.`
-    : "Aucune partie terminée pour l'instant. Lancez une partie classée pour ouvrir le classement.";
+    ? (typeClassement === "saison"
+        ? `${list.length} joueur${list.length>1?"s":""} en lice cette saison.`
+        : `${list.length} joueur${list.length>1?"s":""} · total cumulé depuis l'inscription.`)
+    : (typeClassement === "saison"
+        ? "Personne n'a encore joué de partie classée cette saison. À vous l'honneur."
+        : "Aucune partie terminée pour l'instant.");
 };
 $("btnBoardBack").onclick = () => show("menu");
 
@@ -1462,8 +1510,16 @@ document.querySelectorAll(".mode").forEach(btn => btn.onclick = async () => {
   const mode = btn.dataset.mode;
 
   if (SANS_RESEAU.includes(mode)){
-    const m = await solo("start", {mode, difficulty: niveau});
-    if (!m) return ($("joinError").textContent = "Aucun film disponible pour ce niveau.");
+    const res = await fetch("/api/solo/start", {method:"POST",
+      headers:{"Content-Type":"application/json"}, body: JSON.stringify({mode, difficulty: niveau})});
+    const m = res.ok ? await res.json() : null;
+    if (!m){
+      const err = await res.json().catch(() => ({}));
+      $("joinError").textContent = err.error === "PLUS_DE_PARTIES"
+        ? `Vos ${err.partiesMax} parties classées de la saison ${err.numero} sont épuisées. Nouvelle saison dans ${err.joursRestants} jour${err.joursRestants>1?"s":""}.`
+        : "Aucun film disponible pour ce niveau.";
+      return;
+    }
     state.mode = mode; state.code = null;
     setChatVisible(false);
     return afficherManche(m);
