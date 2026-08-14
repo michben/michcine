@@ -85,6 +85,7 @@ const REGLAGES_DEFAUT = {
   saisonJours: 20,                   // durée d'une saison classée
   partiesClasseesParSaison: 5,       // parties classées autorisées par joueur
   graceApresPremier: 15,             // secondes
+  vitesseSynopsis: 2800,             // durée totale du dévoilement, en millisecondes (0 = désactivé)
   indices: {
     letters:  { actif: true, points: 150, tickets: 1, libelle: "Nombre de lettres" },
     year:     { actif: true, points: 100, tickets: 1, libelle: "Année" },
@@ -213,6 +214,7 @@ app.put("/api/admin/reglages", requireAdmin, (req, res) => {
   REGLAGES.creditsParPartie = borne(r.creditsParPartie, 0, 100, REGLAGES.creditsParPartie);
   REGLAGES.pointsParTicket  = borne(r.pointsParTicket, 10, 100000, REGLAGES.pointsParTicket);
   REGLAGES.graceApresPremier= borne(r.graceApresPremier, 0, 120, REGLAGES.graceApresPremier);
+  REGLAGES.vitesseSynopsis  = borne(r.vitesseSynopsis, 0, 10000, REGLAGES.vitesseSynopsis);
 
   for (const [cle, valeurs] of Object.entries(r.indices || {})) {
     const cible = REGLAGES.indices[cle];
@@ -482,6 +484,7 @@ const vueManche = (p) => ({
   hintCredits: CONFIG.HINT_CREDITS,
   hintLabels: libellesIndices(),
   posterStyle: styleAffiche(p.playlist[p.index]),
+  vitesseSynopsis: REGLAGES.vitesseSynopsis,
 });
 
 function demarrerManche(p) {
@@ -936,6 +939,7 @@ function startRound(room) {
     hintCredits: CONFIG.HINT_CREDITS,
     hintLabels: libellesIndices(),
     posterStyle: styleAffiche(movie),
+    vitesseSynopsis: REGLAGES.vitesseSynopsis,
     choices: room.choices,
   });
 

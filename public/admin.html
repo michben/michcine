@@ -235,6 +235,10 @@
           <div><label for="rPartie">Tickets gagnés par partie</label><input id="rPartie" type="number" min="0" max="100"></div>
           <div><label for="rTaux">Points pour 1 ticket (échange)</label><input id="rTaux" type="number" min="10" max="100000"></div>
           <div><label for="rGrace">Délai après la 1re bonne réponse (s)</label><input id="rGrace" type="number" min="0" max="120"></div>
+          <div>
+            <label for="rVitesse">Dévoilement du synopsis (ms) — 0 pour désactiver</label>
+            <input id="rVitesse" type="number" min="0" max="10000" step="100">
+          </div>
         </div>
         <div class="row">
           <button id="btnSaveReglages">Enregistrer les réglages</button>
@@ -487,7 +491,8 @@ $("tabReglages").onclick = () => tab("reglages");
 let reglages = null;
 
 const CHAMPS = { rDuree:"roundDuration", rBase:"basePoints", rDepart:"creditsDepart",
-                 rPartie:"creditsParPartie", rTaux:"pointsParTicket", rGrace:"graceApresPremier" };
+                 rPartie:"creditsParPartie", rTaux:"pointsParTicket", rGrace:"graceApresPremier",
+                 rVitesse:"vitesseSynopsis" };
 
 async function chargerReglages(){
   const res = await api("/api/admin/reglages");

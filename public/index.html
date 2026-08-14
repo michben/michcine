@@ -724,6 +724,14 @@ const AVATARS = ["🎬","🍿","🎭","🕶️","👽","🦖","🤖","🧛","�
 const HINT_LABELS = {letters:"Nombre de lettres", year:"Année", director:"Réalisateur",
                      actors:"Acteurs", poster:"Photo du film"};
 const MODE_NAMES = {solo:"Solo", duel:"Duel", ffa:"Chacun pour soi", teams:"En équipes", ranked:"Partie classée"};
+/** Le chat est disponible dès qu'on est dans un salon, quel que soit
+ *  l'écran depuis lequel il a été créé. */
+function setChatVisible(on){
+  $("chatToggle").classList.toggle("hidden", !on);
+  if (!on){ $("chatPanel").classList.add("hidden"); $("chatLog").innerHTML = ""; chatUnread = 0; }
+}
+
+let chatUnread = 0;   // déclaré tôt : setChatVisible est appelé bien avant sa définition
 let credits = 0;
 function setCredits(n){
   if (typeof n === "number") credits = n;
@@ -913,8 +921,9 @@ $("mdp").addEventListener("keydown", e => { if (e.key === "Enter") authMail("con
 function derouler(texte){
   const zone = $("synopsis");
   const sobre = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const duree = state.vitesseSynopsis ?? 2800;   // réglable depuis l'administration
 
-  if (sobre){
+  if (sobre || duree === 0){
     zone.textContent = texte;
     $("indiceLecture").classList.add("hidden");
     return;
@@ -922,7 +931,7 @@ function derouler(texte){
 
   const mots = texte.split(/(\s+)/);
   const utiles = mots.filter(m => m.trim()).length;
-  const pas = Math.min(60, Math.max(18, 1400 / Math.max(1, utiles)));  // 1,4 s au total
+  const pas = Math.min(200, Math.max(20, duree / Math.max(1, utiles)));
 
   zone.classList.remove("termine");
   zone.innerHTML = mots.map((m, i) => {
@@ -934,7 +943,7 @@ function derouler(texte){
 
   $("indiceLecture").classList.remove("hidden");
   clearTimeout(state.lectureId);
-  state.lectureId = setTimeout(() => $("indiceLecture").classList.add("hidden"), utiles * pas + 400);
+  state.lectureId = setTimeout(() => $("indiceLecture").classList.add("hidden"), utiles * pas + 600);
 }
 
 /** Tout afficher d'un coup, pour qui lit plus vite que l'animation. */
@@ -1600,7 +1609,6 @@ function bravo(points){
 }
 
 /* ---------- Chat de la partie ---------- */
-let chatUnread = 0;
 const chatOpen = () => !$("chatPanel").classList.contains("hidden");
 
 $("chatToggle").onclick = () => {
@@ -1634,11 +1642,7 @@ socket.on("chat:message", ({pseudo, avatar, text}) => {
 socket.on("chat:blocked", () =>
   chatLine("Message bloqué : il contenait la réponse de la manche en cours.", "sys"));
 
-/** Le chat est disponible dès qu'on est dans un salon. */
-function setChatVisible(on){
-  $("chatToggle").classList.toggle("hidden", !on);
-  if (!on){ $("chatPanel").classList.add("hidden"); $("chatLog").innerHTML = ""; chatUnread = 0; }
-}
+
 
 /* ---------- Bannière : retour au menu ---------- */
 $("banner").onclick = () => {
@@ -1673,6 +1677,7 @@ async function solo(chemin, corps){
 function afficherManche(m){
   state.hintCosts = m.hintCosts; state.hintCredits = m.hintCredits;
   state.posterStyle = m.posterStyle;
+  state.vitesseSynopsis = m.vitesseSynopsis;
   if (m.hintLabels) Object.assign(HINT_LABELS, m.hintLabels);
   state.bought = {}; state.answered = false;
   $("roundLabel").textContent = `Manche ${m.roundIndex + 1} sur ${m.total}`;
@@ -1844,7 +1849,7 @@ $("btnStart").onclick = () => socket.emit("game:start", {code:state.code});
 socket.on("room:update", renderLobby);
 
 /* ---------- Manche ---------- */
-socket.on("round:start", ({roundIndex,total,synopsis,duration,hintCosts,hintCredits,choices,posterStyle,hintLabels}) => {
+socket.on("round:start", ({roundIndex,total,synopsis,duration,hintCosts,hintCredits,choices,posterStyle,hintLabels,vitesseSynopsis}) => {
   $("dots").innerHTML = Array.from({length: total}, (_, i) =>
     `<i class="${i < roundIndex ? "done" : i === roundIndex ? "now" : ""}"></i>`).join("");
   $("roomCode").textContent = state.code || "";
@@ -1858,6 +1863,7 @@ socket.on("round:start", ({roundIndex,total,synopsis,duration,hintCosts,hintCred
     !SANS_RESEAU.includes(state.mode) && state.hostId !== socket.id);
   state.hintCredits = hintCredits || {};
   state.posterStyle = posterStyle;
+  state.vitesseSynopsis = vitesseSynopsis;
   if (hintLabels) Object.assign(HINT_LABELS, hintLabels);
   state.hintCosts = hintCosts; state.bought = {}; state.answered = false;
   $("roundLabel").textContent = `Manche ${roundIndex+1} sur ${total}`;
