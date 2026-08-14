@@ -604,6 +604,15 @@ app.post("/api/solo/next", (req, res) => {
 
 /* ---------- amis ---------- */
 
+/**
+ * Prévient un joueur connecté, sur tous ses onglets ouverts.
+ * Silencieux s'il est hors ligne : il verra la pastille à sa prochaine visite.
+ */
+function notifier(userId, charge) {
+  for (const [, socket] of io.of("/").sockets)
+    if (socket.data.user?.id === userId) socket.emit("notif", charge);
+}
+
 app.get("/api/friends", (req, res) => {
   const user = exigeCompte(req, res);
   if (user) res.json(relations(user.id));
@@ -644,9 +653,17 @@ app.post("/api/friends/:action", (req, res) => {
   const action = ACTIONS[req.params.action];
   if (!action) return res.status(400).json({ error: "ACTION_INCONNUE" });
 
-  const resultat = action(user.id, String(req.body.id || ""));
+  const cible = String(req.body.id || "");
+  const resultat = action(user.id, cible);
   if (resultat?.error) return res.status(400).json(resultat);
-  res.json({ ...resultat, relation: statutRelation(user.id, req.body.id) });
+
+  // l'autre joueur est prévenu immédiatement s'il est connecté
+  if (req.params.action === "demander")
+    notifier(cible, { type: "demande", de: user.pseudo, avatar: user.avatar, photo: user.photo || null });
+  if (req.params.action === "accepter")
+    notifier(cible, { type: "acceptee", de: user.pseudo, avatar: user.avatar, photo: user.photo || null });
+
+  res.json({ ...resultat, relation: statutRelation(user.id, cible) });
 });
 
 app.get("/api/presence", (_req, res) => res.json({ enLigne: nombreEnLigne() }));

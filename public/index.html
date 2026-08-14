@@ -76,7 +76,17 @@
   .players li.B{box-shadow:inset 0 0 0 1px var(--teal)}
   .beam{height:4px;background:var(--card);border-radius:99px;overflow:hidden;margin-bottom:18px}
   .beam i{display:block;height:100%;width:100%;transform-origin:left;background:linear-gradient(90deg,var(--ticket),var(--beam));transition:transform .25s linear}
-  .synopsis{font-size:clamp(17px,4.4vw,22px);line-height:1.5;margin:0}
+  .synopsis{font-size:clamp(17px,4.4vw,22px);line-height:1.5;margin:0;cursor:default}
+  /* Chaque mot apparaît en fondu, comme si le texte se lisait tout seul.
+     Volontairement rapide : le chronomètre tourne pendant ce temps. */
+  .synopsis .mot{display:inline-block;opacity:0;filter:blur(3px);transform:translateY(6px);
+    animation:apparait .34s ease forwards}
+  .synopsis .mot.masque{color:var(--ticket);letter-spacing:.06em}
+  @keyframes apparait{to{opacity:1;filter:none;transform:none}}
+  .synopsis.termine .mot{animation:none;opacity:1;filter:none;transform:none}
+  .indiceLecture{color:var(--muted);font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    margin:10px 0 0;opacity:.75}
+  @media (prefers-reduced-motion:reduce){.synopsis .mot{animation:none;opacity:1;filter:none;transform:none}}
   .choices{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px}
   .choices button{background:var(--card);color:var(--chalk);border:1px solid rgba(237,232,220,.14);
     font-weight:500;font-size:15px;padding:16px 12px;text-align:center;line-height:1.3;min-height:64px}
@@ -165,7 +175,20 @@
   .amiLigne{display:flex;gap:10px;align-items:center;padding:13px 0;border-top:1px solid rgba(237,232,220,.1);flex-wrap:wrap}
   .amiLigne .nom{flex:1;min-width:130px}
   .amiLigne button{padding:9px 12px;font-size:13px}
-  .pastille{background:var(--ticket);color:#fff;font-size:11px;border-radius:10px;padding:1px 7px;margin-left:6px}
+  .pastille{background:var(--ticket);color:#fff;font-size:11px;font-weight:700;border-radius:10px;
+    min-width:20px;display:inline-grid;place-items:center;padding:2px 6px;margin-left:6px;
+    box-shadow:0 0 0 2px var(--velvet),0 2px 10px rgba(228,88,110,.6);animation:pulsePastille 2s ease-in-out infinite}
+  @keyframes pulsePastille{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
+  /* pastille sur les onglets internes de l'écran Amis */
+  .tabsAmis button .pastille{margin-left:5px;animation:none}
+  /* bandeau de notification, discret et éphémère */
+  .notif{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:85;
+    background:var(--velvet);border:1px solid var(--beam);border-radius:12px;padding:12px 18px;
+    display:flex;align-items:center;gap:11px;max-width:min(340px,calc(100vw - 28px));
+    box-shadow:0 12px 34px rgba(0,0,0,.6);cursor:pointer;animation:monteNotif .3s ease both}
+  .notif b{color:var(--beam)}
+  .notif small{display:block;color:var(--muted);font-size:12px}
+  @keyframes monteNotif{from{opacity:0;transform:translateX(-50%) translateY(16px)}to{opacity:1;transform:translateX(-50%)}}
   /* fenêtre d'action sur un joueur */
   #popJoueur{position:fixed;inset:0;background:rgba(10,12,22,.72);display:grid;place-items:center;z-index:70;padding:18px}
   #popJoueur .boite{background:var(--velvet);border:1px solid rgba(237,232,220,.14);border-radius:14px;
@@ -385,7 +408,7 @@
     <div class="card">
       <div class="tabsAmis" id="tabsAmis">
         <button data-onglet="amis" aria-pressed="true">Mes amis</button>
-        <button data-onglet="demandes" aria-pressed="false">Demandes</button>
+        <button data-onglet="demandes" aria-pressed="false">Demandes<span id="badgeDemandes" class="pastille hidden">0</span></button>
         <button data-onglet="recherche" aria-pressed="false">Rechercher</button>
       </div>
 
@@ -511,6 +534,7 @@
       </div>
       <p class="tag" id="roundLabel">Manche 1</p>
       <p class="synopsis" id="synopsis"></p>
+      <p class="indiceLecture hidden" id="indiceLecture">Touchez le texte pour tout afficher</p>
       <p class="pattern hidden" id="pattern"></p>
       <img id="hintPoster" class="poster hidden" alt="Photo du film">
       <p class="wallet" id="walletRound">🎟️ <b>0</b> crédits</p>
@@ -881,6 +905,44 @@ $("mdp").addEventListener("keydown", e => { if (e.key === "Enter") authMail("con
 
 
 
+/**
+ * Dévoile le synopsis mot à mot. L'effet dure moins d'une seconde et demie
+ * quelle que soit la longueur : il donne du rythme sans faire perdre de temps.
+ * Un clic sur le texte affiche tout immédiatement.
+ */
+function derouler(texte){
+  const zone = $("synopsis");
+  const sobre = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  if (sobre){
+    zone.textContent = texte;
+    $("indiceLecture").classList.add("hidden");
+    return;
+  }
+
+  const mots = texte.split(/(\s+)/);
+  const utiles = mots.filter(m => m.trim()).length;
+  const pas = Math.min(60, Math.max(18, 1400 / Math.max(1, utiles)));  // 1,4 s au total
+
+  zone.classList.remove("termine");
+  zone.innerHTML = mots.map((m, i) => {
+    if (!m.trim()) return m;
+    const masque = m.includes("▪") ? " masque" : "";
+    const rang = mots.slice(0, i).filter(x => x.trim()).length;
+    return `<span class="mot${masque}" style="animation-delay:${Math.round(rang * pas)}ms">${esc(m)}</span>`;
+  }).join("");
+
+  $("indiceLecture").classList.remove("hidden");
+  clearTimeout(state.lectureId);
+  state.lectureId = setTimeout(() => $("indiceLecture").classList.add("hidden"), utiles * pas + 400);
+}
+
+/** Tout afficher d'un coup, pour qui lit plus vite que l'animation. */
+$("synopsis").onclick = () => {
+  $("synopsis").classList.add("termine");
+  $("indiceLecture").classList.add("hidden");
+};
+
 /* ---------- Pause ---------- */
 let enPause = false;
 
@@ -1094,7 +1156,7 @@ $("tabsAmis").querySelectorAll("[data-onglet]").forEach(b => b.onclick = () => {
   ongletAmis === "recherche" ? ($("listeAmis").innerHTML = "", $("amisVide").textContent = "") : chargerAmis();
 });
 
-$("btnFriends").onclick = () => { chargerAmis(); show("friends"); };
+$("btnFriends").onclick = () => { chargerAmis(); majBadgeAmis(); show("friends"); };
 $("btnAmisBack").onclick = () => show("menu");
 
 function ligneJoueur(j, boutons){
@@ -1197,13 +1259,51 @@ function inviter(amiId, bouton){
   });
 }
 
-/** Pastille rouge sur le bouton Amis quand une demande attend. */
+/**
+ * Pastilles rouges : sur le bouton Amis du menu et sur l'onglet Demandes.
+ * Rafraîchie à l'ouverture, après chaque action, et dès qu'une notification
+ * arrive — sans quoi le joueur devrait recharger la page pour la voir.
+ */
 async function majBadgeAmis(){
   const r = await fetch("/api/friends").then(x => x.json()).catch(() => null);
-  const attente = r?.recues?.length ?? 0;   // le serveur peut répondre partiellement
-  $("badgeAmis").textContent = attente;
-  $("badgeAmis").classList.toggle("hidden", attente === 0);
+  const attente = r?.recues?.length ?? 0;
+  for (const id of ["badgeAmis", "badgeDemandes"]){
+    $(id).textContent = attente > 9 ? "9+" : attente;
+    $(id).classList.toggle("hidden", attente === 0);
+  }
+  // le titre de l'onglet du navigateur signale aussi l'attente
+  document.title = attente
+    ? `(${attente}) MichBen Ciné Quizz`
+    : "MichBen Ciné Quizz — devinez le film";
+  return attente;
 }
+
+/** Bandeau éphémère, cliquable pour aller directement à l'écran concerné. */
+function bandeauNotif(html, action){
+  const el = document.createElement("div");
+  el.className = "notif";
+  el.innerHTML = html;
+  el.onclick = () => { el.remove(); action?.(); };
+  document.body.append(el);
+  setTimeout(() => el.remove(), 8000);
+}
+
+socket.on("notif", ({type, de, avatar, photo}) => {
+  majBadgeAmis();
+  const image = photo
+    ? `<img class="pfp" src="${esc(photo)}" alt="">`
+    : `<span style="font-size:24px">${avatar || "🎬"}</span>`;
+
+  if (type === "demande")
+    bandeauNotif(`${image}<span><b>${esc(de)}</b> souhaite vous ajouter
+      <small>Touchez pour répondre</small></span>`,
+      () => { ongletAmis = "demandes"; $("btnFriends").click(); chargerAmis(); });
+
+  if (type === "acceptee")
+    bandeauNotif(`${image}<span><b>${esc(de)}</b> a accepté votre demande
+      <small>Vous êtes désormais amis</small></span>`,
+      () => $("btnFriends").click());
+});
 
 /* ---------- Modération ---------- */
 let motifs = {}, filmCourant = null;
@@ -1576,7 +1676,7 @@ function afficherManche(m){
   if (m.hintLabels) Object.assign(HINT_LABELS, m.hintLabels);
   state.bought = {}; state.answered = false;
   $("roundLabel").textContent = `Manche ${m.roundIndex + 1} sur ${m.total}`;
-  $("synopsis").textContent = m.synopsis;
+  derouler(m.synopsis);
   $("dots").innerHTML = Array.from({length: m.total}, (_, i) =>
     `<i class="${i < m.roundIndex ? "done" : i === m.roundIndex ? "now" : ""}"></i>`).join("");
   $("roomCode").classList.add("hidden");
@@ -1761,7 +1861,7 @@ socket.on("round:start", ({roundIndex,total,synopsis,duration,hintCosts,hintCred
   if (hintLabels) Object.assign(HINT_LABELS, hintLabels);
   state.hintCosts = hintCosts; state.bought = {}; state.answered = false;
   $("roundLabel").textContent = `Manche ${roundIndex+1} sur ${total}`;
-  $("synopsis").textContent = synopsis;
+  derouler(synopsis);
   $("hintPoster").classList.add("hidden");
   $("pattern").classList.add("hidden");
   $("roundPlayers").innerHTML = "";
