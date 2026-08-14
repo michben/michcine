@@ -50,6 +50,18 @@
   .flap:nth-child(2){animation-delay:.07s}.flap:nth-child(3){animation-delay:.14s}.flap:nth-child(4){animation-delay:.21s}
   @keyframes flip{from{transform:rotateX(-85deg);opacity:0}to{transform:none;opacity:1}}
   .players{list-style:none;padding:0;margin:12px 0 0;display:flex;flex-wrap:wrap;gap:8px}
+  /* Carte de profil : la photo est le premier élément vu, encadrée en grand. */
+  #carteProfil{text-align:center;margin:4px 0 22px}
+  .cadrePhoto{width:150px;height:150px;margin:0 auto 16px;border-radius:50%;padding:4px;
+    background:linear-gradient(140deg,var(--beam),var(--ticket),var(--teal));
+    box-shadow:0 10px 34px rgba(0,0,0,.5)}
+  .cadrePhoto img{width:100%;height:100%;border-radius:50%;object-fit:cover;
+    display:block;background:var(--card);border:3px solid var(--velvet)}
+  .bienvenue{font-family:'Anton',sans-serif;text-transform:uppercase;letter-spacing:.03em;
+    font-size:clamp(19px,5vw,25px);color:var(--beam);margin:0 0 6px;font-weight:400;line-height:1.2}
+  .stat{color:var(--muted);font-size:14px;line-height:1.6;margin:0 0 16px}
+  .stat b{color:var(--chalk)}
+  @media(max-width:600px){.cadrePhoto{width:124px;height:124px}}
   .pfp{width:26px;height:26px;border-radius:50%;object-fit:cover;vertical-align:-8px;
     background:var(--card);border:1px solid rgba(237,232,220,.14)}
   ol.rank .pfp{width:30px;height:30px}
@@ -307,6 +319,18 @@
     <div class="card">
       <p class="tag" id="profileTitle">Votre profil</p>
       <p class="note" id="welcomeNote" style="margin-top:0"></p>
+
+      <div id="carteProfil" class="hidden">
+        <div class="cadrePhoto">
+          <img id="grandePhoto" alt="Votre photo de profil">
+        </div>
+        <p class="bienvenue" id="motProfil"></p>
+        <p class="stat" id="statProfil"></p>
+        <div class="row" style="justify-content:center">
+          <button id="btnTelechargerPhoto" class="ghost">⬇ Enregistrer ma photo</button>
+        </div>
+        <p class="feedback" id="photoMsg" style="text-align:center"></p>
+      </div>
       <label for="pseudo">Pseudo affiché</label>
       <input id="pseudo" maxlength="20" autocomplete="nickname">
       <label style="margin-top:16px">Avatar</label>
@@ -726,6 +750,7 @@ loadSession();
 
 /* ---------- Première visite : choix du pseudo ---------- */
 function firstVisit(){
+  $("carteProfil").classList.add("hidden");
   $("profileTitle").textContent = "Bienvenue";
   $("welcomeNote").textContent = "Choisissez le pseudo sous lequel les autres joueurs vous verront. Vous pourrez le changer plus tard.";
   $("pseudo").value = me.suggestion || "";
@@ -1236,7 +1261,59 @@ $("avatars").innerHTML = AVATAR_LIST.map(a => `<button data-a="${a}">${a}</butto
 $("avatars").querySelectorAll("[data-a]").forEach(b => b.onclick = () => {
   $("avatars").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
 });
+/**
+ * Carte de profil : photo en grand, message d'accueil et résumé du parcours.
+ * Le message varie selon l'ancienneté pour ne pas paraître mécanique.
+ */
+function remplirCarteProfil(){
+  const carte = $("carteProfil");
+  if (!me?.photo) return carte.classList.add("hidden");
+
+  carte.classList.remove("hidden");
+  $("grandePhoto").src = me.photo;
+
+  const parties = me.partiesGlobales || 0;
+  $("motProfil").textContent = parties === 0
+    ? `Bienvenue parmi nous, ${me.pseudo}`
+    : parties < 10
+      ? `Content de vous revoir, ${me.pseudo}`
+      : `${me.pseudo}, fidèle au poste`;
+
+  const morceaux = [];
+  if (parties) morceaux.push(`<b>${parties}</b> partie${parties>1?"s":""} jouée${parties>1?"s":""}`);
+  if (me.scoreGlobal) morceaux.push(`<b>${me.scoreGlobal}</b> points au total`);
+  morceaux.push(`<b>${me.credits ?? 0}</b> ticket${(me.credits ?? 0)>1?"s":""}`);
+  $("statProfil").innerHTML = morceaux.join(" · ") +
+    (parties >= 10 ? "<br>Merci de faire vivre le jeu." : "");
+  $("photoMsg").textContent = "";
+}
+
+/** Enregistre la photo sur l'appareil du joueur. */
+$("btnTelechargerPhoto").onclick = async () => {
+  const dire = (t, ok) => { $("photoMsg").textContent = t; $("photoMsg").className = ok ? "feedback good" : "feedback bad"; };
+  try {
+    const blob = await fetch(me.photo, { mode: "cors" }).then(r => {
+      if (!r.ok) throw new Error(r.status);
+      return r.blob();
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `michbencine-${me.pseudo.replace(/[^\w-]/g, "")}.jpg`;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    dire("Photo enregistrée.", true);
+  } catch {
+    // certains hébergeurs refusent le téléchargement direct : on ouvre l'image
+    window.open(me.photo, "_blank", "noopener");
+    dire("Image ouverte dans un nouvel onglet — appui long ou clic droit pour l'enregistrer.", true);
+  }
+};
+
 $("btnProfile").onclick = () => {
+  remplirCarteProfil();
   $("profileTitle").textContent = "Votre profil";
   $("welcomeNote").textContent = "";
   $("btnToMenu").classList.remove("hidden");
