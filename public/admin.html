@@ -51,6 +51,10 @@
   .urow .who strong{display:block}
   .urow .who small{color:var(--muted)}
   .urow select{width:auto;padding:8px 10px;font-size:14px}
+  .pfp{width:44px;height:44px;border-radius:50%;object-fit:cover;flex:0 0 auto;
+    background:var(--card);border:1px solid rgba(237,232,220,.16)}
+  .pfp.vide{background:var(--card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%237C819B'%3E%3Cpath d='M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-5 0-9 2.5-9 5.5V22h18v-2.5c0-3-4-5.5-9-5.5z'/%3E%3C/svg%3E") center/22px no-repeat}
+  .champPhoto{flex:1 1 180px;min-width:140px;font-size:13px;padding:8px 10px}
   .urow input{width:80px;padding:8px 10px;font-size:15px;text-align:center}
   .urow button{padding:9px 12px;font-size:14px}
   .urow.banned{opacity:.5}
@@ -273,6 +277,9 @@
       </div>
       <div class="card">
         <p class="tag" id="userCount">Joueurs</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 6px;line-height:1.6">
+          La photo de profil se colle sous forme d'adresse https. Elle s'impose au joueur,
+          qui ne peut ni la changer ni la retirer. Videz le champ pour revenir à l'émoji.</p>
         <div id="userList"></div>
       </div>
     </div>
@@ -633,6 +640,10 @@ function renderUsers(){
         <strong>${u.avatar||"🎬"} ${esc(u.pseudo||"(sans pseudo)")}${u.banned?'<span class="chip">banni</span>':""}</strong>
         <small>${u.totalScore||0} pts · ${u.gamesPlayed||0} parties${u.xHandle?" · @"+esc(u.xHandle):""}${u.online?" · en ligne":""}</small>
       </div>
+      <img src="${u.photo || ""}" alt="" class="pfp ${u.photo ? "" : "vide"}"
+           onerror="this.classList.add('vide')" title="${u.photo ? "Photo attribuée" : "Aucune photo"}">
+      <input type="url" data-photo="${u.id}" value="${u.photo || ""}"
+             placeholder="https://…/photo.jpg" aria-label="Photo de profil" class="champPhoto">
       <select data-role="${u.id}" aria-label="Rôle">
         ${["joueur","moderateur","admin"].map(r =>
           `<option value="${r}" ${(u.role||"joueur")===r?"selected":""}>${r}</option>`).join("")}
@@ -643,11 +654,19 @@ function renderUsers(){
       <button class="danger" data-del="${u.id}">Supprimer</button>
     </div>`).join("");
 
+  // aperçu immédiat quand on colle une adresse
+  $("userList").querySelectorAll("[data-photo]").forEach(champ => champ.oninput = () => {
+    const img = champ.previousElementSibling;
+    img.src = champ.value.trim();
+    img.classList.toggle("vide", !champ.value.trim());
+  });
+
   $("userList").querySelectorAll("[data-save]").forEach(b => b.onclick = async () => {
     const id = b.dataset.save;
     const credits = Number($("userList").querySelector(`[data-credits="${CSS.escape(id)}"]`).value);
     const role = $("userList").querySelector(`[data-role="${CSS.escape(id)}"]`).value;
-    await api(`/api/admin/users/${encodeURIComponent(id)}`, {method:"PUT", body:JSON.stringify({credits, role})});
+    const photo = $("userList").querySelector(`[data-photo="${CSS.escape(id)}"]`).value.trim();
+    await api(`/api/admin/users/${encodeURIComponent(id)}`, {method:"PUT", body:JSON.stringify({credits, role, photo})});
     loadUsers();
   });
   $("userList").querySelectorAll("[data-ban]").forEach(b => b.onclick = async () => {

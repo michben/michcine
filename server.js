@@ -24,7 +24,7 @@ import { mountAuth, userFromCookie, addRankedPoints,
          estModerateur, definirRole, ROLES, chargerUtilisateurs,
          relations, demanderAmi, accepterAmi, retirerAmi, bloquer,
          chercherJoueurs, statutRelation, estBloque, emailAValider,
-         leaderboard, reinitialiserClassement } from "./auth-x.js";
+         leaderboard, reinitialiserClassement, definirPhoto } from "./auth-x.js";
 
 const app = express();
 app.use(express.json());
@@ -441,6 +441,14 @@ app.put("/api/reports/:id", requireModerateur, (req, res) => {
   res.json(signalement);
 });
 
+/** Attribue ou retire la photo de profil d'un joueur. */
+app.put("/api/admin/users/:id/photo", requireAdmin, (req, res) => {
+  const r = definirPhoto(req.params.id, req.body.photo);
+  if (!r) return res.status(404).json({ error: "NOT_FOUND" });
+  if (r.error) return res.status(400).json(r);
+  res.json({ ok: true, photo: r.photo || null });
+});
+
 app.put("/api/admin/users/:id/role", requireAdmin, (req, res) => {
   const user = definirRole(req.params.id, req.body.role);
   if (!user) return res.status(400).json({ error: "ROLE_INVALIDE" });
@@ -467,7 +475,7 @@ const parties = new Map();   // userId -> partie en cours
 const vueManche = (p) => ({
   roundIndex: p.index,
   total: p.playlist.length,
-  synopsis: p.playlist[p.index].synopsis,
+  synopsis: masquerReponse(p.playlist[p.index].synopsis, p.playlist[p.index]),
   choices: p.choices,
   duration: CONFIG.ROUND_DURATION_MS,
   hintCosts: CONFIG.HINT_COSTS,
@@ -781,6 +789,41 @@ const styleAffiche = (film) => {
   return { zoom: p.zoom ?? 100, cadrage: p.cadrage || "center", flou: p.flou ?? 0 };
 };
 
+/**
+ * Masque dans le synopsis tout mot appartenant au titre ou aux réponses
+ * acceptées. Le joueur voit « ▪▪▪▪▪ » : il comprend qu'un mot a été retiré
+ * parce qu'il donnait la réponse, plutôt que de tomber sur un synopsis
+ * incohérent ou, pire, sur le titre en clair.
+ */
+const MOTS_VIDES = new Set([
+  "le","la","les","un","une","des","du","de","d","l","au","aux","et","ou","à","a",
+  "en","dans","sur","pour","par","avec","sans","son","sa","ses","ce","cet","cette",
+  "the","of","and","in","on","to","il","elle","est","qui","que","plus","ne","pas",
+]);
+
+function masquerReponse(synopsis, film) {
+  const sources = [film.title, ...(film.acceptedAnswers || [])];
+  const interdits = new Set();
+
+  for (const source of sources) {
+    const complet = normalize(source);
+    if (complet.length > 2) interdits.add(complet);
+    for (const mot of complet.split(/\s+/))
+      if (mot.length > 3 && !MOTS_VIDES.has(mot)) interdits.add(mot);
+  }
+  if (!interdits.size) return synopsis;
+
+  // on remplace mot à mot, en conservant la ponctuation d'origine
+  return synopsis.replace(/[\p{L}\p{N}'’-]+/gu, (mot) => {
+    const nu = normalize(mot);
+    if (!nu || nu.length < 3) return mot;
+    const touche = [...interdits].some((i) =>
+      nu === i || (i.length > 4 && nu.startsWith(i)) || (nu.length > 4 && i.startsWith(nu))
+    );
+    return touche ? "▪".repeat(Math.max(3, mot.length)) : mot;
+  });
+}
+
 /** Motif du titre : un tiret par lettre, espaces et ponctuation conservés. */
 function titlePattern(title) {
   return [...title].map((c) => (/[\p{L}\p{N}]/u.test(c) ? "–" : c)).join("");
@@ -862,7 +905,7 @@ function startRound(room) {
   io.to(room.code).emit("round:start", {
     roundIndex: room.roundIndex,
     total: room.playlist.length,
-    synopsis: movie.synopsis,        // le titre et l'affiche ne partent jamais au client
+    synopsis: masquerReponse(movie.synopsis, movie),   // aucun mot du titre ne transparaît
     duration: CONFIG.ROUND_DURATION_MS,
     hintCosts: CONFIG.HINT_COSTS,
     hintCredits: CONFIG.HINT_CREDITS,
@@ -1180,6 +1223,7 @@ function joinRoom(socket, room, user) {
     userId: user.id,
     pseudo: user.pseudo,
     avatar: user.avatar || "🎬",
+    photo: user.photo || null,
     team: room.mode === "teams" ? balancedTeam(room) : null,
     score: 0, hints: [], hasAnswered: false,
   });

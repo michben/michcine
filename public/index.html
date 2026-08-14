@@ -50,6 +50,11 @@
   .flap:nth-child(2){animation-delay:.07s}.flap:nth-child(3){animation-delay:.14s}.flap:nth-child(4){animation-delay:.21s}
   @keyframes flip{from{transform:rotateX(-85deg);opacity:0}to{transform:none;opacity:1}}
   .players{list-style:none;padding:0;margin:12px 0 0;display:flex;flex-wrap:wrap;gap:8px}
+  .pfp{width:26px;height:26px;border-radius:50%;object-fit:cover;vertical-align:-8px;
+    background:var(--card);border:1px solid rgba(237,232,220,.14)}
+  ol.rank .pfp{width:30px;height:30px}
+  .amiLigne .pfp{width:28px;height:28px}
+  #popNom .pfp{width:52px;height:52px;vertical-align:-16px;margin-right:6px}
   .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:0 0 auto}
   .dot.on{background:#3DDC84;box-shadow:0 0 8px rgba(61,220,132,.7)}
   .online{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--muted);margin-top:10px}
@@ -666,6 +671,11 @@ const show = id => {
     .forEach(s => $(s).classList.toggle("hidden", s !== id));
   window.scrollTo({top: 0, behavior: "instant"});
 };
+/** Photo du joueur si l'administration lui en a attribué une, émoji sinon. */
+const vignette = (j) => j?.photo
+  ? `<img class="pfp" src="${esc(j.photo)}" alt="" onerror="this.remove()">`
+  : (j?.avatar || "🎬");
+
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
 /* ---------- Pourboire ---------- */
@@ -973,9 +983,9 @@ async function agirAmi(action, id){
 }
 
 /** Fenêtre d'action, ouverte en cliquant un joueur en partie ou dans une liste. */
-async function ouvrirJoueur(id, pseudo, avatar){
+async function ouvrirJoueur(id, pseudo, avatar, photoJoueur){
   if (!me || id === me.id) return;
-  $("popNom").textContent = `${avatar || "🎬"} ${pseudo}`;
+  $("popNom").innerHTML = `${vignette({avatar, photo: photoJoueur})} ${esc(pseudo)}`;
   $("popJoueur").classList.remove("hidden");
 
   const { relation } = await fetch(`/api/players/${encodeURIComponent(id)}/relation`)
@@ -1008,7 +1018,7 @@ $("btnAmisBack").onclick = () => show("menu");
 function ligneJoueur(j, boutons){
   return `<div class="amiLigne">
     <span class="dot ${j.online ? "on" : ""}"></span>
-    <span class="nom">${j.avatar||"🎬"} ${esc(j.pseudo)}</span>
+    <span class="nom">${vignette(j)} ${esc(j.pseudo)}</span>
     ${boutons.map(([a, l]) =>
       `<button class="ghost" data-act="${a}" data-id="${esc(j.id)}">${l}</button>`).join("")}
   </div>`;
@@ -1205,7 +1215,7 @@ $("btnBoard").onclick = async () => {
 
   if (!Array.isArray(list)) list = [];
   $("globalRank").innerHTML = list.map(u =>
-    `<li><span class="dot ${u.online ? "on" : ""}"></span>${u.avatar||"🎬"} ${esc(u.pseudo)}` +
+    `<li><span class="dot ${u.online ? "on" : ""}"></span>${vignette(u)} ${esc(u.pseudo)}` +
     (u.role && u.role !== "joueur" ? `<span class="badge-role">${esc(u.role)}</span>` : "") +
     `<b>${u.totalScore} pts</b></li>`).join("");
   $("boardEmpty").textContent = list.length
@@ -1233,9 +1243,16 @@ $("btnProfile").onclick = () => {
   $("btnLogout").classList.remove("hidden");
   $("btnSaveProfile").textContent = "Enregistrer";
   $("pseudo").value = me.pseudo;
-  $("compteInfo").textContent = me.xHandle
+  $("avatars").classList.toggle("hidden", Boolean(me.photo));
+  $("compteInfo").textContent = me.photo
+    ? "Votre photo de profil a été attribuée par l'administration et n'est pas modifiable."
+    : me.xHandle
     ? `Connecté via X en tant que @${me.xHandle}`
     : "Compte de test";
+  if (me.photo){
+    $("compteInfo").textContent =
+      "Votre photo de profil a été attribuée par l'administration et n'est pas modifiable.";
+  }
   $("avatars").querySelectorAll("[data-a]").forEach(b =>
     b.setAttribute("aria-pressed", b.dataset.a === me.avatar));
   $("profileMsg").textContent = "";
@@ -1566,10 +1583,10 @@ function renderLobby(s){
   $("lobbyCount").textContent = `${MODE_NAMES[s.mode]} — ${s.players.length} joueur${s.players.length>1?"s":""}`;
   $("lobbyPlayers").innerHTML = s.players.map(p =>
     `<li class="${p.team||""}" data-joueur="${esc(p.userId||"")}" data-pseudo="${esc(p.pseudo)}"
-       data-avatar="${p.avatar||"🎬"}" style="cursor:pointer" title="Voir ce joueur">
-       <span class="dot ${p.online ? "on" : ""}"></span>${p.avatar||"🎬"} ${esc(p.pseudo)}</li>`).join("");
+       data-avatar="${p.avatar||"🎬"}" data-photo="${p.photo||""}" style="cursor:pointer" title="Voir ce joueur">
+       <span class="dot ${p.online ? "on" : ""}"></span>${vignette(p)} ${esc(p.pseudo)}</li>`).join("");
   $("lobbyPlayers").querySelectorAll("[data-joueur]").forEach(li => li.onclick = () =>
-    ouvrirJoueur(li.dataset.joueur, li.dataset.pseudo, li.dataset.avatar));
+    ouvrirJoueur(li.dataset.joueur, li.dataset.pseudo, li.dataset.avatar, li.dataset.photo || null));
   $("teamPicker").classList.toggle("hidden", s.mode !== "teams");
   state.isHost = s.hostId === socket.id;
   $("btnStart").classList.toggle("hidden", !state.isHost);
@@ -1771,7 +1788,7 @@ socket.on("game:end", ({ranking, mode, teams, credits: solde, points: cagnotte})
 
 /* La couleur d'équipe suit le joueur jusqu'au classement final. */
 const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
-  .map(p => `<li class="${p.team||""}">${p.avatar||"🎬"} ${esc(p.pseudo)}<b>${p.score} pts</b></li>`).join("");
+  .map(p => `<li class="${p.team||""}">${vignette(p)} ${esc(p.pseudo)}<b>${p.score} pts</b></li>`).join("");
 </script>
 </body>
 </html>

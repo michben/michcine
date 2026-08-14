@@ -32,6 +32,11 @@ export async function chargerUtilisateurs() {
   for (const u of Object.values(users))
     for (const champ of ["amis", "demandesRecues", "demandesEnvoyees", "bloques"])
       if (!Array.isArray(u[champ])) u[champ] = [];
+  // comptes créés avant l'arrivée du classement global
+  for (const u of Object.values(users)) {
+    if (u.scoreGlobal === undefined) u.scoreGlobal = u.totalScore || 0;
+    if (u.partiesGlobales === undefined) u.partiesGlobales = u.gamesPlayed || 0;
+  }
   console.log(`${Object.keys(users).length} compte(s) chargé(s).`);
 }
 
@@ -264,7 +269,7 @@ export function connecterEmail(email, motDePasse) {
 
 /* ---------- amis ---------- */
 
-const lien = (u) => ({ id: u.id, pseudo: u.pseudo, avatar: u.avatar,
+const lien = (u) => ({ id: u.id, pseudo: u.pseudo, avatar: u.avatar, photo: u.photo || null,
                        online: connectes.has(u.id), role: u.role || "joueur" });
 
 /** Listes d'amis, demandes reçues et envoyées, comptes bloqués. */
@@ -386,6 +391,8 @@ export function grantPoints(userId, points) {
   const user = users[userId];
   if (!user || points <= 0) return;
   user.points = (user.points ?? 0) + points;
+  user.scoreGlobal = (user.scoreGlobal || 0) + points;      // classement global, tous modes
+  user.partiesGlobales = (user.partiesGlobales || 0) + 1;
   saveUsers();
 }
 
@@ -416,6 +423,21 @@ export const listUsers = () =>
     .sort((x, y) => (y.totalScore || 0) - (x.totalScore || 0))
     .map(({ motDePasse, ...reste }) => reste);   // jamais d'empreinte hors du serveur
 
+/**
+ * Photo de profil imposée par l'administration.
+ * Le joueur ne peut pas la modifier : c'est voulu, cela évite les images
+ * choquantes ou l'usurpation d'identité par la photo.
+ */
+export function definirPhoto(id, url) {
+  const user = users[id];
+  if (!user) return null;
+  const propre = String(url || "").trim();
+  if (propre && !/^https:\/\/\S+$/i.test(propre)) return { error: "URL_INVALIDE" };
+  propre ? (user.photo = propre.slice(0, 500)) : delete user.photo;
+  saveUsers();
+  return user;
+}
+
 export function adminUpdateUser(id, changes) {
   const user = users[id];
   if (!user) return null;
@@ -428,6 +450,10 @@ export function adminUpdateUser(id, changes) {
   }
   if (changes.banned === true || changes.banned === false) user.banned = changes.banned;
   if (ROLES.includes(changes.role)) user.role = changes.role;
+  if (typeof changes.photo === "string") {
+    const p = changes.photo.trim();
+    p ? (user.photo = p.slice(0, 500)) : delete user.photo;
+  }
   saveUsers();
   return user;
 }
@@ -450,22 +476,37 @@ export function grantAll(amount) {
 export function addRankedPoints(userId, points) {
   const user = users[userId];
   if (!user) return;
-  user.totalScore = (user.totalScore || 0) + points;   // classement : ne baisse jamais
+  user.totalScore = (user.totalScore || 0) + points;    // classement de la saison
   user.gamesPlayed = (user.gamesPlayed || 0) + 1;
   saveUsers();
 }
 
-/** Tous les joueurs ayant terminé au moins une partie, classés au score permanent. */
-export const leaderboard = (limit = 50) =>
-  Object.values(users)
-    .filter((u) => u.pseudoChosen && ((u.gamesPlayed || 0) > 0 || (u.totalScore || 0) > 0))
-    .sort((a, b) => (b.totalScore || 0) - (a.totalScore || 0))
+/**
+ * Deux classements distincts :
+ *  — « global » cumule toutes les parties depuis l'inscription, il ne baisse
+ *    jamais et récompense la fidélité ;
+ *  — « saison » ne compte que les parties classées de la saison en cours, et
+ *    repart de zéro à chaque nouvelle saison.
+ */
+export const leaderboard = (limit = 50, type = "saison") => {
+  const champ = type === "global" ? "scoreGlobal" : "totalScore";
+  const parties = type === "global" ? "partiesGlobales" : "gamesPlayed";
+  return Object.values(users)
+    .filter((u) => u.pseudoChosen && ((u[parties] || 0) > 0 || (u[champ] || 0) > 0))
+    .sort((a, b) => (b[champ] || 0) - (a[champ] || 0))
     .slice(0, limit)
     .map((u, i) => ({
-      rank: i + 1, pseudo: u.pseudo, avatar: u.avatar,
-      totalScore: u.totalScore || 0, gamesPlayed: u.gamesPlayed || 0,
+      rank: i + 1, pseudo: u.pseudo, avatar: u.avatar, photo: u.photo || null,
+      totalScore: u[champ] || 0, gamesPlayed: u[parties] || 0,
       online: connectes.has(u.id), role: u.role || "joueur",
     }));
+};
+
+/** Remet à zéro le classement de saison, sans toucher au classement global. */
+export function reinitialiserClassement() {
+  for (const u of Object.values(users)) { u.totalScore = 0; u.gamesPlayed = 0; }
+  saveUsers();
+}
 
 /**
  * Domaine du cookie : sans cela, une session ouverte sur www.exemple.fr
@@ -535,7 +576,6 @@ export function mountAuth(app) {
     res.json(sansSecret(r.user));
   });
 
-  app.get("/api/leaderboard", (_req, res) => res.json(leaderboard()));
 
   app.post("/api/profile", (req, res) => {
     const user = userFromCookie(req.headers.cookie);
@@ -550,6 +590,7 @@ export function mountAuth(app) {
 
     user.pseudo = pseudo;
     user.pseudoChosen = true;
+    // la photo n'est pas modifiable ici : seule l'administration la définit
     if (typeof req.body.avatar === "string") user.avatar = req.body.avatar.slice(0, 8);
     saveUsers();
     res.json(sansSecret(user));
