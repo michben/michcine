@@ -358,6 +358,41 @@ export function chercherJoueurs(requete, saufId, limite = 15) {
     .map(lien);
 }
 
+/**
+ * Fiche publique d'un joueur : ce que n'importe qui peut voir de lui.
+ * Volontairement limitée — ni email, ni identifiant X, ni cagnotte : ce sont
+ * ses affaires, pas celles des autres joueurs.
+ */
+export function fichePublique(id, demandeurId) {
+  const u = users[id];
+  if (!u || !u.pseudoChosen) return null;
+  if ((u.bloques || []).includes(demandeurId)) return null;   // il ne veut pas être vu
+
+  const classement = (champ) => {
+    const tries = Object.values(users)
+      .filter((x) => x.pseudoChosen && (x[champ] || 0) > 0)
+      .sort((a, b) => (b[champ] || 0) - (a[champ] || 0));
+    const rang = tries.findIndex((x) => x.id === id);
+    return rang === -1 ? null : { rang: rang + 1, sur: tries.length };
+  };
+
+  return {
+    id: u.id, pseudo: u.pseudo, avatar: u.avatar, photo: u.photo || null,
+    role: u.role || "joueur",
+    online: connectes.has(u.id),
+    scoreGlobal: u.scoreGlobal || 0,
+    partiesGlobales: u.partiesGlobales || 0,
+    scoreSaison: u.totalScore || 0,
+    partiesSaison: u.gamesPlayed || 0,
+    moyenne: (u.partiesGlobales || 0)
+      ? Math.round((u.scoreGlobal || 0) / u.partiesGlobales) : 0,
+    rangGlobal: classement("scoreGlobal"),
+    rangSaison: classement("totalScore"),
+    amis: (u.amis || []).length,
+    relation: statutRelation(demandeurId, id),
+  };
+}
+
 /** Relation entre deux joueurs, pour afficher le bon bouton. */
 export function statutRelation(userId, autreId) {
   const u = users[userId];
@@ -496,6 +531,7 @@ export const leaderboard = (limit = 50, type = "saison") => {
     .sort((a, b) => (b[champ] || 0) - (a[champ] || 0))
     .slice(0, limit)
     .map((u, i) => ({
+      id: u.id,   // permet d'ouvrir la fiche du joueur depuis le classement
       rank: i + 1, pseudo: u.pseudo, avatar: u.avatar, photo: u.photo || null,
       totalScore: u[champ] || 0, gamesPlayed: u[parties] || 0,
       online: connectes.has(u.id), role: u.role || "joueur",

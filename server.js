@@ -24,7 +24,7 @@ import { mountAuth, userFromCookie, addRankedPoints,
          estModerateur, definirRole, ROLES, chargerUtilisateurs,
          relations, demanderAmi, accepterAmi, retirerAmi, bloquer,
          chercherJoueurs, statutRelation, estBloque, emailAValider,
-         leaderboard, reinitialiserClassement, definirPhoto } from "./auth-x.js";
+         leaderboard, reinitialiserClassement, definirPhoto, fichePublique } from "./auth-x.js";
 
 const app = express();
 app.use(express.json());
@@ -615,6 +615,14 @@ app.get("/api/players/search", (req, res) => {
   const trouves = chercherJoueurs(req.query.q, user.id)
     .map((j) => ({ ...j, relation: statutRelation(user.id, j.id) }));
   res.json(trouves);
+});
+
+app.get("/api/players/:id/fiche", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (!user) return;
+  const fiche = fichePublique(req.params.id, user.id);
+  if (!fiche) return res.status(404).json({ error: "INTROUVABLE" });
+  res.json(fiche);
 });
 
 app.get("/api/players/:id/relation", (req, res) => {

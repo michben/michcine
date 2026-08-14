@@ -170,6 +170,19 @@
   #popJoueur{position:fixed;inset:0;background:rgba(10,12,22,.72);display:grid;place-items:center;z-index:70;padding:18px}
   #popJoueur .boite{background:var(--velvet);border:1px solid rgba(237,232,220,.14);border-radius:14px;
     padding:22px;max-width:340px;width:100%;text-align:center}
+  .ficheEntete{margin-bottom:16px}
+  .cadreFiche{width:88px;height:88px;margin:0 auto 12px;border-radius:50%;padding:3px;
+    background:linear-gradient(140deg,var(--beam),var(--ticket),var(--teal))}
+  .cadreFiche img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;
+    background:var(--card);border:2px solid var(--velvet)}
+  .cadreFiche.emoji{display:grid;place-items:center;font-size:40px;background:var(--card);
+    box-shadow:inset 0 0 0 1px rgba(245,185,66,.35)}
+  .ficheStats{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:0 0 16px}
+  .ficheStats div{background:var(--card);border-radius:10px;padding:11px 8px}
+  .ficheStats small{display:block;color:var(--muted);font-size:11px;letter-spacing:.1em;
+    text-transform:uppercase;margin-bottom:3px}
+  .ficheStats b{font-family:'JetBrains Mono',monospace;font-size:19px;color:var(--beam)}
+  .ficheStats .large{grid-column:1 / -1}
   #popJoueur .boite h3{font-family:'Anton',sans-serif;text-transform:uppercase;letter-spacing:.03em;
     font-size:20px;margin:0 0 4px;font-weight:400}
   #popJoueur .boite p{color:var(--muted);font-size:13px;margin:0 0 16px}
@@ -579,7 +592,12 @@
 
   <div id="popJoueur" class="hidden">
     <div class="boite">
-      <h3 id="popNom"></h3>
+      <div class="ficheEntete">
+        <div id="popPhoto"></div>
+        <h3 id="popNom"></h3>
+        <p id="popRole"></p>
+      </div>
+      <div class="ficheStats" id="popStats"></div>
       <p id="popEtat"></p>
       <div class="row" style="flex-direction:column" id="popActions"></div>
       <div class="row"><button class="ghost" id="popFermer">Fermer</button></div>
@@ -1008,13 +1026,52 @@ async function agirAmi(action, id){
 }
 
 /** Fenêtre d'action, ouverte en cliquant un joueur en partie ou dans une liste. */
+/**
+ * Fiche d'un joueur : photo, statistiques, rang, et les actions possibles
+ * selon la relation. Accessible depuis le classement, le salon ou la liste
+ * d'amis — un joueur croisé en partie devient ainsi consultable.
+ */
 async function ouvrirJoueur(id, pseudo, avatar, photoJoueur){
   if (!me || id === me.id) return;
-  $("popNom").innerHTML = `${vignette({avatar, photo: photoJoueur})} ${esc(pseudo)}`;
+
+  // affichage immédiat avec ce qu'on sait déjà, la fiche complète arrive après
+  $("popPhoto").innerHTML = photoJoueur
+    ? `<div class="cadreFiche"><img src="${esc(photoJoueur)}" alt=""></div>`
+    : `<div class="cadreFiche emoji">${avatar || "🎬"}</div>`;
+  $("popNom").textContent = pseudo;
+  $("popRole").textContent = "";
+  $("popStats").innerHTML = "";
+  $("popEtat").textContent = "Chargement…";
+  $("popActions").innerHTML = "";
   $("popJoueur").classList.remove("hidden");
 
-  const { relation } = await fetch(`/api/players/${encodeURIComponent(id)}/relation`)
-    .then(r => r.json()).catch(() => ({relation:"aucun"}));
+  const f = await fetch(`/api/players/${encodeURIComponent(id)}/fiche`)
+    .then(r => r.ok ? r.json() : null).catch(() => null);
+
+  if (!f){
+    $("popEtat").textContent = "Ce profil n'est pas consultable.";
+    return;
+  }
+
+  $("popPhoto").innerHTML = f.photo
+    ? `<div class="cadreFiche"><img src="${esc(f.photo)}" alt=""></div>`
+    : `<div class="cadreFiche emoji">${f.avatar || "🎬"}</div>`;
+  $("popNom").textContent = f.pseudo;
+  $("popRole").innerHTML =
+    `<span class="dot ${f.online ? "on" : ""}" style="display:inline-block;margin-right:6px"></span>` +
+    (f.online ? "En ligne" : "Hors ligne") +
+    (f.role !== "joueur" ? ` · <span class="badge-role">${esc(f.role)}</span>` : "");
+
+  const rang = (r) => r ? `${r.rang}<sup style="font-size:11px">e</sup>` : "—";
+  $("popStats").innerHTML = `
+    <div><small>Points au total</small><b>${f.scoreGlobal}</b></div>
+    <div><small>Parties jouées</small><b>${f.partiesGlobales}</b></div>
+    <div><small>Moyenne par partie</small><b>${f.moyenne}</b></div>
+    <div><small>Amis</small><b>${f.amis}</b></div>
+    <div class="large"><small>Rang global · rang de la saison</small>
+      <b>${rang(f.rangGlobal)} · ${rang(f.rangSaison)}</b></div>`;
+
+  const relation = f.relation;
   $("popEtat").textContent = ETATS[relation] || "";
   $("popActions").innerHTML = (ACTIONS_AMI[relation] || []).map(([a, libelle]) =>
     `<button class="${a === "bloquer" ? "ghost danger" : ""}" data-act="${a}">${libelle}</button>`).join("");
@@ -1043,13 +1100,18 @@ $("btnAmisBack").onclick = () => show("menu");
 function ligneJoueur(j, boutons){
   return `<div class="amiLigne">
     <span class="dot ${j.online ? "on" : ""}"></span>
-    <span class="nom">${vignette(j)} ${esc(j.pseudo)}</span>
+    <span class="nom" data-fiche="${esc(j.id)}" data-pseudo="${esc(j.pseudo)}"
+      data-avatar="${j.avatar||"🎬"}" data-photo="${esc(j.photo||"")}"
+      style="cursor:pointer">${vignette(j)} ${esc(j.pseudo)}</span>
     ${boutons.map(([a, l]) =>
       `<button class="ghost" data-act="${a}" data-id="${esc(j.id)}">${l}</button>`).join("")}
   </div>`;
 }
 
 function brancher(){
+  $("listeAmis").querySelectorAll("[data-fiche]").forEach(n => n.onclick = () =>
+    ouvrirJoueur(n.dataset.fiche, n.dataset.pseudo, n.dataset.avatar, n.dataset.photo || null));
+
   $("listeAmis").querySelectorAll("[data-act]").forEach(b => b.onclick = async () => {
     if (b.dataset.act === "inviter") return inviter(b.dataset.id, b);
     if (b.dataset.act === "bloquer" && !confirm("Bloquer ce joueur ?")) return;
@@ -1240,9 +1302,16 @@ $("btnBoard").onclick = async () => {
 
   if (!Array.isArray(list)) list = [];
   $("globalRank").innerHTML = list.map(u =>
-    `<li><span class="dot ${u.online ? "on" : ""}"></span>${vignette(u)} ${esc(u.pseudo)}` +
+    `<li data-joueur="${esc(u.id || "")}" data-pseudo="${esc(u.pseudo)}"
+       data-avatar="${u.avatar||"🎬"}" data-photo="${esc(u.photo||"")}"
+       style="cursor:pointer" title="Voir la fiche de ${esc(u.pseudo)}">
+      <span class="dot ${u.online ? "on" : ""}"></span>${vignette(u)} ${esc(u.pseudo)}` +
     (u.role && u.role !== "joueur" ? `<span class="badge-role">${esc(u.role)}</span>` : "") +
     `<b>${u.totalScore} pts</b></li>`).join("");
+
+  // chaque ligne du classement ouvre la fiche du joueur
+  $("globalRank").querySelectorAll("[data-joueur]").forEach(li => li.onclick = () =>
+    ouvrirJoueur(li.dataset.joueur, li.dataset.pseudo, li.dataset.avatar, li.dataset.photo || null));
   $("boardEmpty").textContent = list.length
     ? (typeClassement === "saison"
         ? `${list.length} joueur${list.length>1?"s":""} en lice cette saison.`
