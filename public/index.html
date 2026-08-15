@@ -2,6 +2,9 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/favicon.svg">
+<meta name="theme-color" content="#0A0C16">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MichBen Ciné Quizz — devinez le film</title>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
@@ -897,8 +900,10 @@ if (!window.tempsReelDispo) {
   document.querySelectorAll(".mode").forEach(b => {
     if (["solo", "ranked"].includes(b.dataset.mode)) return;   // ces modes restent jouables
     b.disabled = true; b.style.opacity = .4;
+    b.title = "Indisponible : le temps réel est bloqué par votre navigateur.";
   });
-  $("btnJoin").disabled = true;
+  // le bouton reste cliquable : mieux vaut un message clair qu'un bouton mort
+  $("btnJoin").title = "Le multijoueur exige la connexion temps réel.";
 }
 
 fetch("/api/config").then(r => r.json())
@@ -2179,13 +2184,33 @@ document.querySelectorAll(".mode").forEach(btn => btn.onclick = async () => {
 });
 
 $("joinCode").addEventListener("input", e => e.target.value = e.target.value.toUpperCase().replace(/[^A-Z]/g,""));
+$("joinCode").addEventListener("keydown", e => { if (e.key === "Enter") $("btnJoin").click(); });
 $("btnJoin").onclick = () => {
-  const code = $("joinCode").value;
+  const code = $("joinCode").value.trim().toUpperCase();
+
+  if (!window.tempsReelDispo)
+    return ($("joinError").textContent =
+      "Impossible de rejoindre : la connexion temps réel est bloquée par votre navigateur " +
+      "ou votre réseau. Désactivez votre bloqueur sur ce site, ou essayez un autre navigateur.");
+
   if (code.length !== 4) return ($("joinError").textContent = "Le code contient 4 lettres.");
+  $("joinError").textContent = "Connexion au salon…";
+  $("joinError").className = "feedback";
+
+  const trop_long = setTimeout(() => {
+    $("joinError").textContent = "Le serveur ne répond pas. Réessayez dans un instant.";
+    $("joinError").className = "feedback bad";
+  }, 6000);
+
   socket.emit("room:join", {code}, res => {
+    clearTimeout(trop_long);
+    $("joinError").className = "feedback bad";
     if (!res?.ok) return ($("joinError").textContent = {
-      ROOM_NOT_FOUND:"Aucun salon avec ce code.", ROOM_FULL:"Ce salon est complet.",
+      ROOM_NOT_FOUND:"Aucun salon avec ce code. Vérifiez les 4 lettres.",
+      ROOM_FULL:"Ce salon est complet.",
+      GAME_OVER:"Cette partie est terminée.",
       GAME_ALREADY_STARTED:"La partie a déjà commencé."}[res?.error] || "Impossible de rejoindre.");
+    $("joinError").textContent = "";
     state.code = res.code; state.mode = res.state.mode;
     setChatVisible(true);
     if (res.waiting){
