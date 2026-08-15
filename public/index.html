@@ -785,15 +785,21 @@ if (typeof io === "undefined") {
  */
 window.tempsReelDispo = typeof io !== "undefined";
 window.cheminTempsReel = "/rt";
+
+/**
+ * Si le moteur temps réel n'a pas pu être chargé, on installe une coquille
+ * inerte sous le même nom. Sans elle, la première ligne qui appelle io()
+ * interrompt tout le script — et plus aucun bouton ne répond.
+ */
 if (!window.tempsReelDispo) {
-  window.io = () => {
-    const rien = () => coquille;
-    const coquille = {
-      id: null, on: rien, once: rien, off: rien, emit: rien,
-      connect: rien, disconnect: rien, close: rien,
-    };
-    return coquille;
+  const coquille = {
+    id: null, connected: false,
+    on(){ return this; }, once(){ return this; }, off(){ return this; },
+    emit(){ return this; }, connect(){ return this; },
+    disconnect(){ return this; }, close(){ return this; },
   };
+  window.io = () => coquille;
+  var io = window.io;   // « var » pour que le nom soit aussi visible sans préfixe
 }
 </script>
 <script>
@@ -801,7 +807,18 @@ if (!window.tempsReelDispo) {
 // une redirection entre le domaine avec et sans www.
 /* Le chemin par défaut « /socket.io » est lui aussi filtré par certains
    bloqueurs : on expose donc le même service sous « /rt ». */
-const socket = io({ withCredentials: true, path: window.cheminTempsReel });
+/* Une panne du moteur ne doit jamais empêcher le reste du jeu de fonctionner. */
+const socket = (() => {
+  try {
+    return io({ withCredentials: true, path: window.cheminTempsReel });
+  } catch (e) {
+    console.warn("Temps réel indisponible :", e.message);
+    window.tempsReelDispo = false;
+    const rien = { id: null, connected: false };
+    for (const m of ["on","once","off","emit","connect","disconnect","close"]) rien[m] = () => rien;
+    return rien;
+  }
+})();
 /**
  * Un élément absent ne doit pas interrompre tout le script : on renvoie un
  * objet inerte plutôt que null. Une seule ligne manquante dans le balisage
@@ -824,6 +841,25 @@ const AVATARS = ["🎬","🍿","🎭","🕶️","👽","🦖","🤖","🧛","�
 const HINT_LABELS = {letters:"Nombre de lettres", year:"Année", director:"Réalisateur",
                      actors:"Acteurs", poster:"Photo du film"};
 const MODE_NAMES = {solo:"Solo", duel:"Duel", ffa:"Chacun pour soi", teams:"En équipes", ranked:"Partie classée"};
+
+/**
+ * Révélation de fin de manche : l'affiche et le titre en grand, quel qu'ait
+ * été le résultat. Voir le film reste la récompense, même après un échec.
+ */
+function revelation(titre, affiche, annee, trouve){
+  $("verdictTag").textContent = trouve === true ? "Bien joué" : trouve === false ? "Raté" : "La réponse était";
+  $("verdictTag").className = `tag ${trouve === true ? "juste" : trouve === false ? "rate" : ""}`;
+  $("answer").textContent = titre || "";
+  $("answerMeta").textContent = annee ? `Sorti en ${annee}` : "";
+
+  const img = $("answerPoster");
+  if (affiche){
+    img.src = affiche;
+    img.alt = `Affiche de ${titre}`;
+    img.classList.remove("hidden");
+  } else img.classList.add("hidden");
+}
+
 /** Le chat est disponible dès qu'on est dans un salon, quel que soit
  *  l'écran depuis lequel il a été créé. */
 function setChatVisible(on){
