@@ -1138,7 +1138,6 @@ function publicState(room) {
     hostId: room.hostId,
     status: room.status,
     mode: room.mode,
-    difficulty: room.difficulty,
     roundIndex: room.roundIndex,
     players: [...room.players.values()].map((p) => ({
       id: p.id, pseudo: p.pseudo, avatar: p.avatar, score: p.score,
@@ -1265,7 +1264,6 @@ io.on("connection", (socket) => {
       code, hostId: socket.id, status: "lobby", roundIndex: 0,
       mode: ["solo", "ffa", "duel", "teams", "ranked"].includes(mode) ? mode : "ffa",
       players: new Map(),
-      difficulty: difficulty || "tous",
       playlist: choisirFilms(vivier, count, user.id),
       currentMovie: null, startedAt: null, timer: null, nextTimer: null, graceTimer: null,
     };
