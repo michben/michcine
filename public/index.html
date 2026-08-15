@@ -168,6 +168,11 @@
   .dots i.now{background:var(--beam)}
   .pattern{font-family:'JetBrains Mono',monospace;font-size:clamp(19px,5vw,26px);color:var(--beam);
     letter-spacing:.14em;margin:16px 0 0;word-break:break-word}
+  .coeurs{display:flex;gap:3px;font-size:19px;line-height:1}
+  .coeurs span{transition:transform .3s ease,opacity .3s ease}
+  .coeurs span.perdu{opacity:.22;transform:scale(.8)}
+  .coeurs span.casse{animation:brise .6s ease}
+  @keyframes brise{0%{transform:scale(1)}30%{transform:scale(1.4) rotate(-12deg)}100%{transform:scale(.8);opacity:.22}}
   .clock{font-family:'JetBrains Mono',monospace;font-size:26px;color:var(--beam);min-width:44px;
     text-align:center;font-variant-numeric:tabular-nums}
   .clock.urgent{color:var(--ticket);animation:pulse .9s ease-in-out infinite}
@@ -558,13 +563,6 @@
     <h2 id="hello">Bonjour</h2>
     <p class="wallet" id="walletMenu">🎟️ <b>0</b> crédits</p>
     <p class="online"><span class="dot on"></span><b id="onlineNb">—</b><span id="onlineCount">joueurs en ligne</span></p>
-    <p class="tag">Niveau</p>
-    <div class="levels" id="levels">
-      <button data-lvl="tous" aria-pressed="true">Tous</button>
-      <button data-lvl="facile" aria-pressed="false">Facile</button>
-      <button data-lvl="moyen" aria-pressed="false">Moyen</button>
-      <button data-lvl="difficile" aria-pressed="false">Difficile</button>
-    </div>
     <p class="tag" style="margin-top:18px">Choisissez votre partie</p>
     <div class="modes">
       <button class="mode" data-mode="solo"><span class="ic">🎬</span><span><b>Solo</b><small>Contre le chrono, pour s'entraîner</small></span></button>
@@ -610,6 +608,7 @@
       <div class="beam"><i id="beamBar"></i></div>
       <div class="headline">
         <span class="clock" id="clock">60</span>
+        <span class="coeurs" id="coeurs"></span>
         <div class="dots" id="dots"></div>
         <span class="roomcode hidden" id="roomCode"></span>
       </div>
@@ -1571,7 +1570,7 @@ $("btnSalonAmis").onclick = () => {
     $("amisMsg").className = "feedback good";
     return chargerAmis();
   }
-  socket.emit("room:create", {mode: modeAmis, difficulty: niveau}, res => {
+  socket.emit("room:create", {mode: modeAmis}, res => {
     if (!res?.ok) return ($("amisMsg").textContent = "Création impossible.");
     state.code = res.code; state.mode = modeAmis; state.hostId = res.state.hostId;
     setChatVisible(true);
@@ -2020,11 +2019,7 @@ $("banner").onclick = () => {
 };
 
 /* ---------- Choix du mode ---------- */
-let niveau = "tous";
-$("levels").querySelectorAll("[data-lvl]").forEach(b => b.onclick = () => {
-  niveau = b.dataset.lvl;
-  $("levels").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
-});
+const niveau = "tous";   // le filtrage par niveau a été retiré du jeu
 
 /* Solo et partie classée passent par de simples requêtes : ils restent
    jouables même si le temps réel est bloqué par le navigateur ou le réseau. */
@@ -2036,7 +2031,20 @@ async function solo(chemin, corps){
   return res.ok ? res.json() : null;
 }
 
+/** Cœurs restants : trois erreurs et la partie s'arrête. */
+function majCoeurs(restants, max, casse){
+  const total = max ?? state.coeursMax ?? 3;
+  state.coeurs = restants;
+  $("coeurs").innerHTML = Array.from({length: total}, (_, i) => {
+    const perdu = i >= restants;
+    const vientDeCasser = casse && i === restants;
+    return `<span class="${perdu ? "perdu" : ""} ${vientDeCasser ? "casse" : ""}">❤️</span>`;
+  }).join("");
+}
+
 function afficherManche(m){
+  state.coeursMax = m.coeursMax ?? 3;
+  majCoeurs(m.coeurs ?? state.coeursMax, m.coeursMax);
   state.hintCosts = m.hintCosts; state.hintCredits = m.hintCredits;
   state.posterStyle = m.posterStyle;
   state.vitesseSynopsis = m.vitesseSynopsis;
@@ -2110,6 +2118,7 @@ function renderChoicesSolo(liste){
     const r = await solo("answer", {choiceId: Number(btn.dataset.choice)});
     if (!r) return;
     clearInterval(state.timerId);
+    if (r.coeurs !== undefined) majCoeurs(r.coeurs, state.coeursMax, !r.correct);
     btn.classList.add(r.correct ? "good" : "bad");
     $("choices").querySelectorAll("button").forEach(b => {
       if (Number(b.dataset.choice) === r.movieId) b.classList.add("good");
@@ -2144,8 +2153,9 @@ async function mancheSuivanteSolo(){
 
   clearInterval(state.timerId);
   setCredits(r.credits); setPoints(r.points);
-  $("winner").textContent = "Partie terminée";
-  $("myResult").textContent = `${me.pseudo} — ${r.score} points`;
+  $("winner").textContent = r.coeursEpuises ? "Cœurs épuisés" : "Partie terminée";
+  $("myResult").textContent = `${me.pseudo} — ${r.score} points` +
+    (r.coeursEpuises ? ` · ${r.manchesJouees} manche${r.manchesJouees>1?"s":""} sur ${r.manchesTotal}` : "");
   $("finalRank").innerHTML = `<li>${me.avatar||"🎬"} ${esc(me.pseudo)}<b>${r.score} pts</b></li>`;
   $("finalTeams").classList.add("hidden");
   show("over");
@@ -2156,7 +2166,7 @@ document.querySelectorAll(".mode").forEach(btn => btn.onclick = async () => {
 
   if (SANS_RESEAU.includes(mode)){
     const res = await fetch("/api/solo/start", {method:"POST",
-      headers:{"Content-Type":"application/json"}, body: JSON.stringify({mode, difficulty: niveau})});
+      headers:{"Content-Type":"application/json"}, body: JSON.stringify({mode})});
     const m = res.ok ? await res.json() : null;
     if (!m){
       const err = await res.json().catch(() => ({}));
@@ -2173,7 +2183,7 @@ document.querySelectorAll(".mode").forEach(btn => btn.onclick = async () => {
   if (!window.tempsReelDispo)
     return ($("joinError").textContent = "Le multijoueur exige la connexion temps réel, bloquée par votre navigateur.");
 
-  socket.emit("room:create", {mode, difficulty: niveau}, res => {
+  socket.emit("room:create", {mode}, res => {
     if (!res?.ok) return ($("joinError").textContent =
       "Aucun film disponible pour ce niveau — choisissez-en un autre.");
     state.code = res.code; state.mode = mode;
@@ -2246,7 +2256,9 @@ $("btnStart").onclick = () => socket.emit("game:start", {code:state.code});
 socket.on("room:update", renderLobby);
 
 /* ---------- Manche ---------- */
-socket.on("round:start", ({roundIndex,total,synopsis,duration,hintCosts,hintCredits,choices,posterStyle,hintLabels,vitesseSynopsis}) => {
+socket.on("round:start", ({roundIndex,total,synopsis,duration,hintCosts,hintCredits,choices,posterStyle,hintLabels,vitesseSynopsis,coeursMax}) => {
+  state.coeursMax = coeursMax ?? state.coeursMax ?? 3;
+  majCoeurs(state.coeurs ?? state.coeursMax, state.coeursMax);
   $("dots").innerHTML = Array.from({length: total}, (_, i) =>
     `<i class="${i < roundIndex ? "done" : i === roundIndex ? "now" : ""}"></i>`).join("");
   $("roomCode").textContent = state.code || "";
@@ -2312,11 +2324,13 @@ function renderChoices(list){
     socket.emit("answer:submit", {code: state.code, choiceId: Number(btn.dataset.choice)}, res => {
       if (!res?.ok) return;
       state.answered = true;
+      if (res.coeurs !== undefined) majCoeurs(res.coeurs, state.coeursMax, !res.correct);
       btn.classList.add(res.correct ? "good" : "bad");
       if (res.correct) bravo(res.points);
       $("guessFeedback").textContent = res.correct
         ? `Trouvé ! +${res.points} points`
-        : "Mauvaise réponse — la manche est terminée pour vous.";
+        : res.elimine ? "Cœurs épuisés — vous êtes éliminé de cette partie."
+                      : `Mauvaise réponse — ${res.coeurs} cœur${res.coeurs>1?"s":""} restant${res.coeurs>1?"s":""}.`;
       $("guessFeedback").className = res.correct ? "feedback good" : "feedback bad";
       $("btnSkip").classList.remove("hidden");
     });

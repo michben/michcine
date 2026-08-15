@@ -89,6 +89,7 @@ const REGLAGES_DEFAUT = {
   partiesClasseesParJour: 5,         // parties classées autorisées par 24 h
   transfertMax: 2000,                // points transférables en une fois entre amis
   transfertParJour: 5000,            // plafond quotidien de dons
+  coeurs: 3,                         // erreurs tolérées avant la fin de partie
   graceApresPremier: 15,             // secondes
   vitesseSynopsis: 2800,             // durée totale du dévoilement, en millisecondes (0 = désactivé)
   indices: {
@@ -223,6 +224,7 @@ app.put("/api/admin/reglages", requireAdmin, (req, res) => {
   REGLAGES.partiesClasseesParJour = borne(r.partiesClasseesParJour, 1, 100, REGLAGES.partiesClasseesParJour);
   REGLAGES.transfertMax     = borne(r.transfertMax, 0, 100000, REGLAGES.transfertMax);
   REGLAGES.transfertParJour = borne(r.transfertParJour, 0, 500000, REGLAGES.transfertParJour);
+  REGLAGES.coeurs           = borne(r.coeurs, 1, 10, REGLAGES.coeurs);
 
   for (const [cle, valeurs] of Object.entries(r.indices || {})) {
     const cible = REGLAGES.indices[cle];
@@ -497,6 +499,8 @@ const vueManche = (p) => ({
   duration: CONFIG.ROUND_DURATION_MS,
   hintCosts: CONFIG.HINT_COSTS,
   hintCredits: CONFIG.HINT_CREDITS,
+  coeurs: p.coeurs,
+  coeursMax: REGLAGES.coeurs,
   hintLabels: libellesIndices(),
   posterStyle: styleAffiche(p.playlist[p.index]),
   vitesseSynopsis: REGLAGES.vitesseSynopsis,
@@ -517,21 +521,21 @@ app.post("/api/solo/start", (req, res) => {
   if (!user) return;
   if (parrainageManquant(user)) return res.status(403).json({ error: "PARRAINAGE_REQUIS" });
 
-  const { mode = "solo", difficulty = "tous", rounds } = req.body;
-  const vivier = movies.filter(
-    (m) => m.enabled !== false && (difficulty === "tous" || m.difficulty === difficulty)
-  );
+  const { mode = "solo", rounds } = req.body;
+  const vivier = movies.filter((m) => m.enabled !== false);
   if (!vivier.length) return res.status(400).json({ error: "NO_MOVIES" });
 
   if (mode === "ranked" && partiesRestantes(user.id) <= 0)
     return res.status(400).json({ error: "PLUS_DE_PARTIES", ...infoSaison(),
                                   prochaineRecharge: prochaineRecharge(user.id) });
 
+  const nombre = Math.min(Number(rounds) || 10, vivier.length);
   const p = {
     mode: mode === "ranked" ? "ranked" : "solo",
-    playlist: melange(vivier).slice(0, Math.min(Number(rounds) || 10, vivier.length)),
-    index: 0, score: 0,
+    playlist: choisirFilms(vivier, nombre, user.id),
+    index: 0, score: 0, coeurs: REGLAGES.coeurs,
   };
+  memoriserVus(user.id, p.playlist);
   parties.set(user.id, p);
   res.json({ ok: true, mode: p.mode, ...demarrerManche(p) });
 });
@@ -592,10 +596,14 @@ app.post("/api/solo/answer", (req, res) => {
   if (juste) {
     points = computeScore({ elapsedMs: Date.now() - p.startedAt, hintsUsed: p.hints });
     p.score += points;
+  } else {
+    p.coeurs = Math.max(0, p.coeurs - 1);
   }
+
   res.json({
     ok: true, correct: juste, points, movieId: film.id,
     answer: film.title, poster: film.poster, year: film.year, total: p.score,
+    coeurs: p.coeurs, perdu: p.coeurs === 0,
   });
 });
 
@@ -606,7 +614,8 @@ app.post("/api/solo/next", (req, res) => {
   if (!p) return res.status(400).json({ error: "PAS_DE_PARTIE" });
 
   p.index++;
-  if (p.index < p.playlist.length) return res.json({ ok: true, ...demarrerManche(p) });
+  const fini = p.index >= p.playlist.length || p.coeurs === 0;
+  if (!fini) return res.json({ ok: true, ...demarrerManche(p) });
 
   // fin de partie : on crédite une seule fois, puis on oublie la partie
   parties.delete(user.id);
@@ -619,6 +628,8 @@ app.post("/api/solo/next", (req, res) => {
   const codeObtenu = verifierCodeParrain(user.id);
   res.json({
     ok: true, fini: true, score: p.score, mode: p.mode,
+    coeursEpuises: p.coeurs === 0,
+    manchesJouees: p.index, manchesTotal: p.playlist.length,
     credits: getCredits(user.id), points: getPoints(user.id), codeObtenu,
   });
 });
@@ -1055,6 +1066,41 @@ function titlePattern(title) {
 }
 
 /**
+ * Sélectionne des films en évitant ceux déjà vus récemment par le joueur.
+ * Sans cela, un tirage purement aléatoire ramène statistiquement les mêmes
+ * titres bien plus souvent que ne le perçoit un joueur — c'est le reproche
+ * le plus fréquent sur ce type de jeu.
+ */
+function choisirFilms(vivier, nombre, userId) {
+  const vus = new Set(historiqueVus(userId));
+  const frais = vivier.filter((m) => !vus.has(m.id));
+
+  // on puise d'abord dans les films jamais vus, puis dans les plus anciens
+  if (frais.length >= nombre) return melange(frais).slice(0, nombre);
+
+  const anciens = melange(vivier.filter((m) => vus.has(m.id)));
+  return [...melange(frais), ...anciens].slice(0, nombre);
+}
+
+/** Films récemment vus par un joueur, du plus ancien au plus récent. */
+function historiqueVus(userId) {
+  return vusParJoueur.get(userId) || [];
+}
+
+/**
+ * Mémorise les films joués. La fenêtre couvre la moitié du catalogue :
+ * un joueur ne revoit un film qu'après en avoir vu des centaines d'autres.
+ */
+function memoriserVus(userId, films) {
+  const taille = Math.max(50, Math.floor(movies.length / 2));
+  const liste = [...historiqueVus(userId), ...films.map((m) => m.id)];
+  vusParJoueur.set(userId, liste.slice(-taille));
+  sauver("vus", Object.fromEntries(vusParJoueur));
+}
+
+const vusParJoueur = new Map();
+
+/**
  * Mélange de Fisher-Yates : chaque permutation est équiprobable.
  * (sort(() => Math.random() - 0.5) paraît équivalent mais ne l'est pas :
  *  le comparateur est incohérent et l'ordre final reste biaisé.)
@@ -1125,7 +1171,11 @@ function startRound(room) {
   room.startedAt = Date.now();
   room.pauseA = null;
   room.graceRestant = null;
-  for (const p of room.players.values()) { p.hasAnswered = false; p.hints = []; }
+  for (const p of room.players.values()) {
+    p.hasAnswered = false;
+    p.hints = [];
+    if (p.coeurs === undefined) p.coeurs = REGLAGES.coeurs;
+  }
 
   io.to(room.code).emit("round:start", {
     roundIndex: room.roundIndex,
@@ -1135,6 +1185,7 @@ function startRound(room) {
     hintCosts: CONFIG.HINT_COSTS,
     hintCredits: CONFIG.HINT_CREDITS,
     hintLabels: libellesIndices(),
+    coeursMax: REGLAGES.coeurs,
     posterStyle: styleAffiche(movie),
     vitesseSynopsis: REGLAGES.vitesseSynopsis,
     choices: room.choices,
@@ -1204,11 +1255,8 @@ io.on("connection", (socket) => {
     io.emit("presence", { enLigne: nombreEnLigne() });
   });
 
-  socket.on("room:create", ({ rounds, mode, difficulty }, cb) => {
-    const vivier = movies.filter(
-      (m) => m.enabled !== false &&
-             (!difficulty || difficulty === "tous" || m.difficulty === difficulty)
-    );
+  socket.on("room:create", ({ rounds, mode }, cb) => {
+    const vivier = movies.filter((m) => m.enabled !== false);
     if (vivier.length === 0) return cb?.({ ok: false, error: "NO_MOVIES" });
 
     const code = generateRoomCode();
@@ -1218,9 +1266,10 @@ io.on("connection", (socket) => {
       mode: ["solo", "ffa", "duel", "teams", "ranked"].includes(mode) ? mode : "ffa",
       players: new Map(),
       difficulty: difficulty || "tous",
-      playlist: melange(vivier).slice(0, count),
+      playlist: choisirFilms(vivier, count, user.id),
       currentMovie: null, startedAt: null, timer: null, nextTimer: null, graceTimer: null,
     };
+    memoriserVus(user.id, room.playlist);
     rooms.set(code, room);
     joinRoom(socket, room, user);
     cb?.({ ok: true, code, state: publicState(room) });
@@ -1289,9 +1338,11 @@ io.on("connection", (socket) => {
     if (!correct) {
       if (!parClic) return cb?.({ ok: true, correct: false });
       player.hasAnswered = true;
+      player.coeurs = Math.max(0, (player.coeurs ?? REGLAGES.coeurs) - 1);
       io.to(room.code).emit("player:answered", { id: player.id, pseudo: player.pseudo, team: player.team, points: 0 });
       if ([...room.players.values()].every((p) => p.hasAnswered)) endRound(room);
-      return cb?.({ ok: true, correct: false, final: true });
+      return cb?.({ ok: true, correct: false, final: true,
+                    coeurs: player.coeurs, elimine: player.coeurs === 0 });
     }
 
     player.hasAnswered = true;
@@ -1299,10 +1350,12 @@ io.on("connection", (socket) => {
     if (parClic) points = Math.max(30, Math.round(points * CONFIG.CHOICE_RATIO));
     player.score += points;
 
-    cb?.({ ok: true, correct: true, points, movieId: room.currentMovie.id });
+    cb?.({ ok: true, correct: true, points, movieId: room.currentMovie.id,
+           coeurs: player.coeurs ?? REGLAGES.coeurs });
     io.to(room.code).emit("player:answered", { id: player.id, pseudo: player.pseudo, team: player.team, points });
 
-    const tousTrouve = [...room.players.values()].every((p) => p.hasAnswered);
+    const tousTrouve = [...room.players.values()]
+      .every((p) => p.hasAnswered || p.coeurs === 0);
     if (tousTrouve) return endRound(room);
 
     // premier à trouver : les autres ont encore quelques secondes
@@ -1479,6 +1532,8 @@ reports = await charger("reports", REPORTS_FILE, []);
 empreinteAdmin = await charger("adminPass", null, null);
 palmares = await charger("palmares", null, []);
 chargerSaison(await charger("saison", null, null));
+for (const [id, liste] of Object.entries(await charger("vus", null, {})))
+  vusParJoueur.set(id, liste);
 conversations = await charger("conversations", null, {});
 REGLAGES = { ...structuredClone(REGLAGES_DEFAUT), ...(await charger("reglages", null, {})) };
 if (!empreinteAdmin)
