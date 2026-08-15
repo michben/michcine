@@ -219,6 +219,10 @@ export function validerCode(userId, code) {
  * l'envoi d'emails est configuré. Sans clé, exiger un code bloquerait
  * les joueurs devant un écran dont ils ne recevraient jamais le message.
  */
+/** Vrai tant que le compte n'a pas fourni de code de parrainage. */
+export const parrainageManquant = (u) =>
+  parrainageObligatoire() && Boolean(u) && !u.parrainId && !u.fondateur;
+
 export const emailAValider = (u) =>
   Boolean(RESEND_API_KEY) && Boolean(u?.email) && !u.emailVerifie;
 
@@ -265,6 +269,85 @@ export function connecterEmail(email, motDePasse) {
   if (!u || !verifierMotDePasse(motDePasse, u.motDePasse)) return { error: "IDENTIFIANTS_INVALIDES" };
   if (u.banned) return { error: "BANNI" };
   return { user: u };
+}
+
+/* ---------- parrainage ---------- */
+
+const PARTIES_POUR_CODE = Number(process.env.PARTIES_POUR_CODE || 25);
+const ALPHABET_CODE = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";   // sans I, O, 0, 1
+
+/** Le parrainage est exigé seulement si la variable est active. */
+export const parrainageObligatoire = () => process.env.PARRAINAGE === "obligatoire";
+
+function genererCodeParrain() {
+  let code;
+  do {
+    code = Array.from({ length: 6 }, () =>
+      ALPHABET_CODE[crypto.randomInt(ALPHABET_CODE.length)]).join("");
+  } while (Object.values(users).some((u) => u.codeParrain === code));
+  return code;
+}
+
+/**
+ * Attribue son code au joueur dès qu'il atteint le seuil de parties.
+ * Appelé après chaque partie : le code apparaît alors de lui-même.
+ */
+export function verifierCodeParrain(userId) {
+  const u = users[userId];
+  if (!u || u.codeParrain) return null;
+  if ((u.partiesGlobales || 0) < PARTIES_POUR_CODE) return null;
+  u.codeParrain = genererCodeParrain();
+  saveUsers();
+  return u.codeParrain;
+}
+
+const parCode = (code) =>
+  Object.values(users).find((u) => u.codeParrain === String(code || "").toUpperCase().trim());
+
+/** Valide un code sans consommer quoi que ce soit. */
+export function verifierCode(code) {
+  const parrain = parCode(code);
+  if (!parrain) return { error: "CODE_INCONNU" };
+  if (parrain.banned) return { error: "CODE_INCONNU" };
+  return { ok: true, parrain: { id: parrain.id, pseudo: parrain.pseudo,
+                                avatar: parrain.avatar, photo: parrain.photo || null } };
+}
+
+/** Rattache un nouveau compte à son parrain. Irréversible et unique. */
+export function rattacherParrain(userId, code) {
+  const u = users[userId];
+  if (!u) return { error: "INTROUVABLE" };
+  if (u.parrainId) return { error: "DEJA_PARRAINE" };
+
+  const parrain = parCode(code);
+  if (!parrain || parrain.banned) return { error: "CODE_INCONNU" };
+  if (parrain.id === userId) return { error: "SOI_MEME" };
+
+  u.parrainId = parrain.id;
+  u.parraineLe = Date.now();
+  parrain.filleuls = [...(parrain.filleuls || []), userId];
+  saveUsers();
+  return { ok: true };
+}
+
+/** Ce que le joueur voit de son propre parrainage. */
+export function infoParrainage(userId) {
+  const u = users[userId];
+  if (!u) return null;
+  const bref = (id) => {
+    const x = users[id];
+    return x && x.pseudoChosen
+      ? { id: x.id, pseudo: x.pseudo, avatar: x.avatar, photo: x.photo || null,
+          online: connectes.has(x.id) }
+      : null;
+  };
+  return {
+    code: u.codeParrain || null,
+    partiesRequises: PARTIES_POUR_CODE,
+    parties: u.partiesGlobales || 0,
+    parrain: u.parrainId ? bref(u.parrainId) : null,
+    filleuls: (u.filleuls || []).map(bref).filter(Boolean),
+  };
 }
 
 /* ---------- amis ---------- */
@@ -421,12 +504,17 @@ export const nombreEnLigne = () => connectes.size;
 export const getCredits = (userId) => users[userId]?.credits ?? 0;
 export const getPoints = (userId) => users[userId]?.points ?? 0;
 
-/** Cagnotte dépensable, alimentée à chaque partie, distincte du classement. */
+/**
+ * Cagnotte dépensable, alimentée à chaque partie, distincte du classement.
+ * Le compteur de parties augmente même à zéro point : une partie perdue
+ * reste une partie jouée, et compte pour débloquer le code d'invitation.
+ */
 export function grantPoints(userId, points) {
   const user = users[userId];
-  if (!user || points <= 0) return;
-  user.points = (user.points ?? 0) + points;
-  user.scoreGlobal = (user.scoreGlobal || 0) + points;      // classement global, tous modes
+  if (!user) return;
+  const gagnes = Math.max(0, points || 0);
+  user.points = (user.points ?? 0) + gagnes;
+  user.scoreGlobal = (user.scoreGlobal || 0) + gagnes;
   user.partiesGlobales = (user.partiesGlobales || 0) + 1;
   saveUsers();
 }
@@ -456,7 +544,7 @@ export function exchangePoints(userId, points, rate) {
 export const listUsers = () =>
   Object.values(users)
     .sort((x, y) => (y.totalScore || 0) - (x.totalScore || 0))
-    .map(({ motDePasse, ...reste }) => reste);   // jamais d'empreinte hors du serveur
+    .map(({ motDePasse, code, codeExpire, codeEssais, ...reste }) => reste);
 
 /**
  * Photo de profil imposée par l'administration.
@@ -485,6 +573,7 @@ export function adminUpdateUser(id, changes) {
   }
   if (changes.banned === true || changes.banned === false) user.banned = changes.banned;
   if (ROLES.includes(changes.role)) user.role = changes.role;
+  if (changes.fondateur === true || changes.fondateur === false) user.fondateur = changes.fondateur;
   if (typeof changes.photo === "string") {
     const p = changes.photo.trim();
     p ? (user.photo = p.slice(0, 500)) : delete user.photo;
@@ -511,6 +600,7 @@ export function grantAll(amount) {
 export function addRankedPoints(userId, points) {
   const user = users[userId];
   if (!user) return;
+  points = Math.max(0, points || 0);
   user.totalScore = (user.totalScore || 0) + points;    // classement de la saison
   user.gamesPlayed = (user.gamesPlayed || 0) + 1;
   saveUsers();
