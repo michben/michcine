@@ -504,6 +504,26 @@ export const nombreEnLigne = () => connectes.size;
 export const getCredits = (userId) => users[userId]?.credits ?? 0;
 export const getPoints = (userId) => users[userId]?.points ?? 0;
 
+/** Retire des points de la cagnotte (don à un ami). */
+export function retirerPoints(userId, montant) {
+  const u = users[userId];
+  if (!u || (u.points ?? 0) < montant) return false;
+  u.points -= montant;
+  saveUsers();
+  return true;
+}
+
+/**
+ * Crédite un don reçu. N'alimente ni le classement ni le compteur de parties :
+ * un score doit se gagner en jouant, pas se recevoir.
+ */
+export function grantPointsDon(userId, montant) {
+  const u = users[userId];
+  if (!u) return;
+  u.points = (u.points ?? 0) + montant;
+  saveUsers();
+}
+
 /**
  * Cagnotte dépensable, alimentée à chaque partie, distincte du classement.
  * Le compteur de parties augmente même à zéro point : une partie perdue

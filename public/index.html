@@ -52,6 +52,32 @@
   .players{list-style:none;padding:0;margin:12px 0 0;display:flex;flex-wrap:wrap;gap:8px}
   /* Carte de profil : la photo est le premier élément vu, encadrée en grand. */
   #carteProfil{text-align:center;margin:4px 0 22px}
+  .codeCadre{text-align:center;background:var(--card);border-radius:12px;padding:16px;margin-top:8px}
+  .codeCadre .valeur{font-family:'JetBrains Mono',monospace;font-size:30px;letter-spacing:.32em;
+    color:var(--beam);margin:6px 0 12px;user-select:all}
+  /* Seau de pop-corn : se vide à chaque partie classée, se remplit en 24 h. */
+  .seau{position:relative;width:96px;height:104px;margin:0 auto;
+    background:linear-gradient(180deg,#E4586E 0 100%);
+    clip-path:polygon(12% 0,88% 0,78% 100%,22% 100%);
+    box-shadow:inset -14px 0 0 rgba(0,0,0,.16),inset 14px 0 0 rgba(255,255,255,.12)}
+  .seau::before{content:"";position:absolute;inset:0;
+    background:repeating-linear-gradient(90deg,transparent 0 12px,rgba(255,255,255,.28) 12px 24px)}
+  .grains{position:absolute;left:0;right:0;bottom:0;overflow:hidden;
+    transition:height .7s cubic-bezier(.34,1.3,.64,1)}
+  .grains::before{content:"";position:absolute;inset:0;
+    background:radial-gradient(circle at 22% 24%,#FFF3D6 5px,transparent 6px),
+               radial-gradient(circle at 62% 14%,#F5E6BE 6px,transparent 7px),
+               radial-gradient(circle at 40% 46%,#FFF6E2 6px,transparent 7px),
+               radial-gradient(circle at 78% 52%,#F0DEB4 5px,transparent 6px),
+               radial-gradient(circle at 16% 68%,#FFF3D6 6px,transparent 7px),
+               radial-gradient(circle at 55% 78%,#F5E6BE 6px,transparent 7px),
+               #F7EAC8}
+  .seauChiffre{position:absolute;inset:0;display:grid;place-items:center;z-index:2;
+    font-family:'JetBrains Mono',monospace;font-size:30px;color:#2A1206;
+    text-shadow:0 1px 0 rgba(255,255,255,.5)}
+  .seau.vide .seauChiffre{color:rgba(255,255,255,.85);text-shadow:none}
+  .jauge{height:6px;background:var(--velvet);border-radius:99px;overflow:hidden;margin:10px 0 6px}
+  .jauge i{display:block;height:100%;background:linear-gradient(90deg,var(--ticket),var(--beam))}
   .cadrePhoto{width:150px;height:150px;margin:0 auto 16px;border-radius:50%;padding:4px;
     background:linear-gradient(140deg,var(--beam),var(--ticket),var(--teal));
     box-shadow:0 10px 34px rgba(0,0,0,.5)}
@@ -104,6 +130,14 @@
   .feedback{margin-top:12px;font-size:15px;min-height:22px}
   .feedback.bad{color:var(--ticket)}.feedback.good{color:var(--beam)}
   .reveal{font-family:'Anton',sans-serif;font-size:clamp(24px,6vw,34px);text-transform:uppercase;color:var(--beam);margin:4px 0 0;letter-spacing:.03em}
+  /* Révélation : l'affiche et le titre occupent le centre de l'écran. */
+  .revelation{text-align:center;margin:6px 0 4px;animation:revele .5s ease both}
+  @keyframes revele{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:none}}
+  .afficheRevelee{width:min(58%,190px);border-radius:12px;display:block;margin:0 auto 14px;
+    box-shadow:0 16px 40px rgba(0,0,0,.6)}
+  .revelation .reveal{font-size:clamp(26px,7.5vw,42px);margin:0;line-height:1.1}
+  #verdictTag.juste{color:var(--teal)}
+  #verdictTag.rate{color:var(--ticket)}
   .poster{width:140px;border-radius:10px;display:block;margin-top:14px;box-shadow:0 12px 30px rgba(0,0,0,.5)}
   #hintPoster{width:min(100%,340px);aspect-ratio:16/9;object-fit:cover;overflow:hidden}
   ol.rank{list-style:none;counter-reset:r;padding:0;margin:14px 0 0}
@@ -190,6 +224,17 @@
   .notif small{display:block;color:var(--muted);font-size:12px}
   @keyframes monteNotif{from{opacity:0;transform:translateX(-50%) translateY(16px)}to{opacity:1;transform:translateX(-50%)}}
   /* fenêtre d'action sur un joueur */
+  #popMessages{position:fixed;inset:0;background:rgba(10,12,22,.72);display:grid;place-items:end center;z-index:78;padding:0}
+  .boiteMsg{background:var(--velvet);border:1px solid rgba(237,232,220,.14);border-radius:16px 16px 0 0;
+    width:min(460px,100%);max-height:80vh;display:flex;flex-direction:column;gap:12px;padding:16px}
+  .enteteMsg{display:flex;align-items:center;gap:8px}
+  .enteteMsg span{flex:1;font-weight:700;display:flex;align-items:center;gap:8px}
+  .enteteMsg button{padding:6px 11px;font-size:14px}
+  #msgLog{flex:1;overflow-y:auto;min-height:180px;display:flex;flex-direction:column;gap:8px}
+  .bulle{max-width:78%;padding:9px 13px;border-radius:14px;font-size:15px;line-height:1.4;word-break:break-word}
+  .bulle.moi{align-self:flex-end;background:var(--beam);color:#161207;border-bottom-right-radius:4px}
+  .bulle.lui{align-self:flex-start;background:var(--card);border-bottom-left-radius:4px}
+  .bulle small{display:block;font-size:11px;opacity:.6;margin-top:3px}
   #popJoueur{position:fixed;inset:0;background:rgba(10,12,22,.72);display:grid;place-items:center;z-index:70;padding:18px}
   #popJoueur .boite{background:var(--velvet);border:1px solid rgba(237,232,220,.14);border-radius:14px;
     padding:22px;max-width:340px;width:100%;text-align:center}
@@ -241,6 +286,8 @@
     font-size:24px;padding:0;box-shadow:0 8px 24px rgba(0,0,0,.5);z-index:20}
   #chatToggle .badge{position:absolute;top:-4px;right:-4px;background:var(--ticket);color:#fff;
     font-size:11px;min-width:20px;height:20px;border-radius:10px;display:grid;place-items:center;padding:0 5px}
+  #chatPanel.reduit{max-height:none}
+  #chatPanel.reduit #chatLog,#chatPanel.reduit #chatForm{display:none}
   #chatPanel{position:fixed;right:18px;bottom:84px;width:min(340px,calc(100vw - 36px));max-height:60vh;
     background:var(--velvet);border:1px solid rgba(237,232,220,.14);border-radius:14px;padding:14px;
     display:flex;flex-direction:column;gap:10px;z-index:20;box-shadow:0 16px 40px rgba(0,0,0,.6)}
@@ -350,6 +397,24 @@
     </div>
   </section>
 
+  <!-- CODE DE PARRAINAGE -->
+  <section id="parrainage" class="hidden">
+    <div class="card">
+      <p class="tag">Code d'invitation</p>
+      <p class="note" style="margin-top:0">MichBen Ciné Quizz se rejoint sur invitation.
+        Demandez son code à la personne qui vous a parlé du jeu.</p>
+      <label for="codeParrain">Votre code</label>
+      <input id="codeParrain" maxlength="6" placeholder="ABC123" autocomplete="off"
+             style="font-family:'JetBrains Mono',monospace;letter-spacing:.4em;text-transform:uppercase;font-size:22px;text-align:center">
+      <div id="apercuParrain" class="hidden" style="text-align:center;margin-top:16px"></div>
+      <div class="row">
+        <button id="btnValiderCode">Rejoindre le jeu</button>
+        <button id="btnCodeLogout" class="ghost">Autre compte</button>
+      </div>
+      <p class="feedback" id="codeMsg"></p>
+    </div>
+  </section>
+
   <!-- PROFIL -->
   <section id="profile" class="hidden">
     <div class="card">
@@ -376,6 +441,11 @@
         <button id="btnToMenu" class="ghost">Retour à l'accueil</button>
       </div>
       <p class="feedback" id="profileMsg"></p>
+      <div id="blocParrain" style="margin-top:20px;padding-top:18px;border-top:1px solid rgba(237,232,220,.12)">
+        <p class="tag">Votre parrainage</p>
+        <div id="monCode"></div>
+        <div id="mesFilleuls" style="margin-top:14px"></div>
+      </div>
       <p class="note" id="compteInfo"></p>
       <div class="row"><button id="btnLogout" class="ghost danger">Se déconnecter</button></div>
     </div>
@@ -455,6 +525,14 @@
       <div class="tabsAmis" id="tabsClassement">
         <button data-c="saison" aria-pressed="true">Saison en cours</button>
         <button data-c="global" aria-pressed="false">Classement global</button>
+      </div>
+
+      <div id="seauBloc" style="text-align:center;margin-top:16px">
+        <div class="seau" id="seau" title="Vos parties classées du jour">
+          <div class="grains" id="grains"></div>
+          <span class="seauChiffre" id="seauChiffre">5</span>
+        </div>
+        <p class="note" id="seauTexte" style="margin:8px 0 0"></p>
       </div>
 
       <div id="bandeauSaison" style="background:var(--card);border-radius:12px;padding:14px;margin-top:14px">
@@ -563,9 +641,12 @@
   <!-- ENTRE-DEUX -->
   <section id="between" class="hidden">
     <div class="card">
-      <p class="tag">La réponse était</p>
-      <p class="reveal" id="answer"></p>
-      <img id="answerPoster" class="poster hidden" alt="">
+      <p class="tag" id="verdictTag">La réponse était</p>
+      <div class="revelation">
+        <img id="answerPoster" class="afficheRevelee hidden" alt="">
+        <p class="reveal" id="answer"></p>
+        <p class="note" id="answerMeta" style="margin-top:2px"></p>
+      </div>
       <ol class="rank" id="interRank"></ol>
       <div class="row">
         <button id="btnNext">Question suivante</button>
@@ -614,6 +695,21 @@
 
   <p id="erreurJS" class="hidden"></p>
 
+  <div id="popMessages" class="hidden">
+    <div class="boiteMsg">
+      <div class="enteteMsg">
+        <span id="msgAvec"></span>
+        <button id="msgSignaler" class="ghost" title="Signaler cette conversation">⚑</button>
+        <button id="msgFermer" class="ghost">✕</button>
+      </div>
+      <div id="msgLog"></div>
+      <div class="row" style="margin:0">
+        <input id="msgTexte" maxlength="500" placeholder="Votre message" autocomplete="off" style="flex:1">
+        <button id="msgEnvoyer" style="flex:0 0 auto">↑</button>
+      </div>
+    </div>
+  </div>
+
   <div id="popJoueur" class="hidden">
     <div class="boite">
       <div class="ficheEntete">
@@ -632,7 +728,11 @@
 
   <button id="chatToggle" class="hidden" title="Chat de la partie">✉️<span class="badge hidden" id="chatBadge">0</span></button>
   <div id="chatPanel" class="hidden">
-    <p class="tag" style="margin:0">Chat de la partie</p>
+    <div style="display:flex;align-items:center;gap:8px">
+      <p class="tag" style="margin:0;flex:1">Chat de la partie</p>
+      <button id="chatReduire" title="Réduire la fenêtre"
+        style="padding:4px 10px;font-size:16px;line-height:1;background:transparent;color:var(--muted);border:0">—</button>
+    </div>
     <div id="chatLog"></div>
     <div id="chatForm">
       <input id="chatInput" maxlength="200" placeholder="Votre message" autocomplete="off" style="flex:1">
@@ -741,7 +841,7 @@ let state = {code:null, mode:"ffa", isHost:false, hintCosts:{}, bought:{}, answe
 
 /** Chaque écran commence en haut : personne ne doit remonter à la main. */
 const show = id => {
-  ["landing","validation","profile","board","exchange","friends","moderation","menu","lobby","waiting","round","between","over"]
+  ["landing","validation","parrainage","profile","board","exchange","friends","moderation","menu","lobby","waiting","round","between","over"]
     .forEach(s => $(s).classList.toggle("hidden", s !== id));
   window.scrollTo({top: 0, behavior: "instant"});
 };
@@ -952,6 +1052,182 @@ $("synopsis").onclick = () => {
   $("indiceLecture").classList.add("hidden");
 };
 
+/* ---------- Messagerie privée ---------- */
+let convAvec = null;
+
+async function ouvrirConversation(id, pseudo, avatar, photo){
+  convAvec = { id, pseudo, avatar, photo };
+  $("msgAvec").innerHTML = `${vignette({avatar, photo})} ${esc(pseudo)}`;
+  $("msgLog").innerHTML = "<p class='note'>Chargement…</p>";
+  $("popMessages").classList.remove("hidden");
+  $("msgTexte").value = "";
+  await chargerConversation();
+  $("msgTexte").focus();
+  majBadgeMessages();
+}
+
+async function chargerConversation(){
+  if (!convAvec) return;
+  const r = await fetch(`/api/messages/${encodeURIComponent(convAvec.id)}`)
+    .then(x => x.ok ? x.json() : null).catch(() => null);
+  if (!r) return ($("msgLog").innerHTML = "<p class='note'>Conversation indisponible.</p>");
+
+  $("msgLog").innerHTML = r.messages.length
+    ? r.messages.map(m => {
+        const heure = new Date(m.at).toLocaleTimeString("fr-FR", {hour:"2-digit", minute:"2-digit"});
+        return `<div class="bulle ${m.de === me.id ? "moi" : "lui"}">${esc(m.texte)}<small>${heure}</small></div>`;
+      }).join("")
+    : "<p class='note'>Aucun message. Écrivez le premier.</p>";
+  $("msgLog").scrollTop = $("msgLog").scrollHeight;
+}
+
+async function envoyerMessage(){
+  const texte = $("msgTexte").value.trim();
+  if (!texte || !convAvec) return;
+  $("msgTexte").value = "";
+  const res = await fetch(`/api/messages/${encodeURIComponent(convAvec.id)}`, {method:"POST",
+    headers:{"Content-Type":"application/json"}, body: JSON.stringify({texte})});
+  if (res.ok) chargerConversation();
+}
+$("msgEnvoyer").onclick = envoyerMessage;
+$("msgTexte").addEventListener("keydown", e => { if (e.key === "Enter") envoyerMessage(); });
+$("msgFermer").onclick = () => { $("popMessages").classList.add("hidden"); convAvec = null; };
+$("popMessages").onclick = e => { if (e.target.id === "popMessages") $("msgFermer").click(); };
+
+$("msgSignaler").onclick = async () => {
+  if (!convAvec) return;
+  const motif = prompt("Que reprochez-vous à cette conversation ? Un modérateur l'examinera.");
+  if (!motif) return;
+  await fetch(`/api/messages/${encodeURIComponent(convAvec.id)}/signaler`, {method:"POST",
+    headers:{"Content-Type":"application/json"}, body: JSON.stringify({motif})});
+  alert("Signalement transmis à la modération.");
+};
+
+/** Pastille des messages non lus, cumulée avec celle des demandes d'amis. */
+let messagesNonLus = 0;
+async function majBadgeMessages(){
+  const r = await fetch("/api/messages").then(x => x.json()).catch(() => null);
+  messagesNonLus = r?.total ?? 0;
+  majBadgeAmis();
+  return messagesNonLus;
+}
+
+/* ---------- Don de points ---------- */
+async function offrirPoints(id, pseudo){
+  const saisie = prompt(`Combien de points offrir à ${pseudo} ?\n\nVotre cagnotte : ${points} points.`);
+  if (saisie === null) return;
+  const montant = Math.floor(Number(saisie));
+  if (!montant || montant <= 0) return;
+
+  const res = await fetch("/api/points/donner", {method:"POST",
+    headers:{"Content-Type":"application/json"}, body: JSON.stringify({id, points: montant})});
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok){
+    const messages = {
+      SOLDE_INSUFFISANT: "Votre cagnotte ne suffit pas.",
+      TROP_ELEVE: `Maximum ${data.max} points en une fois.`,
+      PLAFOND_JOUR: `Plafond quotidien atteint. Il vous reste ${data.restant} points à offrir aujourd'hui.`,
+      PAS_AMI: "Vous ne pouvez offrir des points qu'à vos amis.",
+    };
+    return alert(messages[data.error] || "Transfert impossible.");
+  }
+  setPoints(data.points);
+  bandeauNotif(`<span style="font-size:24px">🎁</span><span><b>${montant} points envoyés</b>
+    <small>à ${esc(pseudo)}</small></span>`);
+}
+
+/* ---------- Parrainage ---------- */
+let parrainVerifie = null;
+
+$("codeParrain").addEventListener("input", async (e) => {
+  e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  $("apercuParrain").classList.add("hidden");
+  parrainVerifie = null;
+  if (e.target.value.length !== 6) return;
+
+  // aperçu du parrain dès que le code est complet : on sait qui invite
+  const r = await fetch("/api/parrainage/verifier", {method:"POST",
+    headers:{"Content-Type":"application/json"}, body: JSON.stringify({code: e.target.value})})
+    .then(x => x.ok ? x.json() : null).catch(() => null);
+
+  if (!r){
+    $("codeMsg").textContent = "Ce code n'existe pas.";
+    $("codeMsg").className = "feedback bad";
+    return;
+  }
+  parrainVerifie = r.parrain;
+  $("codeMsg").textContent = "";
+  $("apercuParrain").innerHTML =
+    `<div class="cadreFiche ${r.parrain.photo ? "" : "emoji"}" style="width:64px;height:64px;margin-bottom:8px">` +
+    (r.parrain.photo ? `<img src="${esc(r.parrain.photo)}" alt="">` : (r.parrain.avatar || "🎬")) +
+    `</div><p class="note" style="margin:0">Invitation de <b style="color:var(--beam)">${esc(r.parrain.pseudo)}</b></p>`;
+  $("apercuParrain").classList.remove("hidden");
+});
+
+$("btnValiderCode").onclick = async () => {
+  const code = $("codeParrain").value;
+  if (code.length !== 6) return ($("codeMsg").textContent = "Le code contient 6 caractères.",
+                                 $("codeMsg").className = "feedback bad");
+  const res = await fetch("/api/parrainage/rejoindre", {method:"POST",
+    headers:{"Content-Type":"application/json"}, body: JSON.stringify({code})});
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok){
+    const messages = { CODE_INCONNU: "Ce code n'existe pas.",
+                       DEJA_PARRAINE: "Votre compte est déjà rattaché.",
+                       SOI_MEME: "Vous ne pouvez pas utiliser votre propre code." };
+    $("codeMsg").textContent = messages[data.error] || "Code refusé.";
+    $("codeMsg").className = "feedback bad";
+    return;
+  }
+  socket.disconnect().connect();
+  if (!me.pseudoChosen) return firstVisit();
+  $("hello").textContent = `Bonjour ${me.pseudo}`;
+  show("menu");
+};
+
+$("btnCodeLogout").onclick = async () => {
+  try { await fetch("/auth/logout", {method:"POST"}); } catch {}
+  location.href = "/";
+};
+
+/** Bloc parrainage du profil : son code, son parrain, ses filleuls. */
+async function chargerParrainage(){
+  const p = await fetch("/api/parrainage").then(r => r.json()).catch(() => null);
+  if (!p) return;
+
+  const reste = Math.max(0, p.partiesRequises - p.parties);
+  $("monCode").innerHTML = p.code
+    ? `<div class="codeCadre">
+         <small style="color:var(--muted);font-size:12px;letter-spacing:.2em;text-transform:uppercase">Votre code d'invitation</small>
+         <p class="valeur">${esc(p.code)}</p>
+         <button class="ghost" id="btnCopierCode">Copier le code</button>
+       </div>`
+    : `<div class="codeCadre">
+         <p class="note" style="margin:0">Votre code d'invitation se débloque après
+           <b style="color:var(--beam)">${p.partiesRequises}</b> parties.</p>
+         <div class="jauge"><i style="width:${Math.min(100, p.parties / p.partiesRequises * 100)}%"></i></div>
+         <p class="note" style="margin:0">${p.parties} sur ${p.partiesRequises} — encore ${reste} partie${reste>1?"s":""}.</p>
+       </div>`;
+
+  if (p.code) $("btnCopierCode").onclick = () => {
+    navigator.clipboard?.writeText(p.code);
+    $("btnCopierCode").textContent = "Copié ✓";
+    setTimeout(() => $("btnCopierCode").textContent = "Copier le code", 2000);
+  };
+
+  const ligne = (j, prefixe) => `<div class="amiLigne">
+    <span class="dot ${j.online ? "on" : ""}"></span>
+    <span class="nom">${vignette(j)} ${esc(j.pseudo)}</span>
+    <small style="color:var(--muted)">${prefixe}</small></div>`;
+
+  $("mesFilleuls").innerHTML =
+    (p.parrain ? `<p class="tag" style="margin-bottom:4px">Invité par</p>${ligne(p.parrain, "")}` : "") +
+    (p.filleuls.length
+      ? `<p class="tag" style="margin:14px 0 4px">Vos filleuls (${p.filleuls.length})</p>` +
+        p.filleuls.map(f => ligne(f, "")).join("")
+      : (p.code ? `<p class="note">Personne n'a encore rejoint avec votre code.</p>` : ""));
+}
+
 /* ---------- Pause ---------- */
 let enPause = false;
 
@@ -1079,7 +1355,8 @@ const ACTIONS_AMI = {
   aucun:    [["demander", "Ajouter en ami"], ["bloquer", "Bloquer"]],
   envoyee:  [["retirer", "Annuler la demande"], ["bloquer", "Bloquer"]],
   recue:    [["accepter", "Accepter la demande"], ["retirer", "Refuser"], ["bloquer", "Bloquer"]],
-  ami:      [["retirer", "Retirer des amis"], ["bloquer", "Bloquer"]],
+  ami:      [["message", "✉ Envoyer un message"], ["donner", "🎁 Offrir des points"],
+             ["retirer", "Retirer des amis"], ["bloquer", "Bloquer"]],
   bloque:   [["debloquer", "Débloquer"]],
 };
 const ETATS = {
@@ -1148,6 +1425,14 @@ async function ouvrirJoueur(id, pseudo, avatar, photoJoueur){
     `<button class="${a === "bloquer" ? "ghost danger" : ""}" data-act="${a}">${libelle}</button>`).join("");
 
   $("popActions").querySelectorAll("[data-act]").forEach(b => b.onclick = async () => {
+    if (b.dataset.act === "message"){
+      $("popJoueur").classList.add("hidden");
+      return ouvrirConversation(id, f.pseudo, f.avatar, f.photo);
+    }
+    if (b.dataset.act === "donner"){
+      $("popJoueur").classList.add("hidden");
+      return offrirPoints(id, f.pseudo);
+    }
     if (b.dataset.act === "bloquer" && !confirm(`Bloquer ${pseudo} ?`)) return;
     await agirAmi(b.dataset.act, id);
     $("popJoueur").classList.add("hidden");
@@ -1275,16 +1560,18 @@ function inviter(amiId, bouton){
  */
 async function majBadgeAmis(){
   const r = await fetch("/api/friends").then(x => x.json()).catch(() => null);
-  const attente = r?.recues?.length ?? 0;
-  for (const id of ["badgeAmis", "badgeDemandes"]){
-    $(id).textContent = attente > 9 ? "9+" : attente;
-    $(id).classList.toggle("hidden", attente === 0);
-  }
-  // le titre de l'onglet du navigateur signale aussi l'attente
-  document.title = attente
-    ? `(${attente}) MichBen Ciné Quizz`
+  const demandes = r?.recues?.length ?? 0;
+  const total = demandes + messagesNonLus;
+
+  $("badgeAmis").textContent = total > 9 ? "9+" : total;
+  $("badgeAmis").classList.toggle("hidden", total === 0);
+  $("badgeDemandes").textContent = demandes > 9 ? "9+" : demandes;
+  $("badgeDemandes").classList.toggle("hidden", demandes === 0);
+
+  document.title = total
+    ? `(${total}) MichBen Ciné Quizz`
     : "MichBen Ciné Quizz — devinez le film";
-  return attente;
+  return total;
 }
 
 /** Bandeau éphémère, cliquable pour aller directement à l'écran concerné. */
@@ -1297,7 +1584,8 @@ function bandeauNotif(html, action){
   setTimeout(() => el.remove(), 8000);
 }
 
-socket.on("notif", ({type, de, avatar, photo}) => {
+socket.on("notif", (notif) => {
+  const {type, de, avatar, photo} = notif;
   majBadgeAmis();
   const image = photo
     ? `<img class="pfp" src="${esc(photo)}" alt="">`
@@ -1307,6 +1595,19 @@ socket.on("notif", ({type, de, avatar, photo}) => {
     bandeauNotif(`${image}<span><b>${esc(de)}</b> souhaite vous ajouter
       <small>Touchez pour répondre</small></span>`,
       () => { ongletAmis = "demandes"; $("btnFriends").click(); chargerAmis(); });
+
+  if (type === "message"){
+    majBadgeMessages();
+    // si la conversation est déjà ouverte, on la rafraîchit au lieu d'alerter
+    if (convAvec?.id === notif.id) return chargerConversation();
+    bandeauNotif(`${image}<span><b>${esc(de)}</b> vous écrit
+      <small>${esc(notif.apercu || "")}</small></span>`,
+      () => ouvrirConversation(notif.id, de, avatar, photo));
+  }
+
+  if (type === "don")
+    bandeauNotif(`${image}<span><b>${esc(de)}</b> vous offre ${notif.montant} points
+      <small>Ajoutés à votre cagnotte</small></span>`, () => $("btnExchange").click());
 
   if (type === "acceptee")
     bandeauNotif(`${image}<span><b>${esc(de)}</b> a accepté votre demande
@@ -1394,10 +1695,21 @@ async function chargerSaison(){
   $("saisonReste").textContent = s.joursRestants > 1
     ? ` — encore ${s.joursRestants} jours`
     : s.joursRestants === 1 ? " — dernier jour" : " — dernières heures";
+  // seau de pop-corn : le remplissage suit les parties restantes
+  const part = s.partiesMax ? s.partiesRestantes / s.partiesMax : 0;
+  $("grains").style.height = `${Math.round(part * 88)}%`;
+  $("seauChiffre").textContent = s.partiesRestantes ?? "—";
+  $("seau").classList.toggle("vide", s.partiesRestantes === 0);
+  $("seauTexte").textContent = s.partiesRestantes > 0
+    ? `${s.partiesRestantes} partie${s.partiesRestantes>1?"s":""} classée${s.partiesRestantes>1?"s":""} disponible${s.partiesRestantes>1?"s":""}`
+    : s.prochaineRecharge
+      ? `Seau vide — il se remplit dans ${Math.ceil(s.prochaineRecharge / 3600000)} h`
+      : "Seau vide";
+
   $("saisonParties").textContent = s.partiesRestantes === null ? ""
     : s.partiesRestantes > 0
-      ? `Il vous reste ${s.partiesRestantes} partie${s.partiesRestantes>1?"s":""} classée${s.partiesRestantes>1?"s":""} sur ${s.partiesMax} cette saison.`
-      : `Vous avez utilisé vos ${s.partiesMax} parties classées. Rendez-vous à la saison prochaine.`;
+      ? `${s.partiesRestantes} sur ${s.partiesMax} parties classées disponibles aujourd'hui.`
+      : `Vos ${s.partiesMax} parties du jour sont utilisées. Le seau se remplit dans 24 h.`;
 }
 
 $("btnBoard").onclick = async () => {
@@ -1492,6 +1804,7 @@ $("btnTelechargerPhoto").onclick = async () => {
 
 $("btnProfile").onclick = () => {
   remplirCarteProfil();
+  chargerParrainage();
   $("profileTitle").textContent = "Votre profil";
   $("welcomeNote").textContent = "";
   $("btnToMenu").classList.remove("hidden");
@@ -1610,6 +1923,14 @@ function bravo(points){
 
 /* ---------- Chat de la partie ---------- */
 const chatOpen = () => !$("chatPanel").classList.contains("hidden");
+
+$("chatReduire").onclick = (e) => {
+  e.stopPropagation();
+  const p = $("chatPanel");
+  const reduit = p.classList.toggle("reduit");
+  $("chatReduire").textContent = reduit ? "▢" : "—";
+  $("chatReduire").title = reduit ? "Agrandir la fenêtre" : "Réduire la fenêtre";
+};
 
 $("chatToggle").onclick = () => {
   $("chatPanel").classList.toggle("hidden");
@@ -1753,10 +2074,20 @@ function renderChoicesSolo(liste){
       if (Number(b.dataset.choice) === r.movieId) b.classList.add("good");
     });
     if (r.correct) bravo(r.points);
-    $("guessFeedback").textContent = r.correct
-      ? `Trouvé ! +${r.points} points` : `Raté — c'était ${r.answer}.`;
+    $("guessFeedback").textContent = r.correct ? `Trouvé ! +${r.points} points` : "Mauvaise réponse.";
     $("guessFeedback").className = r.correct ? "feedback good" : "feedback bad";
-    setTimeout(mancheSuivanteSolo, r.correct ? 1600 : 2600);
+
+    // on montre le film avant d'enchaîner : c'est la récompense de la manche
+    setTimeout(() => {
+      revelation(r.answer, r.poster, r.year, r.correct);
+      $("interRank").innerHTML = "";
+      $("btnNext").classList.remove("hidden");
+      $("btnNext").disabled = false;
+      $("nextNote").textContent = "Enchaînement automatique dans quelques secondes.";
+      show("between");
+      clearTimeout(state.suiteId);
+      state.suiteId = setTimeout(mancheSuivanteSolo, 4200);
+    }, r.correct ? 900 : 700);
   });
 }
 
@@ -1764,6 +2095,11 @@ async function mancheSuivanteSolo(){
   const r = await solo("next");
   if (!r) return show("menu");
   if (!r.fini) return afficherManche(r);
+  if (r.codeObtenu)
+    setTimeout(() => bandeauNotif(
+      `<span style="font-size:24px">🎟️</span><span><b>Votre code d'invitation est prêt</b>
+       <small>${esc(r.codeObtenu)} — partagez-le depuis votre profil</small></span>`,
+      () => $("btnProfile").click()), 1200);
 
   clearInterval(state.timerId);
   setCredits(r.credits); setPoints(r.points);
@@ -1784,7 +2120,7 @@ document.querySelectorAll(".mode").forEach(btn => btn.onclick = async () => {
     if (!m){
       const err = await res.json().catch(() => ({}));
       $("joinError").textContent = err.error === "PLUS_DE_PARTIES"
-        ? `Vos ${err.partiesMax} parties classées de la saison ${err.numero} sont épuisées. Nouvelle saison dans ${err.joursRestants} jour${err.joursRestants>1?"s":""}.`
+        ? `Seau vide : vos ${err.partiesMax} parties classées du jour sont utilisées. Il se remplit dans ${Math.ceil((err.prochaineRecharge||0) / 3600000)} h.`
         : "Aucun film disponible pour ce niveau.";
       return;
     }
@@ -1961,20 +2297,22 @@ function runBeam(duration){
 /* ---------- Fins ---------- */
 $("btnNext").onclick = () => {
   $("btnNext").disabled = true;
+  if (SANS_RESEAU.includes(state.mode)){
+    clearTimeout(state.suiteId);
+    return mancheSuivanteSolo();
+  }
   socket.emit("round:next", {code: state.code});
 };
 
-socket.on("round:end", ({answer, movieId, poster, scores, isHost, mode}) => {
+socket.on("round:end", ({answer, movieId, poster, year, scores, isHost, mode}) => {
   filmCourant = movieId;
+  revelation(answer, poster, year, state.answered);
   $("reportBox").classList.add("hidden");
   $("reportMsg").textContent = "";
   clearInterval(state.timerId);
   clearInterval(state.graceId);
   $("grace").classList.add("hidden");
-  $("answer").textContent = answer;
-  const img = $("answerPoster");
-  if (poster){ img.src = poster; img.alt = `Affiche de ${answer}`; img.classList.remove("hidden"); }
-  else img.classList.add("hidden");
+
   $("interRank").innerHTML = rankHtml(scores);
   // en multijoueur, seul l'hôte décide d'enchaîner
   const peutEnchainer = ["solo","ranked"].includes(mode) || isHost === socket.id;
@@ -1994,10 +2332,12 @@ socket.on("connect_error", err => {
   const raisons = {
     NOT_AUTHENTICATED: "Session non reconnue par le serveur temps réel.",
     EMAIL_NON_VALIDE: "Validez votre adresse email pour jouer.",
+    PARRAINAGE_REQUIS: "Un code d'invitation est nécessaire.",
     BANNED: "Ce compte a été banni.",
     NO_PSEUDO: "Choisissez d'abord un pseudo.",
   };
   if (err.message === "NO_PSEUDO" && me) return firstVisit();
+  if (err.message === "PARRAINAGE_REQUIS") return show("parrainage");
   if (err.message === "BANNED") { $("authError").textContent = raisons.BANNED; return show("landing"); }
 
   $("authError").textContent =

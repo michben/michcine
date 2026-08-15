@@ -24,7 +24,10 @@ import { mountAuth, userFromCookie, addRankedPoints,
          estModerateur, definirRole, ROLES, chargerUtilisateurs,
          relations, demanderAmi, accepterAmi, retirerAmi, bloquer,
          chercherJoueurs, statutRelation, estBloque, emailAValider,
-         leaderboard, reinitialiserClassement, definirPhoto, fichePublique } from "./auth-x.js";
+         leaderboard, reinitialiserClassement, definirPhoto, fichePublique,
+         retirerPoints, grantPointsDon,
+         verifierCode, rattacherParrain, infoParrainage, verifierCodeParrain,
+         parrainageManquant, parrainageObligatoire } from "./auth-x.js";
 
 const app = express();
 app.use(express.json());
@@ -83,7 +86,9 @@ const REGLAGES_DEFAUT = {
   creditsParPartie: 4,
   pointsParTicket: 250,
   saisonJours: 20,                   // durée d'une saison classée
-  partiesClasseesParSaison: 5,       // parties classées autorisées par joueur
+  partiesClasseesParJour: 5,         // parties classées autorisées par 24 h
+  transfertMax: 2000,                // points transférables en une fois entre amis
+  transfertParJour: 5000,            // plafond quotidien de dons
   graceApresPremier: 15,             // secondes
   vitesseSynopsis: 2800,             // durée totale du dévoilement, en millisecondes (0 = désactivé)
   indices: {
@@ -215,6 +220,9 @@ app.put("/api/admin/reglages", requireAdmin, (req, res) => {
   REGLAGES.pointsParTicket  = borne(r.pointsParTicket, 10, 100000, REGLAGES.pointsParTicket);
   REGLAGES.graceApresPremier= borne(r.graceApresPremier, 0, 120, REGLAGES.graceApresPremier);
   REGLAGES.vitesseSynopsis  = borne(r.vitesseSynopsis, 0, 10000, REGLAGES.vitesseSynopsis);
+  REGLAGES.partiesClasseesParJour = borne(r.partiesClasseesParJour, 1, 100, REGLAGES.partiesClasseesParJour);
+  REGLAGES.transfertMax     = borne(r.transfertMax, 0, 100000, REGLAGES.transfertMax);
+  REGLAGES.transfertParJour = borne(r.transfertParJour, 0, 500000, REGLAGES.transfertParJour);
 
   for (const [cle, valeurs] of Object.entries(r.indices || {})) {
     const cible = REGLAGES.indices[cle];
@@ -451,6 +459,13 @@ app.put("/api/admin/users/:id/photo", requireAdmin, (req, res) => {
   res.json({ ok: true, photo: r.photo || null });
 });
 
+/** Exempte un compte de parrainage — utile pour les premiers joueurs. */
+app.put("/api/admin/users/:id/fondateur", requireAdmin, (req, res) => {
+  const user = adminUpdateUser(req.params.id, { fondateur: req.body.fondateur !== false });
+  if (!user) return res.status(404).json({ error: "NOT_FOUND" });
+  res.json({ ok: true, fondateur: Boolean(user.fondateur) });
+});
+
 app.put("/api/admin/users/:id/role", requireAdmin, (req, res) => {
   const user = definirRole(req.params.id, req.body.role);
   if (!user) return res.status(400).json({ error: "ROLE_INVALIDE" });
@@ -500,6 +515,7 @@ function demarrerManche(p) {
 app.post("/api/solo/start", (req, res) => {
   const user = exigeCompte(req, res);
   if (!user) return;
+  if (parrainageManquant(user)) return res.status(403).json({ error: "PARRAINAGE_REQUIS" });
 
   const { mode = "solo", difficulty = "tous", rounds } = req.body;
   const vivier = movies.filter(
@@ -508,7 +524,8 @@ app.post("/api/solo/start", (req, res) => {
   if (!vivier.length) return res.status(400).json({ error: "NO_MOVIES" });
 
   if (mode === "ranked" && partiesRestantes(user.id) <= 0)
-    return res.status(400).json({ error: "PLUS_DE_PARTIES", ...infoSaison() });
+    return res.status(400).json({ error: "PLUS_DE_PARTIES", ...infoSaison(),
+                                  prochaineRecharge: prochaineRecharge(user.id) });
 
   const p = {
     mode: mode === "ranked" ? "ranked" : "solo",
@@ -578,7 +595,7 @@ app.post("/api/solo/answer", (req, res) => {
   }
   res.json({
     ok: true, correct: juste, points, movieId: film.id,
-    answer: film.title, poster: film.poster, total: p.score,
+    answer: film.title, poster: film.poster, year: film.year, total: p.score,
   });
 });
 
@@ -599,10 +616,109 @@ app.post("/api/solo/next", (req, res) => {
   }
   grantPoints(user.id, p.score);
   grantCredits(user.id, REGLAGES.creditsParPartie);
+  const codeObtenu = verifierCodeParrain(user.id);
   res.json({
     ok: true, fini: true, score: p.score, mode: p.mode,
-    credits: getCredits(user.id), points: getPoints(user.id),
+    credits: getCredits(user.id), points: getPoints(user.id), codeObtenu,
   });
+});
+
+/* ------------------------------------------------------------------ */
+/* Messagerie privée entre amis                                        */
+/*                                                                     */
+/* Réservée aux amitiés réciproques : on ne peut pas écrire à un        */
+/* inconnu, ce qui écarte l'essentiel du harcèlement. Les échanges      */
+/* sont conservés et consultables par un modérateur en cas de           */
+/* signalement — sans cela, un canal privé serait sans recours.         */
+/* ------------------------------------------------------------------ */
+
+let conversations = {};   // "idA|idB" trié -> { messages, signale }
+
+const cleConv = (a, b) => [a, b].sort().join("|");
+const saveConversations = () => sauver("conversations", conversations);
+
+app.get("/api/messages/:id", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (!user) return;
+  const autre = req.params.id;
+  if (statutRelation(user.id, autre) !== "ami")
+    return res.status(403).json({ error: "PAS_AMI" });
+
+  const conv = conversations[cleConv(user.id, autre)] || { messages: [] };
+  // on marque comme lus les messages de l'autre
+  let change = false;
+  for (const m of conv.messages)
+    if (m.de === autre && !m.lu) { m.lu = true; change = true; }
+  if (change) saveConversations();
+
+  res.json({ messages: conv.messages.slice(-100) });
+});
+
+app.post("/api/messages/:id", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (!user) return;
+  const autre = req.params.id;
+  if (statutRelation(user.id, autre) !== "ami")
+    return res.status(403).json({ error: "PAS_AMI" });
+  if (estBloque(user.id, autre)) return res.status(403).json({ error: "BLOQUE" });
+
+  const texte = String(req.body.texte || "").trim().slice(0, 500);
+  if (!texte) return res.status(400).json({ error: "VIDE" });
+
+  const cle = cleConv(user.id, autre);
+  const conv = conversations[cle] || (conversations[cle] = { messages: [], signale: false });
+  conv.messages.push({ de: user.id, texte, at: Date.now(), lu: false });
+  if (conv.messages.length > 300) conv.messages = conv.messages.slice(-300);
+  saveConversations();
+
+  notifier(autre, { type: "message", de: user.pseudo, avatar: user.avatar,
+                    photo: user.photo || null, id: user.id, apercu: texte.slice(0, 60) });
+
+  res.json({ ok: true });
+});
+
+/** Nombre de messages non lus, par expéditeur. */
+app.get("/api/messages", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (!user) return;
+  const parAmi = {};
+  let total = 0;
+  for (const [cle, conv] of Object.entries(conversations)) {
+    if (!cle.includes(user.id)) continue;
+    const autre = cle.split("|").find((x) => x !== user.id);
+    const n = conv.messages.filter((m) => m.de === autre && !m.lu).length;
+    if (n) { parAmi[autre] = n; total += n; }
+  }
+  res.json({ total, parAmi });
+});
+
+/** Signale une conversation à la modération. */
+app.post("/api/messages/:id/signaler", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (!user) return;
+  const conv = conversations[cleConv(user.id, req.params.id)];
+  if (!conv) return res.status(404).json({ error: "INTROUVABLE" });
+
+  conv.signale = { par: user.pseudo, parId: user.id,
+                   motif: String(req.body.motif || "").slice(0, 200), at: Date.now() };
+  saveConversations();
+  res.json({ ok: true });
+});
+
+/** Conversations signalées, réservées aux modérateurs. */
+app.get("/api/admin/conversations", requireModerateur, (_req, res) => {
+  const liste = Object.entries(conversations)
+    .filter(([, c]) => c.signale)
+    .map(([cle, c]) => ({ cle, signale: c.signale, messages: c.messages.slice(-40) }));
+  res.json(liste);
+});
+
+app.post("/api/admin/conversations/:cle/traiter", requireModerateur, (req, res) => {
+  const conv = conversations[req.params.cle];
+  if (!conv) return res.status(404).json({ error: "INTROUVABLE" });
+  conv.signale = false;
+  saveConversations();
+  res.json({ ok: true });
 });
 
 /* ---------- amis ---------- */
@@ -669,6 +785,25 @@ app.post("/api/friends/:action", (req, res) => {
   res.json({ ...resultat, relation: statutRelation(user.id, cible) });
 });
 
+/* ---------- parrainage ---------- */
+
+app.get("/api/parrainage", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (user) res.json({ ...infoParrainage(user.id), obligatoire: parrainageObligatoire() });
+});
+
+app.post("/api/parrainage/verifier", (req, res) => {
+  const r = verifierCode(req.body.code);
+  r.error ? res.status(404).json(r) : res.json(r);
+});
+
+app.post("/api/parrainage/rejoindre", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (!user) return;
+  const r = rattacherParrain(user.id, req.body.code);
+  r.error ? res.status(400).json(r) : res.json({ ...r, ...infoParrainage(user.id) });
+});
+
 app.get("/api/presence", (_req, res) => res.json({ enLigne: nombreEnLigne() }));
 
 app.get("/api/leaderboard", (req, res) =>
@@ -680,6 +815,7 @@ app.get("/api/saison", (req, res) => {
   res.json({
     ...infoSaison(),
     partiesRestantes: user ? partiesRestantes(user.id) : null,
+    prochaineRecharge: user ? prochaineRecharge(user.id) : null,
     palmares: palmares.slice(-3).reverse(),
   });
 });
@@ -687,6 +823,43 @@ app.get("/api/saison", (req, res) => {
 app.get("/api/config", (_req, res) => res.json({
   tipUrl: CONFIG.TIP_URL, maxPlayers: CONFIG.MAX_PLAYERS, pointsParTicket: CONFIG.POINTS_PAR_TICKET,
 }));
+
+/**
+ * Don de points à un ami. Plafonné par opération et sur 24 h : sans cela,
+ * plusieurs comptes pourraient converger vers un seul pour gonfler un score.
+ */
+const donsRecents = new Map();   // userId -> [{ montant, at }]
+
+app.post("/api/points/donner", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (!user) return;
+
+  const cible = String(req.body.id || "");
+  const montant = Math.floor(Number(req.body.points) || 0);
+  if (montant <= 0) return res.status(400).json({ error: "MONTANT_INVALIDE" });
+  if (montant > REGLAGES.transfertMax)
+    return res.status(400).json({ error: "TROP_ELEVE", max: REGLAGES.transfertMax });
+  if (statutRelation(user.id, cible) !== "ami")
+    return res.status(403).json({ error: "PAS_AMI" });
+
+  const limite = Date.now() - 24 * 60 * 60 * 1000;
+  const recents = (donsRecents.get(user.id) || []).filter((d) => d.at > limite);
+  const dejaDonne = recents.reduce((t, d) => t + d.montant, 0);
+  if (dejaDonne + montant > REGLAGES.transfertParJour)
+    return res.status(400).json({ error: "PLAFOND_JOUR",
+                                  restant: Math.max(0, REGLAGES.transfertParJour - dejaDonne) });
+
+  if (getPoints(user.id) < montant) return res.status(400).json({ error: "SOLDE_INSUFFISANT" });
+
+  retirerPoints(user.id, montant);
+  grantPointsDon(cible, montant);
+  donsRecents.set(user.id, [...recents, { montant, at: Date.now() }]);
+
+  notifier(cible, { type: "don", de: user.pseudo, avatar: user.avatar,
+                    photo: user.photo || null, montant });
+
+  res.json({ ok: true, points: getPoints(user.id), montant });
+});
 
 /** Espace échange : points gagnés → tickets bonus. */
 app.post("/api/exchange", (req, res) => {
@@ -787,17 +960,41 @@ const infoSaison = () => {
     debut: saison.debut,
     fin,
     joursRestants: Math.max(0, Math.ceil((fin - Date.now()) / 86400000)),
-    partiesMax: REGLAGES.partiesClasseesParSaison,
+    partiesMax: REGLAGES.partiesClasseesParJour,
   };
 };
 
+/**
+ * Les parties classées se rechargent toutes les 24 h, comme un seau de
+ * pop-corn qui se vide en jouant et se remplit du jour au lendemain.
+ * On mémorise l'horodatage de chaque partie plutôt qu'un simple compteur :
+ * la recharge est ainsi progressive et honnête, sans remise à zéro brutale.
+ */
+const JOUR_MS = 24 * 60 * 60 * 1000;
+
+function partiesRecentes(userId) {
+  const liste = saison.participations[userId] || [];
+  const limite = Date.now() - JOUR_MS;
+  const gardees = (Array.isArray(liste) ? liste : []).filter((t) => t > limite);
+  if (gardees.length !== liste.length) saison.participations[userId] = gardees;
+  return gardees;
+}
+
 const partiesRestantes = (userId) => {
   verifierSaison();
-  return Math.max(0, REGLAGES.partiesClasseesParSaison - (saison.participations[userId] || 0));
+  return Math.max(0, REGLAGES.partiesClasseesParJour - partiesRecentes(userId).length);
 };
 
+/** Quand la prochaine partie redevient disponible, en millisecondes. */
+function prochaineRecharge(userId) {
+  const recentes = partiesRecentes(userId);
+  if (recentes.length < REGLAGES.partiesClasseesParJour) return 0;
+  return Math.max(0, Math.min(...recentes) + JOUR_MS - Date.now());
+}
+
 function consommerPartieClassee(userId) {
-  saison.participations[userId] = (saison.participations[userId] || 0) + 1;
+  const recentes = partiesRecentes(userId);
+  saison.participations[userId] = [...recentes, Date.now()];
   sauver("saison", saison);
 }
 
@@ -974,6 +1171,7 @@ function endGame(room) {
     if (room.mode === "ranked") addRankedPoints(p.userId, p.score); // classement permanent
     grantPoints(p.userId, p.score);                                  // cagnotte échangeable
     grantCredits(p.userId, REGLAGES.creditsParPartie);
+    verifierCodeParrain(p.userId);
   }
   for (const p of room.players.values())
     io.to(p.id).emit("game:end", { ranking, mode: room.mode, teams: state.teams,
@@ -990,6 +1188,7 @@ io.use((socket, next) => {
   if (!user) return next(new Error("NOT_AUTHENTICATED"));   // aucune partie sans compte
   if (user.banned) return next(new Error("BANNED"));
   if (emailAValider(user)) return next(new Error("EMAIL_NON_VALIDE"));
+  if (parrainageManquant(user)) return next(new Error("PARRAINAGE_REQUIS"));
   if (!user.pseudoChosen) return next(new Error("NO_PSEUDO")); // ni sans pseudo choisi
   socket.data.user = user;
   next();
@@ -1280,6 +1479,7 @@ reports = await charger("reports", REPORTS_FILE, []);
 empreinteAdmin = await charger("adminPass", null, null);
 palmares = await charger("palmares", null, []);
 chargerSaison(await charger("saison", null, null));
+conversations = await charger("conversations", null, {});
 REGLAGES = { ...structuredClone(REGLAGES_DEFAUT), ...(await charger("reglages", null, {})) };
 if (!empreinteAdmin)
   console.warn("⚠️  Mot de passe d'administration par défaut : changez-le depuis /admin.html");

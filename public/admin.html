@@ -183,8 +183,16 @@
 
     <div id="paneReports" class="hidden">
       <div class="card">
-        <p class="tag" id="reportCount">Signalements</p>
+        <p class="tag" id="reportCount">Signalements de films</p>
         <div id="reportList"></div>
+      </div>
+
+      <div class="card">
+        <p class="tag" id="convCount">Conversations signalées</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 8px;line-height:1.6">
+          Messages privés signalés par un joueur. Consultables uniquement en cas de
+          signalement — jamais autrement.</p>
+        <div id="convList"></div>
       </div>
     </div>
 
@@ -239,6 +247,9 @@
             <label for="rVitesse">Dévoilement du synopsis (ms) — 0 pour désactiver</label>
             <input id="rVitesse" type="number" min="0" max="10000" step="100">
           </div>
+          <div><label for="rParties">Parties classées par 24 h (seau)</label><input id="rParties" type="number" min="1" max="100"></div>
+          <div><label for="rDonMax">Don maximum par opération</label><input id="rDonMax" type="number" min="0" max="100000"></div>
+          <div><label for="rDonJour">Plafond de dons par 24 h</label><input id="rDonJour" type="number" min="0" max="500000"></div>
         </div>
         <div class="row">
           <button id="btnSaveReglages">Enregistrer les réglages</button>
@@ -490,7 +501,7 @@ function tab(which){
     $(volet).classList.toggle("hidden", which !== nom);
   }
   if (which === "users") loadUsers();
-  if (which === "reports") loadReports();
+  if (which === "reports"){ loadReports(); loadConversations(); }
   if (which === "reglages"){ etatSecurite(); chargerReglages(); }
 }
 $("tabMovies").onclick = () => tab("movies");
@@ -503,7 +514,8 @@ let reglages = null;
 
 const CHAMPS = { rDuree:"roundDuration", rBase:"basePoints", rDepart:"creditsDepart",
                  rPartie:"creditsParPartie", rTaux:"pointsParTicket", rGrace:"graceApresPremier",
-                 rVitesse:"vitesseSynopsis" };
+                 rVitesse:"vitesseSynopsis", rParties:"partiesClasseesParJour",
+                 rDonMax:"transfertMax", rDonJour:"transfertParJour" };
 
 async function chargerReglages(){
   const res = await api("/api/admin/reglages");
@@ -607,6 +619,33 @@ $("btnChangerMdp").onclick = async () => {
   dire("Mot de passe changé. Notez-le : il est irrécupérable.", true);
   etatSecurite();
 };
+
+/* ---------- Conversations signalées ---------- */
+async function loadConversations(){
+  const res = await api("/api/admin/conversations");
+  if (!res.ok) return;
+  const liste = await res.json();
+  $("convCount").textContent = liste.length
+    ? `${liste.length} conversation${liste.length>1?"s":""} signalée${liste.length>1?"s":""}`
+    : "Conversations signalées";
+
+  $("convList").innerHTML = liste.length ? liste.map(c => `
+    <div class="urow" style="align-items:flex-start">
+      <div class="who">
+        <strong>Signalée par ${esc(c.signale.par)}</strong>
+        <small>${esc(c.signale.motif || "sans motif")}</small>
+        <div style="margin-top:8px;max-height:160px;overflow-y:auto;font-size:13px;line-height:1.6">
+          ${c.messages.map(m => `<div style="color:var(--muted)">— ${esc(m.texte)}</div>`).join("")}
+        </div>
+      </div>
+      <button class="ghost" data-conv="${esc(c.cle)}">Classer</button>
+    </div>`).join("") : "<p class='msg'>Aucune conversation signalée.</p>";
+
+  $("convList").querySelectorAll("[data-conv]").forEach(b => b.onclick = async () => {
+    await api(`/api/admin/conversations/${encodeURIComponent(b.dataset.conv)}/traiter`, {method:"POST"});
+    loadConversations();
+  });
+}
 
 /* ---------- Signalements ---------- */
 let motifs = {};
