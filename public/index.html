@@ -770,6 +770,15 @@ window.addEventListener("error", (e) => {
   boite.classList.remove("hidden");
 });
 </script>
+<div id="voilePause" class="hidden">
+    <div class="boitePause">
+      <p class="tag" style="margin-bottom:6px">Partie en pause</p>
+      <p class="grosChiffre" id="pauseReste">--</p>
+      <p class="note" id="pauseQui" style="margin:0 0 18px"></p>
+      <button id="btnReprendre">Reprendre la partie</button>
+      <div class="row"><button id="btnQuitterPause" class="ghost">Quitter la partie</button></div>
+    </div>
+
 <script src="/js/moteur.js"></script>
 <script>
 /* Dernier recours si le fichier local est lui aussi filtré. */
@@ -2483,14 +2492,7 @@ socket.on("game:end", ({ranking, mode, teams, credits: solde, points: cagnotte})
 const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
   .map(p => `<li class="${p.team||""}">${vignette(p)} ${esc(p.pseudo)}<b>${p.score} pts</b></li>`).join("");
 </script>
-<div id="voilePause" class="hidden">
-    <div class="boitePause">
-      <p class="tag" style="margin-bottom:6px">Partie en pause</p>
-      <p class="grosChiffre" id="pauseReste">--</p>
-      <p class="note" id="pauseQui" style="margin:0 0 18px"></p>
-      <button id="btnReprendre">Reprendre la partie</button>
-      <div class="row"><button id="btnQuitterPause" class="ghost">Quitter la partie</button></div>
-    </div>
+
   </div>
 </body>
 </html>
