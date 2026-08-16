@@ -1031,7 +1031,7 @@ app.get("/api/movies/upcoming", async (req, res) => {
     const gte = fmt(wednesday);
     const lte = fmt(nextTuesday);
 
-    const url = `https://api.themoviedb.org/3/discover/movie?api_key=${tmdbKey}&language=fr-FR&region=FR&primary_release_date.gte=${gte}&primary_release_date.lte=${lte}&with_release_type=3&sort_by=popularity.desc&vote_count.gte=10`;
+    const url = `https://api.themoviedb.org/3/discover/movie?api_key=${tmdbKey}&language=fr-FR&region=FR&primary_release_date.gte=${gte}&primary_release_date.lte=${lte}&with_release_type=3&sort_by=popularity.desc`;
     const response = await fetch(url);
     if (!response.ok) return res.json({ error: "API_ERROR", movies: [] });
     
