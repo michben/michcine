@@ -274,6 +274,8 @@ export function connecterEmail(email, motDePasse) {
 /* ---------- parrainage ---------- */
 
 const PARTIES_POUR_CODE = Number(process.env.PARTIES_POUR_CODE || 25);
+const USAGES_PAR_CODE = Number(process.env.USAGES_PAR_CODE || 5);        // pour un code de première génération
+const USAGES_FILLEUL = Number(process.env.USAGES_FILLEUL || 3);          // pour un code obtenu par parrainage
 const ALPHABET_CODE = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";   // sans I, O, 0, 1
 
 /** Le parrainage est exigé seulement si la variable est active. */
@@ -292,14 +294,23 @@ function genererCodeParrain() {
  * Attribue son code au joueur dès qu'il atteint le seuil de parties.
  * Appelé après chaque partie : le code apparaît alors de lui-même.
  */
+/**
+ * Attribue son code au joueur dès le seuil atteint.
+ * Un joueur arrivé par parrainage dispose de moins d'invitations que les
+ * premiers membres : la croissance reste maîtrisée de génération en génération.
+ */
 export function verifierCodeParrain(userId) {
   const u = users[userId];
   if (!u || u.codeParrain) return null;
   if ((u.partiesGlobales || 0) < PARTIES_POUR_CODE) return null;
   u.codeParrain = genererCodeParrain();
+  u.usagesMax = u.parrainId ? USAGES_FILLEUL : USAGES_PAR_CODE;
   saveUsers();
   return u.codeParrain;
 }
+
+const usagesRestants = (u) =>
+  Math.max(0, (u.usagesMax ?? USAGES_PAR_CODE) - (u.filleuls || []).length);
 
 const parCode = (code) =>
   Object.values(users).find((u) => u.codeParrain === String(code || "").toUpperCase().trim());
@@ -307,10 +318,11 @@ const parCode = (code) =>
 /** Valide un code sans consommer quoi que ce soit. */
 export function verifierCode(code) {
   const parrain = parCode(code);
-  if (!parrain) return { error: "CODE_INCONNU" };
-  if (parrain.banned) return { error: "CODE_INCONNU" };
+  if (!parrain || parrain.banned) return { error: "CODE_INCONNU" };
+  if (usagesRestants(parrain) <= 0) return { error: "CODE_EPUISE" };
   return { ok: true, parrain: { id: parrain.id, pseudo: parrain.pseudo,
-                                avatar: parrain.avatar, photo: parrain.photo || null } };
+                                avatar: parrain.avatar, photo: parrain.photo || null },
+           restants: usagesRestants(parrain) };
 }
 
 /** Rattache un nouveau compte à son parrain. Irréversible et unique. */
@@ -322,6 +334,7 @@ export function rattacherParrain(userId, code) {
   const parrain = parCode(code);
   if (!parrain || parrain.banned) return { error: "CODE_INCONNU" };
   if (parrain.id === userId) return { error: "SOI_MEME" };
+  if (usagesRestants(parrain) <= 0) return { error: "CODE_EPUISE" };
 
   u.parrainId = parrain.id;
   u.parraineLe = Date.now();
@@ -343,6 +356,8 @@ export function infoParrainage(userId) {
   };
   return {
     code: u.codeParrain || null,
+    usagesMax: u.usagesMax ?? (u.parrainId ? USAGES_FILLEUL : USAGES_PAR_CODE),
+    usagesRestants: u.codeParrain ? usagesRestants(u) : null,
     partiesRequises: PARTIES_POUR_CODE,
     parties: u.partiesGlobales || 0,
     parrain: u.parrainId ? bref(u.parrainId) : null,

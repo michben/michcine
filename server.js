@@ -613,6 +613,12 @@ app.post("/api/solo/next", (req, res) => {
   const p = parties.get(user.id);
   if (!p) return res.status(400).json({ error: "PAS_DE_PARTIE" });
 
+  // passer sans avoir répondu revient à renoncer : cela coûte un cœur
+  if (!p.repondu) {
+    p.coeurs = Math.max(0, p.coeurs - 1);
+    p.repondu = true;
+  }
+
   p.index++;
   const fini = p.index >= p.playlist.length || p.coeurs === 0;
   if (!fini) return res.json({ ok: true, ...demarrerManche(p) });
@@ -1397,7 +1403,14 @@ io.on("connection", (socket) => {
     const room = rooms.get(code);
     const player = room?.players.get(socket.id);
     if (!room || !player || room.status !== "playing") return;
-    if (["solo", "ranked"].includes(room.mode) || player.hasAnswered) endRound(room);
+
+    // renoncer à la manche coûte un cœur, comme une mauvaise réponse
+    if (!player.hasAnswered) {
+      player.hasAnswered = true;
+      player.coeurs = Math.max(0, (player.coeurs ?? REGLAGES.coeurs) - 1);
+      socket.emit("coeurs:maj", { coeurs: player.coeurs, elimine: player.coeurs === 0 });
+    }
+    if ([...room.players.values()].every((p) => p.hasAnswered || p.coeurs === 0)) endRound(room);
   });
 
   /** Enchaîner sans attendre la fin de l'entracte. */

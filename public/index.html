@@ -203,10 +203,16 @@
   /* La pause doit rendre le synopsis réellement illisible : un simple voile
      opaque se contourne en jouant sur le contraste ou en sélectionnant le
      texte. On floute donc la page elle-même, en plus du voile. */
-  body.enPause > .wrap{filter:blur(14px) saturate(.4);pointer-events:none;user-select:none}
+  /* Le flou s'applique au contenu du jeu, jamais au voile lui-même :
+     sinon les boutons de reprise deviennent illisibles. */
+  body.enPause .wrap{filter:blur(14px) saturate(.4);pointer-events:none;user-select:none}
+  body.enPause #voilePause{filter:none}
   #voilePause{position:fixed;inset:0;z-index:75;display:grid;place-items:center;padding:20px;
     background:rgba(10,12,22,.97);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
-  .boitePause{text-align:center;max-width:340px}
+  .boitePause{text-align:center;max-width:340px;background:var(--velvet);
+    border:1px solid rgba(237,232,220,.16);border-radius:16px;padding:26px 22px;
+    box-shadow:0 20px 60px rgba(0,0,0,.7)}
+  .boitePause .row{margin-top:12px}
   .grosChiffre{font-family:'JetBrains Mono',monospace;font-size:52px;color:var(--beam);margin:0 0 4px}
   #erreurJS{position:fixed;left:0;right:0;bottom:0;z-index:90;margin:0;padding:12px 16px;
     background:var(--ticket);color:#fff;font-size:13px;font-family:'JetBrains Mono',monospace;
@@ -686,14 +692,7 @@
     </div>
   </section>
 
-  <div id="voilePause" class="hidden">
-    <div class="boitePause">
-      <p class="tag" style="margin-bottom:6px">Partie en pause</p>
-      <p class="grosChiffre" id="pauseReste">--</p>
-      <p class="note" id="pauseQui" style="margin:0 0 18px"></p>
-      <button id="btnReprendre">Reprendre la partie</button>
-    </div>
-  </div>
+  
 
   <p id="erreurJS" class="hidden"></p>
 
@@ -1191,7 +1190,7 @@ $("codeParrain").addEventListener("input", async (e) => {
     .then(x => x.ok ? x.json() : null).catch(() => null);
 
   if (!r){
-    $("codeMsg").textContent = "Ce code n'existe pas.";
+    $("codeMsg").textContent = "Ce code n'existe pas, ou toutes ses invitations sont utilisées.";
     $("codeMsg").className = "feedback bad";
     return;
   }
@@ -1200,7 +1199,9 @@ $("codeParrain").addEventListener("input", async (e) => {
   $("apercuParrain").innerHTML =
     `<div class="cadreFiche ${r.parrain.photo ? "" : "emoji"}" style="width:64px;height:64px;margin-bottom:8px">` +
     (r.parrain.photo ? `<img src="${esc(r.parrain.photo)}" alt="">` : (r.parrain.avatar || "🎬")) +
-    `</div><p class="note" style="margin:0">Invitation de <b style="color:var(--beam)">${esc(r.parrain.pseudo)}</b></p>`;
+    `</div><p class="note" style="margin:0">Invitation de <b style="color:var(--beam)">${esc(r.parrain.pseudo)}</b>` +
+    (r.restants ? `<br><small>${r.restants} invitation${r.restants>1?"s":""} encore disponible${r.restants>1?"s":""}</small>` : "") +
+    `</p>`;
   $("apercuParrain").classList.remove("hidden");
 });
 
@@ -1213,6 +1214,7 @@ $("btnValiderCode").onclick = async () => {
   const data = await res.json().catch(() => ({}));
   if (!res.ok){
     const messages = { CODE_INCONNU: "Ce code n'existe pas.",
+                       CODE_EPUISE: "Ce code a déjà été utilisé le nombre de fois autorisé.",
                        DEJA_PARRAINE: "Votre compte est déjà rattaché.",
                        SOI_MEME: "Vous ne pouvez pas utiliser votre propre code." };
     $("codeMsg").textContent = messages[data.error] || "Code refusé.";
@@ -1240,7 +1242,11 @@ async function chargerParrainage(){
     ? `<div class="codeCadre">
          <small style="color:var(--muted);font-size:12px;letter-spacing:.2em;text-transform:uppercase">Votre code d'invitation</small>
          <p class="valeur">${esc(p.code)}</p>
-         <button class="ghost" id="btnCopierCode">Copier le code</button>
+         <p class="note" style="margin:0 0 12px">
+           ${p.usagesRestants > 0
+             ? `<b style="color:var(--beam)">${p.usagesRestants}</b> invitation${p.usagesRestants>1?"s":""} restante${p.usagesRestants>1?"s":""} sur ${p.usagesMax}`
+             : "Toutes vos invitations ont été utilisées."}</p>
+         ${p.usagesRestants > 0 ? '<button class="ghost" id="btnCopierCode">Copier le code</button>' : ""}
        </div>`
     : `<div class="codeCadre">
          <p class="note" style="margin:0">Votre code d'invitation se débloque après
@@ -1249,7 +1255,7 @@ async function chargerParrainage(){
          <p class="note" style="margin:0">${p.parties} sur ${p.partiesRequises} — encore ${reste} partie${reste>1?"s":""}.</p>
        </div>`;
 
-  if (p.code) $("btnCopierCode").onclick = () => {
+  if (p.code && p.usagesRestants > 0) $("btnCopierCode").onclick = () => {
     navigator.clipboard?.writeText(p.code);
     $("btnCopierCode").textContent = "Copié ✓";
     setTimeout(() => $("btnCopierCode").textContent = "Copier le code", 2000);
@@ -1295,13 +1301,33 @@ async function basculerPause(){
 }
 $("btnPause").onclick = basculerPause;
 $("btnReprendre").onclick = basculerPause;
+
+$("btnQuitterPause").onclick = () => {
+  if (!confirm("Quitter la partie en cours ?")) return;
+  afficherPause(false, 0);
+  if (!SANS_RESEAU.includes(state.mode)) socket.emit("room:leave");
+  clearInterval(state.timerId);
+  clearTimeout(state.suiteId);
+  state.code = null;
+  setChatVisible(false);
+  show("menu");
+};
 socket.on("game:paused", ({enPause: actif, reste, par}) => afficherPause(actif, reste, par));
 
 /** Enchaîner la manche suivante : disponible en solo, ou après avoir répondu. */
 $("btnSkip").onclick = () => {
+  if (!state.answered && !confirm("Passer sans répondre coûte un cœur. Continuer ?")) return;
   if (SANS_RESEAU.includes(state.mode)) return mancheSuivanteSolo();
   socket.emit("round:skip", {code: state.code});
 };
+
+socket.on("coeurs:maj", ({coeurs, elimine}) => {
+  majCoeurs(coeurs, state.coeursMax, true);
+  $("guessFeedback").textContent = elimine
+    ? "Cœurs épuisés — vous êtes éliminé de cette partie."
+    : `Manche passée — ${coeurs} cœur${coeurs>1?"s":""} restant${coeurs>1?"s":""}.`;
+  $("guessFeedback").className = "feedback bad";
+});
 
 /* ---------- Invitations reçues ---------- */
 socket.on("invite:recue", ({code, mode, de, avatar, joueurs}) => {
@@ -2144,7 +2170,7 @@ function renderChoicesSolo(liste){
 async function mancheSuivanteSolo(){
   const r = await solo("next");
   if (!r) return show("menu");
-  if (!r.fini) return afficherManche(r);
+  if (!r.fini) return afficherManche(r);   // afficherManche remet les cœurs à jour
   if (r.codeObtenu)
     setTimeout(() => bandeauNotif(
       `<span style="font-size:24px">🎟️</span><span><b>Votre code d'invitation est prêt</b>
@@ -2457,5 +2483,14 @@ socket.on("game:end", ({ranking, mode, teams, credits: solde, points: cagnotte})
 const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
   .map(p => `<li class="${p.team||""}">${vignette(p)} ${esc(p.pseudo)}<b>${p.score} pts</b></li>`).join("");
 </script>
+<div id="voilePause" class="hidden">
+    <div class="boitePause">
+      <p class="tag" style="margin-bottom:6px">Partie en pause</p>
+      <p class="grosChiffre" id="pauseReste">--</p>
+      <p class="note" id="pauseQui" style="margin:0 0 18px"></p>
+      <button id="btnReprendre">Reprendre la partie</button>
+      <div class="row"><button id="btnQuitterPause" class="ghost">Quitter la partie</button></div>
+    </div>
+  </div>
 </body>
 </html>
