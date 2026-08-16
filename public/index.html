@@ -113,6 +113,12 @@
   .synopsis .mot.masque{color:var(--ticket);letter-spacing:.06em}
   @keyframes apparait{to{opacity:1;filter:none;transform:none}}
   .synopsis.termine .mot{animation:none;opacity:1;filter:none;transform:none}
+  .barreLecture{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px}
+  .barreLecture button{padding:9px 14px;font-size:14px}
+  .barreLecture button.parle{border-color:var(--beam);color:var(--beam)}
+  .autoLecture{display:flex;align-items:center;gap:7px;margin:0;color:var(--muted);
+    font-size:13px;text-transform:none;letter-spacing:0;cursor:pointer}
+  .autoLecture input{width:18px;height:18px;accent-color:var(--beam)}
   .indiceLecture{color:var(--muted);font-size:12px;letter-spacing:.14em;text-transform:uppercase;
     margin:10px 0 0;opacity:.75}
   @media (prefers-reduced-motion:reduce){.synopsis .mot{animation:none;opacity:1;filter:none;transform:none}}
@@ -620,6 +626,12 @@
       </div>
       <p class="tag" id="roundLabel">Manche 1</p>
       <p class="synopsis" id="synopsis"></p>
+      <div class="barreLecture">
+        <button id="btnLire" class="ghost" title="Lire le synopsis à voix haute">🔊 Lire</button>
+        <label class="autoLecture">
+          <input type="checkbox" id="lectureAuto"> Lecture automatique
+        </label>
+      </div>
       <p class="indiceLecture hidden" id="indiceLecture">Touchez le texte pour tout afficher</p>
       <p class="pattern hidden" id="pattern"></p>
       <img id="hintPoster" class="poster hidden" alt="Photo du film">
@@ -1068,6 +1080,14 @@ $("mdp").addEventListener("keydown", e => { if (e.key === "Enter") authMail("con
  */
 function derouler(texte){
   const zone = $("synopsis");
+  state.synopsisCourant = texte;
+  arreterLecture();
+
+  // la lecture démarre après le dévoilement, pour ne pas devancer le texte
+  if ($("lectureAuto").checked){
+    clearTimeout(state.lectureAutoId);
+    state.lectureAutoId = setTimeout(() => lireSynopsis(texte), 450);
+  }
   const sobre = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const duree = state.vitesseSynopsis ?? 2800;   // réglable depuis l'administration
 
@@ -1184,6 +1204,72 @@ async function offrirPoints(id, pseudo){
     <small>à ${esc(pseudo)}</small></span>`);
 }
 
+/* ---------- Lecture à voix haute ---------- */
+
+/**
+ * Prépare le texte pour la synthèse vocale.
+ * Les mots masqués ne doivent jamais être prononcés : ils sont remplacés par
+ * une formule neutre, sans quoi la lecture donnerait la réponse à voix haute
+ * alors que l'écran la cache.
+ */
+function texteLisible(synopsis){
+  return synopsis
+    .replace(/[▪]+/g, " mot masqué ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const synthese = window.speechSynthesis;
+let voixFr = null;
+
+function choisirVoix(){
+  if (!synthese) return;
+  const voix = synthese.getVoices();
+  voixFr = voix.find(v => v.lang?.startsWith("fr") && /premium|enhanced|amelie|thomas/i.test(v.name))
+        || voix.find(v => v.lang?.startsWith("fr"))
+        || null;
+}
+if (synthese){
+  choisirVoix();
+  synthese.addEventListener?.("voiceschanged", choisirVoix);
+}
+
+function arreterLecture(){
+  synthese?.cancel();
+  $("btnLire").classList.remove("parle");
+  $("btnLire").textContent = "🔊 Lire";
+}
+
+function lireSynopsis(texte){
+  if (!synthese) return;
+  arreterLecture();
+
+  const phrase = new SpeechSynthesisUtterance(texteLisible(texte));
+  phrase.lang = "fr-FR";
+  if (voixFr) phrase.voice = voixFr;
+  phrase.rate = 0.98;
+  phrase.onend = arreterLecture;
+  phrase.onerror = arreterLecture;
+
+  $("btnLire").classList.add("parle");
+  $("btnLire").textContent = "⏹ Arrêter";
+  synthese.speak(phrase);
+}
+
+$("btnLire").onclick = () => {
+  if (synthese?.speaking) return arreterLecture();
+  lireSynopsis(state.synopsisCourant || "");
+};
+
+// la préférence est mémorisée d'une partie à l'autre
+$("lectureAuto").checked = localStorage.getItem("michben_lecture") === "1";
+$("lectureAuto").onchange = () => {
+  localStorage.setItem("michben_lecture", $("lectureAuto").checked ? "1" : "0");
+  if (!$("lectureAuto").checked) arreterLecture();
+};
+
+if (!synthese) $("btnLire").parentElement?.classList?.add("hidden");
+
 /* ---------- Parrainage ---------- */
 let parrainVerifie = null;
 
@@ -1287,6 +1373,7 @@ async function chargerParrainage(){
 let enPause = false;
 
 function afficherPause(actif, reste, par){
+  if (actif) arreterLecture();   // on ne parle pas pendant la pause
   enPause = actif;
   $("voilePause").classList.toggle("hidden", !actif);
   document.body.classList.toggle("enPause", actif);
@@ -2152,6 +2239,7 @@ function renderChoicesSolo(liste){
     $("choices").querySelectorAll("button").forEach(b => b.disabled = true);
     const r = await solo("answer", {choiceId: Number(btn.dataset.choice)});
     if (!r) return;
+    arreterLecture();
     clearInterval(state.timerId);
     if (r.coeurs !== undefined) majCoeurs(r.coeurs, state.coeursMax, !r.correct);
     btn.classList.add(r.correct ? "good" : "bad");
@@ -2415,6 +2503,7 @@ $("btnNext").onclick = () => {
 };
 
 socket.on("round:end", ({answer, movieId, poster, year, scores, isHost, mode}) => {
+  arreterLecture();
   filmCourant = movieId;
   revelation(answer, poster, year, state.answered);
   $("reportBox").classList.add("hidden");
