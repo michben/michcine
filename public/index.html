@@ -429,6 +429,10 @@
   
   @keyframes pulseBonus { 0%, 100% { transform: scale(1.2); } 50% { transform: scale(1.4); box-shadow: 0 0 30px var(--ticket); } }
 
+
+  .cadrePhoto.emoji { display: grid; place-items: center; font-size: 64px; }
+  .cadrePhoto.emoji .inner-emoji { width: 100%; height: 100%; border-radius: 50%; background: var(--card); border: 3px solid var(--velvet); display: grid; place-items: center; }
+
 </style>
 
 </head>
@@ -523,12 +527,12 @@
       <p class="note" id="welcomeNote" style="margin-top:0"></p>
 
       <div id="carteProfil" class="hidden">
-        <div class="cadrePhoto">
+        <div class="cadrePhoto" id="cadreMaPhoto">
           <img id="grandePhoto" alt="Votre photo de profil">
         </div>
         <p class="bienvenue" id="motProfil"></p>
-        <p class="stat" id="statProfil"></p>
-        <div class="row" style="justify-content:center">
+        <div class="ficheStats" id="mesStatsDetaillees" style="margin: 16px 0; text-align: left;"></div>
+        <div class="row" style="justify-content:center" id="dlPhotoRow">
           <button id="btnTelechargerPhoto" class="ghost">⬇ Enregistrer ma photo</button>
         </div>
         <p class="feedback" id="photoMsg" style="text-align:center"></p>
@@ -2120,27 +2124,47 @@ $("avatars").querySelectorAll("[data-a]").forEach(b => b.onclick = () => {
  * Carte de profil : photo en grand, message d'accueil et résumé du parcours.
  * Le message varie selon l'ancienneté pour ne pas paraître mécanique.
  */
-function remplirCarteProfil(){
+async function remplirCarteProfil(){
   const carte = $("carteProfil");
-  if (!me?.photo) return carte.classList.add("hidden");
-
   carte.classList.remove("hidden");
-  $("grandePhoto").src = me.photo;
 
-  const parties = me.partiesGlobales || 0;
+  const cadre = $("cadreMaPhoto");
+  if (me?.photo) {
+    cadre.classList.remove("emoji");
+    cadre.innerHTML = `<img id="grandePhoto" src="${esc(me.photo)}" alt="Votre photo de profil" style="width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;background:var(--card);border:3px solid var(--velvet)">`;
+    $("dlPhotoRow").classList.remove("hidden");
+  } else {
+    cadre.classList.add("emoji");
+    cadre.innerHTML = `<div class="inner-emoji">${me?.avatar || "🎬"}</div>`;
+    $("dlPhotoRow").classList.add("hidden");
+  }
+
+  const parties = me?.partiesGlobales || 0;
   $("motProfil").textContent = parties === 0
-    ? `Bienvenue parmi nous, ${me.pseudo}`
+    ? `Bienvenue parmi nous, ${me?.pseudo}`
     : parties < 10
-      ? `Content de vous revoir, ${me.pseudo}`
-      : `${me.pseudo}, fidèle au poste`;
+      ? `Content de vous revoir, ${me?.pseudo}`
+      : `${me?.pseudo}, fidèle au poste`;
 
-  const morceaux = [];
-  if (parties) morceaux.push(`<b>${parties}</b> partie${parties>1?"s":""} jouée${parties>1?"s":""}`);
-  if (me.scoreGlobal) morceaux.push(`<b>${me.scoreGlobal}</b> points au total`);
-  morceaux.push(`<b>${me.credits ?? 0}</b> ticket${(me.credits ?? 0)>1?"s":""}`);
-  $("statProfil").innerHTML = morceaux.join(" · ") +
-    (parties >= 10 ? "<br>Merci de faire vivre le jeu." : "");
+  $("mesStatsDetaillees").innerHTML = "<p class='note' style='grid-column:1/-1;text-align:center;'>Chargement de vos statistiques...</p>";
   $("photoMsg").textContent = "";
+
+  const f = await fetch(`/api/players/${encodeURIComponent(me.id)}/fiche`).then(r => r.ok ? r.json() : null).catch(() => null);
+
+  if (f) {
+    const rang = (r) => r ? `${r.rang}<sup style="font-size:11px">e</sup>` : "—";
+    $("mesStatsDetaillees").innerHTML = `
+      <div><small>Points au total</small><b>${f.scoreGlobal}</b></div>
+      <div><small>Parties jouées</small><b>${f.partiesGlobales}</b></div>
+      <div><small>Moyenne par partie</small><b>${f.moyenne}</b></div>
+      <div><small>Amis</small><b>${f.amis}</b></div>
+      <div><small>Tickets bonus</small><b>${me.credits ?? 0}</b></div>
+      <div><small>Niveau</small><b>${me.niveau || 0}</b></div>
+      <div class="large"><small>Rang global · rang de la saison</small>
+        <b>${rang(f.rangGlobal)} · ${rang(f.rangSaison)}</b></div>`;
+  } else {
+    $("mesStatsDetaillees").innerHTML = `<p class="note" style="grid-column:1/-1;">Statistiques momentanément indisponibles.</p>`;
+  }
 }
 
 /** Enregistre la photo sur l'appareil du joueur. */
