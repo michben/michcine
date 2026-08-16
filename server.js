@@ -1,5 +1,5 @@
 /**
- * MichBen Ciné Quizz — serveur de jeu (MVP)
+ * MichBen Séries Quizz — serveur de jeu (MVP)
  * Node 18+ / Express / Socket.IO
  *
  *   npm install && npm start   →  http://localhost:3000
@@ -101,9 +101,9 @@ const REGLAGES_DEFAUT = {
   indices: {
     letters:  { actif: true, points: 150, tickets: 1, libelle: "Nombre de lettres" },
     year:     { actif: true, points: 100, tickets: 1, libelle: "Année" },
-    director: { actif: true, points: 200, tickets: 1, libelle: "Réalisateur" },
+    director: { actif: true, points: 200, tickets: 1, libelle: "Créateur / Showrunner" },
     actors:   { actif: true, points: 300, tickets: 2, libelle: "Acteurs" },
-    poster:   { actif: true, points: 250, tickets: 2, libelle: "Photo du film",
+    poster:   { actif: true, points: 250, tickets: 2, libelle: "Affiche de la série",
                 zoom: 160, cadrage: "center", flou: 0 },
   },
 };
@@ -385,7 +385,7 @@ function sanitizeMovie(body) {
     actors: String(body.actors || "").trim(),
     poster: String(body.poster || "").trim(),
     still: String(body.still || "").trim(),
-    // cadrage propre à ce film : remplace le réglage global quand il est défini
+    // cadrage propre à cette série : remplace le réglage global quand il est défini
     cadrageImage: cadragePropre(body.cadrageImage),
     rating: Number(body.rating) || null,
     votes: Number(body.votes) || 0,
@@ -884,7 +884,7 @@ app.post("/api/friends/:action", (req, res) => {
 
 const QUETES = {
   jouer3:      { titre: "Jouer 3 parties",              cible: 3,  tickets: 3, xp: 60 },
-  bonnes10:    { titre: "Trouver 10 films",             cible: 10, tickets: 4, xp: 80 },
+  bonnes10:    { titre: "Trouver 10 séries",             cible: 10, tickets: 4, xp: 80 },
   sansIndice:  { titre: "Gagner 3 manches sans indice", cible: 3,  tickets: 5, xp: 100 },
   sansFaute:   { titre: "Terminer une partie sans faute", cible: 1, tickets: 6, xp: 120 },
 };
@@ -1730,6 +1730,6 @@ if (!empreinteAdmin)
 await chargerUtilisateurs();
 
 httpServer.listen(PORT, "0.0.0.0", () => {
-  console.log(`MichBen Ciné Quizz → http://localhost:${PORT}  (admin : /admin.html)`);
+  console.log(`MichBen Séries Quizz → http://localhost:${PORT}  (admin : /admin.html)`);
   console.log(`${movies.length} films · stockage : ${enBase ? "Postgres" : "fichiers locaux"}`);
 });
