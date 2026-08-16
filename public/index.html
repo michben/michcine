@@ -654,7 +654,10 @@
     <h2 id="hello">Bonjour</h2>
     <p class="wallet" id="walletMenu">🎟️ <b>0</b> crédits</p>
     <p class="online" id="btnOnlineUsers" style="cursor:pointer" title="Voir les joueurs en ligne"><span class="dot on"></span><b id="onlineNb">—</b><span id="onlineCount">joueurs en ligne</span></p>
-    <button id="btnUpcomingMovies" style="margin-left: 10px; padding: 10px 16px; background: var(--beam); color: #0A0C16; font-weight: bold; border: 0; border-radius: 999px; cursor: pointer;">🍿 Sorties Ciné de la semaine</button>
+    <div class="row" style="margin-bottom: 14px; gap: 10px;">
+      <button id="btnUpcomingMovies" style="flex:1; padding: 10px 16px; background: var(--beam); color: #0A0C16; font-weight: bold; border: 0; border-radius: 999px; cursor: pointer;">🍿 Sorties Ciné</button>
+      <button id="btnNowPlaying" style="flex:1; padding: 10px 16px; background: var(--teal); color: #0A0C16; font-weight: bold; border: 0; border-radius: 999px; cursor: pointer;">🎥 Actuellement au cinéma</button>
+    </div>
 
     <div class="barreNiveau" id="barreNiveau">
       <div class="niveauTete">
@@ -2825,6 +2828,19 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
         </div>
     </div>
 
+    <!-- MODALE ACTUELLEMENT AU CINEMA -->
+    <div class="modal-overlay" id="nowPlayingModal">
+        <div class="modal-content">
+            <div class="modal-header" style="border-bottom-color: var(--teal);">
+                <h2>🎥 Actuellement au cinéma</h2>
+                <button class="close-btn" id="closeNowPlayingBtn">&times;</button>
+            </div>
+            <div class="modal-body" id="nowPlayingList" style="max-height: 60vh; overflow-y: auto;">
+                <p class="note" style="text-align:center">Recherche des films à l'affiche...</p>
+            </div>
+        </div>
+    </div>
+
     <!-- BOUTON FLOTTANT ET MODALE D'AIDE -->
     <div class="help-btn" id="helpBtn" title="Règles du jeu">?</div>
     <div class="modal-overlay" id="rulesModal">
@@ -2972,18 +2988,25 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
         const closeBdayBtn = document.getElementById("closeBdayBtn");
 
         if (btnBirthdays) {
-            const today = new Date();
-            const options = { day: 'numeric', month: 'long' };
-            const dateStr = today.toLocaleDateString('fr-FR', options);
-            btnBirthdays.innerHTML = `🎂 Célébrités nées le ${dateStr}`;
+            const updateBdayText = () => {
+                const today = new Date();
+                const options = { day: 'numeric', month: 'long' };
+                const dateStr = today.toLocaleDateString('fr-FR', options);
+                btnBirthdays.innerHTML = `🎂 Célébrités nées le ${dateStr}`;
+                return { dateStr, mm: String(today.getMonth() + 1).padStart(2, '0'), dd: String(today.getDate()).padStart(2, '0') };
+            };
+            updateBdayText();
+            // Automatically update at midnight if page is left open
+            setInterval(updateBdayText, 60000);
 
             btnBirthdays.addEventListener("click", async () => {
                 birthdaysModal.classList.add("active");
+                const { dateStr, mm, dd } = updateBdayText();
                 document.getElementById("bdayDate").textContent = dateStr;
                 document.getElementById("bdayList").innerHTML = "<p class='note' style='text-align:center'>Recherche dans les archives d'Hollywood...</p>";
 
                 try {
-                    const res = await fetch("/api/birthdays");
+                    const res = await fetch(`/api/birthdays?mm=${mm}&dd=${dd}`);
                     const data = await res.json();
                     if (!data.actors || data.actors.length === 0) {
                         document.getElementById("bdayList").innerHTML = "<p class='note'>Aucune star majeure du cinéma répertoriée pour aujourd'hui.</p>";
@@ -3009,7 +3032,53 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
                 if (e.target === birthdaysModal) birthdaysModal.classList.remove('active');
             });
         }
-    </script>
+    
+        const btnNowPlaying = document.getElementById("btnNowPlaying");
+        const nowPlayingModal = document.getElementById("nowPlayingModal");
+        const closeNowPlayingBtn = document.getElementById("closeNowPlayingBtn");
+
+        if (btnNowPlaying) {
+            btnNowPlaying.addEventListener("click", async () => {
+                nowPlayingModal.classList.add("active");
+                document.getElementById("nowPlayingList").innerHTML = "<p class='note' style='text-align:center'>Recherche des films à l'affiche...</p>";
+                try {
+                    const res = await fetch("/api/movies/now_playing");
+                    const data = await res.json();
+                    
+                    if (data.error === "NO_KEY") {
+                        document.getElementById("nowPlayingList").innerHTML = "<p class='note' style='color:var(--ticket)'>Fonctionnalité en attente de configuration. L'administrateur doit renseigner une clé API TMDB dans les réglages.</p>";
+                        return;
+                    }
+                    if (!data.movies || data.movies.length === 0) {
+                        document.getElementById("nowPlayingList").innerHTML = "<p class='note'>Aucun film à l'affiche trouvé.</p>";
+                        return;
+                    }
+
+                    let html = `<p class="tag" style="margin-bottom:16px;">Sélection des films du moment</p>`;
+                    html += data.movies.map(m => `
+                        <div class="bday-item" style="border-left-color: var(--teal); align-items:flex-start;">
+                            ${m.poster ? `<img src="${m.poster}" alt="" style="width:70px;height:100px;border-radius:4px;">` : `<div style="width:70px;height:100px;border-radius:4px;background:#333;display:flex;align-items:center;justify-content:center;font-size:24px">🎥</div>`}
+                            <div class="info" style="flex:1;">
+                                <b style="font-family:'Anton', sans-serif; letter-spacing:1px; text-transform:uppercase; font-size:18px;">${m.title}</b>
+                                <div style="display:flex;gap:6px;margin:6px 0;">
+                                    <span style="font-size:11px;background:var(--teal);padding:2px 6px;border-radius:4px;color:#161207;font-weight:bold;">⭐ ${m.vote.toFixed(1)}/10</span>
+                                </div>
+                                <small style="display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;">${m.overview || "Aucun synopsis disponible."}</small>
+                            </div>
+                        </div>
+                    `).join("");
+                    document.getElementById("nowPlayingList").innerHTML = html;
+                } catch(e) {
+                    document.getElementById("nowPlayingList").innerHTML = "<p class='note' style='color:var(--ticket)'>Erreur lors du chargement des films à l'affiche.</p>";
+                }
+            });
+            closeNowPlayingBtn.addEventListener("click", () => nowPlayingModal.classList.remove("active"));
+            nowPlayingModal.addEventListener('click', (e) => {
+                if (e.target === nowPlayingModal) nowPlayingModal.classList.remove('active');
+            });
+        }
+
+</script>
 
 </body>
 

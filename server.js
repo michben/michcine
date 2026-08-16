@@ -1014,6 +1014,10 @@ const SORTIES_FILE = new URL("./sorties.json", import.meta.url);
 let sortiesConfig = { hidden: [], custom: [] };
 const saveSortiesConfig = () => sauver("sortiesConfig", sortiesConfig, SORTIES_FILE);
 
+const NOWPLAYING_FILE = new URL("./nowplaying.json", import.meta.url);
+let nowPlayingConfig = { hidden: [], custom: [] };
+const saveNowPlayingConfig = () => sauver("nowPlayingConfig", nowPlayingConfig, NOWPLAYING_FILE);
+
 app.post("/api/admin/sorties/hide", requireAdmin, (req, res) => {
     const id = Number(req.body.id);
     if (id && !sortiesConfig.hidden.includes(id)) {
@@ -1043,6 +1047,38 @@ app.post("/api/admin/sorties/remove-custom", requireAdmin, (req, res) => {
     const id = Number(req.body.id);
     sortiesConfig.custom = sortiesConfig.custom.filter(x => x !== id);
     saveSortiesConfig();
+    res.json({ ok: true });
+});
+
+app.post("/api/admin/nowplaying/hide", requireAdmin, (req, res) => {
+    const id = Number(req.body.id);
+    if (id && !nowPlayingConfig.hidden.includes(id)) {
+        nowPlayingConfig.hidden.push(id);
+        saveNowPlayingConfig();
+    }
+    res.json({ ok: true });
+});
+
+app.post("/api/admin/nowplaying/unhide", requireAdmin, (req, res) => {
+    const id = Number(req.body.id);
+    nowPlayingConfig.hidden = nowPlayingConfig.hidden.filter(x => x !== id);
+    saveNowPlayingConfig();
+    res.json({ ok: true });
+});
+
+app.post("/api/admin/nowplaying/custom", requireAdmin, (req, res) => {
+    const id = Number(req.body.id);
+    if (id && !nowPlayingConfig.custom.includes(id)) {
+        nowPlayingConfig.custom.push(id);
+        saveNowPlayingConfig();
+    }
+    res.json({ ok: true });
+});
+
+app.post("/api/admin/nowplaying/remove-custom", requireAdmin, (req, res) => {
+    const id = Number(req.body.id);
+    nowPlayingConfig.custom = nowPlayingConfig.custom.filter(x => x !== id);
+    saveNowPlayingConfig();
     res.json({ ok: true });
 });
 
@@ -1119,6 +1155,60 @@ app.get("/api/movies/upcoming", async (req, res) => {
 });
 
 
+
+app.get("/api/movies/now_playing", async (req, res) => {
+  try {
+    const tmdbKey = REGLAGES.tmdbApiKey;
+    if (!tmdbKey) return res.json({ error: "NO_KEY", movies: [] });
+    
+    const isAdmin = motDePasseAdminValide(req.get("x-admin-token"));
+    const url = `https://api.themoviedb.org/3/movie/now_playing?api_key=${tmdbKey}&language=fr-FR&region=FR`;
+    
+    const response = await fetch(url);
+    if (!response.ok) return res.json({ error: "API_ERROR", movies: [] });
+    
+    const data = await response.json();
+    let results = data.results || [];
+    
+    const customMovies = [];
+    for (const cid of (nowPlayingConfig.custom || [])) {
+        try {
+            const cRes = await fetch(`https://api.themoviedb.org/3/movie/${cid}?api_key=${tmdbKey}&language=fr-FR`);
+            if (cRes.ok) customMovies.push(await cRes.json());
+        } catch(e){}
+    }
+    
+    const allMovies = [...customMovies, ...results];
+    const seen = new Set();
+    const finalMovies = [];
+    
+    for (const m of allMovies) {
+        if (seen.has(m.id)) continue;
+        seen.add(m.id);
+        
+        const isHidden = (nowPlayingConfig.hidden || []).includes(m.id);
+        const isCustom = (nowPlayingConfig.custom || []).includes(m.id);
+        
+        if (isHidden && !isAdmin) continue;
+        
+        finalMovies.push({
+            id: m.id,
+            title: m.title,
+            overview: m.overview,
+            poster: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : null,
+            vote: m.vote_average,
+            hidden: isHidden,
+            custom: isCustom
+        });
+    }
+
+    res.json({ movies: isAdmin ? finalMovies : finalMovies.slice(0, 15) });
+  } catch (err) {
+    console.error("Erreur now_playing:", err);
+    res.json({ error: "INTERNAL_ERROR", movies: [] });
+  }
+});
+
 app.get("/api/leaderboard", (req, res) =>
   res.json(leaderboard(50, req.query.type === "global" ? "global" : "saison"))
 );
@@ -1135,9 +1225,15 @@ app.get("/api/saison", (req, res) => {
 
 app.get("/api/birthdays", async (req, res) => {
   try {
-    const today = new Date();
-    const mm = String(today.getMonth() + 1).padStart(2, '0');
-    const dd = String(today.getDate()).padStart(2, '0');
+    let mm, dd;
+    if (req.query.mm && req.query.dd) {
+        mm = req.query.mm;
+        dd = req.query.dd;
+    } else {
+        const today = new Date();
+        mm = String(today.getMonth() + 1).padStart(2, '0');
+        dd = String(today.getDate()).padStart(2, '0');
+    }
     const response = await fetch(`https://fr.wikipedia.org/api/rest_v1/feed/onthisday/births/${mm}/${dd}`);
     if (!response.ok) return res.json({ actors: [] });
     const data = await response.json();
@@ -1947,6 +2043,7 @@ for (const [id, liste] of Object.entries(await charger("vus", null, {})))
   vusParJoueur.set(id, liste);
 conversations = await charger("conversations", null, {});
   sortiesConfig = await charger("sortiesConfig", SORTIES_FILE, { hidden: [], custom: [] });
+  nowPlayingConfig = await charger("nowPlayingConfig", NOWPLAYING_FILE, { hidden: [], custom: [] });
 REGLAGES = { ...structuredClone(REGLAGES_DEFAUT), ...(await charger("reglages", null, {})) };
 if (!empreinteAdmin)
   console.warn("⚠️  Mot de passe d'administration par défaut : changez-le depuis /admin.html");
