@@ -773,11 +773,17 @@ app.get("/api/messages/:id", (req, res) => {
     return res.status(403).json({ error: "PAS_AMI" });
 
   const conv = conversations[cleConv(user.id, autre)] || { messages: [] };
+  
+  // Flash : efface les messages de plus de 24h
+  const limit = Date.now() - 24 * 60 * 60 * 1000;
+  conv.messages = conv.messages.filter(m => m.at > limit);
+  
   // on marque comme lus les messages de l'autre
   let change = false;
   for (const m of conv.messages)
     if (m.de === autre && !m.lu) { m.lu = true; change = true; }
-  if (change) saveConversations();
+  
+  saveConversations(); // on sauvegarde toujours pour purger les vieux messages
 
   res.json({ messages: conv.messages.slice(-100) });
 });
@@ -795,6 +801,11 @@ app.post("/api/messages/:id", (req, res) => {
 
   const cle = cleConv(user.id, autre);
   const conv = conversations[cle] || (conversations[cle] = { messages: [], signale: false });
+  
+  // Flash : nettoyage avant ajout
+  const limit = Date.now() - 24 * 60 * 60 * 1000;
+  conv.messages = conv.messages.filter(m => m.at > limit);
+  
   conv.messages.push({ de: user.id, texte, at: Date.now(), lu: false });
   if (conv.messages.length > 300) conv.messages = conv.messages.slice(-300);
   saveConversations();
@@ -811,12 +822,17 @@ app.get("/api/messages", (req, res) => {
   if (!user) return;
   const parAmi = {};
   let total = 0;
+  const limit = Date.now() - 24 * 60 * 60 * 1000;
   for (const [cle, conv] of Object.entries(conversations)) {
+    // Purge au passage
+    conv.messages = conv.messages.filter(m => m.at > limit);
+    
     if (!cle.includes(user.id)) continue;
     const autre = cle.split("|").find((x) => x !== user.id);
     const n = conv.messages.filter((m) => m.de === autre && !m.lu).length;
     if (n) { parAmi[autre] = n; total += n; }
   }
+  saveConversations();
   res.json({ total, parAmi });
 });
 

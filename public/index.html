@@ -1805,8 +1805,10 @@ function ligneJoueur(j, boutons){
     <span class="nom" data-fiche="${esc(j.id)}" data-pseudo="${esc(j.pseudo)}"
       data-avatar="${j.avatar||"🎬"}" data-photo="${esc(j.photo||"")}"
       style="cursor:pointer">${vignette(j)} ${esc(j.pseudo)}</span>
+    <div style="display:flex; gap:6px; flex-wrap:wrap;">
     ${boutons.map(([a, l]) =>
-      `<button class="ghost" data-act="${a}" data-id="${esc(j.id)}">${l}</button>`).join("")}
+      `<button class="ghost" data-act="${a}" data-id="${esc(j.id)}" title="${a}" style="padding:6px 10px; font-size:15px;">${l}</button>`).join("")}
+    </div>
   </div>`;
 }
 
@@ -1816,7 +1818,16 @@ function brancher(){
 
   $("listeAmis").querySelectorAll("[data-act]").forEach(b => b.onclick = async () => {
     if (b.dataset.act === "inviter") return inviter(b.dataset.id, b);
+    if (b.dataset.act === "message") {
+        const nomEl = b.closest(".amiLigne").querySelector(".nom");
+        return ouvrirConversation(b.dataset.id, nomEl.dataset.pseudo, nomEl.dataset.avatar, nomEl.dataset.photo);
+    }
+    if (b.dataset.act === "donner") {
+        const nomEl = b.closest(".amiLigne").querySelector(".nom");
+        return offrirPoints(b.dataset.id, nomEl.dataset.pseudo);
+    }
     if (b.dataset.act === "bloquer" && !confirm("Bloquer ce joueur ?")) return;
+    if (b.dataset.act === "retirer" && !confirm("Retirer cet ami ?")) return;
     await agirAmi(b.dataset.act, b.dataset.id);
     ongletAmis === "recherche" ? chercher() : chargerAmis();
     majBadgeAmis();
@@ -1834,8 +1845,8 @@ async function chargerAmis(){
     const enSalon = Boolean(state.code);
     $("listeAmis").innerHTML = r.amis.map(j => ligneJoueur(j,
       enSalon && j.online
-        ? [["inviter","Inviter"], ["retirer","Retirer"], ["bloquer","Bloquer"]]
-        : [["retirer","Retirer"], ["bloquer","Bloquer"]])).join("");
+        ? [["inviter","🎮 Inviter"], ["message","✉️"], ["donner","🎁"], ["retirer","❌"], ["bloquer","🚫"]]
+        : [["message","✉️"], ["donner","🎁"], ["retirer","❌"], ["bloquer","🚫"]])).join("");
     $("amisVide").textContent = r.amis.length ? "" :
       "Aucun ami pour l'instant. Cherchez un pseudo dans l'onglet Rechercher.";
   } else if (ongletAmis === "demandes"){
