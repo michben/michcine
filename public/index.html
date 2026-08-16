@@ -654,7 +654,7 @@
     <h2 id="hello">Bonjour</h2>
     <p class="wallet" id="walletMenu">🎟️ <b>0</b> crédits</p>
     <p class="online" id="btnOnlineUsers" style="cursor:pointer" title="Voir les joueurs en ligne"><span class="dot on"></span><b id="onlineNb">—</b><span id="onlineCount">joueurs en ligne</span></p>
-    <button id="btnUpcomingMovies" class="free" style="margin-left: 10px; padding: 6px 14px; border-color: var(--beam); color: var(--beam);">🍿 Sorties Ciné de la semaine</button>
+    <button id="btnUpcomingMovies" style="margin-left: 10px; padding: 10px 16px; background: var(--beam); color: #0A0C16; font-weight: bold; border: 0; border-radius: 999px; cursor: pointer;">🍿 Sorties Ciné de la semaine</button>
 
     <div class="barreNiveau" id="barreNiveau">
       <div class="niveauTete">
@@ -2861,7 +2861,21 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
                 document.getElementById('rulesModal').classList.remove('active');
             }
         });
-    </script>
+    
+        function inviterOnlineUser(amiId, btn) {
+            if (!state.code) {
+                alert("Vous devez d'abord créer ou ouvrir un salon de jeu pour inviter des joueurs !");
+                return;
+            }
+            socket.emit("invite:send", {code: state.code, amiId}, res => {
+                if (!res?.ok){
+                    alert("Invitation impossible.");
+                    return;
+                }
+                btn.textContent = res.livree ? "Invité ✓" : "Hors ligne";
+                btn.disabled = true;
+            });
+        }
 
     <script>
         const btnOnlineUsers = document.getElementById("btnOnlineUsers");
@@ -2880,12 +2894,13 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
                         return;
                     }
                     document.getElementById("onlineUsersList").innerHTML = users.map(u => `
-                        <div class="amiLigne" style="padding: 10px; background: var(--card); border-radius: 8px; margin-bottom: 8px; border: 1px solid rgba(237,232,220,.1);">
+                        <div class="amiLigne" style="padding: 10px; background: var(--card); border-radius: 8px; margin-bottom: 8px; border: 1px solid rgba(237,232,220,.1); display:flex; align-items:center; gap:10px;">
                             <span class="dot on"></span>
-                            <span class="nom" style="display:flex;align-items:center;gap:10px;">
+                            <span class="nom" style="display:flex;align-items:center;gap:10px; flex:1;">
                                 ${u.photo ? `<img src="${u.photo}" class="pfp" alt="">` : `<div class="pfp" style="display:grid;place-items:center;font-size:20px">${u.avatar||'🎬'}</div>`}
                                 <span><b>${u.pseudo}</b> ${u.role !== 'joueur' ? `<span class="badge-role">${u.role}</span>` : ''}</span>
                             </span>
+                            ${state.code && u.id !== me.id ? `<button class="ghost" onclick="inviterOnlineUser('${u.id}', this)" style="padding:6px 12px; font-size:13px;">Inviter</button>` : ''}
                         </div>
                     `).join("");
                 } catch(e) {
