@@ -21,7 +21,7 @@ import { mountAuth, userFromCookie, addRankedPoints,
          spendCredits, grantCredits, getCredits, CREDITS_PER_GAME,
          listUsers, adminUpdateUser, adminDeleteUser, grantAll,
          grantPoints, getPoints, exchangePoints,
-         marquerEnLigne, marquerHorsLigne, estEnLigne, nombreEnLigne,
+         marquerEnLigne, marquerHorsLigne, estEnLigne, nombreEnLigne, getConnectedUsers,
          estModerateur, definirRole, ROLES, chargerUtilisateurs,
          relations, demanderAmi, accepterAmi, retirerAmi, bloquer,
          chercherJoueurs, statutRelation, estBloque, emailAValider,
@@ -83,6 +83,7 @@ const io = new Server(httpServer, { cors: { origin: "*" }, path: "/rt" });
 const REGLAGES_DEFAUT = {
   roundDuration: 60,                 // secondes
   basePoints: 1000,
+  tmdbApiKey: "",
   creditsDepart: 12,
   creditsParPartie: 4,
   pointsParTicket: 250,
@@ -261,6 +262,7 @@ app.put("/api/admin/reglages", requireAdmin, (req, res) => {
   REGLAGES.partiesClasseesParJour = borne(r.partiesClasseesParJour, 1, 100, REGLAGES.partiesClasseesParJour);
   REGLAGES.transfertMax     = borne(r.transfertMax, 0, 100000, REGLAGES.transfertMax);
   REGLAGES.transfertParJour = borne(r.transfertParJour, 0, 500000, REGLAGES.transfertParJour);
+  if (typeof r.tmdbApiKey === 'string') REGLAGES.tmdbApiKey = r.tmdbApiKey;
   REGLAGES.coeurs           = borne(r.coeurs, 1, 10, REGLAGES.coeurs);
   REGLAGES.xpBase           = borne(r.xpBase, 10, 10000, REGLAGES.xpBase);
   REGLAGES.xpCroissance     = borne(r.xpCroissance, 1.01, 2, REGLAGES.xpCroissance);
@@ -921,7 +923,7 @@ app.post("/api/friends/:action", (req, res) => {
 const QUETES = {
   jouer3:      { titre: "Jouer 3 parties",              cible: 3,  tickets: 3, xp: 60 },
   bonnes10:    { titre: "Trouver 10 films",             cible: 10, tickets: 4, xp: 80 },
-  sansIndice:  { titre: "Gagner 3 manches sans indice", cible: 3,  tickets: 5, xp: 100 },
+  sansIndice:  { titre: "Gagner 3 questions sans indice", cible: 3,  tickets: 5, xp: 100 },
   sansFaute:   { titre: "Terminer une partie sans faute", cible: 1, tickets: 6, xp: 120 },
 };
 
@@ -1003,6 +1005,52 @@ app.post("/api/parrainage/rejoindre", (req, res) => {
 });
 
 app.get("/api/presence", (_req, res) => res.json({ enLigne: nombreEnLigne() }));
+app.get("/api/presence/users", (req, res) => {
+  res.json(getConnectedUsers());
+});
+
+app.get("/api/movies/upcoming", async (req, res) => {
+  try {
+    const tmdbKey = REGLAGES.tmdbApiKey;
+    if (!tmdbKey) return res.json({ error: "NO_KEY", movies: [] });
+
+    // Trouver le mercredi actuel ou le prochain mercredi
+    const now = new Date();
+    const day = now.getDay(); // 0 = Dimanche, 3 = Mercredi
+    const diffToWed = (3 - day + 7) % 7; 
+    
+    // Date de sortie en France (les films sortent le mercredi)
+    // On prend du mercredi courant jusqu'au mardi suivant
+    const wednesday = new Date(now);
+    wednesday.setDate(now.getDate() + (day >= 3 ? (3 - day) : diffToWed)); // Mercredi de la semaine courante
+    
+    const nextTuesday = new Date(wednesday);
+    nextTuesday.setDate(wednesday.getDate() + 6);
+
+    const fmt = d => d.toISOString().split('T')[0];
+    const gte = fmt(wednesday);
+    const lte = fmt(nextTuesday);
+
+    const url = `https://api.themoviedb.org/3/discover/movie?api_key=${tmdbKey}&language=fr-FR&region=FR&primary_release_date.gte=${gte}&primary_release_date.lte=${lte}&sort_by=popularity.desc`;
+    const response = await fetch(url);
+    if (!response.ok) return res.json({ error: "API_ERROR", movies: [] });
+    
+    const data = await response.json();
+    res.json({ 
+        dateDebut: gte, 
+        movies: data.results.slice(0, 10).map(m => ({
+            title: m.title,
+            overview: m.overview,
+            poster: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : null,
+            vote: m.vote_average
+        }))
+    });
+  } catch (err) {
+    console.error("Erreur upcoming:", err);
+    res.json({ error: "INTERNAL_ERROR", movies: [] });
+  }
+});
+
 
 app.get("/api/leaderboard", (req, res) =>
   res.json(leaderboard(50, req.query.type === "global" ? "global" : "saison"))
@@ -1016,32 +1064,6 @@ app.get("/api/saison", (req, res) => {
     prochaineRecharge: user ? prochaineRecharge(user.id) : null,
     palmares: palmares.slice(-3).reverse(),
   });
-});
-
-app.get("/api/birthdays", async (req, res) => {
-  try {
-    const today = new Date();
-    const mm = String(today.getMonth() + 1).padStart(2, '0');
-    const dd = String(today.getDate()).padStart(2, '0');
-    const response = await fetch(`https://fr.wikipedia.org/api/rest_v1/feed/onthisday/births/${mm}/${dd}`);
-    if (!response.ok) return res.json({ actors: [] });
-    const data = await response.json();
-    
-    const actors = data.births.filter(b => {
-      const text = (b.text || "").toLowerCase();
-      return text.includes("acteur") || text.includes("actrice") || text.includes("réalisateur") || text.includes("cinéaste");
-    }).map(b => ({
-      name: b.pages && b.pages[0] ? b.pages[0].title.replace(/_/g, ' ') : "Inconnu",
-      year: b.year,
-      description: b.text,
-      thumbnail: b.pages && b.pages[0] && b.pages[0].thumbnail ? b.pages[0].thumbnail.source : null
-    })).sort((a, b) => b.year - a.year);
-    
-    res.json({ actors: actors.slice(0, 15) });
-  } catch (err) {
-    console.error("Erreur anniversaires:", err);
-    res.json({ actors: [] });
-  }
 });
 
 app.get("/api/config", (_req, res) => res.json({
@@ -1398,6 +1420,9 @@ function startRound(room) {
     hintCosts: CONFIG.HINT_COSTS,
     hintCredits: CONFIG.HINT_CREDITS,
     hintLabels: libellesIndices(),
+    coeursMax: p.coeursMax,
+  freeHintsRemaining: p.freeHintsRemaining,
+  allHintsFree: p.allHintsFree,
     posterStyle: styleAffiche(movie),
     vitesseSynopsis: REGLAGES.vitesseSynopsis,
     choices: room.choices,

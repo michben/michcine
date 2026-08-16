@@ -387,7 +387,7 @@
   @media (prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important}}
 
 /* --- LE BOUTON POINT D'INTERROGATION --- */
-.help-btn { position: fixed; bottom: 20px; left: 20px; width: 40px; height: 40px; background: rgba(28, 34, 56, 0.6); color: var(--muted); border: 1px solid rgba(237, 232, 220, 0.15); border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 20px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2); transition: all 0.3s ease; z-index: 1000; backdrop-filter: blur(4px); }
+.help-btn { position: fixed; bottom: 20px; right: 20px; width: 40px; height: 40px; background: rgba(28, 34, 56, 0.6); color: var(--muted); border: 1px solid rgba(237, 232, 220, 0.15); border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 20px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2); transition: all 0.3s ease; z-index: 1000; backdrop-filter: blur(4px); }
 .help-btn:hover { transform: scale(1.1); color: var(--chalk); border-color: var(--beam); background: rgba(28, 34, 56, 0.9); }
 /* --- LA FENÊTRE MODALE --- */
 .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.85); display: none; justify-content: center; align-items: center; z-index: 1001; opacity: 0; transition: opacity 0.3s ease; }
@@ -409,12 +409,6 @@
 .modal-content::-webkit-scrollbar { width: 8px; }
 .modal-content::-webkit-scrollbar-track { background: #1a1a1a; }
 .modal-content::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
-
-  .bday-item { display: flex; gap: 12px; margin-bottom: 12px; padding: 10px; background: var(--card); border-radius: 8px; align-items: center; border-left: 4px solid var(--teal); }
-  .bday-item img { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; }
-  .bday-item .info { flex: 1; }
-  .bday-item .info b { display: block; color: var(--chalk); font-size: 16px; margin-bottom: 2px;}
-  .bday-item .info small { color: var(--muted); font-size: 13px; line-height: 1.3; display: block;}
 </style>
 
 </head>
@@ -653,7 +647,8 @@
   <section id="menu" class="hidden">
     <h2 id="hello">Bonjour</h2>
     <p class="wallet" id="walletMenu">🎟️ <b>0</b> crédits</p>
-    <p class="online"><span class="dot on"></span><b id="onlineNb">—</b><span id="onlineCount">joueurs en ligne</span></p>
+    <p class="online" id="btnOnlineUsers" style="cursor:pointer" title="Voir les joueurs en ligne"><span class="dot on"></span><b id="onlineNb">—</b><span id="onlineCount">joueurs en ligne</span></p>
+    <button id="btnUpcomingMovies" class="free" style="margin-left: 10px; padding: 6px 14px; border-color: var(--ticket); color: var(--ticket);">🍿 Sorties Ciné de la semaine</button>
 
     <div class="barreNiveau" id="barreNiveau">
       <div class="niveauTete">
@@ -664,9 +659,6 @@
       <div class="jauge"><i id="niveauJauge" style="width:0%"></i></div>
     </div>
     <p class="tag" style="margin-top:18px">Choisissez votre partie</p>
-    <div class="row" style="margin-bottom: 14px;">
-      <button id="btnBirthdays" class="ghost" style="border-color: var(--teal); color: var(--teal);">🎂 Nés aujourd'hui</button>
-    </div>
     <div class="modes">
       <button class="mode" data-mode="solo"><span class="ic">🎬</span><span><b>Solo</b><small>Contre le chrono, pour s'entraîner</small></span></button>
       <button class="mode" data-mode="duel"><span class="ic">⚔️</span><span><b>Duel</b><small>Deux joueurs, face à face</small></span></button>
@@ -716,7 +708,7 @@
         <div class="dots" id="dots"></div>
         <span class="roomcode hidden" id="roomCode"></span>
       </div>
-      <p class="tag" id="roundLabel">Manche 1</p>
+      <p class="tag" id="roundLabel">Question 1</p>
       <p class="synopsis" id="synopsis"></p>
       <div class="barreLecture">
         <button id="btnLire" class="ghost" title="Lire le synopsis à voix haute">🔊 Lire</button>
@@ -735,7 +727,7 @@
       <div class="emojis hidden" id="emojiBar"></div>
       <div class="row">
         <button id="btnPause" class="ghost" style="flex:0 0 auto">⏸ Pause</button>
-        <button id="btnSkip" class="ghost hidden">Passer à la manche suivante</button>
+        <button id="btnSkip" class="ghost hidden">Passer à la question suivante</button>
       </div>
       <ul class="players" id="roundPlayers"></ul>
     </div>
@@ -1518,7 +1510,7 @@ socket.on("coeurs:maj", ({coeurs, elimine}) => {
   majCoeurs(coeurs, state.coeursMax, true);
   $("guessFeedback").textContent = elimine
     ? "Cœurs épuisés — vous êtes éliminé de cette partie."
-    : `Manche passée — ${coeurs} cœur${coeurs>1?"s":""} restant${coeurs>1?"s":""}.`;
+    : `Question passée — ${coeurs} cœur${coeurs>1?"s":""} restant${coeurs>1?"s":""}.`;
   $("guessFeedback").className = "feedback bad";
 });
 
@@ -2354,7 +2346,7 @@ function afficherManche(m){
   state.vitesseSynopsis = m.vitesseSynopsis;
   if (m.hintLabels) Object.assign(HINT_LABELS, m.hintLabels);
   state.bought = {}; state.answered = false;
-  $("roundLabel").textContent = `Manche ${m.roundIndex + 1} sur ${m.total}`;
+  $("roundLabel").textContent = `Question ${m.roundIndex + 1} sur ${m.total}`;
   derouler(m.synopsis);
   $("dots").innerHTML = Array.from({length: m.total}, (_, i) =>
     `<i class="${i < m.roundIndex ? "done" : i === m.roundIndex ? "now" : ""}"></i>`).join("");
@@ -2463,7 +2455,7 @@ async function mancheSuivanteSolo(){
   afficherBilan(r.bilan);
   $("winner").textContent = r.coeursEpuises ? "Cœurs épuisés" : "Partie terminée";
   $("myResult").textContent = `${me.pseudo} — ${r.score} points` +
-    (r.coeursEpuises ? ` · ${r.manchesJouees} manche${r.manchesJouees>1?"s":""} sur ${r.manchesTotal}` : "");
+    (r.coeursEpuises ? ` · ${r.manchesJouees} question${r.manchesJouees>1?"s":""} sur ${r.manchesTotal}` : "");
   $("finalRank").innerHTML = `<li>${me.avatar||"🎬"} ${esc(me.pseudo)}<b>${r.score} pts</b></li>`;
   $("finalTeams").classList.add("hidden");
   show("over");
@@ -2718,7 +2710,7 @@ socket.on("round:end", ({answer, movieId, poster, year, scores, isHost, mode}) =
   $("btnNext").classList.toggle("hidden", !peutEnchainer);
   $("nextNote").textContent = peutEnchainer
     ? "Sinon, enchaînement automatique dans quelques secondes."
-    : "Manche suivante dans quelques secondes.";
+    : "Question suivante dans quelques secondes.";
   show("between");
 });
 
@@ -2785,18 +2777,32 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
   </div>
 
     
-    <!-- MODALE ANNIVERSAIRES -->
-    <div class="modal-overlay" id="birthdaysModal">
+    <!-- MODALE JOUEURS EN LIGNE -->
+    <div class="modal-overlay" id="onlineUsersModal">
         <div class="modal-content">
-            <div class="modal-header" style="border-bottom-color: var(--teal);">
-                <h2>🎂 Nés un <span id="bdayDate"></span></h2>
-                <button class="close-btn" id="closeBdayBtn">&times;</button>
+            <div class="modal-header">
+                <h2>🟢 Joueurs en ligne</h2>
+                <button class="close-btn" id="closeOnlineUsersBtn">&times;</button>
             </div>
-            <div class="modal-body" id="bdayList" style="max-height: 60vh; overflow-y: auto;">
+            <div class="modal-body" id="onlineUsersList" style="max-height: 60vh; overflow-y: auto;">
+                <p class="note" style="text-align:center">Chargement...</p>
             </div>
         </div>
     </div>
-    
+
+    <!-- MODALE SORTIES CINEMA -->
+    <div class="modal-overlay" id="upcomingMoviesModal">
+        <div class="modal-content">
+            <div class="modal-header" style="border-bottom-color: var(--ticket);">
+                <h2>🍿 Sorties de la semaine</h2>
+                <button class="close-btn" id="closeUpcomingMoviesBtn">&times;</button>
+            </div>
+            <div class="modal-body" id="upcomingMoviesList" style="max-height: 60vh; overflow-y: auto;">
+                <p class="note" style="text-align:center">Recherche des nouveautés UGC, Pathé, Gaumont...</p>
+            </div>
+        </div>
+    </div>
+
     <!-- BOUTON FLOTTANT ET MODALE D'AIDE -->
     <div class="help-btn" id="helpBtn" title="Règles du jeu">?</div>
     <div class="modal-overlay" id="rulesModal">
@@ -2836,49 +2842,91 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
     </script>
 
     <script>
-        const btnBirthdays = document.getElementById("btnBirthdays");
-        const birthdaysModal = document.getElementById("birthdaysModal");
-        const closeBdayBtn = document.getElementById("closeBdayBtn");
+        const btnOnlineUsers = document.getElementById("btnOnlineUsers");
+        const onlineUsersModal = document.getElementById("onlineUsersModal");
+        const closeOnlineUsersBtn = document.getElementById("closeOnlineUsersBtn");
 
-        if (btnBirthdays) {
-            const today = new Date();
-            const options = { day: 'numeric', month: 'long' };
-            const dateStr = today.toLocaleDateString('fr-FR', options);
-            btnBirthdays.innerHTML = `🎂 Célébrités nées le ${dateStr}`;
-
-            btnBirthdays.addEventListener("click", async () => {
-                birthdaysModal.classList.add("active");
-                document.getElementById("bdayDate").textContent = dateStr;
-                document.getElementById("bdayList").innerHTML = "<p class='note' style='text-align:center'>Recherche dans les archives d'Hollywood...</p>";
-
+        if (btnOnlineUsers) {
+            btnOnlineUsers.addEventListener("click", async () => {
+                onlineUsersModal.classList.add("active");
+                document.getElementById("onlineUsersList").innerHTML = "<p class='note' style='text-align:center'>Chargement...</p>";
                 try {
-                    const res = await fetch("/api/birthdays");
+                    const res = await fetch("/api/presence/users");
+                    const users = await res.json();
+                    if (!users.length) {
+                        document.getElementById("onlineUsersList").innerHTML = "<p class='note'>Personne en ligne actuellement.</p>";
+                        return;
+                    }
+                    document.getElementById("onlineUsersList").innerHTML = users.map(u => `
+                        <div class="amiLigne" style="padding: 10px; background: var(--card); border-radius: 8px; margin-bottom: 8px; border: 1px solid rgba(237,232,220,.1);">
+                            <span class="dot on"></span>
+                            <span class="nom" style="display:flex;align-items:center;gap:10px;">
+                                ${u.photo ? `<img src="${u.photo}" class="pfp" alt="">` : `<div class="pfp" style="display:grid;place-items:center;font-size:20px">${u.avatar||'🎬'}</div>`}
+                                <span><b>${u.pseudo}</b> ${u.role !== 'joueur' ? `<span class="badge-role">${u.role}</span>` : ''}</span>
+                            </span>
+                        </div>
+                    `).join("");
+                } catch(e) {
+                    document.getElementById("onlineUsersList").innerHTML = "<p class='note' style='color:var(--ticket)'>Erreur de chargement.</p>";
+                }
+            });
+            closeOnlineUsersBtn.addEventListener("click", () => onlineUsersModal.classList.remove("active"));
+            onlineUsersModal.addEventListener('click', (e) => {
+                if (e.target === onlineUsersModal) onlineUsersModal.classList.remove('active');
+            });
+        }
+
+        const btnUpcomingMovies = document.getElementById("btnUpcomingMovies");
+        const upcomingMoviesModal = document.getElementById("upcomingMoviesModal");
+        const closeUpcomingMoviesBtn = document.getElementById("closeUpcomingMoviesBtn");
+
+        if (btnUpcomingMovies) {
+            btnUpcomingMovies.addEventListener("click", async () => {
+                upcomingMoviesModal.classList.add("active");
+                document.getElementById("upcomingMoviesList").innerHTML = "<p class='note' style='text-align:center'>Recherche des nouveautés...</p>";
+                try {
+                    const res = await fetch("/api/movies/upcoming");
                     const data = await res.json();
-                    if (!data.actors || data.actors.length === 0) {
-                        document.getElementById("bdayList").innerHTML = "<p class='note'>Aucune star majeure du cinéma répertoriée pour aujourd'hui.</p>";
+                    
+                    if (data.error === "NO_KEY") {
+                        document.getElementById("upcomingMoviesList").innerHTML = "<p class='note' style='color:var(--ticket)'>Fonctionnalité en attente de configuration. L'administrateur doit renseigner une clé API TMDB dans les réglages.</p>";
+                        return;
+                    }
+                    if (!data.movies || data.movies.length === 0) {
+                        document.getElementById("upcomingMoviesList").innerHTML = "<p class='note'>Aucune sortie trouvée pour cette semaine.</p>";
                         return;
                     }
                     
-                    document.getElementById("bdayList").innerHTML = data.actors.map(a => `
-                        <div class="bday-item">
-                            ${a.thumbnail ? `<img src="${a.thumbnail}" alt="">` : `<div style="width:50px;height:50px;border-radius:50%;background:#333;display:flex;align-items:center;justify-content:center;font-size:24px">🎬</div>`}
-                            <div class="info">
-                                <b>${a.name}</b>
-                                <small>${a.year} — ${a.description}</small>
+                    // Formater la date en français
+                    const options = { day: 'numeric', month: 'long', year: 'numeric' };
+                    const d = new Date(data.dateDebut);
+                    const dateFr = d.toLocaleDateString('fr-FR', options);
+
+                    let html = `<p class="tag" style="margin-bottom:16px;">Semaine du mercredi ${dateFr}</p>`;
+                    html += data.movies.map(m => `
+                        <div class="bday-item" style="border-left-color: var(--ticket); align-items:flex-start;">
+                            ${m.poster ? `<img src="${m.poster}" alt="" style="width:70px;height:100px;border-radius:4px;">` : `<div style="width:70px;height:100px;border-radius:4px;background:#333;display:flex;align-items:center;justify-content:center;font-size:24px">🍿</div>`}
+                            <div class="info" style="flex:1;">
+                                <b style="font-family:'Anton', sans-serif; letter-spacing:1px; text-transform:uppercase; font-size:18px;">${m.title}</b>
+                                <div style="display:flex;gap:6px;margin:6px 0;">
+                                    <span style="font-size:11px;background:var(--ticket);padding:2px 6px;border-radius:4px;color:#fff;">⭐ ${m.vote.toFixed(1)}/10</span>
+                                </div>
+                                <small style="display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;">${m.overview || "Aucun synopsis disponible."}</small>
                             </div>
                         </div>
                     `).join("");
-                } catch (e) {
-                    document.getElementById("bdayList").innerHTML = "<p class='note' style='color:var(--ticket)'>Impossible de charger les données.</p>";
+                    document.getElementById("upcomingMoviesList").innerHTML = html;
+                } catch(e) {
+                    document.getElementById("upcomingMoviesList").innerHTML = "<p class='note' style='color:var(--ticket)'>Erreur lors du chargement des sorties.</p>";
                 }
             });
-
-            closeBdayBtn.addEventListener("click", () => birthdaysModal.classList.remove("active"));
-            birthdaysModal.addEventListener('click', (e) => {
-                if (e.target === birthdaysModal) birthdaysModal.classList.remove('active');
+            closeUpcomingMoviesBtn.addEventListener("click", () => upcomingMoviesModal.classList.remove("active"));
+            upcomingMoviesModal.addEventListener('click', (e) => {
+                if (e.target === upcomingMoviesModal) upcomingMoviesModal.classList.remove('active');
             });
         }
     </script>
+
 </body>
 
 </html>

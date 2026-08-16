@@ -125,6 +125,14 @@ export function marquerHorsLigne(userId) {
 }
 export const estEnLigne = (userId) => connectes.has(userId);
 
+export const getConnectedUsers = () => {
+  return Array.from(connectes.keys())
+    .map(id => users[id])
+    .filter(u => u && u.pseudoChosen && !u.banned)
+    .map(u => ({ id: u.id, pseudo: u.pseudo, avatar: u.avatar, photo: u.photo || null, role: u.role || 'joueur' }))
+    .sort((a, b) => a.pseudo.localeCompare(b.pseudo));
+};
+
 /* ---------- captcha et validation par email ---------- */
 
 const TURNSTILE_SECRET = process.env.TURNSTILE_SECRET;

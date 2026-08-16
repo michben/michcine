@@ -245,6 +245,7 @@
           <div><label for="rDepart">Tickets offerts à l'inscription</label><input id="rDepart" type="number" min="0" max="1000"></div>
           <div><label for="rPartie">Tickets gagnés par partie</label><input id="rPartie" type="number" min="0" max="100"></div>
           <div><label for="rTaux">Points pour 1 ticket (échange)</label><input id="rTaux" type="number" min="10" max="100000"></div>
+          <div style="grid-column: 1 / -1;"><label for="rTmdbKey">Clé API TMDB (Pour les prochaines sorties cinéma)</label><input id="rTmdbKey" type="text" placeholder="Entrez votre clé API TheMovieDB"></div>
           <div><label for="rGrace">Délai après la 1re bonne réponse (s)</label><input id="rGrace" type="number" min="0" max="120"></div>
           <div>
             <label for="rVitesse">Dévoilement du synopsis (ms) — 0 pour désactiver</label>
@@ -543,7 +544,7 @@ $("tabReglages").onclick = () => tab("reglages");
 /* ---------- Réglages du jeu ---------- */
 let reglages = null;
 
-const CHAMPS = { rDuree:"roundDuration", rBase:"basePoints", rDepart:"creditsDepart",
+const CHAMPS = { rTmdbKey:"tmdbApiKey", rDuree:"roundDuration", rBase:"basePoints", rDepart:"creditsDepart",
                  rPartie:"creditsParPartie", rTaux:"pointsParTicket", rGrace:"graceApresPremier",
                  rVitesse:"vitesseSynopsis", rParties:"partiesClasseesParJour",
                  rDonMax:"transfertMax", rDonJour:"transfertParJour", rCoeurs:"coeurs",
