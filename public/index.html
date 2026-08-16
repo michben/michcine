@@ -55,6 +55,29 @@
   .players{list-style:none;padding:0;margin:12px 0 0;display:flex;flex-wrap:wrap;gap:8px}
   /* Carte de profil : la photo est le premier élément vu, encadrée en grand. */
   #carteProfil{text-align:center;margin:4px 0 22px}
+  .barreNiveau{background:var(--card);border-radius:12px;padding:13px 15px;margin-top:14px}
+  .niveauTete{display:flex;align-items:center;gap:10px;margin-bottom:9px}
+  .pastilleNiveau{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;
+    background:linear-gradient(140deg,var(--beam),var(--ticket));color:#161207;
+    font-family:'JetBrains Mono',monospace;font-weight:700;font-size:15px;flex:0 0 auto}
+  .niveauTexte{flex:1;font-size:14px;color:var(--muted)}
+  .niveauTexte b{color:var(--chalk)}
+  .niveauXp{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted)}
+  .quete{display:flex;gap:12px;align-items:center;padding:14px 0;border-top:1px solid rgba(237,232,220,.1);flex-wrap:wrap}
+  .quete .infos{flex:1;min-width:150px}
+  .quete .infos b{display:block;font-size:15px}
+  .quete .infos small{color:var(--muted);font-size:13px}
+  .quete .jauge{margin:7px 0 0}
+  .quete .gain{font-size:13px;color:var(--beam);white-space:nowrap}
+  .quete.finie .infos b{color:var(--teal)}
+  .quete button{padding:9px 14px;font-size:14px}
+  .montee{position:fixed;left:50%;top:26%;transform:translateX(-50%);z-index:86;text-align:center;
+    pointer-events:none;animation:monteeNiveau 2.6s ease-out forwards}
+  .montee b{display:block;font-family:'Anton',sans-serif;text-transform:uppercase;
+    font-size:clamp(26px,7vw,40px);color:var(--beam);letter-spacing:.03em}
+  @keyframes monteeNiveau{0%{opacity:0;transform:translateX(-50%) scale(.7)}
+    15%{opacity:1;transform:translateX(-50%) scale(1.1)}25%{transform:translateX(-50%) scale(1)}
+    100%{opacity:0;transform:translateX(-50%) translateY(-40px)}}
   .codeCadre{text-align:center;background:var(--card);border-radius:12px;padding:16px;margin-top:8px}
   .codeCadre .valeur{font-family:'JetBrains Mono',monospace;font-size:30px;letter-spacing:.32em;
     color:var(--beam);margin:6px 0 12px;user-select:all}
@@ -158,6 +181,10 @@
   ol.rank li.B b{color:var(--teal)}
   #roundPlayers li.A{box-shadow:inset 0 0 0 1px var(--beam)}
   #roundPlayers li.B{box-shadow:inset 0 0 0 1px var(--teal)}
+  #bilan{background:var(--card);border-radius:12px;padding:15px;margin:16px 0;text-align:left}
+  #bilan .ligne{display:flex;justify-content:space-between;padding:5px 0;font-size:14px}
+  #bilan .ligne b{color:var(--beam);font-family:'JetBrains Mono',monospace}
+  #bilan .titre{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
   .teamboard{display:flex;gap:12px;margin-top:14px}
   .teamboard div{flex:1;background:var(--card);border-radius:12px;padding:14px;text-align:center}
   .teamboard div b{display:block;font-family:'JetBrains Mono',monospace;font-size:26px;margin-top:4px}
@@ -529,6 +556,17 @@
     </div>
   </section>
 
+  <!-- QUÊTES -->
+  <section id="quetes" class="hidden">
+    <div class="card">
+      <p class="tag">Quêtes du jour</p>
+      <p class="note" style="margin-top:0">Renouvelées chaque jour à minuit.
+        Réclamez vos récompenses avant qu'elles ne disparaissent.</p>
+      <div id="listeQuetes"></div>
+      <div class="row"><button class="ghost" id="btnQuetesBack">Retour à l'accueil</button></div>
+    </div>
+  </section>
+
   <!-- MODÉRATION -->
   <section id="moderation" class="hidden">
     <div class="card">
@@ -575,6 +613,15 @@
     <h2 id="hello">Bonjour</h2>
     <p class="wallet" id="walletMenu">🎟️ <b>0</b> crédits</p>
     <p class="online"><span class="dot on"></span><b id="onlineNb">—</b><span id="onlineCount">joueurs en ligne</span></p>
+
+    <div class="barreNiveau" id="barreNiveau">
+      <div class="niveauTete">
+        <span class="pastilleNiveau" id="niveauNum">0</span>
+        <span class="niveauTexte">Niveau <b id="niveauLabel">0</b></span>
+        <span class="niveauXp" id="niveauXp"></span>
+      </div>
+      <div class="jauge"><i id="niveauJauge" style="width:0%"></i></div>
+    </div>
     <p class="tag" style="margin-top:18px">Choisissez votre partie</p>
     <div class="modes">
       <button class="mode" data-mode="solo"><span class="ic">🎬</span><span><b>Solo</b><small>Contre le chrono, pour s'entraîner</small></span></button>
@@ -586,6 +633,7 @@
     <div class="row">
       <button class="ghost" id="btnExchange">Espace échange</button>
       <button class="ghost" id="btnBoard">Classement</button>
+      <button class="ghost" id="btnQuetes">Quêtes <span id="badgeQuetes" class="pastille hidden">0</span></button>
       <button class="ghost" id="btnFriends">Amis <span id="badgeAmis" class="pastille hidden">0</span></button>
       <button class="ghost" id="btnProfile">Profil</button>
     </div>
@@ -696,6 +744,7 @@
         <div class="a">Équipe jaune<b id="teamA">0</b></div>
         <div class="b">Équipe turquoise<b id="teamB">0</b></div>
       </div>
+      <div id="bilan" class="hidden"></div>
       <ol class="rank" id="finalRank"></ol>
       <div class="row">
         <button id="btnHome">Retour à l'accueil</button>
@@ -899,7 +948,7 @@ let state = {code:null, mode:"ffa", isHost:false, hintCosts:{}, bought:{}, answe
 
 /** Chaque écran commence en haut : personne ne doit remonter à la main. */
 const show = id => {
-  ["landing","validation","parrainage","profile","board","exchange","friends","moderation","menu","lobby","waiting","round","between","over"]
+  ["landing","validation","parrainage","profile","board","exchange","friends","quetes","moderation","menu","lobby","waiting","round","between","over"]
     .forEach(s => $(s).classList.toggle("hidden", s !== id));
   window.scrollTo({top: 0, behavior: "instant"});
 };
@@ -1449,6 +1498,89 @@ socket.on("invite:recue", ({code, mode, de, avatar, joueurs}) => {
   };
   setTimeout(fermer, 45000);   // une invitation ne reste pas indéfiniment
 });
+
+/* ---------- Niveaux et quêtes ---------- */
+let mesQuetes = [];
+
+function majNiveau(n){
+  if (!n) return;
+  $("niveauNum").textContent = n.niveau;
+  $("niveauLabel").textContent = n.niveau;
+  $("niveauXp").textContent = `${n.reste} / ${n.requis} xp`;
+  $("niveauJauge").style.width = `${Math.min(100, n.reste / n.requis * 100)}%`;
+}
+
+/** Annonce visuelle d'une montée de niveau. */
+function annoncerNiveau(niveau){
+  const el = document.createElement("div");
+  el.className = "montee";
+  el.innerHTML = `<b>Niveau ${niveau}</b><span class="note">Bravo !</span>`;
+  document.body.append(el);
+  setTimeout(() => el.remove(), 2700);
+  if (typeof confettis === "function") confettis();
+}
+
+async function chargerQuetes(){
+  const d = await fetch("/api/quetes").then(r => r.json()).catch(() => null);
+  if (!d) return;
+  mesQuetes = d.quetes;
+  majNiveau(d.niveau);
+
+  const aReclamer = mesQuetes.filter(q => q.accomplie && !q.reclamee).length;
+  $("badgeQuetes").textContent = aReclamer;
+  $("badgeQuetes").classList.toggle("hidden", aReclamer === 0);
+
+  $("listeQuetes").innerHTML = mesQuetes.map(q => `
+    <div class="quete ${q.accomplie ? "finie" : ""}">
+      <div class="infos">
+        <b>${q.accomplie ? "✓ " : ""}${esc(q.titre)}</b>
+        <small>${q.avancement} sur ${q.cible}</small>
+        <div class="jauge"><i style="width:${q.avancement / q.cible * 100}%"></i></div>
+      </div>
+      <span class="gain">🎟️ ${q.tickets} · ${q.xp} xp</span>
+      ${q.reclamee
+        ? '<span class="note" style="margin:0">Réclamée</span>'
+        : q.accomplie
+          ? `<button data-quete="${q.cle}">Réclamer</button>`
+          : '<span class="note" style="margin:0">En cours</span>'}
+    </div>`).join("");
+
+  $("listeQuetes").querySelectorAll("[data-quete]").forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    const res = await fetch(`/api/quetes/${b.dataset.quete}/reclamer`, {method:"POST"});
+    if (!res.ok) return chargerQuetes();
+    const d = await res.json();
+    setCredits(d.credits);
+    majNiveau(d.niveau);
+    if (d.niveau?.monte) annoncerNiveau(d.niveau.niveau);
+    bandeauNotif(`<span style="font-size:24px">🎁</span><span><b>${d.tickets} tickets et ${d.xp} xp</b>
+      <small>Récompense récupérée</small></span>`);
+    chargerQuetes();
+  });
+}
+
+$("btnQuetes").onclick = () => { chargerQuetes(); show("quetes"); };
+$("btnQuetesBack").onclick = () => show("menu");
+
+/** Bilan affiché à la fin de chaque partie. */
+function afficherBilan(b){
+  if (!b) return $("bilan").classList.add("hidden");
+  const lignes = [
+    ["Expérience gagnée", `+${b.xp} xp`],
+    b.bonnes !== undefined ? ["Bonnes réponses", b.bonnes] : null,
+    b.vainqueur ? ["Victoire", "🏆"] : null,
+    ["Tickets gagnés", `🎟️ +${b.ticketsGagnes}`],
+    b.niveau ? ["Niveau", `${b.niveau.niveau} · ${b.niveau.reste}/${b.niveau.requis} xp`] : null,
+  ].filter(Boolean);
+
+  $("bilan").innerHTML = `<p class="titre">Votre bilan</p>` +
+    lignes.map(([k, v]) => `<div class="ligne"><span>${k}</span><b>${v}</b></div>`).join("");
+  $("bilan").classList.remove("hidden");
+
+  majNiveau(b.niveau);
+  if (b.niveau?.monte) setTimeout(() => annoncerNiveau(b.niveau.niveau), 500);
+  chargerQuetes();
+}
 
 /* ---------- Présence ---------- */
 function majPresence(n){
@@ -2276,6 +2408,7 @@ async function mancheSuivanteSolo(){
 
   clearInterval(state.timerId);
   setCredits(r.credits); setPoints(r.points);
+  afficherBilan(r.bilan);
   $("winner").textContent = r.coeursEpuises ? "Cœurs épuisés" : "Partie terminée";
   $("myResult").textContent = `${me.pseudo} — ${r.score} points` +
     (r.coeursEpuises ? ` · ${r.manchesJouees} manche${r.manchesJouees>1?"s":""} sur ${r.manchesTotal}` : "");
@@ -2550,7 +2683,8 @@ socket.on("connect", () => {
   if (me && me.pseudoChosen && $("landing").classList.contains("hidden") === false) show("menu");
 });
 
-socket.on("game:end", ({ranking, mode, teams, credits: solde, points: cagnotte}) => {
+socket.on("game:end", ({ranking, mode, teams, credits: solde, points: cagnotte, bilan}) => {
+  afficherBilan(bilan);
   clearInterval(state.timerId);
   clearInterval(state.graceId);
   setCredits(solde);

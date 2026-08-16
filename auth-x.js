@@ -198,6 +198,16 @@ export async function envoyerCodeValidation(userId) {
   }
 }
 
+/** Valide l'adresse d'un compte sans code — réservé à l'administration. */
+export function validerManuellement(id) {
+  const u = users[id];
+  if (!u) return null;
+  u.emailVerifie = true;
+  delete u.code; delete u.codeExpire; delete u.codeEssais;
+  saveUsers();
+  return u;
+}
+
 export function validerCode(userId, code) {
   const u = users[userId];
   if (!u) return { error: "INTROUVABLE" };
@@ -270,6 +280,48 @@ export function connecterEmail(email, motDePasse) {
   if (u.banned) return { error: "BANNI" };
   return { user: u };
 }
+
+/* ---------- niveaux et expérience ---------- */
+
+/**
+ * L'expérience nécessaire augmente à chaque niveau : les premiers montent
+ * vite, ce qui donne un sentiment de progression immédiat, puis le rythme
+ * ralentit pour que les niveaux élevés gardent de la valeur.
+ */
+export function xpRequise(niveau, base = 100, croissance = 1.04) {
+  return Math.round(base * Math.pow(croissance, niveau));
+}
+
+export function niveauDepuisXp(xp, base, croissance, plafond = 300) {
+  let niveau = 0, reste = xp || 0;
+  while (niveau < plafond && reste >= xpRequise(niveau, base, croissance)) {
+    reste -= xpRequise(niveau, base, croissance);
+    niveau++;
+  }
+  return { niveau, reste, requis: xpRequise(niveau, base, croissance) };
+}
+
+/** Ajoute de l'expérience et signale une éventuelle montée de niveau. */
+export function ajouterXp(userId, montant, reglages = {}) {
+  const u = users[userId];
+  if (!u || montant <= 0) return null;
+
+  const { base = 100, croissance = 1.04, plafond = 300 } = reglages;
+  const avant = niveauDepuisXp(u.xp || 0, base, croissance, plafond).niveau;
+  u.xp = (u.xp || 0) + montant;
+  const apres = niveauDepuisXp(u.xp, base, croissance, plafond);
+  u.niveau = apres.niveau;
+  saveUsers();
+
+  return { gagne: montant, xp: u.xp, ...apres, monte: apres.niveau > avant, niveauAvant: avant };
+}
+
+export const infoNiveau = (userId, reglages = {}) => {
+  const u = users[userId];
+  if (!u) return null;
+  const { base = 100, croissance = 1.04, plafond = 300 } = reglages;
+  return { xp: u.xp || 0, ...niveauDepuisXp(u.xp || 0, base, croissance, plafond) };
+};
 
 /* ---------- parrainage ---------- */
 
@@ -368,6 +420,7 @@ export function infoParrainage(userId) {
 /* ---------- amis ---------- */
 
 const lien = (u) => ({ id: u.id, pseudo: u.pseudo, avatar: u.avatar, photo: u.photo || null,
+                       niveau: u.niveau || 0,
                        online: connectes.has(u.id), role: u.role || "joueur" });
 
 /** Listes d'amis, demandes reçues et envoyées, comptes bloqués. */
@@ -478,6 +531,8 @@ export function fichePublique(id, demandeurId) {
     id: u.id, pseudo: u.pseudo, avatar: u.avatar, photo: u.photo || null,
     role: u.role || "joueur",
     online: connectes.has(u.id),
+    niveau: u.niveau || 0,
+    xp: u.xp || 0,
     scoreGlobal: u.scoreGlobal || 0,
     partiesGlobales: u.partiesGlobales || 0,
     scoreSaison: u.totalScore || 0,
@@ -657,7 +712,7 @@ export const leaderboard = (limit = 50, type = "saison") => {
     .slice(0, limit)
     .map((u, i) => ({
       id: u.id,   // permet d'ouvrir la fiche du joueur depuis le classement
-      rank: i + 1, pseudo: u.pseudo, avatar: u.avatar, photo: u.photo || null,
+      rank: i + 1, pseudo: u.pseudo, avatar: u.avatar, photo: u.photo || null, niveau: u.niveau || 0,
       totalScore: u[champ] || 0, gamesPlayed: u[parties] || 0,
       online: connectes.has(u.id), role: u.role || "joueur",
     }));

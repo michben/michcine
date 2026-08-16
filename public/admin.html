@@ -254,6 +254,12 @@
           <div><label for="rDonMax">Don maximum par opération</label><input id="rDonMax" type="number" min="0" max="100000"></div>
           <div><label for="rDonJour">Plafond de dons par 24 h</label><input id="rDonJour" type="number" min="0" max="500000"></div>
           <div><label for="rCoeurs">Cœurs par partie (erreurs tolérées)</label><input id="rCoeurs" type="number" min="1" max="10"></div>
+          <div><label for="rNivMax">Niveau maximum</label><input id="rNivMax" type="number" min="10" max="1000"></div>
+          <div><label for="rXpBase">Expérience du premier niveau</label><input id="rXpBase" type="number" min="10" max="10000"></div>
+          <div><label for="rXpCroiss">Croissance par niveau (1.04 = +4 %)</label><input id="rXpCroiss" type="number" min="1.01" max="2" step="0.01"></div>
+          <div><label for="rXpPartie">Expérience par partie</label><input id="rXpPartie" type="number" min="0" max="1000"></div>
+          <div><label for="rXpBonne">Expérience par bonne réponse</label><input id="rXpBonne" type="number" min="0" max="500"></div>
+          <div><label for="rXpVict">Bonus de victoire (multijoueur)</label><input id="rXpVict" type="number" min="0" max="1000"></div>
         </div>
         <div class="row">
           <button id="btnSaveReglages">Enregistrer les réglages</button>
@@ -519,7 +525,9 @@ let reglages = null;
 const CHAMPS = { rDuree:"roundDuration", rBase:"basePoints", rDepart:"creditsDepart",
                  rPartie:"creditsParPartie", rTaux:"pointsParTicket", rGrace:"graceApresPremier",
                  rVitesse:"vitesseSynopsis", rParties:"partiesClasseesParJour",
-                 rDonMax:"transfertMax", rDonJour:"transfertParJour", rCoeurs:"coeurs" };
+                 rDonMax:"transfertMax", rDonJour:"transfertParJour", rCoeurs:"coeurs",
+                 rNivMax:"niveauMax", rXpBase:"xpBase", rXpCroiss:"xpCroissance",
+                 rXpPartie:"xpParPartie", rXpBonne:"xpParBonneReponse", rXpVict:"xpParVictoire" };
 
 async function chargerReglages(){
   const res = await api("/api/admin/reglages");
@@ -698,7 +706,7 @@ function renderUsers(){
       <div class="who">
         <strong>${u.avatar||"🎬"} ${esc(u.pseudo||"(sans pseudo)")}${u.banned?'<span class="chip">banni</span>':""}</strong>
         <small>${u.totalScore||0} pts · ${u.gamesPlayed||0} parties${u.xHandle?" · @"+esc(u.xHandle):""}${u.online?" · en ligne":""}</small>
-        <small>${u.codeParrain ? "code "+esc(u.codeParrain) : "sans code"}${u.fondateur ? " · fondateur" : ""}</small>
+        <small>niveau ${u.niveau || 0}${u.codeParrain ? " · code "+esc(u.codeParrain) : ""}${u.fondateur ? " · fondateur" : ""}${u.email && !u.emailVerifie ? " · email à valider" : ""}</small>
       </div>
       <img src="${u.photo || ""}" alt="" class="pfp ${u.photo ? "" : "vide"}"
            onerror="this.classList.add('vide')" title="${u.photo ? "Photo attribuée" : "Aucune photo"}">
@@ -709,6 +717,9 @@ function renderUsers(){
           `<option value="${r}" ${(u.role||"joueur")===r?"selected":""}>${r}</option>`).join("")}
       </select>
       <input type="number" min="0" value="${u.credits??0}" data-credits="${u.id}" aria-label="Crédits">
+      ${u.email && !u.emailVerifie
+        ? `<button class="ghost" data-valider="${u.id}" title="Valider l'adresse sans envoi de code">✉ Valider</button>`
+        : ""}
       <button class="ghost" data-fondateur="${u.id}" title="Dispense de code d'invitation">
         ${u.fondateur ? "★ Fondateur" : "☆ Fondateur"}</button>
       <button class="ghost" data-save="${u.id}">Enregistrer</button>
@@ -731,6 +742,11 @@ function renderUsers(){
     await api(`/api/admin/users/${encodeURIComponent(id)}`, {method:"PUT", body:JSON.stringify({credits, role, photo})});
     loadUsers();
   });
+  $("userList").querySelectorAll("[data-valider]").forEach(b => b.onclick = async () => {
+    await api(`/api/admin/users/${encodeURIComponent(b.dataset.valider)}/valider`, {method:"PUT"});
+    loadUsers();
+  });
+
   $("userList").querySelectorAll("[data-fondateur]").forEach(b => b.onclick = async () => {
     const u = players.find(p => p.id === b.dataset.fondateur);
     await api(`/api/admin/users/${encodeURIComponent(u.id)}/fondateur`,

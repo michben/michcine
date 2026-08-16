@@ -25,7 +25,7 @@ import { mountAuth, userFromCookie, addRankedPoints,
          relations, demanderAmi, accepterAmi, retirerAmi, bloquer,
          chercherJoueurs, statutRelation, estBloque, emailAValider,
          leaderboard, reinitialiserClassement, definirPhoto, fichePublique,
-         retirerPoints, grantPointsDon,
+         retirerPoints, grantPointsDon, ajouterXp, infoNiveau, validerManuellement,
          verifierCode, rattacherParrain, infoParrainage, verifierCodeParrain,
          parrainageManquant, parrainageObligatoire } from "./auth-x.js";
 
@@ -90,6 +90,12 @@ const REGLAGES_DEFAUT = {
   transfertMax: 2000,                // points transférables en une fois entre amis
   transfertParJour: 5000,            // plafond quotidien de dons
   coeurs: 3,                         // erreurs tolérées avant la fin de partie
+  xpBase: 100,                       // expérience du premier niveau
+  xpCroissance: 1.04,                // augmentation par niveau
+  niveauMax: 300,
+  xpParPartie: 40,                   // expérience versée pour une partie terminée
+  xpParBonneReponse: 12,
+  xpParVictoire: 60,                 // bonus en multijoueur
   graceApresPremier: 15,             // secondes
   vitesseSynopsis: 2800,             // durée totale du dévoilement, en millisecondes (0 = désactivé)
   indices: {
@@ -225,6 +231,12 @@ app.put("/api/admin/reglages", requireAdmin, (req, res) => {
   REGLAGES.transfertMax     = borne(r.transfertMax, 0, 100000, REGLAGES.transfertMax);
   REGLAGES.transfertParJour = borne(r.transfertParJour, 0, 500000, REGLAGES.transfertParJour);
   REGLAGES.coeurs           = borne(r.coeurs, 1, 10, REGLAGES.coeurs);
+  REGLAGES.xpBase           = borne(r.xpBase, 10, 10000, REGLAGES.xpBase);
+  REGLAGES.xpCroissance     = borne(r.xpCroissance, 1.01, 2, REGLAGES.xpCroissance);
+  REGLAGES.niveauMax        = borne(r.niveauMax, 10, 1000, REGLAGES.niveauMax);
+  REGLAGES.xpParPartie      = borne(r.xpParPartie, 0, 1000, REGLAGES.xpParPartie);
+  REGLAGES.xpParBonneReponse= borne(r.xpParBonneReponse, 0, 500, REGLAGES.xpParBonneReponse);
+  REGLAGES.xpParVictoire    = borne(r.xpParVictoire, 0, 1000, REGLAGES.xpParVictoire);
 
   for (const [cle, valeurs] of Object.entries(r.indices || {})) {
     const cible = REGLAGES.indices[cle];
@@ -462,6 +474,13 @@ app.put("/api/admin/users/:id/photo", requireAdmin, (req, res) => {
 });
 
 /** Exempte un compte de parrainage — utile pour les premiers joueurs. */
+/** Valide l'adresse email d'un compte sans lui envoyer de code. */
+app.put("/api/admin/users/:id/valider", requireAdmin, (req, res) => {
+  const user = validerManuellement(req.params.id);
+  if (!user) return res.status(404).json({ error: "NOT_FOUND" });
+  res.json({ ok: true, emailVerifie: true });
+});
+
 app.put("/api/admin/users/:id/fondateur", requireAdmin, (req, res) => {
   const user = adminUpdateUser(req.params.id, { fondateur: req.body.fondateur !== false });
   if (!user) return res.status(404).json({ error: "NOT_FOUND" });
@@ -596,6 +615,8 @@ app.post("/api/solo/answer", (req, res) => {
   if (juste) {
     points = computeScore({ elapsedMs: Date.now() - p.startedAt, hintsUsed: p.hints });
     p.score += points;
+    p.bonnes = (p.bonnes || 0) + 1;
+    if (!p.hints.length) p.sansIndice = (p.sansIndice || 0) + 1;
   } else {
     p.coeurs = Math.max(0, p.coeurs - 1);
   }
@@ -631,12 +652,26 @@ app.post("/api/solo/next", (req, res) => {
   }
   grantPoints(user.id, p.score);
   grantCredits(user.id, REGLAGES.creditsParPartie);
+  // bilan : expérience, quêtes avancées, niveau atteint
+  const bonnes = p.bonnes || 0;
+  const xpGagnee = REGLAGES.xpParPartie + bonnes * REGLAGES.xpParBonneReponse;
+  const niveau = ajouterXp(user.id, xpGagnee, reglagesNiveau());
+
+  avancerQuete(user.id, "jouer3");
+  if (bonnes) avancerQuete(user.id, "bonnes10", bonnes);
+  if (p.sansIndice) avancerQuete(user.id, "sansIndice", p.sansIndice);
+  if (p.coeurs === REGLAGES.coeurs) avancerQuete(user.id, "sansFaute");
+
   const codeObtenu = verifierCodeParrain(user.id);
   res.json({
     ok: true, fini: true, score: p.score, mode: p.mode,
     coeursEpuises: p.coeurs === 0,
     manchesJouees: p.index, manchesTotal: p.playlist.length,
     credits: getCredits(user.id), points: getPoints(user.id), codeObtenu,
+    bilan: {
+      xp: xpGagnee, bonnes, ticketsGagnes: REGLAGES.creditsParPartie,
+      niveau, quetes: etatQuetes(user.id),
+    },
   });
 });
 
@@ -801,6 +836,78 @@ app.post("/api/friends/:action", (req, res) => {
 
   res.json({ ...resultat, relation: statutRelation(user.id, cible) });
 });
+
+/* ------------------------------------------------------------------ */
+/* Quêtes quotidiennes                                                 */
+/*                                                                     */
+/* Trois objectifs simples, renouvelés chaque jour. Ils donnent une     */
+/* raison de revenir sans exiger de longues sessions.                  */
+/* ------------------------------------------------------------------ */
+
+const QUETES = {
+  jouer3:      { titre: "Jouer 3 parties",              cible: 3,  tickets: 3, xp: 60 },
+  bonnes10:    { titre: "Trouver 10 films",             cible: 10, tickets: 4, xp: 80 },
+  sansIndice:  { titre: "Gagner 3 manches sans indice", cible: 3,  tickets: 5, xp: 100 },
+  sansFaute:   { titre: "Terminer une partie sans faute", cible: 1, tickets: 6, xp: 120 },
+};
+
+let progression = {};   // userId -> { jour, compteurs, reclamees }
+const saveProgression = () => sauver("quetes", progression);
+const jourCourant = () => new Date().toISOString().slice(0, 10);
+
+function quetesDu(userId) {
+  const p = progression[userId];
+  if (!p || p.jour !== jourCourant())
+    progression[userId] = { jour: jourCourant(), compteurs: {}, reclamees: [] };
+  return progression[userId];
+}
+
+function avancerQuete(userId, cle, pas = 1) {
+  const p = quetesDu(userId);
+  p.compteurs[cle] = (p.compteurs[cle] || 0) + pas;
+  saveProgression();
+}
+
+const etatQuetes = (userId) => {
+  const p = quetesDu(userId);
+  return Object.entries(QUETES).map(([cle, q]) => ({
+    cle, ...q,
+    avancement: Math.min(p.compteurs[cle] || 0, q.cible),
+    accomplie: (p.compteurs[cle] || 0) >= q.cible,
+    reclamee: p.reclamees.includes(cle),
+  }));
+};
+
+app.get("/api/quetes", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (user) res.json({ quetes: etatQuetes(user.id), niveau: niveauJoueur(user.id) });
+});
+
+app.post("/api/quetes/:cle/reclamer", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (!user) return;
+  const cle = req.params.cle;
+  const quete = QUETES[cle];
+  if (!quete) return res.status(404).json({ error: "INCONNUE" });
+
+  const p = quetesDu(user.id);
+  if (p.reclamees.includes(cle)) return res.status(400).json({ error: "DEJA_RECLAMEE" });
+  if ((p.compteurs[cle] || 0) < quete.cible) return res.status(400).json({ error: "PAS_ACCOMPLIE" });
+
+  p.reclamees.push(cle);
+  saveProgression();
+  grantCredits(user.id, quete.tickets);
+  const niveau = ajouterXp(user.id, quete.xp, reglagesNiveau());
+
+  res.json({ ok: true, tickets: quete.tickets, xp: quete.xp,
+             credits: getCredits(user.id), niveau });
+});
+
+const reglagesNiveau = () => ({
+  base: REGLAGES.xpBase, croissance: REGLAGES.xpCroissance, plafond: REGLAGES.niveauMax,
+});
+
+const niveauJoueur = (userId) => infoNiveau(userId, reglagesNiveau());
 
 /* ---------- parrainage ---------- */
 
@@ -1227,11 +1334,18 @@ function endGame(room) {
     if (room.mode === "ranked") addRankedPoints(p.userId, p.score); // classement permanent
     grantPoints(p.userId, p.score);                                  // cagnotte échangeable
     grantCredits(p.userId, REGLAGES.creditsParPartie);
+
+    const vainqueur = ranking[0]?.id === p.id;
+    const xp = REGLAGES.xpParPartie + (vainqueur ? REGLAGES.xpParVictoire : 0);
+    const niveau = ajouterXp(p.userId, xp, reglagesNiveau());
+    avancerQuete(p.userId, "jouer3");
+    p.bilan = { xp, niveau, vainqueur, ticketsGagnes: REGLAGES.creditsParPartie };
+
     verifierCodeParrain(p.userId);
   }
   for (const p of room.players.values())
     io.to(p.id).emit("game:end", { ranking, mode: room.mode, teams: state.teams,
-      credits: getCredits(p.userId), points: getPoints(p.userId) });
+      credits: getCredits(p.userId), points: getPoints(p.userId), bilan: p.bilan });
   // TODO : persister la partie et créditer les récompenses
 }
 
@@ -1543,6 +1657,7 @@ reports = await charger("reports", REPORTS_FILE, []);
 empreinteAdmin = await charger("adminPass", null, null);
 palmares = await charger("palmares", null, []);
 chargerSaison(await charger("saison", null, null));
+progression = await charger("quetes", null, {});
 for (const [id, liste] of Object.entries(await charger("vus", null, {})))
   vusParJoueur.set(id, liste);
 conversations = await charger("conversations", null, {});
