@@ -1689,6 +1689,24 @@ io.on("connection", (socket) => {
   marquerEnLigne(user.id);
   io.emit("presence", { enLigne: nombreEnLigne() });
 
+  // Notify friends that this user just connected
+  const mesRelations = relations(user.id);
+  if (mesRelations && mesRelations.amis) {
+      for (const ami of mesRelations.amis) {
+          for (const [, s] of io.of("/").sockets) {
+              if (s.data.user?.id === ami.id) {
+                  s.emit("notif", {
+                      type: "friend_online",
+                      de: user.pseudo,
+                      avatar: user.avatar,
+                      photo: user.photo || null,
+                      id: user.id
+                  });
+              }
+          }
+      }
+  }
+
   socket.on("disconnect", () => {
     marquerHorsLigne(user.id);
     io.emit("presence", { enLigne: nombreEnLigne() });
@@ -1711,7 +1729,27 @@ io.on("connection", (socket) => {
     rooms.set(code, room);
     joinRoom(socket, room, user);
     cb?.({ ok: true, code, state: publicState(room) });
-    if (room.mode === "solo" || room.mode === "ranked") startRound(room); // le solo démarre immédiatement
+    if (room.mode === "solo" || room.mode === "ranked") {
+        startRound(room); // le solo démarre immédiatement
+    } else {
+        // Mode multijoueur : on notifie automatiquement les amis en ligne
+        const mesRelations = relations(user.id);
+        if (mesRelations && mesRelations.amis) {
+            for (const ami of mesRelations.amis) {
+                for (const [, s] of io.of("/").sockets) {
+                    if (s.data.user?.id === ami.id) {
+                        s.emit("invite:recue", {
+                            code: room.code,
+                            mode: room.mode,
+                            de: user.pseudo,
+                            avatar: user.avatar,
+                            joueurs: 1
+                        });
+                    }
+                }
+            }
+        }
+    }
   });
 
   socket.on("room:join", ({ code }, cb) => {

@@ -1937,6 +1937,11 @@ socket.on("notif", (notif) => {
     ? `<img class="pfp" src="${esc(photo)}" alt="">`
     : `<span style="font-size:24px">${avatar || "🎬"}</span>`;
 
+  if (type === "friend_online")
+    bandeauNotif(`${image}<span><b>${esc(de)}</b> est en ligne
+      <small>Votre ami(e) vient de se connecter</small></span>`,
+      () => { ongletAmis = "amis"; $("btnFriends").click(); chargerAmis(); });
+
   if (type === "demande")
     bandeauNotif(`${image}<span><b>${esc(de)}</b> souhaite vous ajouter
       <small>Touchez pour répondre</small></span>`,
