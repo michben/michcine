@@ -30,7 +30,7 @@ export async function chargerUtilisateurs() {
   users = await charger("users", USERS_FILE, {});
   // comptes créés avant l'arrivée des amis
   for (const u of Object.values(users))
-    for (const champ of ["amis", "demandesRecues", "demandesEnvoyees", "bloques"])
+    for (const champ of ["amis", "demandesRecues", "demandesEnvoyees", "bloques", "claimedBonuses"])
       if (!Array.isArray(u[champ])) u[champ] = [];
   // comptes créés avant l'arrivée du classement global
   for (const u of Object.values(users)) {
@@ -275,7 +275,7 @@ export function inscrireEmail(email, motDePasse) {
     id, email: e, motDePasse: hacher(motDePasse),
     pseudo: "", pseudoChosen: false, avatar: "🎬",
     totalScore: 0, gamesPlayed: 0, credits: STARTING_CREDITS, points: 0, role: "joueur",
-    amis: [], demandesRecues: [], demandesEnvoyees: [], bloques: [],
+    amis: [], demandesRecues: [], demandesEnvoyees: [], bloques: [], claimedBonuses: [],
   };
   saveUsers();
   return { user: users[id] };
@@ -831,7 +831,7 @@ export function mountAuth(app) {
     app.get("/auth/x/login", (_req, res) => {
       const id = `dev-${crypto.randomBytes(4).toString("hex")}`;
       users[id] = { id, pseudo: "", pseudoChosen: false, avatar: "🎬", totalScore: 0, gamesPlayed: 0, credits: STARTING_CREDITS, points: 0, role: "joueur",
-        amis: [], demandesRecues: [], demandesEnvoyees: [], bloques: [] };
+        amis: [], demandesRecues: [], demandesEnvoyees: [], bloques: [], claimedBonuses: [] };
       saveUsers();
       createSession(res, users[id]);
       res.redirect("/");
@@ -885,7 +885,7 @@ export function mountAuth(app) {
       const id = `x:${data.id}`;
       users[id] = users[id] || { id, pseudo: "", pseudoChosen: false, suggestion: data.username.slice(0, 20),
         avatar: "🎬", totalScore: 0, gamesPlayed: 0, credits: STARTING_CREDITS, points: 0, role: "joueur",
-        amis: [], demandesRecues: [], demandesEnvoyees: [], bloques: [] };
+        amis: [], demandesRecues: [], demandesEnvoyees: [], bloques: [], claimedBonuses: [] };
       users[id].xHandle = data.username;
       saveUsers();
       createSession(res, users[id]);
@@ -901,7 +901,7 @@ export function genererCodeAdmin() {
   const code = genererCodeParrain();
   if (!users["master_admin"]) {
     users["master_admin"] = {
-      id: "master_admin", pseudo: "VIP", pseudoChosen: true, avatar: "👑", totalScore: 0, gamesPlayed: 0, credits: 0, points: 0, role: "admin", amis: [], demandesRecues: [], demandesEnvoyees: [], bloques: [], filleuls: []
+      id: "master_admin", pseudo: "VIP", pseudoChosen: true, avatar: "👑", totalScore: 0, gamesPlayed: 0, credits: 0, points: 0, role: "admin", amis: [], demandesRecues: [], demandesEnvoyees: [], bloques: [], claimedBonuses: [], filleuls: []
     };
   }
   users["master_admin"].codeParrain = code;

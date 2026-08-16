@@ -416,54 +416,18 @@
   .bday-item .info b { display: block; color: var(--chalk); font-size: 16px; margin-bottom: 2px;}
   .bday-item .info small { color: var(--muted); font-size: 13px; line-height: 1.3; display: block;}
 
-  /* --- Effets visuels avancés (Boutons et Logos) --- */
-  body.animations-actives button:not(.ghost):not(#chatToggle):not(.close-btn):not(#banner) {
-    position: relative; overflow: hidden; transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s;
-  }
-  body.animations-actives button:not(.ghost):not(#chatToggle):not(.close-btn):not(#banner)::after {
-    content: ""; position: absolute; top: 0; left: -100%; width: 50%; height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
-    transform: skewX(-20deg); transition: none;
-  }
-  body.animations-actives button:not(.ghost):not(#chatToggle):not(.close-btn):not(#banner):hover,
-  body.animations-actives button:not(.ghost):not(#chatToggle):not(.close-btn):not(#banner):active {
-    transform: scale(1.03); box-shadow: 0 4px 15px rgba(245,185,66,0.3);
-  }
-  body.animations-actives button:not(.ghost):not(#chatToggle):not(.close-btn):not(#banner):hover::after,
-  body.animations-actives button:not(.ghost):not(#chatToggle):not(.close-btn):not(#banner):active::after {
-    animation: shine 0.6s ease;
-  }
-  @keyframes shine { 100% { left: 200%; } }
+  .progression-map { display: flex; flex-direction: column-reverse; align-items: center; padding: 20px 0; overflow-y: auto; overflow-x: hidden; height: 100%; padding-bottom: 50vh; }
+  .progression-line { width: 6px; height: 26px; background: var(--card); transition: background 0.3s; }
+  .progression-line.done { background: var(--teal); }
+  .progression-step { width: 56px; height: 56px; border-radius: 50%; background: var(--card); color: var(--chalk); display: flex; justify-content: center; align-items: center; font-family: 'Anton', sans-serif; font-size: 22px; border: 4px solid #222; z-index: 2; transition: all 0.3s; position: relative; }
+  .progression-step.done { background: var(--teal); border-color: #3DDC84; color: #000; }
+  .progression-step.current { background: var(--beam); border-color: #FFF; color: #000; transform: scale(1.35); box-shadow: 0 0 20px var(--beam); z-index: 5; }
+  .progression-step.bonus { border-color: var(--ticket); background: #4a1c24; }
+  .progression-step.bonus.done { background: var(--teal); border-color: var(--ticket); }
+  .progression-step.claimable { animation: pulseBonus 1s infinite; cursor: pointer; background: var(--ticket); color: #fff; box-shadow: 0 0 15px var(--ticket); z-index: 6; }
+  .progression-step.fog { background: #111; border-color: #1a1a1a; color: transparent; text-shadow: 0 0 0 #444; transform: scale(0.9); }
   
-  body.animations-actives button.ghost:not(#btnQuitGame):not(#chatReduire) {
-    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s, border-color 0.2s;
-  }
-  body.animations-actives button.ghost:not(#btnQuitGame):not(#chatReduire):hover,
-  body.animations-actives button.ghost:not(#btnQuitGame):not(#chatReduire):active {
-    transform: scale(1.05); background: rgba(255,255,255,0.06); border-color: var(--beam); color: var(--chalk);
-  }
-  
-  body.animations-actives .mode { transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s, border-color 0.2s; }
-  body.animations-actives .mode:hover, body.animations-actives .mode:active {
-    transform: translateY(-4px) scale(1.02);
-    box-shadow: 0 8px 25px rgba(0,0,0,0.5);
-    border-color: var(--beam);
-  }
-  body.animations-actives .mode:hover .ic, body.animations-actives .mode:active .ic { animation: bounceIcon 0.5s; }
-  @keyframes bounceIcon { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px) scale(1.1); } }
-
-  body.animations-actives #banner h1 em { display: inline-block; transition: transform 0.3s; }
-  body.animations-actives #banner:hover h1 em, body.animations-actives #banner:active h1 em { animation: wobble 0.6s ease-in-out; color: var(--ticket); }
-  @keyframes wobble { 0%, 100% { transform: rotate(0deg) scale(1); } 25% { transform: rotate(-8deg) scale(1.1); } 75% { transform: rotate(8deg) scale(1.1); } }
-  
-  body.animations-actives .amiLigne { transition: background 0.2s, transform 0.2s; }
-  body.animations-actives .amiLigne:hover { background: rgba(255,255,255,0.03); border-radius: 8px; transform: translateX(4px); }
-  
-  body.animations-actives .choices button { transition: transform 0.15s, border-color 0.15s, background 0.15s; }
-  body.animations-actives .choices button:hover:not(:disabled),
-  body.animations-actives .choices button:active:not(:disabled) {
-    transform: scale(1.02); border-color: var(--beam); box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-  }
+  @keyframes pulseBonus { 0%, 100% { transform: scale(1.2); } 50% { transform: scale(1.4); box-shadow: 0 0 30px var(--ticket); } }
 
 </style>
 
@@ -1076,7 +1040,7 @@ if (!window.tempsReelDispo) {
 }
 
 fetch("/api/config").then(r => r.json())
-  .then(c => { $("tipLink").href = c.tipUrl; tauxTicket = c.pointsParTicket || tauxTicket; if (c.animationsAvancees !== false) document.body.classList.add("animations-actives"); })
+  .then(c => { $("tipLink").href = c.tipUrl; tauxTicket = c.pointsParTicket || tauxTicket; })
   .catch(() => $("tipLink").classList.add("hidden"));
 
 /* ---------- Session ---------- */
@@ -1855,10 +1819,8 @@ function ligneJoueur(j, boutons){
     <span class="nom" data-fiche="${esc(j.id)}" data-pseudo="${esc(j.pseudo)}"
       data-avatar="${j.avatar||"🎬"}" data-photo="${esc(j.photo||"")}"
       style="cursor:pointer">${vignette(j)} ${esc(j.pseudo)}</span>
-    <div style="display:flex; gap:6px; flex-wrap:wrap;">
     ${boutons.map(([a, l]) =>
-      `<button class="ghost" data-act="${a}" data-id="${esc(j.id)}" title="${a}" style="padding:6px 10px; font-size:15px;">${l}</button>`).join("")}
-    </div>
+      `<button class="ghost" data-act="${a}" data-id="${esc(j.id)}">${l}</button>`).join("")}
   </div>`;
 }
 
@@ -1868,16 +1830,7 @@ function brancher(){
 
   $("listeAmis").querySelectorAll("[data-act]").forEach(b => b.onclick = async () => {
     if (b.dataset.act === "inviter") return inviter(b.dataset.id, b);
-    if (b.dataset.act === "message") {
-        const nomEl = b.closest(".amiLigne").querySelector(".nom");
-        return ouvrirConversation(b.dataset.id, nomEl.dataset.pseudo, nomEl.dataset.avatar, nomEl.dataset.photo);
-    }
-    if (b.dataset.act === "donner") {
-        const nomEl = b.closest(".amiLigne").querySelector(".nom");
-        return offrirPoints(b.dataset.id, nomEl.dataset.pseudo);
-    }
     if (b.dataset.act === "bloquer" && !confirm("Bloquer ce joueur ?")) return;
-    if (b.dataset.act === "retirer" && !confirm("Retirer cet ami ?")) return;
     await agirAmi(b.dataset.act, b.dataset.id);
     ongletAmis === "recherche" ? chercher() : chargerAmis();
     majBadgeAmis();
@@ -1895,8 +1848,8 @@ async function chargerAmis(){
     const enSalon = Boolean(state.code);
     $("listeAmis").innerHTML = r.amis.map(j => ligneJoueur(j,
       enSalon && j.online
-        ? [["inviter","🎮 Inviter"], ["message","✉️"], ["donner","🎁"], ["retirer","❌"], ["bloquer","🚫"]]
-        : [["message","✉️"], ["donner","🎁"], ["retirer","❌"], ["bloquer","🚫"]])).join("");
+        ? [["inviter","Inviter"], ["retirer","Retirer"], ["bloquer","Bloquer"]]
+        : [["retirer","Retirer"], ["bloquer","Bloquer"]])).join("");
     $("amisVide").textContent = r.amis.length ? "" :
       "Aucun ami pour l'instant. Cherchez un pseudo dans l'onglet Rechercher.";
   } else if (ongletAmis === "demandes"){
@@ -2907,6 +2860,25 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
         </div>
     </div>
 
+    
+    <!-- MODALE PROGRESSION -->
+    <div class="modal-overlay" id="progressionModal">
+        <div class="modal-content" style="max-height: 85vh; display: flex; flex-direction: column;">
+            <div class="modal-header" style="border-bottom-color: var(--beam);">
+                <h2>🗺️ Votre Parcours</h2>
+                <button class="close-btn" id="closeProgressionBtn">&times;</button>
+            </div>
+            <div class="modal-body" style="flex: 1; padding: 0; display: flex; flex-direction: column; overflow: hidden;">
+                <div style="padding: 15px 25px; background: #111; border-bottom: 1px solid #333; text-align: center; position: sticky; top: 0; z-index: 10;">
+                    <p id="nextBonusText" style="margin: 0; font-size: 15px; color: var(--chalk);"></p>
+                </div>
+                <div id="progressionMap" class="progression-map">
+                    <p class='note' style='text-align:center; margin-top:20px;'>Génération de la carte...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- BOUTON FLOTTANT ET MODALE D'AIDE -->
     <div class="help-btn" id="helpBtn" title="Règles du jeu">?</div>
     <div class="modal-overlay" id="rulesModal">
@@ -3143,6 +3115,107 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
                 if (e.target === nowPlayingModal) nowPlayingModal.classList.remove('active');
             });
         }
+
+
+        const barreNiveau = document.getElementById("barreNiveau");
+        const progressionModal = document.getElementById("progressionModal");
+        const closeProgressionBtn = document.getElementById("closeProgressionBtn");
+
+        if (barreNiveau) {
+            barreNiveau.style.cursor = "pointer";
+            barreNiveau.title = "Voir ma progression";
+            barreNiveau.addEventListener("click", openProgression);
+            closeProgressionBtn.addEventListener("click", () => progressionModal.classList.remove("active"));
+            progressionModal.addEventListener("click", (e) => {
+                if (e.target === progressionModal) progressionModal.classList.remove("active");
+            });
+        }
+
+        async function openProgression() {
+            progressionModal.classList.add("active");
+            document.getElementById("progressionMap").innerHTML = "<p class='note' style='text-align:center; margin-top:20px;'>Génération de la carte...</p>";
+            
+            try {
+                const res = await fetch("/api/progression");
+                const data = await res.json();
+                
+                const { currentLevel, claimedBonuses, nextBonus, maxLevel } = data;
+                
+                if (nextBonus) {
+                    const diff = nextBonus - currentLevel;
+                    document.getElementById("nextBonusText").innerHTML = `Encore <b style="color:var(--beam)">${diff} niveau${diff>1?'x':''}</b> avant le prochain coffre 🎁 !`;
+                } else {
+                    document.getElementById("nextBonusText").textContent = "Vous avez atteint le sommet ! Félicitations !";
+                }
+                
+                let html = "";
+                // On affiche jusqu'à 8 niveaux au-dessus pour le brouillard
+                const visMax = Math.min(maxLevel, currentLevel + 8);
+                
+                for (let i = 1; i <= visMax; i++) {
+                    const isBonus = i === 5 || (i > 0 && i % 10 === 0);
+                    const isDone = i < currentLevel;
+                    const isCurrent = i === currentLevel;
+                    const isFog = i > currentLevel + 2; 
+                    
+                    let classes = "progression-step";
+                    if (isDone) classes += " done";
+                    if (isCurrent) classes += " current";
+                    if (isBonus) classes += " bonus";
+                    if (isFog && !isBonus) classes += " fog";
+                    
+                    const claimable = isBonus && i <= currentLevel && !claimedBonuses.includes(i);
+                    if (claimable) classes += " claimable";
+                    
+                    let content = i;
+                    if (isBonus) {
+                        if (claimedBonuses.includes(i)) content = "✅";
+                        else if (claimable) content = "🎁";
+                        else content = "📦";
+                    }
+                    if (isFog && !isBonus) content = "☁️";
+                    
+                    const clickAttr = claimable ? `onclick="claimBonus(${i})"` : "";
+                    const line = i > 1 ? `<div class="progression-line ${isDone || isCurrent ? 'done' : ''}"></div>` : "";
+                    
+                    html += `
+                    <div style="display:flex; flex-direction:column; align-items:center;">
+                        ${line}
+                        <div class="${classes}" id="step-${i}" ${clickAttr} title="Niveau ${i}">
+                            ${content}
+                        </div>
+                    </div>`;
+                }
+                
+                document.getElementById("progressionMap").innerHTML = html;
+                
+                // Animate scrolling to the current level
+                setTimeout(() => {
+                    const el = document.getElementById(`step-${currentLevel}`);
+                    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+                }, 150);
+                
+            } catch(e) {
+                document.getElementById("progressionMap").innerHTML = "<p class='note' style='color:var(--ticket)'>Erreur de chargement de la carte.</p>";
+            }
+        }
+
+        window.claimBonus = async (lvl) => {
+            const res = await fetch("/api/progression/claim", {
+                method: "POST", 
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({level: lvl})
+            });
+            const data = await res.json();
+            if (data.ok) {
+                bandeauNotif(`<span style="font-size:24px">🎉</span><span><b style="color:var(--beam)">Bonus récupéré !</b><small>+${data.reward.credits} tickets et +${data.reward.xp} xp</small></span>`);
+                if (typeof setCredits === "function") setCredits(data.credits);
+                if (data.niveau && typeof majNiveau === "function") majNiveau(data.niveau);
+                openProgression(); // Refresh map
+            } else {
+                alert("Erreur lors de la récupération du bonus.");
+            }
+        };
 
 </script>
 

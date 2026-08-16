@@ -81,7 +81,6 @@ const io = new Server(httpServer, { cors: { origin: "*" }, path: "/rt" });
  * Ils sont conservés en base : un changement survit aux redéploiements.
  */
 const REGLAGES_DEFAUT = {
-  animationsAvancees: true,
   roundDuration: 60,                 // secondes
   basePoints: 1000,
   tmdbApiKey: "",
@@ -264,7 +263,6 @@ app.put("/api/admin/reglages", requireAdmin, (req, res) => {
   REGLAGES.transfertMax     = borne(r.transfertMax, 0, 100000, REGLAGES.transfertMax);
   REGLAGES.transfertParJour = borne(r.transfertParJour, 0, 500000, REGLAGES.transfertParJour);
   if (typeof r.tmdbApiKey === 'string') REGLAGES.tmdbApiKey = r.tmdbApiKey;
-  REGLAGES.animationsAvancees = r.animationsAvancees !== false;
   REGLAGES.coeurs           = borne(r.coeurs, 1, 10, REGLAGES.coeurs);
   REGLAGES.xpBase           = borne(r.xpBase, 10, 10000, REGLAGES.xpBase);
   REGLAGES.xpCroissance     = borne(r.xpCroissance, 1.01, 2, REGLAGES.xpCroissance);
@@ -775,17 +773,11 @@ app.get("/api/messages/:id", (req, res) => {
     return res.status(403).json({ error: "PAS_AMI" });
 
   const conv = conversations[cleConv(user.id, autre)] || { messages: [] };
-  
-  // Flash : efface les messages de plus de 24h
-  const limit = Date.now() - 24 * 60 * 60 * 1000;
-  conv.messages = conv.messages.filter(m => m.at > limit);
-  
   // on marque comme lus les messages de l'autre
   let change = false;
   for (const m of conv.messages)
     if (m.de === autre && !m.lu) { m.lu = true; change = true; }
-  
-  saveConversations(); // on sauvegarde toujours pour purger les vieux messages
+  if (change) saveConversations();
 
   res.json({ messages: conv.messages.slice(-100) });
 });
@@ -803,11 +795,6 @@ app.post("/api/messages/:id", (req, res) => {
 
   const cle = cleConv(user.id, autre);
   const conv = conversations[cle] || (conversations[cle] = { messages: [], signale: false });
-  
-  // Flash : nettoyage avant ajout
-  const limit = Date.now() - 24 * 60 * 60 * 1000;
-  conv.messages = conv.messages.filter(m => m.at > limit);
-  
   conv.messages.push({ de: user.id, texte, at: Date.now(), lu: false });
   if (conv.messages.length > 300) conv.messages = conv.messages.slice(-300);
   saveConversations();
@@ -824,17 +811,12 @@ app.get("/api/messages", (req, res) => {
   if (!user) return;
   const parAmi = {};
   let total = 0;
-  const limit = Date.now() - 24 * 60 * 60 * 1000;
   for (const [cle, conv] of Object.entries(conversations)) {
-    // Purge au passage
-    conv.messages = conv.messages.filter(m => m.at > limit);
-    
     if (!cle.includes(user.id)) continue;
     const autre = cle.split("|").find((x) => x !== user.id);
     const n = conv.messages.filter((m) => m.de === autre && !m.lu).length;
     if (n) { parAmi[autre] = n; total += n; }
   }
-  saveConversations();
   res.json({ total, parAmi });
 });
 
@@ -865,6 +847,51 @@ app.post("/api/admin/conversations/:cle/traiter", requireModerateur, (req, res) 
   conv.signale = false;
   saveConversations();
   res.json({ ok: true });
+});
+
+
+/* ---------- Progression & Map ---------- */
+function isBonusLevel(lvl) {
+    return lvl === 5 || (lvl > 0 && lvl % 10 === 0);
+}
+function getBonusReward(lvl) {
+    // Ex: +x crédits, +x xp
+    return { credits: 2 + Math.floor(lvl / 10), xp: lvl * 10 };
+}
+
+app.get("/api/progression", (req, res) => {
+    const user = exigeCompte(req, res);
+    if (!user) return;
+    const n = infoNiveau(user.id, { base: REGLAGES.xpBase, croissance: REGLAGES.xpCroissance, plafond: REGLAGES.niveauMax })?.niveau || 0;
+    const claimed = user.claimedBonuses || [];
+    
+    let nextBonus = null;
+    for (let i = n + 1; i <= REGLAGES.niveauMax; i++) {
+        if (isBonusLevel(i)) { nextBonus = i; break; }
+    }
+    
+    res.json({ currentLevel: n, claimedBonuses: claimed, nextBonus, maxLevel: REGLAGES.niveauMax });
+});
+
+app.post("/api/progression/claim", (req, res) => {
+    const user = exigeCompte(req, res);
+    if (!user) return;
+    const lvl = Number(req.body.level);
+    const n = infoNiveau(user.id, { base: REGLAGES.xpBase, croissance: REGLAGES.xpCroissance, plafond: REGLAGES.niveauMax })?.niveau || 0;
+    
+    if (lvl > n) return res.status(400).json({ error: "NIVEAU_NON_ATTEINT" });
+    if (!isBonusLevel(lvl)) return res.status(400).json({ error: "PAS_UN_BONUS" });
+    
+    user.claimedBonuses = user.claimedBonuses || [];
+    if (user.claimedBonuses.includes(lvl)) return res.status(400).json({ error: "DEJA_RECLAME" });
+    
+    user.claimedBonuses.push(lvl);
+    
+    const reward = getBonusReward(lvl);
+    grantCredits(user.id, reward.credits);
+    const nv = ajouterXp(user.id, reward.xp, { base: REGLAGES.xpBase, croissance: REGLAGES.xpCroissance, plafond: REGLAGES.niveauMax });
+    
+    res.json({ ok: true, reward, credits: getCredits(user.id), niveau: nv });
 });
 
 /* ---------- amis ---------- */
@@ -1274,7 +1301,7 @@ app.get("/api/birthdays", async (req, res) => {
 });
 
 app.get("/api/config", (_req, res) => res.json({
-  tipUrl: CONFIG.TIP_URL, maxPlayers: CONFIG.MAX_PLAYERS, pointsParTicket: CONFIG.POINTS_PAR_TICKET, animationsAvancees: REGLAGES.animationsAvancees,
+  tipUrl: CONFIG.TIP_URL, maxPlayers: CONFIG.MAX_PLAYERS, pointsParTicket: CONFIG.POINTS_PAR_TICKET,
 }));
 
 /**
