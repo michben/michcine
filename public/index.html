@@ -409,6 +409,12 @@
 .modal-content::-webkit-scrollbar { width: 8px; }
 .modal-content::-webkit-scrollbar-track { background: #1a1a1a; }
 .modal-content::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
+
+  .bday-item { display: flex; gap: 12px; margin-bottom: 12px; padding: 10px; background: var(--card); border-radius: 8px; align-items: center; border-left: 4px solid var(--teal); }
+  .bday-item img { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; }
+  .bday-item .info { flex: 1; }
+  .bday-item .info b { display: block; color: var(--chalk); font-size: 16px; margin-bottom: 2px;}
+  .bday-item .info small { color: var(--muted); font-size: 13px; line-height: 1.3; display: block;}
 </style>
 
 </head>
@@ -658,6 +664,9 @@
       <div class="jauge"><i id="niveauJauge" style="width:0%"></i></div>
     </div>
     <p class="tag" style="margin-top:18px">Choisissez votre partie</p>
+    <div class="row" style="margin-bottom: 14px;">
+      <button id="btnBirthdays" class="ghost" style="border-color: var(--teal); color: var(--teal);">🎂 Nés aujourd'hui</button>
+    </div>
     <div class="modes">
       <button class="mode" data-mode="solo"><span class="ic">🎬</span><span><b>Solo</b><small>Contre le chrono, pour s'entraîner</small></span></button>
       <button class="mode" data-mode="duel"><span class="ic">⚔️</span><span><b>Duel</b><small>Deux joueurs, face à face</small></span></button>
@@ -707,7 +716,7 @@
         <div class="dots" id="dots"></div>
         <span class="roomcode hidden" id="roomCode"></span>
       </div>
-      <p class="tag" id="roundLabel">Question 1</p>
+      <p class="tag" id="roundLabel">Manche 1</p>
       <p class="synopsis" id="synopsis"></p>
       <div class="barreLecture">
         <button id="btnLire" class="ghost" title="Lire le synopsis à voix haute">🔊 Lire</button>
@@ -726,7 +735,7 @@
       <div class="emojis hidden" id="emojiBar"></div>
       <div class="row">
         <button id="btnPause" class="ghost" style="flex:0 0 auto">⏸ Pause</button>
-        <button id="btnSkip" class="ghost hidden">Passer à la question suivante</button>
+        <button id="btnSkip" class="ghost hidden">Passer à la manche suivante</button>
       </div>
       <ul class="players" id="roundPlayers"></ul>
     </div>
@@ -1509,7 +1518,7 @@ socket.on("coeurs:maj", ({coeurs, elimine}) => {
   majCoeurs(coeurs, state.coeursMax, true);
   $("guessFeedback").textContent = elimine
     ? "Cœurs épuisés — vous êtes éliminé de cette partie."
-    : `Question passée — ${coeurs} cœur${coeurs>1?"s":""} restant${coeurs>1?"s":""}.`;
+    : `Manche passée — ${coeurs} cœur${coeurs>1?"s":""} restant${coeurs>1?"s":""}.`;
   $("guessFeedback").className = "feedback bad";
 });
 
@@ -2345,7 +2354,7 @@ function afficherManche(m){
   state.vitesseSynopsis = m.vitesseSynopsis;
   if (m.hintLabels) Object.assign(HINT_LABELS, m.hintLabels);
   state.bought = {}; state.answered = false;
-  $("roundLabel").textContent = `Question ${m.roundIndex + 1} sur ${m.total}`;
+  $("roundLabel").textContent = `Manche ${m.roundIndex + 1} sur ${m.total}`;
   derouler(m.synopsis);
   $("dots").innerHTML = Array.from({length: m.total}, (_, i) =>
     `<i class="${i < m.roundIndex ? "done" : i === m.roundIndex ? "now" : ""}"></i>`).join("");
@@ -2454,7 +2463,7 @@ async function mancheSuivanteSolo(){
   afficherBilan(r.bilan);
   $("winner").textContent = r.coeursEpuises ? "Cœurs épuisés" : "Partie terminée";
   $("myResult").textContent = `${me.pseudo} — ${r.score} points` +
-    (r.coeursEpuises ? ` · ${r.manchesJouees} question${r.manchesJouees>1?"s":""} sur ${r.manchesTotal}` : "");
+    (r.coeursEpuises ? ` · ${r.manchesJouees} manche${r.manchesJouees>1?"s":""} sur ${r.manchesTotal}` : "");
   $("finalRank").innerHTML = `<li>${me.avatar||"🎬"} ${esc(me.pseudo)}<b>${r.score} pts</b></li>`;
   $("finalTeams").classList.add("hidden");
   show("over");
@@ -2709,7 +2718,7 @@ socket.on("round:end", ({answer, movieId, poster, year, scores, isHost, mode}) =
   $("btnNext").classList.toggle("hidden", !peutEnchainer);
   $("nextNote").textContent = peutEnchainer
     ? "Sinon, enchaînement automatique dans quelques secondes."
-    : "Question suivante dans quelques secondes.";
+    : "Manche suivante dans quelques secondes.";
   show("between");
 });
 
@@ -2775,6 +2784,19 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
 
   </div>
 
+    
+    <!-- MODALE ANNIVERSAIRES -->
+    <div class="modal-overlay" id="birthdaysModal">
+        <div class="modal-content">
+            <div class="modal-header" style="border-bottom-color: var(--teal);">
+                <h2>🎂 Nés un <span id="bdayDate"></span></h2>
+                <button class="close-btn" id="closeBdayBtn">&times;</button>
+            </div>
+            <div class="modal-body" id="bdayList" style="max-height: 60vh; overflow-y: auto;">
+            </div>
+        </div>
+    </div>
+    
     <!-- BOUTON FLOTTANT ET MODALE D'AIDE -->
     <div class="help-btn" id="helpBtn" title="Règles du jeu">?</div>
     <div class="modal-overlay" id="rulesModal">
@@ -2811,6 +2833,51 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
                 document.getElementById('rulesModal').classList.remove('active');
             }
         });
+    </script>
+
+    <script>
+        const btnBirthdays = document.getElementById("btnBirthdays");
+        const birthdaysModal = document.getElementById("birthdaysModal");
+        const closeBdayBtn = document.getElementById("closeBdayBtn");
+
+        if (btnBirthdays) {
+            const today = new Date();
+            const options = { day: 'numeric', month: 'long' };
+            const dateStr = today.toLocaleDateString('fr-FR', options);
+            btnBirthdays.innerHTML = `🎂 Célébrités nées le ${dateStr}`;
+
+            btnBirthdays.addEventListener("click", async () => {
+                birthdaysModal.classList.add("active");
+                document.getElementById("bdayDate").textContent = dateStr;
+                document.getElementById("bdayList").innerHTML = "<p class='note' style='text-align:center'>Recherche dans les archives d'Hollywood...</p>";
+
+                try {
+                    const res = await fetch("/api/birthdays");
+                    const data = await res.json();
+                    if (!data.actors || data.actors.length === 0) {
+                        document.getElementById("bdayList").innerHTML = "<p class='note'>Aucune star majeure du cinéma répertoriée pour aujourd'hui.</p>";
+                        return;
+                    }
+                    
+                    document.getElementById("bdayList").innerHTML = data.actors.map(a => `
+                        <div class="bday-item">
+                            ${a.thumbnail ? `<img src="${a.thumbnail}" alt="">` : `<div style="width:50px;height:50px;border-radius:50%;background:#333;display:flex;align-items:center;justify-content:center;font-size:24px">🎬</div>`}
+                            <div class="info">
+                                <b>${a.name}</b>
+                                <small>${a.year} — ${a.description}</small>
+                            </div>
+                        </div>
+                    `).join("");
+                } catch (e) {
+                    document.getElementById("bdayList").innerHTML = "<p class='note' style='color:var(--ticket)'>Impossible de charger les données.</p>";
+                }
+            });
+
+            closeBdayBtn.addEventListener("click", () => birthdaysModal.classList.remove("active"));
+            birthdaysModal.addEventListener('click', (e) => {
+                if (e.target === birthdaysModal) birthdaysModal.classList.remove('active');
+            });
+        }
     </script>
 </body>
 

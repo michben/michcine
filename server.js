@@ -921,7 +921,7 @@ app.post("/api/friends/:action", (req, res) => {
 const QUETES = {
   jouer3:      { titre: "Jouer 3 parties",              cible: 3,  tickets: 3, xp: 60 },
   bonnes10:    { titre: "Trouver 10 films",             cible: 10, tickets: 4, xp: 80 },
-  sansIndice:  { titre: "Gagner 3 questions sans indice", cible: 3,  tickets: 5, xp: 100 },
+  sansIndice:  { titre: "Gagner 3 manches sans indice", cible: 3,  tickets: 5, xp: 100 },
   sansFaute:   { titre: "Terminer une partie sans faute", cible: 1, tickets: 6, xp: 120 },
 };
 
@@ -1016,6 +1016,32 @@ app.get("/api/saison", (req, res) => {
     prochaineRecharge: user ? prochaineRecharge(user.id) : null,
     palmares: palmares.slice(-3).reverse(),
   });
+});
+
+app.get("/api/birthdays", async (req, res) => {
+  try {
+    const today = new Date();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    const response = await fetch(`https://fr.wikipedia.org/api/rest_v1/feed/onthisday/births/${mm}/${dd}`);
+    if (!response.ok) return res.json({ actors: [] });
+    const data = await response.json();
+    
+    const actors = data.births.filter(b => {
+      const text = (b.text || "").toLowerCase();
+      return text.includes("acteur") || text.includes("actrice") || text.includes("réalisateur") || text.includes("cinéaste");
+    }).map(b => ({
+      name: b.pages && b.pages[0] ? b.pages[0].title.replace(/_/g, ' ') : "Inconnu",
+      year: b.year,
+      description: b.text,
+      thumbnail: b.pages && b.pages[0] && b.pages[0].thumbnail ? b.pages[0].thumbnail.source : null
+    })).sort((a, b) => b.year - a.year);
+    
+    res.json({ actors: actors.slice(0, 15) });
+  } catch (err) {
+    console.error("Erreur anniversaires:", err);
+    res.json({ actors: [] });
+  }
 });
 
 app.get("/api/config", (_req, res) => res.json({
