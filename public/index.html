@@ -707,7 +707,7 @@
         <div class="dots" id="dots"></div>
         <span class="roomcode hidden" id="roomCode"></span>
       </div>
-      <p class="tag" id="roundLabel">Manche 1</p>
+      <p class="tag" id="roundLabel">Question 1</p>
       <p class="synopsis" id="synopsis"></p>
       <div class="barreLecture">
         <button id="btnLire" class="ghost" title="Lire le synopsis à voix haute">🔊 Lire</button>
@@ -726,7 +726,7 @@
       <div class="emojis hidden" id="emojiBar"></div>
       <div class="row">
         <button id="btnPause" class="ghost" style="flex:0 0 auto">⏸ Pause</button>
-        <button id="btnSkip" class="ghost hidden">Passer à la manche suivante</button>
+        <button id="btnSkip" class="ghost hidden">Passer à la question suivante</button>
       </div>
       <ul class="players" id="roundPlayers"></ul>
     </div>
@@ -1509,7 +1509,7 @@ socket.on("coeurs:maj", ({coeurs, elimine}) => {
   majCoeurs(coeurs, state.coeursMax, true);
   $("guessFeedback").textContent = elimine
     ? "Cœurs épuisés — vous êtes éliminé de cette partie."
-    : `Manche passée — ${coeurs} cœur${coeurs>1?"s":""} restant${coeurs>1?"s":""}.`;
+    : `Question passée — ${coeurs} cœur${coeurs>1?"s":""} restant${coeurs>1?"s":""}.`;
   $("guessFeedback").className = "feedback bad";
 });
 
@@ -2345,7 +2345,7 @@ function afficherManche(m){
   state.vitesseSynopsis = m.vitesseSynopsis;
   if (m.hintLabels) Object.assign(HINT_LABELS, m.hintLabels);
   state.bought = {}; state.answered = false;
-  $("roundLabel").textContent = `Manche ${m.roundIndex + 1} sur ${m.total}`;
+  $("roundLabel").textContent = `Question ${m.roundIndex + 1} sur ${m.total}`;
   derouler(m.synopsis);
   $("dots").innerHTML = Array.from({length: m.total}, (_, i) =>
     `<i class="${i < m.roundIndex ? "done" : i === m.roundIndex ? "now" : ""}"></i>`).join("");
@@ -2454,7 +2454,7 @@ async function mancheSuivanteSolo(){
   afficherBilan(r.bilan);
   $("winner").textContent = r.coeursEpuises ? "Cœurs épuisés" : "Partie terminée";
   $("myResult").textContent = `${me.pseudo} — ${r.score} points` +
-    (r.coeursEpuises ? ` · ${r.manchesJouees} manche${r.manchesJouees>1?"s":""} sur ${r.manchesTotal}` : "");
+    (r.coeursEpuises ? ` · ${r.manchesJouees} question${r.manchesJouees>1?"s":""} sur ${r.manchesTotal}` : "");
   $("finalRank").innerHTML = `<li>${me.avatar||"🎬"} ${esc(me.pseudo)}<b>${r.score} pts</b></li>`;
   $("finalTeams").classList.add("hidden");
   show("over");
@@ -2709,7 +2709,7 @@ socket.on("round:end", ({answer, movieId, poster, year, scores, isHost, mode}) =
   $("btnNext").classList.toggle("hidden", !peutEnchainer);
   $("nextNote").textContent = peutEnchainer
     ? "Sinon, enchaînement automatique dans quelques secondes."
-    : "Manche suivante dans quelques secondes.";
+    : "Question suivante dans quelques secondes.";
   show("between");
 });
 

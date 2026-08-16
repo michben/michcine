@@ -921,7 +921,7 @@ app.post("/api/friends/:action", (req, res) => {
 const QUETES = {
   jouer3:      { titre: "Jouer 3 parties",              cible: 3,  tickets: 3, xp: 60 },
   bonnes10:    { titre: "Trouver 10 films",             cible: 10, tickets: 4, xp: 80 },
-  sansIndice:  { titre: "Gagner 3 manches sans indice", cible: 3,  tickets: 5, xp: 100 },
+  sansIndice:  { titre: "Gagner 3 questions sans indice", cible: 3,  tickets: 5, xp: 100 },
   sansFaute:   { titre: "Terminer une partie sans faute", cible: 1, tickets: 6, xp: 120 },
 };
 
