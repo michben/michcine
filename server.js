@@ -1009,20 +1009,56 @@ app.get("/api/presence/users", (req, res) => {
   res.json(getConnectedUsers());
 });
 
+
+const SORTIES_FILE = new URL("./sorties.json", import.meta.url);
+let sortiesConfig = { hidden: [], custom: [] };
+const saveSortiesConfig = () => sauver("sortiesConfig", sortiesConfig, SORTIES_FILE);
+
+app.post("/api/admin/sorties/hide", requireAdmin, (req, res) => {
+    const id = Number(req.body.id);
+    if (id && !sortiesConfig.hidden.includes(id)) {
+        sortiesConfig.hidden.push(id);
+        saveSortiesConfig();
+    }
+    res.json({ ok: true });
+});
+
+app.post("/api/admin/sorties/unhide", requireAdmin, (req, res) => {
+    const id = Number(req.body.id);
+    sortiesConfig.hidden = sortiesConfig.hidden.filter(x => x !== id);
+    saveSortiesConfig();
+    res.json({ ok: true });
+});
+
+app.post("/api/admin/sorties/custom", requireAdmin, (req, res) => {
+    const id = Number(req.body.id);
+    if (id && !sortiesConfig.custom.includes(id)) {
+        sortiesConfig.custom.push(id);
+        saveSortiesConfig();
+    }
+    res.json({ ok: true });
+});
+
+app.post("/api/admin/sorties/remove-custom", requireAdmin, (req, res) => {
+    const id = Number(req.body.id);
+    sortiesConfig.custom = sortiesConfig.custom.filter(x => x !== id);
+    saveSortiesConfig();
+    res.json({ ok: true });
+});
+
 app.get("/api/movies/upcoming", async (req, res) => {
   try {
     const tmdbKey = REGLAGES.tmdbApiKey;
     if (!tmdbKey) return res.json({ error: "NO_KEY", movies: [] });
+    
+    const isAdmin = motDePasseAdminValide(req.get("x-admin-token"));
 
-    // Trouver le mercredi actuel ou le prochain mercredi
     const now = new Date();
-    const day = now.getDay(); // 0 = Dimanche, 3 = Mercredi
+    const day = now.getDay();
     const diffToWed = (3 - day + 7) % 7; 
     
-    // Date de sortie en France (les films sortent le mercredi)
-    // On prend du mercredi courant jusqu'au mardi suivant
     const wednesday = new Date(now);
-    wednesday.setDate(now.getDate() + (day >= 3 ? (3 - day) : diffToWed)); // Mercredi de la semaine courante
+    wednesday.setDate(now.getDate() + (day >= 3 ? (3 - day) : diffToWed));
     
     const nextTuesday = new Date(wednesday);
     nextTuesday.setDate(wednesday.getDate() + 6);
@@ -1036,14 +1072,45 @@ app.get("/api/movies/upcoming", async (req, res) => {
     if (!response.ok) return res.json({ error: "API_ERROR", movies: [] });
     
     const data = await response.json();
-    res.json({ 
-        dateDebut: gte, 
-        movies: data.results.slice(0, 10).map(m => ({
+    let results = data.results || [];
+    
+    const customMovies = [];
+    for (const cid of (sortiesConfig.custom || [])) {
+        try {
+            const cRes = await fetch(`https://api.themoviedb.org/3/movie/${cid}?api_key=${tmdbKey}&language=fr-FR`);
+            if (cRes.ok) {
+                customMovies.push(await cRes.json());
+            }
+        } catch(e){}
+    }
+    
+    const allMovies = [...customMovies, ...results];
+    const seen = new Set();
+    const finalMovies = [];
+    
+    for (const m of allMovies) {
+        if (seen.has(m.id)) continue;
+        seen.add(m.id);
+        
+        const isHidden = (sortiesConfig.hidden || []).includes(m.id);
+        const isCustom = (sortiesConfig.custom || []).includes(m.id);
+        
+        if (isHidden && !isAdmin) continue;
+        
+        finalMovies.push({
+            id: m.id,
             title: m.title,
             overview: m.overview,
             poster: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : null,
-            vote: m.vote_average
-        }))
+            vote: m.vote_average,
+            hidden: isHidden,
+            custom: isCustom
+        });
+    }
+
+    res.json({ 
+        dateDebut: gte, 
+        movies: isAdmin ? finalMovies : finalMovies.slice(0, 10)
     });
   } catch (err) {
     console.error("Erreur upcoming:", err);
@@ -1879,6 +1946,7 @@ progression = await charger("quetes", null, {});
 for (const [id, liste] of Object.entries(await charger("vus", null, {})))
   vusParJoueur.set(id, liste);
 conversations = await charger("conversations", null, {});
+  sortiesConfig = await charger("sortiesConfig", SORTIES_FILE, { hidden: [], custom: [] });
 REGLAGES = { ...structuredClone(REGLAGES_DEFAUT), ...(await charger("reglages", null, {})) };
 if (!empreinteAdmin)
   console.warn("⚠️  Mot de passe d'administration par défaut : changez-le depuis /admin.html");

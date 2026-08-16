@@ -205,8 +205,12 @@
       <div class="card">
         <p class="tag" id="sortiesCount">Sorties Ciné de la Semaine</p>
         <p style="color:var(--muted);font-size:13px;margin:0 0 8px;line-height:1.6">
-          Voici les gros films internationaux qui sortent ou vont sortir cette semaine. Vous pouvez les pré-remplir dans votre catalogue pour les ajouter au jeu.
+          Gérez les films affichés aux joueurs pour cette semaine. Ajoutez manuellement un film avec son lien TMDB pour forcer son affichage.
         </p>
+        <div class="row" style="margin-bottom: 16px;">
+          <input type="text" id="tmdbUrlInput" placeholder="Ex: https://www.themoviedb.org/movie/12345-..." style="flex:1;">
+          <button id="btnAddCustomSortie">Ajouter via TMDB</button>
+        </div>
         <div class="row">
           <button id="btnLoadSorties">Rafraîchir les sorties</button>
         </div>
@@ -562,10 +566,31 @@ $("tabSorties").onclick = () => tab("sorties");
 
 $("btnLoadSorties").onclick = loadSorties;
 
+$("btnAddCustomSortie").onclick = async () => {
+    const url = $("tmdbUrlInput").value.trim();
+    const match = url.match(/movie\/(\d+)/);
+    if (!match) return alert("Lien TMDB invalide. Utilisez un lien comme https://www.themoviedb.org/movie/12345");
+    const id = Number(match[1]);
+    await api("/api/admin/sorties/custom", { method: "POST", body: JSON.stringify({ id }) });
+    $("tmdbUrlInput").value = "";
+    loadSorties();
+};
+
+window.toggleHideSortie = async (id, currentlyHidden) => {
+    const endpoint = currentlyHidden ? "/api/admin/sorties/unhide" : "/api/admin/sorties/hide";
+    await api(endpoint, { method: "POST", body: JSON.stringify({ id }) });
+    loadSorties();
+};
+
+window.removeCustomSortie = async (id) => {
+    await api("/api/admin/sorties/remove-custom", { method: "POST", body: JSON.stringify({ id }) });
+    loadSorties();
+};
+
 async function loadSorties() {
   $("sortiesList").innerHTML = "<p class='msg'>Chargement des sorties TMDB...</p>";
   try {
-    const res = await fetch("/api/movies/upcoming");
+    const res = await api("/api/movies/upcoming");
     const data = await res.json();
     if (data.error && data.error === "NO_KEY") {
       $("sortiesList").innerHTML = "<p class='msg err'>Erreur: La clé API TMDB n'est pas configurée dans les Réglages.</p>";
@@ -577,16 +602,20 @@ async function loadSorties() {
     }
     
     $("sortiesList").innerHTML = data.movies.map((m, i) => `
-      <div class="urow" style="align-items:flex-start">
+      <div class="urow ${m.hidden ? 'banned' : ''}" style="align-items:flex-start">
         <img src="${m.poster || ''}" style="width:50px;height:75px;object-fit:cover;border-radius:4px;background:#333;margin-right:10px;">
         <div class="who" style="flex:1;">
-          <strong>${esc(m.title)}</strong>
+          <strong>${esc(m.title)} ${m.custom ? '<span class="chip" style="color:var(--teal);border-color:var(--teal);">Ajouté</span>' : ''} ${m.hidden ? '<span class="chip">Masqué</span>' : ''}</strong>
           <small>⭐ ${m.vote ? m.vote.toFixed(1) : '?'} / 10</small>
           <div style="margin-top:4px;font-size:13px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">
             ${esc(m.overview || "Aucun synopsis disponible.")}
           </div>
         </div>
-        <button class="ghost" onclick="importSortie(${i})">Pré-remplir</button>
+        <div style="display:flex; flex-direction:column; gap:5px;">
+            <button class="ghost" onclick="importSortie(${i})">Pré-remplir</button>
+            <button class="ghost" onclick="toggleHideSortie(${m.id}, ${m.hidden})">${m.hidden ? 'Afficher' : 'Masquer'}</button>
+            ${m.custom ? `<button class="danger" onclick="removeCustomSortie(${m.id})">Retirer</button>` : ''}
+        </div>
       </div>
     `).join("");
     
