@@ -1401,8 +1401,8 @@ function publicState(room) {
     mode: room.mode,
     roundIndex: room.roundIndex,
     players: [...room.players.values()].map((p) => ({
-      id: p.id, pseudo: p.pseudo, avatar: p.avatar, score: p.score,
-      team: p.team, hasAnswered: p.hasAnswered,
+      id: p.id, userId: p.userId, pseudo: p.pseudo, avatar: p.avatar, score: p.score,
+      team: p.team, hasAnswered: p.hasAnswered, online: p.online !== false,
     })),
     teams: room.mode === "teams" ? teamScores(room) : null,
   };
@@ -1446,9 +1446,6 @@ function startRound(room) {
     hintCosts: CONFIG.HINT_COSTS,
     hintCredits: CONFIG.HINT_CREDITS,
     hintLabels: libellesIndices(),
-    coeursMax: p.coeursMax,
-  freeHintsRemaining: p.freeHintsRemaining,
-  allHintsFree: p.allHintsFree,
     posterStyle: styleAffiche(movie),
     vitesseSynopsis: REGLAGES.vitesseSynopsis,
     choices: room.choices,
@@ -1557,20 +1554,56 @@ io.on("connection", (socket) => {
   socket.on("room:join", ({ code }, cb) => {
     const room = rooms.get(String(code || "").toUpperCase());
     if (!room) return cb?.({ ok: false, error: "ROOM_NOT_FOUND" });
+    
+    const existingPlayer = room.players.get(user.id);
+    const enCours = room.status !== "lobby";
+    
+    if (existingPlayer) {
+       existingPlayer.id = socket.id;
+       existingPlayer.online = true;
+       socket.join(room.code);
+       io.to(room.code).emit("room:update", publicState(room));
+       
+       cb?.({ ok: true, code: room.code, state: publicState(room), waiting: enCours && existingPlayer.hasAnswered,
+           roundIndex: room.roundIndex, total: room.playlist.length });
+           
+       if (room.status === "playing" && !existingPlayer.hasAnswered) {
+          const movie = room.currentMovie;
+          io.to(socket.id).emit("round:start", {
+            roundIndex: room.roundIndex,
+            total: room.playlist.length,
+            synopsis: masquerReponse(movie.synopsis, movie),
+            duration: CONFIG.ROUND_DURATION_MS,
+            hintCosts: CONFIG.HINT_COSTS,
+            hintCredits: CONFIG.HINT_CREDITS,
+            hintLabels: libellesIndices(),
+            posterStyle: styleAffiche(movie),
+            vitesseSynopsis: REGLAGES.vitesseSynopsis,
+            choices: room.choices,
+          });
+          io.to(socket.id).emit("player:round_info", {
+            coeursMax: existingPlayer.coeursMax,
+            coeurs: existingPlayer.coeurs,
+            freeHintsRemaining: existingPlayer.freeHintsRemaining,
+            allHintsFree: existingPlayer.allHintsFree
+          });
+       }
+       return;
+    }
+    
     const limit = room.mode === "duel" ? 2 : CONFIG.MAX_PLAYERS;
     if (room.players.size >= limit) return cb?.({ ok: false, error: "ROOM_FULL" });
     if (room.status === "finished") return cb?.({ ok: false, error: "GAME_OVER" });
 
-    const enCours = room.status !== "lobby";
     joinRoom(socket, room, user);
-    if (enCours) room.players.get(socket.id).hasAnswered = true; // n'entre qu'à la manche suivante
+    if (enCours) room.players.get(user.id).hasAnswered = true; // n'entre qu'à la manche suivante
     cb?.({ ok: true, code: room.code, state: publicState(room), waiting: enCours,
            roundIndex: room.roundIndex, total: room.playlist.length });
   });
 
   socket.on("team:choose", ({ code, team }) => {
     const room = rooms.get(code);
-    const player = room?.players.get(socket.id);
+    const player = room?.players.get(socket.data.user.id);
     if (!room || !player || room.status !== "lobby" || !["A", "B"].includes(team)) return;
     player.team = team;
     io.to(room.code).emit("room:update", publicState(room));
@@ -1584,7 +1617,7 @@ io.on("connection", (socket) => {
 
   socket.on("hint:buy", ({ code, type }, cb) => {
     const room = rooms.get(code);
-    const player = room?.players.get(socket.id);
+    const player = room?.players.get(socket.data.user.id);
     if (!room || !player || room.status !== "playing") return cb?.({ ok: false });
     if (room.pauseA) return cb?.({ ok: false, error: "EN_PAUSE" });
     if (!CONFIG.HINT_COSTS[type]) return cb?.({ ok: false, error: "UNKNOWN_HINT" });
@@ -1609,7 +1642,7 @@ io.on("connection", (socket) => {
 
   socket.on("answer:submit", ({ code, guess, choiceId }, cb) => {
     const room = rooms.get(code);
-    const player = room?.players.get(socket.id);
+    const player = room?.players.get(socket.data.user.id);
     if (!room || !player || room.status !== "playing" || player.hasAnswered) return cb?.({ ok: false });
     if (room.pauseA) return cb?.({ ok: false, error: "EN_PAUSE" });
 
@@ -1654,7 +1687,7 @@ io.on("connection", (socket) => {
    *  réponse en cours sont bloqués : sinon le chat devient un anti-jeu. */
   socket.on("chat:send", ({ code, text }) => {
     const room = rooms.get(code);
-    const player = room?.players.get(socket.id);
+    const player = room?.players.get(socket.data.user.id);
     if (!room || !player) return;
 
     const message = String(text || "").trim().slice(0, 200);
@@ -1681,7 +1714,7 @@ io.on("connection", (socket) => {
   /** Un joueur qui a déjà répondu (ou qui joue seul) peut enchaîner. */
   socket.on("round:skip", ({ code }) => {
     const room = rooms.get(code);
-    const player = room?.players.get(socket.id);
+    const player = room?.players.get(socket.data.user.id);
     if (!room || !player || room.status !== "playing") return;
 
     // renoncer à la manche coûte un cœur, comme une mauvaise réponse
@@ -1696,7 +1729,7 @@ io.on("connection", (socket) => {
   /** Enchaîner sans attendre la fin de l'entracte. */
   socket.on("round:next", ({ code }) => {
     const room = rooms.get(code);
-    if (!room || !room.players.has(socket.id) || room.status !== "intermission") return;
+    if (!room || !room.players.has(socket.data.user.id) || room.status !== "intermission") return;
     if (!["solo", "ranked"].includes(room.mode) && room.hostId !== socket.id) return; // l'hôte décide
     clearTimeout(room.nextTimer);
     startRound(room);
@@ -1743,7 +1776,7 @@ io.on("connection", (socket) => {
 
   socket.on("reaction", ({ code, emoji }) => {
     const room = rooms.get(code);
-    const player = room?.players.get(socket.id);
+    const player = room?.players.get(socket.data.user.id);
     if (!room || !player || !EMOJIS.includes(emoji)) return;
     if (Date.now() - derniereReaction < 700) return;   // évite le matraquage
     derniereReaction = Date.now();
@@ -1753,7 +1786,7 @@ io.on("connection", (socket) => {
   /** Invite un ami dans le salon en cours. Il reçoit une notification. */
   socket.on("invite:send", ({ code, amiId }, cb) => {
     const room = rooms.get(code);
-    if (!room || !room.players.has(socket.id)) return cb?.({ ok: false });
+    if (!room || !room.players.has(socket.data.user.id)) return cb?.({ ok: false });
     if (statutRelation(user.id, amiId) !== "ami") return cb?.({ ok: false, error: "PAS_AMI" });
     if (estBloque(user.id, amiId)) return cb?.({ ok: false, error: "BLOQUE" });
 
@@ -1775,14 +1808,26 @@ io.on("connection", (socket) => {
   socket.on("disconnect", () => leaveAllRooms(socket));
 
   function leaveAllRooms(socket) {
+    const userId = socket.data.user?.id;
     for (const room of rooms.values()) {
-      if (!room.players.delete(socket.id)) continue;
+      const p = room.players.get(userId);
+      if (!p || p.id !== socket.id) continue;
+      
+      if (room.status === "lobby") {
+          room.players.delete(userId);
+      } else {
+          p.online = false;
+      }
       socket.leave(room.code);
-      if (room.players.size === 0) {
+      
+      const activePlayers = [...room.players.values()].filter(x => x.online !== false);
+      if (activePlayers.length === 0) {
         clearTimeout(room.timer); clearTimeout(room.nextTimer); clearTimeout(room.graceTimer);
         rooms.delete(room.code);
       } else {
-        if (room.hostId === socket.id) room.hostId = [...room.players.keys()][0];
+        if (room.hostId === socket.id && activePlayers.length > 0) {
+            room.hostId = activePlayers[0].id;
+        }
         io.to(room.code).emit("room:update", publicState(room));
       }
     }
@@ -1793,7 +1838,7 @@ function joinRoom(socket, room, user) {
   const niveau = infoNiveau(user.id)?.niveau || 0;
   const avantages = getAvantagesNiveau(niveau);
 
-  room.players.set(socket.id, {
+  room.players.set(user.id, {
     id: socket.id,
     userId: user.id,
     pseudo: user.pseudo,

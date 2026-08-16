@@ -2546,9 +2546,9 @@ function renderLobby(s){
   $("marquee").innerHTML = s.code.split("").map(c => `<span class="flap">${c}</span>`).join("");
   $("lobbyCount").textContent = `${MODE_NAMES[s.mode]} — ${s.players.length} joueur${s.players.length>1?"s":""}`;
   $("lobbyPlayers").innerHTML = s.players.map(p =>
-    `<li class="${p.team||""}" data-joueur="${esc(p.userId||"")}" data-pseudo="${esc(p.pseudo)}"
-       data-avatar="${p.avatar||"🎬"}" data-photo="${p.photo||""}" style="cursor:pointer" title="Voir ce joueur">
-       <span class="dot ${p.online ? "on" : ""}"></span>${vignette(p)} ${esc(p.pseudo)}</li>`).join("");
+    `<li class="${p.team||""} ${p.online === false ? "off" : ""}" data-joueur="${esc(p.userId||"")}" data-pseudo="${esc(p.pseudo)}"
+       data-avatar="${p.avatar||"🎬"}" data-photo="${p.photo||""}" style="cursor:pointer; ${p.online === false ? "opacity:0.5;" : ""}" title="${p.online === false ? "Déconnecté" : "Voir ce joueur"}">
+       <span class="dot ${p.online !== false ? "on" : ""}"></span>${vignette(p)} ${esc(p.pseudo)}</li>`).join("");
   $("lobbyPlayers").querySelectorAll("[data-joueur]").forEach(li => li.onclick = () =>
     ouvrirJoueur(li.dataset.joueur, li.dataset.pseudo, li.dataset.avatar, li.dataset.photo || null));
   $("teamPicker").classList.toggle("hidden", s.mode !== "teams");
