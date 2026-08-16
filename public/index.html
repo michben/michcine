@@ -387,7 +387,7 @@
   @media (prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important}}
 
 /* --- LE BOUTON POINT D'INTERROGATION --- */
-.help-btn { position: fixed; bottom: 20px; right: 20px; width: 40px; height: 40px; background: rgba(28, 34, 56, 0.6); color: var(--muted); border: 1px solid rgba(237, 232, 220, 0.15); border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 20px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2); transition: all 0.3s ease; z-index: 1000; backdrop-filter: blur(4px); }
+.help-btn { position: fixed; bottom: 20px; left: 20px; width: 40px; height: 40px; background: rgba(28, 34, 56, 0.6); color: var(--muted); border: 1px solid rgba(237, 232, 220, 0.15); border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 20px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2); transition: all 0.3s ease; z-index: 1000; backdrop-filter: blur(4px); }
 .help-btn:hover { transform: scale(1.1); color: var(--chalk); border-color: var(--beam); background: rgba(28, 34, 56, 0.9); }
 /* --- LA FENÊTRE MODALE --- */
 .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.85); display: none; justify-content: center; align-items: center; z-index: 1001; opacity: 0; transition: opacity 0.3s ease; }
@@ -409,6 +409,12 @@
 .modal-content::-webkit-scrollbar { width: 8px; }
 .modal-content::-webkit-scrollbar-track { background: #1a1a1a; }
 .modal-content::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
+
+  .bday-item { display: flex; gap: 12px; margin-bottom: 12px; padding: 10px; background: var(--card); border-radius: 8px; align-items: center; border-left: 4px solid var(--teal); }
+  .bday-item img { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; }
+  .bday-item .info { flex: 1; }
+  .bday-item .info b { display: block; color: var(--chalk); font-size: 16px; margin-bottom: 2px;}
+  .bday-item .info small { color: var(--muted); font-size: 13px; line-height: 1.3; display: block;}
 </style>
 
 </head>
@@ -2777,6 +2783,19 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
   </div>
 
     
+    
+    <!-- MODALE ANNIVERSAIRES -->
+    <div class="modal-overlay" id="birthdaysModal">
+        <div class="modal-content">
+            <div class="modal-header" style="border-bottom-color: var(--teal);">
+                <h2>🎂 Nés un <span id="bdayDate"></span></h2>
+                <button class="close-btn" id="closeBdayBtn">&times;</button>
+            </div>
+            <div class="modal-body" id="bdayList" style="max-height: 60vh; overflow-y: auto;">
+            </div>
+        </div>
+    </div>
+
     <!-- MODALE JOUEURS EN LIGNE -->
     <div class="modal-overlay" id="onlineUsersModal">
         <div class="modal-content">
@@ -2923,6 +2942,52 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
             closeUpcomingMoviesBtn.addEventListener("click", () => upcomingMoviesModal.classList.remove("active"));
             upcomingMoviesModal.addEventListener('click', (e) => {
                 if (e.target === upcomingMoviesModal) upcomingMoviesModal.classList.remove('active');
+            });
+        }
+    </script>
+
+
+    <script>
+        const btnBirthdays = document.getElementById("btnBirthdays");
+        const birthdaysModal = document.getElementById("birthdaysModal");
+        const closeBdayBtn = document.getElementById("closeBdayBtn");
+
+        if (btnBirthdays) {
+            const today = new Date();
+            const options = { day: 'numeric', month: 'long' };
+            const dateStr = today.toLocaleDateString('fr-FR', options);
+            btnBirthdays.innerHTML = `🎂 Célébrités nées le ${dateStr}`;
+
+            btnBirthdays.addEventListener("click", async () => {
+                birthdaysModal.classList.add("active");
+                document.getElementById("bdayDate").textContent = dateStr;
+                document.getElementById("bdayList").innerHTML = "<p class='note' style='text-align:center'>Recherche dans les archives d'Hollywood...</p>";
+
+                try {
+                    const res = await fetch("/api/birthdays");
+                    const data = await res.json();
+                    if (!data.actors || data.actors.length === 0) {
+                        document.getElementById("bdayList").innerHTML = "<p class='note'>Aucune star majeure du cinéma répertoriée pour aujourd'hui.</p>";
+                        return;
+                    }
+                    
+                    document.getElementById("bdayList").innerHTML = data.actors.map(a => `
+                        <div class="bday-item">
+                            ${a.thumbnail ? `<img src="${a.thumbnail}" alt="">` : `<div style="width:50px;height:50px;border-radius:50%;background:#333;display:flex;align-items:center;justify-content:center;font-size:24px">🎬</div>`}
+                            <div class="info">
+                                <b>${a.name}</b>
+                                <small>${a.year} — ${a.description}</small>
+                            </div>
+                        </div>
+                    `).join("");
+                } catch (e) {
+                    document.getElementById("bdayList").innerHTML = "<p class='note' style='color:var(--ticket)'>Impossible de charger les données.</p>";
+                }
+            });
+
+            closeBdayBtn.addEventListener("click", () => birthdaysModal.classList.remove("active"));
+            birthdaysModal.addEventListener('click', (e) => {
+                if (e.target === birthdaysModal) birthdaysModal.classList.remove('active');
             });
         }
     </script>

@@ -594,7 +594,10 @@ for (const id of ["rZoom","rFlou","rCadrage"])
 
 $("btnSaveReglages").onclick = async () => {
   const corps = { indices: {} };
-  for (const [champ, cle] of Object.entries(CHAMPS)) corps[cle] = Number($(champ).value);
+  for (const [champ, cle] of Object.entries(CHAMPS)) {
+    if (cle === "tmdbApiKey") corps[cle] = $(champ).value.trim();
+    else corps[cle] = Number($(champ).value);
+  }
 
   for (const cle of Object.keys(reglages.indices)) {
     corps.indices[cle] = {
