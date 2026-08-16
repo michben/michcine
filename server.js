@@ -508,7 +508,27 @@ function exigeCompte(req, res) {
 /* filtrants). Ici, tout se joue en requêtes HTTP ordinaires.          */
 /* ------------------------------------------------------------------ */
 
-const parties = new Map();   // userId -> partie en cours
+
+/** Calcule les avantages d'un joueur en fonction de son niveau */
+function getAvantagesNiveau(niveau) {
+  let extraCoeurs = 0;
+  if (niveau >= 300) extraCoeurs = 3;
+  else if (niveau >= 200) extraCoeurs = 2;
+  else if (niveau >= 100) extraCoeurs = 1;
+
+  let freeHints = 0;
+  let allFree = false;
+  if (niveau >= 300) {
+    allFree = true;
+  } else if (niveau >= 50) {
+    freeHints = 1; // 1 indice gratuit par partie
+  }
+
+  return { extraCoeurs, freeHints, allFree };
+}
+
+const parties = new Map();
+   // userId -> partie en cours
 
 const vueManche = (p) => ({
   roundIndex: p.index,
@@ -519,7 +539,9 @@ const vueManche = (p) => ({
   hintCosts: CONFIG.HINT_COSTS,
   hintCredits: CONFIG.HINT_CREDITS,
   coeurs: p.coeurs,
-  coeursMax: REGLAGES.coeurs,
+  coeursMax: p.coeursMax,
+  freeHintsRemaining: p.freeHintsRemaining,
+  allHintsFree: p.allHintsFree,
   hintLabels: libellesIndices(),
   posterStyle: styleAffiche(p.playlist[p.index]),
   vitesseSynopsis: REGLAGES.vitesseSynopsis,
@@ -530,6 +552,7 @@ function demarrerManche(p) {
   p.choices = buildChoices(film);
   p.startedAt = Date.now();
   p.hints = [];
+  p.paidHints = [];
   p.repondu = false;
   p.pauseA = null;
   return vueManche(p);
@@ -549,10 +572,18 @@ app.post("/api/solo/start", (req, res) => {
                                   prochaineRecharge: prochaineRecharge(user.id) });
 
   const nombre = Math.min(Number(rounds) || 10, vivier.length);
+  const niveau = infoNiveau(user.id)?.niveau || 0;
+  const avantages = getAvantagesNiveau(niveau);
+  
   const p = {
     mode: mode === "ranked" ? "ranked" : "solo",
     playlist: choisirFilms(vivier, nombre, user.id),
-    index: 0, score: 0, coeurs: REGLAGES.coeurs,
+    index: 0, score: 0, 
+    coeursMax: REGLAGES.coeurs + avantages.extraCoeurs,
+    coeurs: REGLAGES.coeurs + avantages.extraCoeurs,
+    freeHintsRemaining: avantages.freeHints,
+    allHintsFree: avantages.allFree,
+    paidHints: []
   };
   memoriserVus(user.id, p.playlist);
   parties.set(user.id, p);
@@ -588,15 +619,22 @@ app.post("/api/solo/hint", (req, res) => {
   const type = req.body.type;
   if (!CONFIG.HINT_COSTS[type]) return res.status(400).json({ error: "UNKNOWN_HINT" });
   if (p.hints.includes(type)) return res.status(400).json({ error: "ALREADY_BOUGHT" });
-  if (!spendCredits(user.id, CONFIG.HINT_CREDITS[type]))
-    return res.status(400).json({ error: "NO_CREDITS" });
+
+  const isFree = p.allHintsFree || p.freeHintsRemaining > 0;
+  if (!isFree) {
+    if (!spendCredits(user.id, CONFIG.HINT_CREDITS[type]))
+      return res.status(400).json({ error: "NO_CREDITS" });
+    p.paidHints.push(type);
+  } else {
+    if (!p.allHintsFree) p.freeHintsRemaining--;
+  }
 
   p.hints.push(type);
   const film = p.playlist[p.index];
   const value = type === "poster" ? (film.still || film.poster)
               : type === "letters" ? titlePattern(film.title)
               : film[type];
-  res.json({ ok: true, type, value, credits: getCredits(user.id) });
+  res.json({ ok: true, type, value, credits: getCredits(user.id), freeHintsRemaining: p.freeHintsRemaining, allHintsFree: p.allHintsFree });
 });
 
 app.post("/api/solo/answer", (req, res) => {
@@ -613,7 +651,7 @@ app.post("/api/solo/answer", (req, res) => {
 
   let points = 0;
   if (juste) {
-    points = computeScore({ elapsedMs: Date.now() - p.startedAt, hintsUsed: p.hints });
+    points = computeScore({ elapsedMs: Date.now() - p.startedAt, hintsUsed: p.paidHints });
     p.score += points;
     p.bonnes = (p.bonnes || 0) + 1;
     if (!p.hints.length) p.sansIndice = (p.sansIndice || 0) + 1;
@@ -1286,7 +1324,8 @@ function startRound(room) {
   for (const p of room.players.values()) {
     p.hasAnswered = false;
     p.hints = [];
-    if (p.coeurs === undefined) p.coeurs = REGLAGES.coeurs;
+    p.paidHints = [];
+    if (p.coeurs === undefined) p.coeurs = p.coeursMax ?? REGLAGES.coeurs;
   }
 
   io.to(room.code).emit("round:start", {
@@ -1297,7 +1336,9 @@ function startRound(room) {
     hintCosts: CONFIG.HINT_COSTS,
     hintCredits: CONFIG.HINT_CREDITS,
     hintLabels: libellesIndices(),
-    coeursMax: REGLAGES.coeurs,
+    coeursMax: p.coeursMax,
+  freeHintsRemaining: p.freeHintsRemaining,
+  allHintsFree: p.allHintsFree,
     posterStyle: styleAffiche(movie),
     vitesseSynopsis: REGLAGES.vitesseSynopsis,
     choices: room.choices,
@@ -1305,6 +1346,15 @@ function startRound(room) {
 
   clearTimeout(room.timer);
   room.timer = setTimeout(() => endRound(room), CONFIG.ROUND_DURATION_MS);
+  
+  for (const p of room.players.values()) {
+    io.to(p.id).emit("player:round_info", {
+      coeursMax: p.coeursMax,
+      coeurs: p.coeurs,
+      freeHintsRemaining: p.freeHintsRemaining,
+      allHintsFree: p.allHintsFree
+    });
+  }
 }
 
 function endRound(room) {
@@ -1430,15 +1480,21 @@ io.on("connection", (socket) => {
     if (!CONFIG.HINT_COSTS[type]) return cb?.({ ok: false, error: "UNKNOWN_HINT" });
     if (player.hints.includes(type)) return cb?.({ ok: false, error: "ALREADY_BOUGHT" });
 
-    if (!spendCredits(player.userId, CONFIG.HINT_CREDITS[type]))
-      return cb?.({ ok: false, error: "NO_CREDITS" });
+    const isFree = player.allHintsFree || player.freeHintsRemaining > 0;
+    if (!isFree) {
+      if (!spendCredits(player.userId, CONFIG.HINT_CREDITS[type]))
+        return cb?.({ ok: false, error: "NO_CREDITS" });
+      player.paidHints.push(type);
+    } else {
+      if (!player.allHintsFree) player.freeHintsRemaining--;
+    }
 
     player.hints.push(type);
     const value =
       type === "poster" ? (room.currentMovie.still || room.currentMovie.poster) // sans titre imprimé
     : type === "letters" ? titlePattern(room.currentMovie.title)
     : room.currentMovie[type];
-    cb?.({ ok: true, type, value, credits: getCredits(player.userId) });
+    cb?.({ ok: true, type, value, credits: getCredits(player.userId), freeHintsRemaining: player.freeHintsRemaining, allHintsFree: player.allHintsFree });
   });
 
   socket.on("answer:submit", ({ code, guess, choiceId }, cb) => {
@@ -1456,7 +1512,7 @@ io.on("connection", (socket) => {
     if (!correct) {
       if (!parClic) return cb?.({ ok: true, correct: false });
       player.hasAnswered = true;
-      player.coeurs = Math.max(0, (player.coeurs ?? REGLAGES.coeurs) - 1);
+      player.coeurs = Math.max(0, (player.coeurs ?? player.coeursMax) - 1);
       io.to(room.code).emit("player:answered", { id: player.id, pseudo: player.pseudo, team: player.team, points: 0 });
       if ([...room.players.values()].every((p) => p.hasAnswered)) endRound(room);
       return cb?.({ ok: true, correct: false, final: true,
@@ -1464,12 +1520,12 @@ io.on("connection", (socket) => {
     }
 
     player.hasAnswered = true;
-    let points = computeScore({ elapsedMs: Date.now() - room.startedAt, hintsUsed: player.hints });
+    let points = computeScore({ elapsedMs: Date.now() - room.startedAt, hintsUsed: player.paidHints });
     if (parClic) points = Math.max(30, Math.round(points * CONFIG.CHOICE_RATIO));
     player.score += points;
 
     cb?.({ ok: true, correct: true, points, movieId: room.currentMovie.id,
-           coeurs: player.coeurs ?? REGLAGES.coeurs });
+           coeurs: player.coeurs ?? player.coeursMax });
     io.to(room.code).emit("player:answered", { id: player.id, pseudo: player.pseudo, team: player.team, points });
 
     const tousTrouve = [...room.players.values()]
@@ -1521,7 +1577,7 @@ io.on("connection", (socket) => {
     // renoncer à la manche coûte un cœur, comme une mauvaise réponse
     if (!player.hasAnswered) {
       player.hasAnswered = true;
-      player.coeurs = Math.max(0, (player.coeurs ?? REGLAGES.coeurs) - 1);
+      player.coeurs = Math.max(0, (player.coeurs ?? player.coeursMax) - 1);
       socket.emit("coeurs:maj", { coeurs: player.coeurs, elimine: player.coeurs === 0 });
     }
     if ([...room.players.values()].every((p) => p.hasAnswered || p.coeurs === 0)) endRound(room);
@@ -1624,6 +1680,9 @@ io.on("connection", (socket) => {
 });
 
 function joinRoom(socket, room, user) {
+  const niveau = infoNiveau(user.id)?.niveau || 0;
+  const avantages = getAvantagesNiveau(niveau);
+
   room.players.set(socket.id, {
     id: socket.id,
     userId: user.id,
@@ -1631,7 +1690,11 @@ function joinRoom(socket, room, user) {
     avatar: user.avatar || "🎬",
     photo: user.photo || null,
     team: room.mode === "teams" ? balancedTeam(room) : null,
-    score: 0, hints: [], hasAnswered: false,
+    score: 0, hints: [], paidHints: [], hasAnswered: false,
+    coeursMax: REGLAGES.coeurs + avantages.extraCoeurs,
+    coeurs: REGLAGES.coeurs + avantages.extraCoeurs,
+    freeHintsRemaining: avantages.freeHints,
+    allHintsFree: avantages.allFree
   });
   socket.join(room.code);
   io.to(room.code).emit("room:update", publicState(room));

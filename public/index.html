@@ -377,7 +377,32 @@
     .flap{width:40px;height:52px;font-size:22px}
   }
   @media (prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important}}
+
+/* --- LE BOUTON POINT D'INTERROGATION --- */
+.help-btn { position: fixed; bottom: 30px; right: 30px; width: 60px; height: 60px; background: linear-gradient(135deg, #e50914, #8b0000); color: white; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 32px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 15px rgba(229, 9, 20, 0.5); transition: transform 0.3s ease, box-shadow 0.3s ease; z-index: 1000; }
+.help-btn:hover { transform: scale(1.1); box-shadow: 0 6px 20px rgba(229, 9, 20, 0.8); }
+/* --- LA FENÊTRE MODALE --- */
+.modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.85); display: none; justify-content: center; align-items: center; z-index: 1001; opacity: 0; transition: opacity 0.3s ease; }
+.modal-overlay.active { display: flex; opacity: 1; }
+.modal-content { background-color: #1a1a1a; border: 1px solid #333; border-radius: 12px; width: 90%; max-width: 600px; max-height: 80vh; overflow-y: auto; position: relative; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7); transform: translateY(-20px); transition: transform 0.3s ease; color: #fff;}
+.modal-overlay.active .modal-content { transform: translateY(0); }
+.modal-header { background: #111; padding: 20px; border-bottom: 2px solid #222; border-radius: 12px 12px 0 0; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; }
+.modal-header h2 { margin: 0; font-size: 24px; color: #f5f5f5; font-family: 'Anton', sans-serif;}
+.close-btn { background: none; border: none; color: #888; font-size: 32px; line-height: 1; cursor: pointer; transition: color 0.2s; }
+.close-btn:hover { color: #e50914; }
+.modal-body { padding: 25px; line-height: 1.6; font-family: 'Space Grotesk', sans-serif; text-align: left; }
+.mode-section { background-color: #222; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; border-left: 5px solid #1db954; text-align: left; }
+.mode-section.cine { border-left-color: #e50914; }
+.mode-section h3 { margin-top: 0; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; color: white;}
+.mode-section ul { margin-bottom: 0; padding-left: 20px; }
+.teaser-section { background: linear-gradient(135deg, #1c1c3c, #3a2056); padding: 25px; border-radius: 8px; text-align: center; margin-top: 30px; box-shadow: 0 4px 15px rgba(58, 32, 86, 0.4); border: 1px solid #4a3066; }
+.teaser-section h3 { margin-top: 0; color: #fff; text-transform: uppercase; letter-spacing: 1px; font-size: 20px; }
+.teaser-section p { font-size: 1.05em; color: #ddd; }
+.modal-content::-webkit-scrollbar { width: 8px; }
+.modal-content::-webkit-scrollbar-track { background: #1a1a1a; }
+.modal-content::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
 </style>
+
 </head>
 <body>
 <div class="wrap">
@@ -944,7 +969,7 @@ function setCredits(n){
   if (typeof n === "number") credits = n;
   document.querySelectorAll(".wallet b").forEach(el => el.textContent = credits);
 }
-let state = {code:null, mode:"ffa", isHost:false, hintCosts:{}, bought:{}, answered:false, timerId:null};
+let state = {code:null, mode:"ffa", isHost:false, hintCosts:{}, bought:{}, answered:false, timerId:null, freeHintsRemaining: 0, allHintsFree: false, coeursMax: 3};
 
 /** Chaque écran commence en haut : personne ne doit remonter à la main. */
 const show = id => {
@@ -2357,6 +2382,8 @@ function renderHintsSolo(){
     }
     state.bought[r.type] = r.value;
     setCredits(r.credits);
+    if (r.freeHintsRemaining !== undefined) state.freeHintsRemaining = r.freeHintsRemaining;
+    if (r.allHintsFree !== undefined) state.allHintsFree = r.allHintsFree;
     if (r.type === "poster") appliquerAffiche(r.value);
     if (r.type === "letters"){ $("pattern").textContent = r.value; $("pattern").classList.remove("hidden"); }
     renderHintsSolo();
@@ -2540,6 +2567,14 @@ socket.on("round:start", ({roundIndex,total,synopsis,duration,hintCosts,hintCred
   renderHints(); runBeam(duration); show("round");
 });
 
+socket.on("player:round_info", (info) => {
+  state.coeursMax = info.coeursMax;
+  state.freeHintsRemaining = info.freeHintsRemaining;
+  state.allHintsFree = info.allHintsFree;
+  majCoeurs(info.coeurs, info.coeursMax);
+  renderHints();
+});
+
 function renderHints(){
   // seuls les indices activés dans l'administration sont proposés
   $("hints").innerHTML = Object.keys(state.hintCosts || {}).map(type => {
@@ -2549,8 +2584,12 @@ function renderHints(){
       return `<button class="bought" disabled>${libelle}${val}</button>`;
     }
     const jetons = (state.hintCredits||{})[type] ?? 1;
-    const broke = credits < jetons ? " broke" : "";
-    return `<button class="${broke.trim()}" data-hint="${type}">${libelle}<span class="cost">🎟️${jetons} · −${state.hintCosts[type]} pts</span></button>`;
+    
+    const isFree = state.allHintsFree || state.freeHintsRemaining > 0;
+    const broke = (!isFree && credits < jetons) ? " broke" : "";
+    const costText = isFree ? "GRATUIT" : `🎟️${jetons} · −${state.hintCosts[type]} pts`;
+    
+    return `<button class="${broke.trim()}" data-hint="${type}">${libelle}<span class="cost">${costText}</span></button>`;
   }).join("");
   $("hints").querySelectorAll("[data-hint]").forEach(btn => btn.onclick = () =>
     socket.emit("hint:buy", {code:state.code, type:btn.dataset.hint}, res => {
@@ -2563,6 +2602,8 @@ function renderHints(){
       }
       setCredits(res.credits);
       state.bought[res.type] = res.value;
+      if (res.freeHintsRemaining !== undefined) state.freeHintsRemaining = res.freeHintsRemaining;
+      if (res.allHintsFree !== undefined) state.allHintsFree = res.allHintsFree;
       if (res.type === "poster" && res.value){
         $("hintPoster").src = res.value; $("hintPoster").classList.remove("hidden");
       }
@@ -2717,5 +2758,52 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
 </script>
 
   </div>
+
+    <!-- BOUTON FLOTTANT ET MODALE D'AIDE -->
+    <div class="help-btn" id="helpBtn" title="Règles du jeu">?</div>
+    <div class="modal-overlay" id="rulesModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Comment jouer ? 🎬🎵</h2>
+                <button class="close-btn" id="closeBtn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Bienvenue ! Testez vos connaissances et défiez vos amis dans nos différents modes de jeu interactifs.</p>
+                <div class="mode-section cine">
+                    <h3>🍿 Mode Ciné Quiz</h3>
+                    <p>Prouvez que vous êtes incollable sur le 7ème art.</p>
+                    <ul>
+                        <li>Lisez attentivement la question affichée.</li>
+                        <li>Sélectionnez la bonne proposition avant la fin du chrono.</li>
+                        <li>Plus vous êtes rapide, plus vous marquez de points !</li>
+                    </ul>
+                </div>
+                <div class="mode-section">
+                    <h3>🎧 Mode Blind Test</h3>
+                    <p>Le mode musical pour les oreilles affûtées.</p>
+                    <ul>
+                        <li>Écoutez attentivement l'extrait sonore.</li>
+                        <li>Trouvez le nom de l'artiste ou le titre du morceau.</li>
+                        <li>Soyez le premier à valider pour dominer le classement.</li>
+                    </ul>
+                </div>
+                <div class="teaser-section">
+                    <h3>🚀 L'aventure ne fait que commencer...</h3>
+                    <p>MichBen Ciné n'est que la <strong>toute première étape</strong>.</p>
+                    <p>Ce que vous voyez aujourd'hui est le point de départ d'une longue série de mini-jeux, d'expériences interactives et d'univers encore plus poussés qui arriveront très prochainement. Entraînez-vous bien, la suite s'annonce lourde !</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        document.getElementById('helpBtn').addEventListener('click', () => document.getElementById('rulesModal').classList.add('active'));
+        document.getElementById('closeBtn').addEventListener('click', () => document.getElementById('rulesModal').classList.remove('active'));
+        document.getElementById('rulesModal').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('rulesModal')) {
+                document.getElementById('rulesModal').classList.remove('active');
+            }
+        });
+    </script>
 </body>
+
 </html>
