@@ -81,6 +81,7 @@ const io = new Server(httpServer, { cors: { origin: "*" }, path: "/rt" });
  * Ils sont conservés en base : un changement survit aux redéploiements.
  */
 const REGLAGES_DEFAUT = {
+  animationsAvancees: true,
   roundDuration: 60,                 // secondes
   basePoints: 1000,
   tmdbApiKey: "",
@@ -263,6 +264,7 @@ app.put("/api/admin/reglages", requireAdmin, (req, res) => {
   REGLAGES.transfertMax     = borne(r.transfertMax, 0, 100000, REGLAGES.transfertMax);
   REGLAGES.transfertParJour = borne(r.transfertParJour, 0, 500000, REGLAGES.transfertParJour);
   if (typeof r.tmdbApiKey === 'string') REGLAGES.tmdbApiKey = r.tmdbApiKey;
+  REGLAGES.animationsAvancees = r.animationsAvancees !== false;
   REGLAGES.coeurs           = borne(r.coeurs, 1, 10, REGLAGES.coeurs);
   REGLAGES.xpBase           = borne(r.xpBase, 10, 10000, REGLAGES.xpBase);
   REGLAGES.xpCroissance     = borne(r.xpCroissance, 1.01, 2, REGLAGES.xpCroissance);
@@ -1272,7 +1274,7 @@ app.get("/api/birthdays", async (req, res) => {
 });
 
 app.get("/api/config", (_req, res) => res.json({
-  tipUrl: CONFIG.TIP_URL, maxPlayers: CONFIG.MAX_PLAYERS, pointsParTicket: CONFIG.POINTS_PAR_TICKET,
+  tipUrl: CONFIG.TIP_URL, maxPlayers: CONFIG.MAX_PLAYERS, pointsParTicket: CONFIG.POINTS_PAR_TICKET, animationsAvancees: REGLAGES.animationsAvancees,
 }));
 
 /**

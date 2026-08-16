@@ -309,6 +309,10 @@
 
       <div class="card">
         <p class="tag">Apparence du site</p>
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer;font-size:15px;color:var(--chalk);text-transform:none;letter-spacing:0">
+          <input type="checkbox" id="rAnimAvancees" style="width:auto">
+          Activer les effets visuels (Animations boutons au survol/toucher)
+        </label>
         <label for="favInput">Changer le Favicon (l'icône de l'onglet)</label>
         <input type="file" id="favInput" accept=".png, .svg, .ico, .jpg, .jpeg" style="background: transparent; border: none; padding: 0;">
         <div class="row">
@@ -756,6 +760,7 @@ async function chargerReglages(){
   $("rFlou").value = p.flou; $("rFlouVal").textContent = p.flou;
   $("rCadrage").value = p.cadrage;
   majApercu();
+  $("rAnimAvancees").checked = reglages.animationsAvancees !== false;
 
   $("listeIndices").innerHTML = Object.entries(reglages.indices).map(([cle, v]) => `
     <div class="urow">
@@ -801,6 +806,7 @@ $("btnSaveReglages").onclick = async () => {
       tickets: Number($("listeIndices").querySelector(`[data-tickets="${cle}"]`).value),
     };
   }
+  corps.animationsAvancees = $("rAnimAvancees").checked;
   Object.assign(corps.indices.poster, {
     zoom: Number($("rZoom").value), flou: Number($("rFlou").value), cadrage: $("rCadrage").value,
   });
