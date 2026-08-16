@@ -433,6 +433,56 @@
   .cadrePhoto.emoji { display: grid; place-items: center; font-size: 64px; }
   .cadrePhoto.emoji .inner-emoji { width: 100%; height: 100%; border-radius: 50%; background: var(--card); border: 3px solid var(--velvet); display: grid; place-items: center; }
 
+
+  /* --- Effets visuels avancés (Boutons et Logos) --- */
+  body.animations-actives button:not(.ghost):not(#chatToggle):not(.close-btn):not(#banner) {
+    position: relative; overflow: hidden; transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s;
+  }
+  body.animations-actives button:not(.ghost):not(#chatToggle):not(.close-btn):not(#banner)::after {
+    content: ""; position: absolute; top: 0; left: -100%; width: 50%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+    transform: skewX(-20deg); transition: none;
+  }
+  body.animations-actives button:not(.ghost):not(#chatToggle):not(.close-btn):not(#banner):hover,
+  body.animations-actives button:not(.ghost):not(#chatToggle):not(.close-btn):not(#banner):active {
+    transform: scale(1.03); box-shadow: 0 4px 15px rgba(245,185,66,0.3);
+  }
+  body.animations-actives button:not(.ghost):not(#chatToggle):not(.close-btn):not(#banner):hover::after,
+  body.animations-actives button:not(.ghost):not(#chatToggle):not(.close-btn):not(#banner):active::after {
+    animation: shine 0.6s ease;
+  }
+  @keyframes shine { 100% { left: 200%; } }
+  
+  body.animations-actives button.ghost:not(#btnQuitGame):not(#chatReduire) {
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s, border-color 0.2s;
+  }
+  body.animations-actives button.ghost:not(#btnQuitGame):not(#chatReduire):hover,
+  body.animations-actives button.ghost:not(#btnQuitGame):not(#chatReduire):active {
+    transform: scale(1.05); background: rgba(255,255,255,0.06); border-color: var(--beam); color: var(--chalk);
+  }
+  
+  body.animations-actives .mode { transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s, border-color 0.2s; }
+  body.animations-actives .mode:hover, body.animations-actives .mode:active {
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.5);
+    border-color: var(--beam);
+  }
+  body.animations-actives .mode:hover .ic, body.animations-actives .mode:active .ic { animation: bounceIcon 0.5s; }
+  @keyframes bounceIcon { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px) scale(1.1); } }
+
+  body.animations-actives #banner h1 em { display: inline-block; transition: transform 0.3s; }
+  body.animations-actives #banner:hover h1 em, body.animations-actives #banner:active h1 em { animation: wobble 0.6s ease-in-out; color: var(--ticket); }
+  @keyframes wobble { 0%, 100% { transform: rotate(0deg) scale(1); } 25% { transform: rotate(-8deg) scale(1.1); } 75% { transform: rotate(8deg) scale(1.1); } }
+  
+  body.animations-actives .amiLigne { transition: background 0.2s, transform 0.2s; }
+  body.animations-actives .amiLigne:hover { background: rgba(255,255,255,0.03); border-radius: 8px; transform: translateX(4px); }
+  
+  body.animations-actives .choices button { transition: transform 0.15s, border-color 0.15s, background 0.15s; }
+  body.animations-actives .choices button:hover:not(:disabled),
+  body.animations-actives .choices button:active:not(:disabled) {
+    transform: scale(1.02); border-color: var(--beam); box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+  }
+
 </style>
 
 </head>
@@ -1044,7 +1094,7 @@ if (!window.tempsReelDispo) {
 }
 
 fetch("/api/config").then(r => r.json())
-  .then(c => { $("tipLink").href = c.tipUrl; tauxTicket = c.pointsParTicket || tauxTicket; })
+  .then(c => { $("tipLink").href = c.tipUrl; tauxTicket = c.pointsParTicket || tauxTicket; if (c.animationsAvancees !== false) document.body.classList.add("animations-actives"); })
   .catch(() => $("tipLink").classList.add("hidden"));
 
 /* ---------- Session ---------- */
@@ -1823,8 +1873,10 @@ function ligneJoueur(j, boutons){
     <span class="nom" data-fiche="${esc(j.id)}" data-pseudo="${esc(j.pseudo)}"
       data-avatar="${j.avatar||"🎬"}" data-photo="${esc(j.photo||"")}"
       style="cursor:pointer">${vignette(j)} ${esc(j.pseudo)}</span>
+    <div style="display:flex; gap:6px; flex-wrap:wrap;">
     ${boutons.map(([a, l]) =>
-      `<button class="ghost" data-act="${a}" data-id="${esc(j.id)}">${l}</button>`).join("")}
+      `<button class="ghost" data-act="${a}" data-id="${esc(j.id)}" title="${a}" style="padding:6px 10px; font-size:15px;">${l}</button>`).join("")}
+    </div>
   </div>`;
 }
 
@@ -1834,7 +1886,16 @@ function brancher(){
 
   $("listeAmis").querySelectorAll("[data-act]").forEach(b => b.onclick = async () => {
     if (b.dataset.act === "inviter") return inviter(b.dataset.id, b);
+    if (b.dataset.act === "message") {
+        const nomEl = b.closest(".amiLigne").querySelector(".nom");
+        return ouvrirConversation(b.dataset.id, nomEl.dataset.pseudo, nomEl.dataset.avatar, nomEl.dataset.photo);
+    }
+    if (b.dataset.act === "donner") {
+        const nomEl = b.closest(".amiLigne").querySelector(".nom");
+        return offrirPoints(b.dataset.id, nomEl.dataset.pseudo);
+    }
     if (b.dataset.act === "bloquer" && !confirm("Bloquer ce joueur ?")) return;
+    if (b.dataset.act === "retirer" && !confirm("Retirer cet ami ?")) return;
     await agirAmi(b.dataset.act, b.dataset.id);
     ongletAmis === "recherche" ? chercher() : chargerAmis();
     majBadgeAmis();
@@ -1852,8 +1913,8 @@ async function chargerAmis(){
     const enSalon = Boolean(state.code);
     $("listeAmis").innerHTML = r.amis.map(j => ligneJoueur(j,
       enSalon && j.online
-        ? [["inviter","Inviter"], ["retirer","Retirer"], ["bloquer","Bloquer"]]
-        : [["retirer","Retirer"], ["bloquer","Bloquer"]])).join("");
+        ? [["bloquer","🚫"], ["retirer","❌"], ["donner","🎁"], ["message","✉️"], ["inviter","🎮 Inviter"]]
+        : [["bloquer","🚫"], ["retirer","❌"], ["donner","🎁"], ["message","✉️"]])).join("");
     $("amisVide").textContent = r.amis.length ? "" :
       "Aucun ami pour l'instant. Cherchez un pseudo dans l'onglet Rechercher.";
   } else if (ongletAmis === "demandes"){

@@ -309,6 +309,10 @@
 
       <div class="card">
         <p class="tag">Apparence du site</p>
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer;font-size:15px;color:var(--chalk);text-transform:none;letter-spacing:0">
+          <input type="checkbox" id="rAnimAvancees" style="width:auto">
+          Activer les effets visuels (Animations boutons au survol/toucher)
+        </label>
         <label for="favInput">Changer le Favicon (l'icône de l'onglet)</label>
         <input type="file" id="favInput" accept=".png, .svg, .ico, .jpg, .jpeg" style="background: transparent; border: none; padding: 0;">
         <div class="row">
@@ -756,6 +760,7 @@ async function chargerReglages(){
   $("rFlou").value = p.flou; $("rFlouVal").textContent = p.flou;
   $("rCadrage").value = p.cadrage;
   majApercu();
+  $("rAnimAvancees").checked = reglages.animationsAvancees !== false;
 
   $("listeIndices").innerHTML = Object.entries(reglages.indices).map(([cle, v]) => `
     <div class="urow">
@@ -801,6 +806,7 @@ $("btnSaveReglages").onclick = async () => {
       tickets: Number($("listeIndices").querySelector(`[data-tickets="${cle}"]`).value),
     };
   }
+  corps.animationsAvancees = $("rAnimAvancees").checked;
   Object.assign(corps.indices.poster, {
     zoom: Number($("rZoom").value), flou: Number($("rFlou").value), cadrage: $("rCadrage").value,
   });
@@ -946,7 +952,11 @@ function renderUsers(){
   $("userList").innerHTML = players.map(u => `
     <div class="urow ${u.banned?"banned":""}">
       <div class="who">
-        <strong>${u.avatar||"🎬"} ${esc(u.pseudo||"(sans pseudo)")}${u.banned?'<span class="chip">banni</span>':""}</strong>
+        <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+          <span style="font-size:18px;">${u.avatar||"🎬"}</span>
+          <input type="text" data-pseudo="${u.id}" value="${esc(u.pseudo||"")}" placeholder="Pseudo" style="width:130px; padding:4px 8px; font-size:14px; font-weight:bold; border:1px solid rgba(237,232,220,.2); border-radius:6px; background:var(--velvet); color:var(--chalk);">
+          ${u.banned?'<span class="chip">banni</span>':""}
+        </div>
         <small>${u.totalScore||0} pts · ${u.gamesPlayed||0} parties${u.xHandle?" · @"+esc(u.xHandle):""}${u.online?" · en ligne":""}</small>
         <small>niveau ${u.niveau || 0}${u.codeParrain ? " · code "+esc(u.codeParrain) : ""}${u.fondateur ? " · fondateur" : ""}${u.email && !u.emailVerifie ? " · email à valider" : ""}</small>
       </div>
@@ -981,7 +991,8 @@ function renderUsers(){
     const credits = Number($("userList").querySelector(`[data-credits="${CSS.escape(id)}"]`).value);
     const role = $("userList").querySelector(`[data-role="${CSS.escape(id)}"]`).value;
     const photo = $("userList").querySelector(`[data-photo="${CSS.escape(id)}"]`).value.trim();
-    await api(`/api/admin/users/${encodeURIComponent(id)}`, {method:"PUT", body:JSON.stringify({credits, role, photo})});
+    const pseudo = $("userList").querySelector(`[data-pseudo="${CSS.escape(id)}"]`).value.trim();
+    await api(`/api/admin/users/${encodeURIComponent(id)}`, {method:"PUT", body:JSON.stringify({credits, role, photo, pseudo})});
     loadUsers();
   });
   $("userList").querySelectorAll("[data-valider]").forEach(b => b.onclick = async () => {
