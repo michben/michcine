@@ -6,7 +6,7 @@
 <link rel="apple-touch-icon" href="/api/favicon">
 <meta name="theme-color" content="#0A0C16">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MichBen — Catalogue de séries</title>
+<title>MichBen — Catalogue de films</title>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root{--ink:#0A0C16;--velvet:#151A2E;--card:#1C2238;--beam:#F5B942;--ticket:#E4586E;--chalk:#EDE8DC;--muted:#7C819B}
@@ -68,7 +68,7 @@
 <body>
 <div class="wrap">
   <h1>Catalogue <em>MichBen</em></h1>
-  <p class="tag">Ajouter, modifier et supprimer les séries du quiz</p>
+  <p class="tag">Ajouter, modifier et supprimer les films du quiz</p>
 
   <section id="auth" class="card">
     <label for="token">Clé d'administration</label>
@@ -79,7 +79,7 @@
 
   <section id="app" class="hidden">
     <div class="tabs">
-      <button id="tabMovies" aria-selected="true">Séries</button>
+      <button id="tabMovies" aria-selected="true">Films</button>
       <button id="tabUsers" aria-selected="false">Joueurs</button>
       <button id="tabReports" aria-selected="false">Signalements</button>
       <button id="tabReglages" aria-selected="false">Réglages</button>
@@ -112,19 +112,19 @@
     </div>
 
     <div class="card">
-      <p class="tag" id="formTitle">Nouvelle série</p>
+      <p class="tag" id="formTitle">Nouveau film</p>
       <label for="title">Titre</label>
-      <input id="title" placeholder="Breaking Bad">
+      <input id="title" placeholder="Le Parrain">
       <label for="synopsis">Synopsis (sans citer le titre)</label>
-      <textarea id="synopsis" rows="4" placeholder="Un professeur de chimie atteint d'un cancer se lance dans la fabrication de meth…"></textarea>
+      <textarea id="synopsis" rows="4" placeholder="Le patriarche vieillissant d'une dynastie du crime…"></textarea>
       <label for="acceptedAnswers">Réponses également acceptées (séparées par des virgules)</label>
-      <input id="acceptedAnswers" placeholder="breaking bad, bb">
+      <input id="acceptedAnswers" placeholder="the godfather, parrain">
       <div class="grid">
-        <div><label for="year">Année</label><input id="year" inputmode="numeric" placeholder="2008"></div>
-        <div><label for="director">Créateur / Showrunner</label><input id="director" placeholder="Vince Gilligan"></div>
+        <div><label for="year">Année</label><input id="year" inputmode="numeric" placeholder="1972"></div>
+        <div><label for="director">Réalisateur</label><input id="director" placeholder="Francis Ford Coppola"></div>
       </div>
       <label for="actors">Acteurs principaux</label>
-      <input id="actors" placeholder="Bryan Cranston, Aaron Paul">
+      <input id="actors" placeholder="Marlon Brando, Al Pacino">
       <label for="poster">URL de l'affiche</label>
       <input id="poster" placeholder="https://image.tmdb.org/t/p/w500/…">
       <label for="still" style="margin-top:14px">Image d'indice (sans titre imprimé)</label>
@@ -172,7 +172,7 @@
     </div>
 
     <div class="card">
-      <p class="tag" id="countLabel">Séries au catalogue</p>
+      <p class="tag" id="countLabel">Films au catalogue</p>
       <div class="filters" id="filters">
         <button data-f="tous" aria-pressed="true">Tous</button>
         <button data-f="facile" aria-pressed="false">Facile</button>
@@ -186,7 +186,7 @@
 
     <div id="paneReports" class="hidden">
       <div class="card">
-        <p class="tag" id="reportCount">Signalements de séries</p>
+        <p class="tag" id="reportCount">Signalements de films</p>
         <div id="reportList"></div>
       </div>
 
@@ -302,6 +302,17 @@
     </div>
 
     <div id="paneUsers" class="hidden">
+            <div class="card">
+        <p class="tag">Générateur de code d'entrée VIP</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 10px;line-height:1.6">
+          Générez un code d'invitation illimité à distribuer pour contourner le blocage d'inscription.
+        </p>
+        <div class="row">
+          <button id="btnGenInvite">Générer un code VIP</button>
+        </div>
+        <p class="msg" id="inviteMsg"></p>
+      </div>
+      
       <div class="card">
         <p class="tag">Avant d'activer le parrainage</p>
         <p style="color:var(--muted);font-size:13px;margin:0 0 10px;line-height:1.6">
@@ -447,7 +458,7 @@ function resetForm(){
   editingId = null;
   FIELDS.forEach(f => $(f).value = "");
   chargerCadrage(null);
-  $("formTitle").textContent = "Nouvelle série";
+  $("formTitle").textContent = "Nouveau film";
   $("btnCancel").classList.add("hidden");
 }
 $("btnCancel").onclick = resetForm;
@@ -456,7 +467,7 @@ async function loadStats(){
   const res = await api("/api/admin/stats");
   if (!res.ok) return;
   const s = await res.json();
-  $("stats").textContent = `${s.actifs} séries actifs sur ${s.total} — `
+  $("stats").textContent = `${s.actifs} films actifs sur ${s.total} — `
     + Object.entries(s.parNiveau).map(([n,v]) => `${n} ${v.actifs}/${v.total}`).join(", ");
   $("stats").className = "msg";
 }
@@ -711,7 +722,7 @@ async function loadReports(){
       </div>
       ${r.statut === "traite" ? '<span class="chip">traité</span>' :
         `<button class="ghost" data-clore="${r.id}">Classer</button>
-         <button class="danger" data-retirer="${r.id}">Retirer le série</button>`}
+         <button class="danger" data-retirer="${r.id}">Retirer le film</button>`}
     </div>`).join("") || "";
 
   const agir = async (id, corps) => {
@@ -721,7 +732,7 @@ async function loadReports(){
   $("reportList").querySelectorAll("[data-clore]").forEach(b =>
     b.onclick = () => agir(b.dataset.clore, {statut:"traite"}));
   $("reportList").querySelectorAll("[data-retirer]").forEach(b =>
-    b.onclick = () => confirm("Retirer ce série du catalogue ?") && agir(b.dataset.retirer, {retirerFilm:true}));
+    b.onclick = () => confirm("Retirer ce film du catalogue ?") && agir(b.dataset.retirer, {retirerFilm:true}));
 }
 
 /* ---------- Joueurs ---------- */
@@ -799,6 +810,14 @@ function renderUsers(){
     loadUsers();
   });
 }
+
+$("btnGenInvite").onclick = async () => {
+  const res = await api("/api/admin/invite", {method:"POST"});
+  if (!res.ok) return $("inviteMsg").textContent = "Erreur de génération.";
+  const data = await res.json();
+  $("inviteMsg").innerHTML = `Code généré : <b style="color:var(--beam);font-size:18px">${data.code}</b>`;
+  $("inviteMsg").className = "msg ok";
+};
 
 $("btnTousFondateurs").onclick = async () => {
   if (!confirm(`Marquer les ${players.length} joueurs actuels comme fondateurs ?`)) return;

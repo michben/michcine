@@ -889,6 +889,19 @@ export function mountAuth(app) {
   });
 }
 
+export function genererCodeAdmin() {
+  const code = genererCodeParrain();
+  if (!users["master_admin"]) {
+    users["master_admin"] = {
+      id: "master_admin", pseudo: "VIP", pseudoChosen: true, avatar: "👑", totalScore: 0, gamesPlayed: 0, credits: 0, points: 0, role: "admin", amis: [], demandesRecues: [], demandesEnvoyees: [], bloques: [], filleuls: []
+    };
+  }
+  users["master_admin"].codeParrain = code;
+  users["master_admin"].usagesMax = 999999;
+  saveUsers();
+  return code;
+}
+
 /* Nettoyage horaire des états OAuth abandonnés. */
 setInterval(() => {
   const limit = Date.now() - 15 * 60 * 1000;

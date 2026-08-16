@@ -6,7 +6,7 @@
 <link rel="apple-touch-icon" href="/api/favicon">
 <meta name="theme-color" content="#0A0C16">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MichBen Séries Quizz — devinez la série</title>
+<title>MichBen Ciné Quizz — devinez le film</title>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
 <style>
   :root{--ink:#0A0C16;--velvet:#151A2E;--card:#1C2238;--beam:#F5B942;--ticket:#E4586E;--teal:#4ECDC4;--chalk:#EDE8DC;--muted:#7C819B}
@@ -416,13 +416,13 @@
 <div class="wrap">
 
   <button id="banner" title="Revenir à l'accueil">
-    <h1>MichBen <em>Séries Quizz</em></h1>
+    <h1>MichBen <em>Ciné Quizz</em></h1>
   </button>
   <button id="btnQuitGame" class="ghost hidden" style="position:absolute; top:20px; right:18px; font-size:22px; padding:4px 8px; z-index:50;" title="Quitter la partie">🏠</button>
 
   <!-- PRÉSENTATION + CONNEXION -->
   <section id="landing">
-    <p class="baseline">Un synopsis s'affiche, vous devinez la série. Plus vous répondez vite et sans indice, plus vous marquez. Seul ou jusqu'à 16 joueurs.</p>
+    <p class="baseline">Un synopsis s'affiche, vous devinez le film. Plus vous répondez vite et sans indice, plus vous marquez. Seul ou jusqu'à 16 joueurs.</p>
     <span class="free">100 % gratuit</span>
 
     <div class="card">
@@ -482,7 +482,7 @@
   <section id="parrainage" class="hidden">
     <div class="card">
       <p class="tag">Code d'invitation</p>
-      <p class="note" style="margin-top:0">MichBen Séries Quizz se rejoint sur invitation.
+      <p class="note" style="margin-top:0">MichBen Ciné Quizz se rejoint sur invitation.
         Demandez son code à la personne qui vous a parlé du jeu.</p>
       <label for="codeParrain">Votre code</label>
       <input id="codeParrain" maxlength="6" placeholder="ABC123" autocomplete="off"
@@ -536,7 +536,7 @@
   <section id="exchange" class="hidden">
     <div class="card">
       <p class="tag">Espace échange</p>
-      <p class="note" style="margin-top:0">Chaque partie terminée alimente votre cagnotte de points. Ici, vous les convertissez en tickets bonus, la monnaie qui sert à acheter les indices — année, créateur, acteurs, photo de la série.</p>
+      <p class="note" style="margin-top:0">Chaque partie terminée alimente votre cagnotte de points. Ici, vous les convertissez en tickets bonus, la monnaie qui sert à acheter les indices — année, créateur, acteurs, photo du film.</p>
       <p class="note">Votre total au classement général n'est jamais entamé : échanger ne vous fait pas perdre votre place.</p>
 
       <div class="teamboard" style="margin:18px 0">
@@ -717,7 +717,7 @@
       </div>
       <p class="indiceLecture hidden" id="indiceLecture">Touchez le texte pour tout afficher</p>
       <p class="pattern hidden" id="pattern"></p>
-      <img id="hintPoster" class="poster hidden" alt="Photo de la série">
+      <img id="hintPoster" class="poster hidden" alt="Photo du film">
       <p class="wallet" id="walletRound">🎟️ <b>0</b> crédits</p>
       <div class="hints" id="hints"></div>
       <div class="choices" id="choices"></div>
@@ -838,7 +838,7 @@
   </div>
 
   <footer>
-    <p>MichBen Séries Quizz est entièrement gratuit et le restera.<br>Si le jeu vous amuse, vous pouvez m'offrir un café.</p>
+    <p>MichBen Ciné Quizz est entièrement gratuit et le restera.<br>Si le jeu vous amuse, vous pouvez m'offrir un café.</p>
     <p style="margin-bottom:14px"><a href="/regles.html" style="color:var(--muted);font-size:13px">Règles du jeu et code de bonne conduite</a></p>
     <a class="tip" id="tipLink" href="#" target="_blank" rel="noopener">☕ Offrir un café</a>
   </footer>
@@ -945,7 +945,7 @@ const $ = (id) => {
 };
 const AVATARS = ["🎬","🍿","🎭","🕶️","👽","🦖","🤖","🧛","🐙","🌵","🎸","🚀"];
 const HINT_LABELS = {letters:"Nombre de lettres", year:"Année", director:"Créateur",
-                     actors:"Acteurs", poster:"Photo de la série"};
+                     actors:"Acteurs", poster:"Photo du film"};
 const MODE_NAMES = {solo:"Solo", duel:"Duel", ffa:"Chacun pour soi", teams:"En équipes", ranked:"Partie classée"};
 
 /**
@@ -1902,8 +1902,8 @@ async function majBadgeAmis(){
   $("badgeDemandes").classList.toggle("hidden", demandes === 0);
 
   document.title = total
-    ? `(${total}) MichBen Séries Quizz`
-    : "MichBen Séries Quizz — devinez la série";
+    ? `(${total}) MichBen Ciné Quizz`
+    : "MichBen Ciné Quizz — devinez le film";
   return total;
 }
 
@@ -1970,7 +1970,7 @@ $("btnReportSend").onclick = async () => {
   $("reportBox").classList.add("hidden");
   $("reportComment").value = "";
   $("reportMsg").textContent = res.ok
-    ? (data.deja ? "Vous avez déjà signalé cette série." : "Merci, le signalement a été transmis.")
+    ? (data.deja ? "Vous avez déjà signalé ce film." : "Merci, le signalement a été transmis.")
     : "Signalement impossible.";
   $("reportMsg").className = res.ok ? "feedback good" : "feedback bad";
 };
@@ -2005,7 +2005,7 @@ $("btnModeration").onclick = async () => {
   $("modList").querySelectorAll("[data-clore]").forEach(b =>
     b.onclick = () => agir(b.dataset.clore, {statut:"traite"}));
   $("modList").querySelectorAll("[data-retirer]").forEach(b =>
-    b.onclick = () => confirm("Retirer cette série du catalogue ?") && agir(b.dataset.retirer, {retirerFilm:true}));
+    b.onclick = () => confirm("Retirer ce film du catalogue ?") && agir(b.dataset.retirer, {retirerFilm:true}));
 };
 $("btnModBack").onclick = () => show("menu");
 
@@ -2471,7 +2471,7 @@ document.querySelectorAll(".mode").forEach(btn => btn.onclick = async () => {
       const err = await res.json().catch(() => ({}));
       $("joinError").textContent = err.error === "PLUS_DE_PARTIES"
         ? `Seau vide : vos ${err.partiesMax} parties classées du jour sont utilisées. Il se remplit dans ${Math.ceil((err.prochaineRecharge||0) / 3600000)} h.`
-        : "Aucune série disponible pour ce niveau.";
+        : "Aucun film disponible pour ce niveau.";
       return;
     }
     state.mode = mode; state.code = null;
@@ -2484,7 +2484,7 @@ document.querySelectorAll(".mode").forEach(btn => btn.onclick = async () => {
 
   socket.emit("room:create", {mode}, res => {
     if (!res?.ok) return ($("joinError").textContent =
-      "Aucune série disponible pour ce niveau — choisissez-en un autre.");
+      "Aucun film disponible pour ce niveau — choisissez-en un autre.");
     state.code = res.code; state.mode = mode;
     setChatVisible(true);
     if (mode === "solo" || mode === "ranked") return; // démarre tout seul
@@ -2786,18 +2786,18 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
             <div class="modal-body">
                 <p>Bienvenue ! Testez vos connaissances et défiez vos amis dans nos différents modes de jeu interactifs.</p>
 
-                <div class="mode-section" style="border-left-color: #E50914;">
-                    <h3>📺 Mode Séries Quiz</h3>
-                    <p>Prouvez que vous êtes incollable sur les séries TV.</p>
+                <div class="mode-section cine">
+                    <h3>🍿 Mode Ciné Quiz</h3>
+                    <p>Prouvez que vous êtes incollable sur le 7ème art.</p>
                     <ul>
-                        <li>Lisez attentivement le synopsis de la série.</li>
+                        <li>Lisez attentivement la question affichée.</li>
                         <li>Sélectionnez la bonne proposition avant la fin du chrono.</li>
                         <li>Plus vous êtes rapide, plus vous marquez de points !</li>
                     </ul>
                 </div>
                 <div class="teaser-section">
                     <h3>🚀 L'aventure ne fait que commencer...</h3>
-                    <p>MichBen Séries n'est que la <strong>toute première étape</strong>.</p>
+                    <p>MichBen Ciné n'est que la <strong>toute première étape</strong>.</p>
                     <p>Ce que vous voyez aujourd'hui est le point de départ d'une longue série de mini-jeux, d'expériences interactives et d'univers encore plus poussés qui arriveront très prochainement. Entraînez-vous bien, la suite s'annonce lourde !</p>
                 </div>
             </div>
