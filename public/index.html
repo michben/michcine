@@ -2,8 +2,8 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="/favicon.svg">
+<link rel="icon" href="/api/favicon">
+<link rel="apple-touch-icon" href="/api/favicon">
 <meta name="theme-color" content="#0A0C16">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MichBen Séries Quizz — devinez la série</title>
@@ -418,6 +418,7 @@
   <button id="banner" title="Revenir à l'accueil">
     <h1>MichBen <em>Séries Quizz</em></h1>
   </button>
+  <button id="btnQuitGame" class="ghost hidden" style="position:absolute; top:20px; right:18px; font-size:22px; padding:4px 8px; z-index:50;" title="Quitter la partie">🏠</button>
 
   <!-- PRÉSENTATION + CONNEXION -->
   <section id="landing">
@@ -985,6 +986,9 @@ const show = id => {
   ["landing","validation","parrainage","profile","board","exchange","friends","quetes","moderation","menu","lobby","waiting","round","between","over"]
     .forEach(s => $(s).classList.toggle("hidden", s !== id));
   window.scrollTo({top: 0, behavior: "instant"});
+  
+  const inGame = ["round", "between", "lobby", "waiting"].includes(id);
+  $("btnQuitGame").classList.toggle("hidden", !inGame);
 };
 /** Photo du joueur si l'administration lui en a attribué une, émoji sinon. */
 const vignette = (j) => j?.photo
@@ -2295,10 +2299,10 @@ socket.on("chat:blocked", () =>
 
 
 /* ---------- Bannière : retour au menu ---------- */
-$("banner").onclick = () => {
+const quitterPartie = () => {
   if (!me) return;
-  if (state.code && ["round","between","lobby"].some(s => !$(s).classList.contains("hidden"))){
-    if (!confirm("Quitter la partie en cours et revenir au menu principal ?")) return;
+  if (state.code || ["round","between","lobby","waiting"].some(s => !$(s).classList.contains("hidden"))){
+    if (!confirm("⚠️ ATTENTION !\nQuitter la partie en cours vous fera perdre vos points non sauvegardés.\n\nVoulez-vous vraiment revenir à l'accueil ?")) return;
     socket.emit("room:leave");
     clearInterval(state.timerId);
     state.code = null;
@@ -2306,6 +2310,8 @@ $("banner").onclick = () => {
   }
   show("menu");
 };
+$("banner").onclick = quitterPartie;
+$("btnQuitGame").onclick = quitterPartie;
 
 /* ---------- Choix du mode ---------- */
 const niveau = "tous";   // le filtrage par niveau a été retiré du jeu

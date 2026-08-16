@@ -2,8 +2,8 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="/favicon.svg">
+<link rel="icon" href="/api/favicon">
+<link rel="apple-touch-icon" href="/api/favicon">
 <meta name="theme-color" content="#0A0C16">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MichBen — Catalogue de séries</title>
@@ -266,6 +266,16 @@
           <button id="btnResetReglages" class="ghost">Valeurs par défaut</button>
         </div>
         <p class="msg" id="reglagesMsg"></p>
+      </div>
+
+      <div class="card">
+        <p class="tag">Apparence du site</p>
+        <label for="favInput">Changer le Favicon (l'icône de l'onglet)</label>
+        <input type="file" id="favInput" accept=".png, .svg, .ico, .jpg, .jpeg" style="background: transparent; border: none; padding: 0;">
+        <div class="row">
+          <button id="btnUploadFavicon">Uploader le favicon</button>
+        </div>
+        <p class="msg" id="favMsg"></p>
       </div>
 
       <div class="card" id="alerteMdp" style="border-color:rgba(228,88,110,.5)">
@@ -633,6 +643,29 @@ $("btnChangerMdp").onclick = async () => {
 };
 
 /* ---------- Conversations signalées ---------- */
+$("btnUploadFavicon").onclick = () => {
+  const file = $("favInput").files[0];
+  if (!file) {
+    $("favMsg").textContent = "Veuillez sélectionner un fichier.";
+    $("favMsg").className = "msg err";
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    $("favMsg").textContent = "Upload en cours...";
+    $("favMsg").className = "msg";
+    const res = await api("/api/admin/favicon", { method: "POST", body: JSON.stringify({ image: e.target.result, ext: file.name.split('.').pop() }) });
+    if (res.ok) {
+      $("favMsg").textContent = "Favicon mis à jour ! Rechargez la page (Ctrl+F5) pour voir le résultat.";
+      $("favMsg").className = "msg ok";
+    } else {
+      $("favMsg").textContent = "Erreur lors de l'upload.";
+      $("favMsg").className = "msg err";
+    }
+  };
+  reader.readAsDataURL(file);
+};
+
 async function loadConversations(){
   const res = await api("/api/admin/conversations");
   if (!res.ok) return;

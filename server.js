@@ -16,6 +16,7 @@ import { charger, sauver, initStockage, enBase } from "./db.js";
 import { createRequire } from "module";
 import { dirname, join } from "path";
 import crypto from "crypto";
+import fs from "fs";
 import { mountAuth, userFromCookie, addRankedPoints,
          spendCredits, grantCredits, getCredits, CREDITS_PER_GAME,
          listUsers, adminUpdateUser, adminDeleteUser, grantAll,
@@ -208,6 +209,31 @@ app.post("/api/admin/password", requireAdmin, (req, res) => {
 
   empreinteAdmin = hacherAdmin(nouveau);
   sauver("adminPass", empreinteAdmin);
+  res.json({ ok: true });
+});
+
+app.get("/api/favicon", (req, res) => {
+  const exts = ["png", "svg", "ico", "jpg", "jpeg"];
+  for (const ext of exts) {
+    const p = join(process.cwd(), "public", `favicon.${ext}`);
+    if (fs.existsSync(p)) return res.sendFile(p);
+  }
+  res.status(404).end();
+});
+
+app.post("/api/admin/favicon", requireAdmin, (req, res) => {
+  const { image, ext } = req.body;
+  if (!image) return res.status(400).json({ error: "NO_IMAGE" });
+  const publicDir = join(process.cwd(), "public");
+  if (!fs.existsSync(publicDir)) fs.mkdirSync(publicDir, { recursive: true });
+  
+  for (const e of ["svg", "png", "ico", "jpg", "jpeg"]) {
+     const p = join(publicDir, `favicon.${e}`);
+     if (fs.existsSync(p)) fs.unlinkSync(p);
+  }
+  const cleanExt = ["svg", "png", "ico", "jpg", "jpeg"].includes(String(ext).toLowerCase()) ? String(ext).toLowerCase() : "png";
+  const base64Data = image.split(';base64,').pop();
+  fs.writeFileSync(join(publicDir, `favicon.${cleanExt}`), Buffer.from(base64Data, 'base64'));
   res.json({ ok: true });
 });
 
