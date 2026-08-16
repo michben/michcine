@@ -753,7 +753,8 @@
       <button class="ghost" id="btnFriends">Amis <span id="badgeAmis" class="pastille hidden">0</span></button>
       <button class="ghost" id="btnProfile">Profil</button>
     </div>
-    <div class="row"><button class="ghost hidden" id="btnModeration">Modération</button></div>
+        <div class="row"><button class="ghost hidden" id="btnModeration">Modération</button>
+      <button class="ghost hidden" id="btnAdminAccess" style="border-color:var(--beam); color:var(--beam)">⚙️ Administration</button></div>
     <div class="card">
       <label for="joinCode">Rejoindre un salon existant</label>
       <input id="joinCode" maxlength="4" placeholder="ABCD" autocomplete="off">
@@ -1089,7 +1090,13 @@ if (!window.tempsReelDispo) {
     b.disabled = true; b.style.opacity = .4;
     b.title = "Indisponible : le temps réel est bloqué par votre navigateur.";
   });
-  // le bouton reste cliquable : mieux vaut un message clair qu'un bouton mort
+  
+// Logic to show Admin button if admin
+if (["admin"].includes(me.role)) {
+    $("btnAdminAccess").classList.remove("hidden");
+    $("btnAdminAccess").onclick = () => window.location.href = "/admin.html";
+}
+// le bouton reste cliquable : mieux vaut un message clair qu'un bouton mort
   $("btnJoin").title = "Le multijoueur exige la connexion temps réel.";
 }
 

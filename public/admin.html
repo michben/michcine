@@ -1055,5 +1055,18 @@ $("btnGrantAll").onclick = async () => {
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 </script>
+
+<script>
+async function autoLogin() {
+    const res = await fetch("/api/admin/check");
+    const status = await res.json();
+    if (status.isAdmin || status.isMod) {
+        // Try to unlock with a generic token if the user is verified by session
+        $("token").value = "session-granted";
+        $("btnAuth").click();
+    }
+}
+autoLogin();
+</script>
 </body>
 </html>
