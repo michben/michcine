@@ -31,7 +31,7 @@ import { mountAuth, userFromCookie, addRankedPoints,
          parrainageManquant, parrainageObligatoire } from "./auth-x.js";
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '10mb' })); // Limite augmentée pour l'upload d'images
 /**
  * Les pages HTML ne doivent jamais rester en cache : sinon un joueur garde
  * l'ancienne version après une mise à jour et croit le jeu cassé.
@@ -222,19 +222,24 @@ app.get("/api/favicon", (req, res) => {
 });
 
 app.post("/api/admin/favicon", requireAdmin, (req, res) => {
-  const { image, ext } = req.body;
-  if (!image) return res.status(400).json({ error: "NO_IMAGE" });
-  const publicDir = join(process.cwd(), "public");
-  if (!fs.existsSync(publicDir)) fs.mkdirSync(publicDir, { recursive: true });
-  
-  for (const e of ["svg", "png", "ico", "jpg", "jpeg"]) {
-     const p = join(publicDir, `favicon.${e}`);
-     if (fs.existsSync(p)) fs.unlinkSync(p);
+  try {
+    const { image, ext } = req.body;
+    if (!image) return res.status(400).json({ error: "NO_IMAGE" });
+    const publicDir = join(process.cwd(), "public");
+    if (!fs.existsSync(publicDir)) fs.mkdirSync(publicDir, { recursive: true });
+    
+    for (const e of ["svg", "png", "ico", "jpg", "jpeg"]) {
+       const p = join(publicDir, `favicon.${e}`);
+       if (fs.existsSync(p)) fs.unlinkSync(p);
+    }
+    const cleanExt = ["svg", "png", "ico", "jpg", "jpeg"].includes(String(ext).toLowerCase()) ? String(ext).toLowerCase() : "png";
+    const base64Data = image.split(';base64,').pop();
+    fs.writeFileSync(join(publicDir, `favicon.${cleanExt}`), Buffer.from(base64Data, 'base64'));
+    res.json({ ok: true });
+  } catch (error) {
+    console.error("Erreur upload favicon:", error);
+    res.status(500).json({ error: "INTERNAL_ERROR", details: error.message });
   }
-  const cleanExt = ["svg", "png", "ico", "jpg", "jpeg"].includes(String(ext).toLowerCase()) ? String(ext).toLowerCase() : "png";
-  const base64Data = image.split(';base64,').pop();
-  fs.writeFileSync(join(publicDir, `favicon.${cleanExt}`), Buffer.from(base64Data, 'base64'));
-  res.json({ ok: true });
 });
 
 app.get("/api/admin/reglages", requireAdmin, (_req, res) => res.json(REGLAGES));
