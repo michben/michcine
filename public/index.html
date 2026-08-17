@@ -483,10 +483,6 @@
     transform: scale(1.02); border-color: var(--beam); box-shadow: 0 4px 10px rgba(0,0,0,0.3);
   }
 
-
-  textarea { width: 100%; background: var(--card); border: 1px solid rgba(237,232,220,.14); color: var(--chalk); border-radius: 10px; padding: 13px 14px; font: inherit; font-size: 16px; resize: vertical; }
-  textarea:focus-visible { outline: 2px solid var(--beam); outline-offset: 2px; }
-
 </style>
 
 </head>
@@ -934,149 +930,6 @@
 
 <!-- Moteur temps réel servi sous un nom neutre : les bloqueurs qui filtrent
      le mot « socket.io » ne le reconnaissent pas. -->
-
-<div id="voilePause" class="hidden">
-    <div class="boitePause">
-      <p class="tag" style="margin-bottom:6px">Partie en pause</p>
-      <p class="grosChiffre" id="pauseReste">--</p>
-      <p class="note" id="pauseQui" style="margin:0 0 18px"></p>
-      <button id="btnReprendre">Reprendre la partie</button>
-      <div class="row"><button id="btnQuitterPause" class="ghost">Quitter la partie</button></div>
-    </div>
-
-<script src="/js/moteur.js"></script>
-
-
-
-
-  </div>
-
-    
-    
-    <!-- MODALE ANNIVERSAIRES -->
-    <div class="modal-overlay" id="birthdaysModal">
-        <div class="modal-content">
-            <div class="modal-header" style="border-bottom-color: var(--teal);">
-                <h2>🎂 Nés un <span id="bdayDate"></span></h2>
-                <button class="close-btn" id="closeBdayBtn">&times;</button>
-            </div>
-            <div class="modal-body" id="bdayList" style="max-height: 60vh; overflow-y: auto;">
-            </div>
-        </div>
-    </div>
-
-    <!-- MODALE JOUEURS EN LIGNE -->
-    <div class="modal-overlay" id="onlineUsersModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>🟢 Joueurs en ligne</h2>
-                <button class="close-btn" id="closeOnlineUsersBtn">&times;</button>
-            </div>
-            <div class="modal-body" id="onlineUsersList" style="max-height: 60vh; overflow-y: auto;">
-                <p class="note" style="text-align:center">Chargement...</p>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODALE SORTIES CINEMA -->
-    <div class="modal-overlay" id="upcomingMoviesModal">
-        <div class="modal-content">
-            <div class="modal-header" style="border-bottom-color: var(--ticket);">
-                <h2>🍿 Sorties de la semaine</h2>
-                <button class="close-btn" id="closeUpcomingMoviesBtn">&times;</button>
-            </div>
-            <div class="modal-body" id="upcomingMoviesList" style="max-height: 60vh; overflow-y: auto;">
-                <p class="note" style="text-align:center">Recherche des nouveautés UGC, Pathé, Gaumont...</p>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODALE ACTUELLEMENT AU CINEMA -->
-    <div class="modal-overlay" id="nowPlayingModal">
-        <div class="modal-content">
-            <div class="modal-header" style="border-bottom-color: var(--teal);">
-                <h2>🎥 Actuellement au cinéma</h2>
-                <button class="close-btn" id="closeNowPlayingBtn">&times;</button>
-            </div>
-            <div class="modal-body" id="nowPlayingList" style="max-height: 60vh; overflow-y: auto;">
-                <p class="note" style="text-align:center">Recherche des films à l'affiche...</p>
-            </div>
-        </div>
-    </div>
-
-    
-    
-    <!-- MODALE SUGGESTION -->
-    <div class="modal-overlay" id="suggestionModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>💡 Suggérer un film</h2>
-                <button class="close-btn" id="closeSuggestionBtn">&times;</button>
-            </div>
-            <div class="modal-body">
-                <label for="suggTitre">Titre du film</label>
-                <input id="suggTitre" placeholder="Titre du film...">
-                <label for="suggComment" style="margin-top:10px">Commentaire (facultatif)</label>
-                <textarea id="suggComment" rows="3" placeholder="Pourquoi ce film serait bien ?"></textarea>
-                <div class="row"><button id="btnSendSugg">Envoyer la suggestion</button></div>
-                <p class="feedback" id="suggFeedback"></p>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODALE PROGRESSION -->
-    <div class="modal-overlay" id="progressionModal">
-        <div class="modal-content" style="max-height: 85vh; display: flex; flex-direction: column;">
-            <div class="modal-header" style="border-bottom-color: var(--beam);">
-                <h2>🗺️ Votre Parcours</h2>
-                <button class="close-btn" id="closeProgressionBtn">&times;</button>
-            </div>
-            <div class="modal-body" style="flex: 1; padding: 0; display: flex; flex-direction: column; overflow: hidden;">
-                <div style="padding: 15px 25px; background: #111; border-bottom: 1px solid #333; text-align: center; position: sticky; top: 0; z-index: 10;">
-                    <p id="nextBonusText" style="margin: 0; font-size: 15px; color: var(--chalk);"></p>
-                </div>
-                <div id="progressionMap" class="progression-map">
-                    <p class='note' style='text-align:center; margin-top:20px;'>Génération de la carte...</p>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- BOUTON FLOTTANT ET MODALE D'AIDE -->
-    <div class="help-btn" id="helpBtn" title="Règles du jeu">?</div>
-    <div class="modal-overlay" id="rulesModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Comment jouer ? 🎬🎵</h2>
-                <button class="close-btn" id="closeBtn">&times;</button>
-            </div>
-            <div class="modal-body">
-                <p>Bienvenue ! Testez vos connaissances et défiez vos amis dans nos différents modes de jeu interactifs.</p>
-
-                <div class="mode-section cine">
-                    <h3>🍿 Mode Ciné Quiz</h3>
-                    <p>Prouvez que vous êtes incollable sur le 7ème art.</p>
-                    <ul>
-                        <li>Lisez attentivement la question affichée.</li>
-                        <li>Sélectionnez la bonne proposition avant la fin du chrono.</li>
-                        <li>Plus vous êtes rapide, plus vous marquez de points !</li>
-                    </ul>
-                </div>
-                <div class="teaser-section">
-                    <h3>🚀 L'aventure ne fait que commencer...</h3>
-                    <p>MichBen Ciné n'est que la <strong>toute première étape</strong>.</p>
-                    <p>Ce que vous voyez aujourd'hui est le point de départ d'une longue série de mini-jeux, d'expériences interactives et d'univers encore plus poussés qui arriveront très prochainement. Entraînez-vous bien, la suite s'annonce lourde !</p>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-
-    
-
-
-    
-
 <script>
 /* Toute erreur de script devient visible à l'écran : sans cela, une seule
    ligne fautive fige l'interface sans que personne ne sache pourquoi. */
@@ -1096,14 +949,24 @@ window.addEventListener("error", (e) => {
   boite.textContent = `Erreur : ${e.message} (${source.split("/").pop()}:${e.lineno})`;
   boite.classList.remove("hidden");
 });
+</script>
+<div id="voilePause" class="hidden">
+    <div class="boitePause">
+      <p class="tag" style="margin-bottom:6px">Partie en pause</p>
+      <p class="grosChiffre" id="pauseReste">--</p>
+      <p class="note" id="pauseQui" style="margin:0 0 18px"></p>
+      <button id="btnReprendre">Reprendre la partie</button>
+      <div class="row"><button id="btnQuitterPause" class="ghost">Quitter la partie</button></div>
+    </div>
 
-
+<script src="/js/moteur.js"></script>
+<script>
 /* Dernier recours si le fichier local est lui aussi filtré. */
 if (typeof io === "undefined") {
   document.write('<scr' + 'ipt src="https://cdn.jsdelivr.net/npm/socket.io-client@4.8.1/dist/socket.io.min.js"><\/scr' + 'ipt>');
 }
-
-
+</script>
+<script>
 /**
  * Si Socket.IO reste indisponible (bloqueur, pare-feu, réseau filtrant), on
  * remplace l'objet par une coquille inerte. Le profil, l'espace échange, le
@@ -1128,8 +991,8 @@ if (!window.tempsReelDispo) {
   window.io = () => coquille;
   var io = window.io;   // « var » pour que le nom soit aussi visible sans préfixe
 }
-
-
+</script>
+<script>
 // withCredentials garantit l'envoi du cookie de session, y compris après
 // une redirection entre le domaine avec et sans www.
 /* Le chemin par défaut « /socket.io » est lui aussi filtré par certains
@@ -1229,7 +1092,38 @@ if (!window.tempsReelDispo) {
     b.disabled = true; b.style.opacity = .4;
     b.title = "Indisponible : le temps réel est bloqué par votre navigateur.";
   });
-  // le bouton reste cliquable : mieux vaut un message clair qu'un bouton mort
+  
+// Logic to show Admin button if admin
+if (["admin"].includes(me.role)) {
+    $("btnAdminAccess").classList.remove("hidden");
+    $("btnAdminAccess").onclick = () => window.location.href = "/admin.html";
+}
+
+        const suggestionModal = $("suggestionModal");
+        const btnSuggestion = $("btnSuggestion");
+        
+        btnSuggestion.onclick = () => suggestionModal.classList.add("active");
+        $("closeSuggestionBtn").onclick = () => suggestionModal.classList.remove("active");
+        
+        $("btnSendSugg").onclick = async () => {
+            const titre = $("suggTitre").value.trim();
+            const commentaire = $("suggComment").value.trim();
+            if(!titre) return;
+            
+            const res = await fetch("/api/suggestions", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({ titre, commentaire })
+            });
+            if(res.ok) {
+                $("suggFeedback").textContent = "Merci pour votre suggestion !";
+                $("suggFeedback").className = "feedback good";
+                $("suggTitre").value = ""; $("suggComment").value = "";
+                setTimeout(() => suggestionModal.classList.remove("active"), 2000);
+            }
+        };
+
+// le bouton reste cliquable : mieux vaut un message clair qu'un bouton mort
   $("btnJoin").title = "Le multijoueur exige la connexion temps réel.";
 }
 
@@ -1266,47 +1160,6 @@ async function loadSession(){
 if (new URLSearchParams(location.search).get("erreur"))
   $("authError").textContent = "La connexion avec X a échoué. Réessayez.";
 loadSession();
-
-// Admin Access Button Logic
-if (me && ["admin"].includes(me.role)) {
-    $("btnAdminAccess").classList.remove("hidden");
-    $("btnAdminAccess").onclick = () => window.location.href = "/admin.html";
-}
-
-// Suggestion Modal Logic
-const suggestionModal = $("suggestionModal");
-const btnSuggestion = $("btnSuggestion");
-if (btnSuggestion && suggestionModal) {
-    btnSuggestion.onclick = () => suggestionModal.classList.add("active");
-    $("closeSuggestionBtn").onclick = () => suggestionModal.classList.remove("active");
-    suggestionModal.onclick = (e) => { if (e.target === suggestionModal) suggestionModal.classList.remove("active"); };
-    
-    $("btnSendSugg").onclick = async () => {
-        const titre = $("suggTitre").value.trim();
-        const commentaire = $("suggComment").value.trim();
-        if(!titre) {
-            $("suggFeedback").textContent = "Veuillez entrer un titre de film.";
-            $("suggFeedback").className = "feedback bad";
-            return;
-        }
-        
-        const res = await fetch("/api/suggestions", {
-            method: "POST",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({ titre, commentaire })
-        });
-        if(res.ok) {
-            $("suggFeedback").textContent = "Merci pour votre suggestion ! 🎉";
-            $("suggFeedback").className = "feedback good";
-            $("suggTitre").value = ""; $("suggComment").value = "";
-            setTimeout(() => suggestionModal.classList.remove("active"), 2000);
-        } else {
-            $("suggFeedback").textContent = "Erreur lors de l'envoi.";
-            $("suggFeedback").className = "feedback bad";
-        }
-    };
-}
-
 
 /* ---------- Première visite : choix du pseudo ---------- */
 function firstVisit(){
@@ -3069,8 +2922,130 @@ socket.on("game:end", ({ranking, mode, teams, credits: solde, points: cagnotte, 
 /* La couleur d'équipe suit le joueur jusqu'au classement final. */
 const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
   .map(p => `<li class="${p.team||""}">${vignette(p)} ${esc(p.pseudo)}<b>${p.score} pts</b></li>`).join("");
+</script>
 
+  </div>
 
+    
+    
+    <!-- MODALE ANNIVERSAIRES -->
+    <div class="modal-overlay" id="birthdaysModal">
+        <div class="modal-content">
+            <div class="modal-header" style="border-bottom-color: var(--teal);">
+                <h2>🎂 Nés un <span id="bdayDate"></span></h2>
+                <button class="close-btn" id="closeBdayBtn">&times;</button>
+            </div>
+            <div class="modal-body" id="bdayList" style="max-height: 60vh; overflow-y: auto;">
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALE JOUEURS EN LIGNE -->
+    <div class="modal-overlay" id="onlineUsersModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🟢 Joueurs en ligne</h2>
+                <button class="close-btn" id="closeOnlineUsersBtn">&times;</button>
+            </div>
+            <div class="modal-body" id="onlineUsersList" style="max-height: 60vh; overflow-y: auto;">
+                <p class="note" style="text-align:center">Chargement...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALE SORTIES CINEMA -->
+    <div class="modal-overlay" id="upcomingMoviesModal">
+        <div class="modal-content">
+            <div class="modal-header" style="border-bottom-color: var(--ticket);">
+                <h2>🍿 Sorties de la semaine</h2>
+                <button class="close-btn" id="closeUpcomingMoviesBtn">&times;</button>
+            </div>
+            <div class="modal-body" id="upcomingMoviesList" style="max-height: 60vh; overflow-y: auto;">
+                <p class="note" style="text-align:center">Recherche des nouveautés UGC, Pathé, Gaumont...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALE ACTUELLEMENT AU CINEMA -->
+    <div class="modal-overlay" id="nowPlayingModal">
+        <div class="modal-content">
+            <div class="modal-header" style="border-bottom-color: var(--teal);">
+                <h2>🎥 Actuellement au cinéma</h2>
+                <button class="close-btn" id="closeNowPlayingBtn">&times;</button>
+            </div>
+            <div class="modal-body" id="nowPlayingList" style="max-height: 60vh; overflow-y: auto;">
+                <p class="note" style="text-align:center">Recherche des films à l'affiche...</p>
+            </div>
+        </div>
+    </div>
+
+    
+    
+    <!-- MODALE SUGGESTION -->
+    <div class="modal-overlay" id="suggestionModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>💡 Suggérer un film</h2>
+                <button class="close-btn" id="closeSuggestionBtn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <label for="suggTitre">Titre du film</label>
+                <input id="suggTitre" placeholder="Titre du film...">
+                <label for="suggComment" style="margin-top:10px">Commentaire (facultatif)</label>
+                <textarea id="suggComment" rows="3" placeholder="Pourquoi ce film serait bien ?"></textarea>
+                <div class="row"><button id="btnSendSugg">Envoyer la suggestion</button></div>
+                <p class="feedback" id="suggFeedback"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALE PROGRESSION -->
+    <div class="modal-overlay" id="progressionModal">
+        <div class="modal-content" style="max-height: 85vh; display: flex; flex-direction: column;">
+            <div class="modal-header" style="border-bottom-color: var(--beam);">
+                <h2>🗺️ Votre Parcours</h2>
+                <button class="close-btn" id="closeProgressionBtn">&times;</button>
+            </div>
+            <div class="modal-body" style="flex: 1; padding: 0; display: flex; flex-direction: column; overflow: hidden;">
+                <div style="padding: 15px 25px; background: #111; border-bottom: 1px solid #333; text-align: center; position: sticky; top: 0; z-index: 10;">
+                    <p id="nextBonusText" style="margin: 0; font-size: 15px; color: var(--chalk);"></p>
+                </div>
+                <div id="progressionMap" class="progression-map">
+                    <p class='note' style='text-align:center; margin-top:20px;'>Génération de la carte...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BOUTON FLOTTANT ET MODALE D'AIDE -->
+    <div class="help-btn" id="helpBtn" title="Règles du jeu">?</div>
+    <div class="modal-overlay" id="rulesModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Comment jouer ? 🎬🎵</h2>
+                <button class="close-btn" id="closeBtn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Bienvenue ! Testez vos connaissances et défiez vos amis dans nos différents modes de jeu interactifs.</p>
+
+                <div class="mode-section cine">
+                    <h3>🍿 Mode Ciné Quiz</h3>
+                    <p>Prouvez que vous êtes incollable sur le 7ème art.</p>
+                    <ul>
+                        <li>Lisez attentivement la question affichée.</li>
+                        <li>Sélectionnez la bonne proposition avant la fin du chrono.</li>
+                        <li>Plus vous êtes rapide, plus vous marquez de points !</li>
+                    </ul>
+                </div>
+                <div class="teaser-section">
+                    <h3>🚀 L'aventure ne fait que commencer...</h3>
+                    <p>MichBen Ciné n'est que la <strong>toute première étape</strong>.</p>
+                    <p>Ce que vous voyez aujourd'hui est le point de départ d'une longue série de mini-jeux, d'expériences interactives et d'univers encore plus poussés qui arriveront très prochainement. Entraînez-vous bien, la suite s'annonce lourde !</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
         document.getElementById('helpBtn').addEventListener('click', () => document.getElementById('rulesModal').classList.add('active'));
         document.getElementById('closeBtn').addEventListener('click', () => document.getElementById('rulesModal').classList.remove('active'));
         document.getElementById('rulesModal').addEventListener('click', (e) => {
@@ -3093,8 +3068,9 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
                 btn.disabled = true;
             });
         }
-    
+    </script>
 
+    <script>
         const btnOnlineUsers = document.getElementById("btnOnlineUsers");
         const onlineUsersModal = document.getElementById("onlineUsersModal");
         const closeOnlineUsersBtn = document.getElementById("closeOnlineUsersBtn");
@@ -3179,8 +3155,10 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
                 if (e.target === upcomingMoviesModal) upcomingMoviesModal.classList.remove('active');
             });
         }
-    
+    </script>
 
+
+    <script>
         const btnBirthdays = document.getElementById("btnBirthdays");
         const birthdaysModal = document.getElementById("birthdaysModal");
         const closeBdayBtn = document.getElementById("closeBdayBtn");
@@ -3378,6 +3356,7 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
         };
 
 </script>
+
 </body>
 
 </html>

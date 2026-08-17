@@ -993,6 +993,7 @@ function renderUsers(){
       <button class="ghost" data-save="${u.id}">Enregistrer</button>
       <button class="ghost" data-ban="${u.id}">${u.banned?"Réactiver":"Bannir"}</button>
       <button class="danger" data-del="${u.id}">Supprimer</button>
+      <button class="ghost" style="color:var(--teal)" data-debug="${u.id}">🔍 Debug</button>
     </div>`).join("");
 
   // aperçu immédiat quand on colle une adresse
@@ -1011,10 +1012,22 @@ function renderUsers(){
     await api(`/api/admin/users/${encodeURIComponent(id)}`, {method:"PUT", body:JSON.stringify({credits, role, photo, pseudo})});
     loadUsers();
   });
+  $("userList").querySelectorAll("[data-debug]").forEach(b => b.onclick = async () => {
+    const res = await api(`/api/admin/debug-user/${encodeURIComponent(b.dataset.debug)}`, {method:"POST"});
+    if(res.ok) { alert("Compte debuggé : email validé, ban levé."); loadUsers(); }
+    else { alert("Erreur debug."); }
+  });
+
   $("userList").querySelectorAll("[data-valider]").forEach(b => b.onclick = async () => {
     await api(`/api/admin/users/${encodeURIComponent(b.dataset.valider)}/valider`, {method:"PUT"});
     loadUsers();
   });
+  $("userList").querySelectorAll("[data-debug]").forEach(b => b.onclick = async () => {
+    const res = await api(`/api/admin/debug-user/${encodeURIComponent(b.dataset.debug)}`, {method:"POST"});
+    if(res.ok) { alert("Compte debuggé : email validé, ban levé."); loadUsers(); }
+    else { alert("Erreur debug."); }
+  });
+
 
   $("userList").querySelectorAll("[data-fondateur]").forEach(b => b.onclick = async () => {
     const u = players.find(p => p.id === b.dataset.fondateur);
@@ -1022,18 +1035,36 @@ function renderUsers(){
       {method:"PUT", body: JSON.stringify({fondateur: !u.fondateur})});
     loadUsers();
   });
+  $("userList").querySelectorAll("[data-debug]").forEach(b => b.onclick = async () => {
+    const res = await api(`/api/admin/debug-user/${encodeURIComponent(b.dataset.debug)}`, {method:"POST"});
+    if(res.ok) { alert("Compte debuggé : email validé, ban levé."); loadUsers(); }
+    else { alert("Erreur debug."); }
+  });
+
 
   $("userList").querySelectorAll("[data-ban]").forEach(b => b.onclick = async () => {
     const u = players.find(p => p.id === b.dataset.ban);
     await api(`/api/admin/users/${encodeURIComponent(u.id)}`, {method:"PUT", body:JSON.stringify({banned: !u.banned})});
     loadUsers();
   });
+  $("userList").querySelectorAll("[data-debug]").forEach(b => b.onclick = async () => {
+    const res = await api(`/api/admin/debug-user/${encodeURIComponent(b.dataset.debug)}`, {method:"POST"});
+    if(res.ok) { alert("Compte debuggé : email validé, ban levé."); loadUsers(); }
+    else { alert("Erreur debug."); }
+  });
+
   $("userList").querySelectorAll("[data-del]").forEach(b => b.onclick = async () => {
     const u = players.find(p => p.id === b.dataset.del);
     if (!confirm(`Supprimer définitivement le compte « ${u.pseudo || u.id} » ?`)) return;
     await api(`/api/admin/users/${encodeURIComponent(u.id)}`, {method:"DELETE"});
     loadUsers();
   });
+  $("userList").querySelectorAll("[data-debug]").forEach(b => b.onclick = async () => {
+    const res = await api(`/api/admin/debug-user/${encodeURIComponent(b.dataset.debug)}`, {method:"POST"});
+    if(res.ok) { alert("Compte debuggé : email validé, ban levé."); loadUsers(); }
+    else { alert("Erreur debug."); }
+  });
+
 }
 
 $("btnGenInvite").onclick = async () => {

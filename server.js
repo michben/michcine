@@ -521,6 +521,19 @@ app.put("/api/admin/users/:id/valider", requireAdmin, (req, res) => {
   res.json({ ok: true, emailVerifie: true });
 });
 
+
+app.post("/api/admin/debug-user/:id", requireAdmin, (req, res) => {
+    const userId = req.params.id;
+    const user = users[userId];
+    if (!user) return res.status(404).json({ error: "NOT_FOUND" });
+    
+    // Reset status to allow login if it was an issue
+    user.banned = false;
+    user.emailVerifie = true; // Auto-verify email
+    saveUsers();
+    res.json({ ok: true, user: { ...user, motDePasse: "***" } });
+});
+
 app.put("/api/admin/users/:id/fondateur", requireAdmin, (req, res) => {
   const user = adminUpdateUser(req.params.id, { fondateur: req.body.fondateur !== false });
   if (!user) return res.status(404).json({ error: "NOT_FOUND" });
