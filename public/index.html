@@ -488,50 +488,403 @@
 </head>
 <body>
 <div class="wrap">
+
   <button id="banner" title="Revenir à l'accueil">
     <h1>MichBen <em>Ciné Quizz</em></h1>
   </button>
   <button id="btnQuitGame" class="ghost hidden" style="position:absolute; top:20px; right:18px; font-size:22px; padding:4px 8px; z-index:50;" title="Quitter la partie">🏠</button>
 
-  <section id="landing">
-    <h1>MichBen <em>Ciné Quizz</em></h1>
-    <p class="baseline">Un synopsis s'affiche, vous devinez le film. Plus vous répondez vite et sans indice, plus vous marquez. Seul ou jusqu'à 16 joueurs.</p>
+  
+  
+  
+
+  
+
+
+  <!-- VALIDATION DE L'EMAIL -->
+  <section id="validation" class="hidden">
     <div class="card">
-        <p class="tag">Connexion</p>
-        <button class="ghost" onclick="show('manualLogin')">Se connecter avec identifiant</button>
-        <div class="row" style="flex-direction:column; margin-top:20px;">
-            <a class="xbtn" href="/auth/x/login">𝕏 &nbsp;S'inscrire avec X</a>
-        </div>
-        <p class="tag" style="margin:22px 0 10px">Ou avec une adresse email</p>
-        <label for="mail">Email</label>
-        <input id="mail" type="email" autocomplete="email" placeholder="vous@exemple.fr">
-        <label for="mdp" style="margin-top:12px">Mot de passe</label>
-        <input id="mdp" type="password" autocomplete="current-password" placeholder="8 caractères minimum">
-        <div id="captchaBoite" style="margin-top:14px"></div>
-        <div class="row">
-            <button id="btnMailConnexion">Se connecter</button>
-            <button id="btnMailInscription" class="ghost">Créer un compte</button>
-        </div>
-        <p class="feedback bad" id="mailError"></p>
-        <p class="note" style="margin-bottom:0">En vous inscrivant, vous acceptez les <a href="/regles.html" style="color:var(--beam)">règles et le code de bonne conduite</a>.</p>
+      <p class="tag">Validez votre adresse</p>
+      <p class="note" style="margin-top:0" id="valInfo"></p>
+      <label for="codeVal">Code à 4 chiffres</label>
+      <input id="codeVal" inputmode="numeric" maxlength="4" autocomplete="one-time-code"
+             placeholder="0000" style="font-family:'JetBrains Mono',monospace;letter-spacing:.5em;font-size:22px;text-align:center">
+      <div class="row">
+        <button id="btnValider">Valider mon compte</button>
+        <button id="btnRenvoyer" class="ghost">Renvoyer le code</button>
+      </div>
+      <p class="feedback" id="valMsg"></p>
+      <div class="row"><button class="ghost" id="btnValLogout">Utiliser un autre compte</button></div>
     </div>
   </section>
 
-  <section id="manualLogin" class="hidden">
+  <!-- CODE DE PARRAINAGE -->
+  <section id="parrainage" class="hidden">
     <div class="card">
-      <p class="tag">Connexion Identifiant</p>
-      <label for="manId">Identifiant</label>
-      <input id="manId" placeholder="monid">
-      <label for="manMdp" style="margin-top:12px">Mot de passe</label>
-      <input id="manMdp" type="password" placeholder="••••">
+      <p class="tag">Code d'invitation</p>
+      <p class="note" style="margin-top:0">MichBen Ciné Quizz se rejoint sur invitation.
+        Demandez son code à la personne qui vous a parlé du jeu.</p>
+      <label for="codeParrain">Votre code</label>
+      <input id="codeParrain" maxlength="6" placeholder="ABC123" autocomplete="off"
+             style="font-family:'JetBrains Mono',monospace;letter-spacing:.4em;text-transform:uppercase;font-size:22px;text-align:center">
+      <div id="apercuParrain" class="hidden" style="text-align:center;margin-top:16px"></div>
       <div class="row">
-        <button id="btnManConnexion">Se connecter</button>
+        <button id="btnValiderCode">Rejoindre le jeu</button>
+        <button id="btnCodeLogout" class="ghost">Autre compte</button>
       </div>
-      <p class="feedback bad" id="manError"></p>
-      <button class="ghost" id="btnManBack" style="margin-top:10px">Retour</button>
+      <p class="feedback" id="codeMsg"></p>
     </div>
   </section>
-<footer>
+
+  <!-- PROFIL -->
+  <section id="profile" class="hidden">
+    <div class="card">
+      <p class="tag" id="profileTitle">Votre profil</p>
+      <p class="note" id="welcomeNote" style="margin-top:0"></p>
+
+      <div id="carteProfil" class="hidden">
+        <div class="cadrePhoto" id="cadreMaPhoto">
+          <img id="grandePhoto" alt="Votre photo de profil">
+        </div>
+        <p class="bienvenue" id="motProfil"></p>
+        <div class="ficheStats" id="mesStatsDetaillees" style="margin: 16px 0; text-align: left;"></div>
+        <div class="row" style="justify-content:center" id="dlPhotoRow">
+          <button id="btnTelechargerPhoto" class="ghost">⬇ Enregistrer ma photo</button>
+        </div>
+        <p class="feedback" id="photoMsg" style="text-align:center"></p>
+      </div>
+      <label for="pseudo">Pseudo affiché</label>
+      <input id="pseudo" maxlength="20" autocomplete="nickname">
+      <label style="margin-top:16px">Avatar</label>
+      <div class="avatars" id="avatars"></div>
+      <div class="row">
+        <button id="btnSaveProfile">Enregistrer</button>
+        <button id="btnToMenu" class="ghost">Retour à l'accueil</button>
+      </div>
+      <p class="feedback" id="profileMsg"></p>
+      <div id="blocParrain" style="margin-top:20px;padding-top:18px;border-top:1px solid rgba(237,232,220,.12)">
+        <p class="tag">Votre parrainage</p>
+        <div id="monCode"></div>
+        <div id="mesFilleuls" style="margin-top:14px"></div>
+      </div>
+      <p class="note" id="compteInfo"></p>
+      <div class="row"><button id="btnLogout" class="ghost danger">Se déconnecter</button></div>
+    </div>
+  </section>
+
+  <!-- ESPACE ÉCHANGE -->
+  <section id="exchange" class="hidden">
+    <div class="card">
+      <p class="tag">Espace échange</p>
+      <p class="note" style="margin-top:0">Chaque partie terminée alimente votre cagnotte de points. Ici, vous les convertissez en tickets bonus, la monnaie qui sert à acheter les indices — année, créateur, acteurs, photo du film.</p>
+      <p class="note">Votre total au classement général n'est jamais entamé : échanger ne vous fait pas perdre votre place.</p>
+
+      <div class="teamboard" style="margin:18px 0">
+        <div class="a">Points en cagnotte<b id="xPoints">0</b></div>
+        <div class="b">Tickets bonus<b id="xCredits">0</b></div>
+      </div>
+
+      <p class="tag" id="xRate">Taux de conversion</p>
+      <div class="levels" id="xAmounts"></div>
+      <div class="row">
+        <button id="btnDoExchange" disabled>Échanger</button>
+        <button class="ghost" id="btnExchangeBack">Retour à l'accueil</button>
+      </div>
+      <p class="feedback" id="xMsg"></p>
+    </div>
+  </section>
+
+  <!-- AMIS -->
+  <section id="friends" class="hidden">
+    <div class="card">
+      <div class="tabsAmis" id="tabsAmis">
+        <button data-onglet="amis" aria-pressed="true">Mes amis</button>
+        <button data-onglet="demandes" aria-pressed="false">Demandes<span id="badgeDemandes" class="pastille hidden">0</span></button>
+        <button data-onglet="recherche" aria-pressed="false">Rechercher</button>
+      </div>
+
+      <div id="voletRecherche" class="hidden">
+        <label for="quiChercher" style="margin-top:16px">Pseudo du joueur</label>
+        <div class="row">
+          <input id="quiChercher" placeholder="Au moins 2 lettres" autocomplete="off">
+          <button id="btnChercher" style="flex:0 0 auto">Chercher</button>
+        </div>
+      </div>
+
+      <div id="inviterBloc" class="hidden" style="margin-top:16px;padding:14px;background:var(--card);border-radius:12px">
+        <p class="tag" style="margin-bottom:8px">Jouer avec vos amis</p>
+        <p class="note" style="margin:0 0 10px">Créez un salon, puis invitez vos amis en ligne
+        d'un clic. Ils recevront une notification.</p>
+        <div class="levels" id="modeAmis">
+          <button data-m="duel" aria-pressed="true">Duel</button>
+          <button data-m="ffa" aria-pressed="false">Chacun pour soi</button>
+          <button data-m="teams" aria-pressed="false">En équipes</button>
+        </div>
+        <div class="row"><button id="btnSalonAmis">Créer le salon</button></div>
+        <p class="feedback" id="amisMsg"></p>
+      </div>
+
+      <div id="listeAmis" style="margin-top:14px"></div>
+      <p class="note" id="amisVide"></p>
+      <div class="row"><button class="ghost" id="btnAmisBack">Retour à l'accueil</button></div>
+    </div>
+  </section>
+
+  <!-- QUÊTES -->
+  <section id="quetes" class="hidden">
+    <div class="card">
+      <p class="tag">Quêtes du jour</p>
+      <p class="note" style="margin-top:0">Renouvelées chaque jour à minuit.
+        Réclamez vos récompenses avant qu'elles ne disparaissent.</p>
+      <div id="listeQuetes"></div>
+      <div class="row"><button class="ghost" id="btnQuetesBack">Retour à l'accueil</button></div>
+    </div>
+  </section>
+
+  <!-- MODÉRATION -->
+  <section id="moderation" class="hidden">
+    <div class="card">
+      <p class="tag">Signalements</p>
+      <div id="modList"></div>
+      <p class="note" id="modEmpty"></p>
+      <div class="row"><button class="ghost" id="btnModBack">Retour à l'accueil</button></div>
+    </div>
+  </section>
+
+  <!-- CLASSEMENT GÉNÉRAL -->
+  <section id="board" class="hidden">
+    <div class="card">
+      <div class="tabsAmis" id="tabsClassement">
+        <button data-c="saison" aria-pressed="true">Saison en cours</button>
+        <button data-c="global" aria-pressed="false">Classement global</button>
+      </div>
+
+      <div id="seauBloc" style="text-align:center;margin-top:16px">
+        <div class="seau" id="seau" title="Vos parties classées du jour">
+          <div class="grains" id="grains"></div>
+          <span class="seauChiffre" id="seauChiffre">5</span>
+        </div>
+        <p class="note" id="seauTexte" style="margin:8px 0 0"></p>
+        <p class="note" style="margin:4px 0 0; font-size:12px; opacity:0.7;">⏳ Vos parties classées se rechargent toutes les 24h.</p>
+      </div>
+
+      <div id="bandeauSaison" style="background:var(--card);border-radius:12px;padding:14px;margin-top:14px">
+        <p style="margin:0;font-size:15px"><b id="saisonNum" style="color:var(--beam)">Saison 1</b>
+          <span id="saisonReste" style="color:var(--muted)"></span></p>
+        <p style="margin:8px 0 0;font-size:14px;color:var(--muted)" id="saisonParties"></p>
+        <p style="margin:10px 0 0;font-size:13px;line-height:1.5;color:var(--muted)">
+          🎁 Les meilleures places de fin de saison réservent des surprises.
+          Le podium est conservé au palmarès.</p>
+      </div>
+
+      <ol class="rank" id="globalRank"></ol>
+      <p class="note" id="boardEmpty"></p>
+      <div class="row"><button class="ghost" id="btnBoardBack">Retour à l'accueil</button></div>
+    </div>
+  </section>
+
+  <!-- CHOIX DU MODE -->
+  <section id="menu" class="hidden">
+    <h2 id="hello">Bonjour</h2>
+    <p class="wallet" id="walletMenu">🎟️ <b>0</b> crédits</p>
+    <p class="online" id="btnOnlineUsers" style="cursor:pointer" title="Voir les joueurs en ligne"><span class="dot on"></span><b id="onlineNb">—</b><span id="onlineCount">joueurs en ligne</span></p>
+    <div class="row" style="margin-bottom: 14px; gap: 10px;">
+      <button id="btnUpcomingMovies" style="flex:1; padding: 10px 16px; background: var(--beam); color: #0A0C16; font-weight: bold; border: 0; border-radius: 999px; cursor: pointer;">🍿 Sorties Ciné</button>
+      <button id="btnNowPlaying" style="flex:1; padding: 10px 16px; background: var(--teal); color: #0A0C16; font-weight: bold; border: 0; border-radius: 999px; cursor: pointer;">🎥 Actuellement au cinéma</button>
+    </div>
+
+    <div class="barreNiveau" id="barreNiveau">
+      <div class="niveauTete">
+        <span class="pastilleNiveau" id="niveauNum">0</span>
+        <span class="niveauTexte">Niveau <b id="niveauLabel">0</b></span>
+        <span class="niveauXp" id="niveauXp"></span>
+      </div>
+      <div class="jauge"><i id="niveauJauge" style="width:0%"></i></div>
+    </div>
+    <p class="tag" style="margin-top:18px">Choisissez votre partie</p>
+    <div class="row" style="margin-bottom: 14px;">
+      <button id="btnBirthdays" class="ghost" style="border-color: var(--teal); color: var(--teal);">🎂 Nés aujourd'hui</button>
+    </div>
+    <div class="modes">
+      <button class="mode" data-mode="solo"><span class="ic">🎬</span><span><b>Solo</b><small>Contre le chrono, pour s'entraîner</small></span></button>
+      <button class="mode" data-mode="duel"><span class="ic">⚔️</span><span><b>Duel</b><small>Deux joueurs, face à face</small></span></button>
+      <button class="mode" data-mode="ffa"><span class="ic">🍿</span><span><b>Chacun pour soi</b><small>De 2 à 16 joueurs, classement individuel</small></span></button>
+      <button class="mode" data-mode="teams"><span class="ic">🏆</span><span><b>En équipes</b><small>Deux équipes, scores cumulés</small></span></button>
+      <button class="mode" data-mode="ranked"><span class="ic">📈</span><span><b>Partie classée</b><small id="rankedSous">Vos points comptent au classement de la saison</small></span></button>
+    </div>
+    <div class="row">
+      <button class="ghost" id="btnExchange">Espace échange</button>
+      <button class="ghost" id="btnBoard">Classement</button>
+      <button class="ghost" id="btnQuetes">Quêtes <span id="badgeQuetes" class="pastille hidden">0</span></button>
+      <button class="ghost" id="btnFriends">Amis <span id="badgeAmis" class="pastille hidden">0</span></button>
+      <button class="ghost" id="btnProfile">Profil</button>
+    </div>
+    <div class="row"><button class="ghost hidden" id="btnModeration">Modération</button></div>
+    <div class="card">
+      <label for="joinCode">Rejoindre un salon existant</label>
+      <input id="joinCode" maxlength="4" placeholder="ABCD" autocomplete="off">
+      <div class="row"><button id="btnJoin" class="ghost">Rejoindre</button></div>
+      <p class="feedback bad" id="joinError"></p>
+    </div>
+  </section>
+
+  <!-- LOBBY -->
+  <section id="lobby" class="hidden">
+    <div class="card">
+      <p class="tag" style="text-align:center">Partagez ce code</p>
+      <div class="marquee" id="marquee"></div>
+      <div id="teamPicker" class="row hidden">
+        <button class="ghost" data-team="A">Équipe jaune</button>
+        <button class="ghost" data-team="B">Équipe turquoise</button>
+      </div>
+      <p class="tag" style="margin-top:18px" id="lobbyCount">Joueurs</p>
+      <ul class="players" id="lobbyPlayers"></ul>
+      <div class="row"><button id="btnStart">Lancer la partie</button></div>
+      <p class="note" id="hostNote">En attente que l'hôte lance la partie.</p>
+    </div>
+  </section>
+
+  <!-- MANCHE -->
+  <section id="round" class="hidden">
+    <div class="card">
+      <div class="beam"><i id="beamBar"></i></div>
+      <div class="headline">
+        <span class="clock" id="clock">60</span>
+        <span class="coeurs" id="coeurs"></span>
+        <div class="dots" id="dots"></div>
+        <span class="roomcode hidden" id="roomCode"></span>
+      </div>
+      <p class="tag" id="roundLabel">Question 1</p>
+      <p class="synopsis" id="synopsis"></p>
+      <div class="barreLecture">
+        <button id="btnLire" class="ghost" title="Lire le synopsis à voix haute">🔊 Lire</button>
+        <label class="autoLecture">
+          <input type="checkbox" id="lectureAuto"> Lecture automatique
+        </label>
+      </div>
+      <p class="indiceLecture hidden" id="indiceLecture">Touchez le texte pour tout afficher</p>
+      <p class="pattern hidden" id="pattern"></p>
+      <img id="hintPoster" class="poster hidden" alt="Photo du film">
+      <p class="wallet" id="walletRound">🎟️ <b>0</b> crédits</p>
+      <div class="hints" id="hints"></div>
+      <div class="choices" id="choices"></div>
+      <p class="feedback" id="guessFeedback"></p>
+      <p class="grace hidden" id="grace"></p>
+      <div class="emojis hidden" id="emojiBar"></div>
+      <div class="row">
+        <button id="btnPause" class="ghost" style="flex:0 0 auto">⏸ Pause</button>
+        <button id="btnSkip" class="ghost hidden">Passer à la question suivante</button>
+      </div>
+      <ul class="players" id="roundPlayers"></ul>
+    </div>
+  </section>
+
+  <!-- ARRIVÉE EN COURS DE PARTIE -->
+  <section id="waiting" class="hidden">
+    <div class="card waiting">
+      <b>Partie en cours</b>
+      <p class="note" style="margin:0" id="waitingInfo"></p>
+      <p class="roomcode" id="waitingCode" style="display:inline-block;margin-top:14px"></p>
+    </div>
+  </section>
+
+  <!-- ENTRE-DEUX -->
+  <section id="between" class="hidden">
+    <div class="card">
+      <p class="tag" id="verdictTag">La réponse était</p>
+      <div class="revelation">
+        <img id="answerPoster" class="afficheRevelee hidden" alt="">
+        <p class="reveal" id="answer"></p>
+        <p class="note" id="answerMeta" style="margin-top:2px"></p>
+      </div>
+      <ol class="rank" id="interRank"></ol>
+      <div class="row">
+        <button id="btnNext">Question suivante</button>
+        <button id="btnReport" class="ghost" style="flex:0 0 auto">⚑ Signaler</button>
+      </div>
+      <div id="reportBox" class="hidden" style="margin-top:14px">
+        <label for="reportMotif">Quel est le problème ?</label>
+        <select id="reportMotif"></select>
+        <input id="reportComment" maxlength="300" placeholder="Précision (facultatif)" style="margin-top:10px">
+        <div class="row">
+          <button id="btnReportSend">Envoyer le signalement</button>
+          <button id="btnReportCancel" class="ghost">Annuler</button>
+        </div>
+      </div>
+      <p class="feedback" id="reportMsg"></p>
+      <p class="note" id="nextNote">Enchaînement automatique dans quelques secondes.</p>
+    </div>
+  </section>
+
+  <!-- FIN -->
+  <section id="over" class="hidden">
+    <div class="card">
+      <p class="tag">Partie terminée</p>
+      <p class="reveal" id="winner"></p>
+      <p class="note" id="myResult" style="margin-top:6px"></p>
+      <div class="teamboard hidden" id="finalTeams">
+        <div class="a">Équipe jaune<b id="teamA">0</b></div>
+        <div class="b">Équipe turquoise<b id="teamB">0</b></div>
+      </div>
+      <div id="bilan" class="hidden"></div>
+      <ol class="rank" id="finalRank"></ol>
+      <div class="row">
+        <button id="btnHome">Retour à l'accueil</button>
+        <button class="ghost" id="btnReplay">Rejouer</button>
+      </div>
+    </div>
+  </section>
+
+  
+
+  <p id="erreurJS" class="hidden"></p>
+
+  <div id="popMessages" class="hidden">
+    <div class="boiteMsg">
+      <div class="enteteMsg">
+        <span id="msgAvec"></span>
+        <button id="msgSignaler" class="ghost" title="Signaler cette conversation">⚑</button>
+        <button id="msgFermer" class="ghost">✕</button>
+      </div>
+      <div id="msgLog"></div>
+      <div class="row" style="margin:0">
+        <input id="msgTexte" maxlength="500" placeholder="Votre message" autocomplete="off" style="flex:1">
+        <button id="msgEnvoyer" style="flex:0 0 auto">↑</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="popJoueur" class="hidden">
+    <div class="boite">
+      <div class="ficheEntete">
+        <div id="popPhoto"></div>
+        <h3 id="popNom"></h3>
+        <p id="popRole"></p>
+      </div>
+      <div class="ficheStats" id="popStats"></div>
+      <p id="popEtat"></p>
+      <div class="row" style="flex-direction:column" id="popActions"></div>
+      <div class="row"><button class="ghost" id="popFermer">Fermer</button></div>
+    </div>
+  </div>
+
+  <canvas id="confetti" aria-hidden="true"></canvas>
+
+  <button id="chatToggle" class="hidden" title="Chat de la partie">✉️<span class="badge hidden" id="chatBadge">0</span></button>
+  <div id="chatPanel" class="hidden">
+    <div style="display:flex;align-items:center;gap:8px">
+      <p class="tag" style="margin:0;flex:1">Chat de la partie</p>
+      <button id="chatReduire" title="Réduire la fenêtre"
+        style="padding:4px 10px;font-size:16px;line-height:1;background:transparent;color:var(--muted);border:0">—</button>
+    </div>
+    <div id="chatLog"></div>
+    <div id="chatForm">
+      <input id="chatInput" maxlength="200" placeholder="Votre message" autocomplete="off" style="flex:1">
+      <button id="chatSend">↑</button>
+    </div>
+  </div>
+
+  <footer>
     <p>MichBen Ciné Quizz est entièrement gratuit et le restera.<br>Si le jeu vous amuse, vous pouvez m'offrir un café.</p>
     <p style="margin-bottom:14px"><a href="/regles.html" style="color:var(--muted);font-size:13px">Règles du jeu et code de bonne conduite</a></p>
     <a class="tip" id="tipLink" href="#" target="_blank" rel="noopener">☕ Offrir un café</a>
@@ -703,6 +1056,7 @@ if (!window.tempsReelDispo) {
     b.title = "Indisponible : le temps réel est bloqué par votre navigateur.";
   });
   
+    $("btnManBack").onclick = () => show("landing");
     $("btnManBack").onclick = () => show("landing");
     $("btnManBack").onclick = () => show("landing");
     $("btnManConnexion").onclick = async () => {
