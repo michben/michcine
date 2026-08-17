@@ -2,8 +2,8 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="/favicon.svg">
+<link rel="icon" href="/api/favicon">
+<link rel="apple-touch-icon" href="/api/favicon">
 <meta name="theme-color" content="#0A0C16">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MichBen Ciné Quizz — devinez le film</title>
@@ -55,27 +55,6 @@
   .players{list-style:none;padding:0;margin:12px 0 0;display:flex;flex-wrap:wrap;gap:8px}
   /* Carte de profil : la photo est le premier élément vu, encadrée en grand. */
   #carteProfil{text-align:center;margin:4px 0 22px}
-  .barreInfos{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
-  .puceInfo{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:500;
-    color:var(--muted);background:var(--card);border:1px solid rgba(237,232,220,.1);
-    border-radius:999px;padding:8px 14px;cursor:pointer}
-  .puceInfo:hover{border-color:var(--beam);color:var(--chalk)}
-  .puceInfo b{color:#3DDC84;font-family:'JetBrains Mono',monospace;font-size:15px}
-  .listeEnLigne{display:flex;flex-direction:column;gap:2px;margin-top:6px}
-  .sugLigne{display:flex;gap:12px;align-items:center;padding:13px 0;border-top:1px solid rgba(237,232,220,.1);flex-wrap:wrap}
-  .sugLigne .quoi{flex:1;min-width:150px}
-  .sugLigne .quoi b{display:block;font-size:15px}
-  .sugLigne .quoi small{color:var(--muted);font-size:13px}
-  .sugLigne button{padding:8px 13px;font-size:13px;white-space:nowrap}
-  .sugLigne button.soutenue{border-color:var(--beam);color:var(--beam)}
-  .etiqKid{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--teal);
-    border:1px solid var(--teal);border-radius:999px;padding:2px 8px;margin-left:6px}
-  .sortieFilm{display:flex;gap:14px;padding:14px 0;border-top:1px solid rgba(237,232,220,.1)}
-  .sortieFilm img{width:74px;border-radius:8px;flex:0 0 auto;background:var(--card)}
-  .sortieFilm .txt{flex:1;min-width:0}
-  .sortieFilm .txt b{display:block;font-size:16px;margin-bottom:3px}
-  .sortieFilm .txt small{color:var(--muted);font-size:13px;line-height:1.5;display:block}
-  .sortieFilm .note{display:inline-block;font-size:12px;color:var(--beam);margin-top:5px}
   .barreNiveau{background:var(--card);border-radius:12px;padding:13px 15px;margin-top:14px}
   .niveauTete{display:flex;align-items:center;gap:10px;margin-bottom:9px}
   .pastilleNiveau{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;
@@ -109,16 +88,24 @@
     box-shadow:inset -14px 0 0 rgba(0,0,0,.16),inset 14px 0 0 rgba(255,255,255,.12)}
   .seau::before{content:"";position:absolute;inset:0;
     background:repeating-linear-gradient(90deg,transparent 0 12px,rgba(255,255,255,.28) 12px 24px)}
-  .grains{position:absolute;left:0;right:0;bottom:0;overflow:hidden;
-    transition:height .7s cubic-bezier(.34,1.3,.64,1)}
-  .grains::before{content:"";position:absolute;inset:0;
-    background:radial-gradient(circle at 22% 24%,#FFF3D6 5px,transparent 6px),
-               radial-gradient(circle at 62% 14%,#F5E6BE 6px,transparent 7px),
-               radial-gradient(circle at 40% 46%,#FFF6E2 6px,transparent 7px),
-               radial-gradient(circle at 78% 52%,#F0DEB4 5px,transparent 6px),
-               radial-gradient(circle at 16% 68%,#FFF3D6 6px,transparent 7px),
-               radial-gradient(circle at 55% 78%,#F5E6BE 6px,transparent 7px),
-               #F7EAC8}
+  .grains{position:absolute;left:0;right:0;bottom:0;overflow:visible;
+    transition:height .7s cubic-bezier(.34,1.3,.64,1);
+    background-color: #F8E5A0;
+    background-image:
+      radial-gradient(circle at 30% 25%, #FFFFFF 4px, transparent 7px),
+      radial-gradient(circle at 70% 20%, #FFFFFF 5px, transparent 8px),
+      radial-gradient(circle at 45% 45%, #FFFFFF 6px, transparent 9px),
+      radial-gradient(circle at 20% 65%, #FFFFFF 5px, transparent 8px),
+      radial-gradient(circle at 80% 60%, #FFFFFF 4px, transparent 7px),
+      radial-gradient(circle at 55% 85%, #FFFFFF 5px, transparent 8px),
+      radial-gradient(circle at 35% 35%, #F0D060 2px, transparent 5px),
+      radial-gradient(circle at 65% 55%, #F0D060 3px, transparent 6px),
+      radial-gradient(circle at 40% 75%, #F0D060 2px, transparent 5px);
+    background-size: 28px 28px;
+    box-shadow: inset 0 12px 20px rgba(0,0,0,0.3);}
+  .grains::before{content:"";position:absolute;top:-6px;left:-10px;right:-10px;height:12px;
+    background: radial-gradient(circle at 12px 6px, #FFFFFF 6px, transparent 7px) repeat-x;
+    background-size: 18px 12px; z-index: 1;}
   .seauChiffre{position:absolute;inset:0;display:grid;place-items:center;z-index:2;
     font-family:'JetBrains Mono',monospace;font-size:30px;color:#2A1206;
     text-shadow:0 1px 0 rgba(255,255,255,.5)}
@@ -176,21 +163,6 @@
   .typed summary{cursor:pointer;color:var(--muted);font-size:13px;letter-spacing:.1em;text-transform:uppercase;list-style:none}
   .typed summary::-webkit-details-marker{display:none}
   .typed summary::before{content:"＋ ";color:var(--beam)}
-  .offerts{display:inline-flex;align-items:center;gap:7px;font-size:13px;margin:8px 0 0;
-    color:var(--teal);background:rgba(78,205,196,.1);border-radius:999px;padding:6px 13px}
-  .hints button.gratuit{border-style:solid;border-color:var(--teal);color:var(--teal)}
-  .hints button.gratuit .cost{color:var(--teal)}
-  .paliers{margin-top:8px}
-  .palier{display:flex;gap:12px;align-items:center;padding:12px 0;border-top:1px solid rgba(237,232,220,.1)}
-  .palier .niv{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;flex:0 0 auto;
-    background:var(--card);font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--muted)}
-  .palier.atteint .niv{background:linear-gradient(140deg,var(--beam),var(--ticket));color:#161207;font-weight:700}
-  .palier .quoi{flex:1}
-  .palier .quoi b{display:block;font-size:15px}
-  .palier .quoi small{color:var(--muted);font-size:13px}
-  .palier.atteint .quoi b{color:var(--beam)}
-  .titreJoueur{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--teal);
-    border:1px solid var(--teal);border-radius:999px;padding:3px 10px;margin-left:8px}
   .hints{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
   .hints button{background:transparent;color:var(--chalk);border:1px dashed rgba(245,185,66,.45);font-weight:500;padding:10px 13px;font-size:14px}
   .hints button.bought{border-style:solid;border-color:var(--beam);color:var(--beam)}
@@ -413,7 +385,106 @@
     .flap{width:40px;height:52px;font-size:22px}
   }
   @media (prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important}}
+
+/* --- LE BOUTON POINT D'INTERROGATION --- */
+.help-btn { position: fixed; bottom: 20px; left: 20px; width: 40px; height: 40px; background: rgba(28, 34, 56, 0.6); color: var(--muted); border: 1px solid rgba(237, 232, 220, 0.15); border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 20px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2); transition: all 0.3s ease; z-index: 1000; backdrop-filter: blur(4px); }
+.help-btn:hover { transform: scale(1.1); color: var(--chalk); border-color: var(--beam); background: rgba(28, 34, 56, 0.9); }
+/* --- LA FENÊTRE MODALE --- */
+.modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.85); display: none; justify-content: center; align-items: center; z-index: 1001; opacity: 0; transition: opacity 0.3s ease; }
+.modal-overlay.active { display: flex; opacity: 1; }
+.modal-content { background-color: #1a1a1a; border: 1px solid #333; border-radius: 12px; width: 90%; max-width: 600px; max-height: 80vh; overflow-y: auto; position: relative; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7); transform: translateY(-20px); transition: transform 0.3s ease; color: #fff;}
+.modal-overlay.active .modal-content { transform: translateY(0); }
+.modal-header { background: #111; padding: 20px; border-bottom: 2px solid #222; border-radius: 12px 12px 0 0; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; }
+.modal-header h2 { margin: 0; font-size: 24px; color: #f5f5f5; font-family: 'Anton', sans-serif;}
+.close-btn { background: none; border: none; color: #888; font-size: 32px; line-height: 1; cursor: pointer; transition: color 0.2s; }
+.close-btn:hover { color: #e50914; }
+.modal-body { padding: 25px; line-height: 1.6; font-family: 'Space Grotesk', sans-serif; text-align: left; }
+.mode-section { background-color: #222; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; border-left: 5px solid #1db954; text-align: left; }
+.mode-section.cine { border-left-color: #e50914; }
+.mode-section h3 { margin-top: 0; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; color: white;}
+.mode-section ul { margin-bottom: 0; padding-left: 20px; }
+.teaser-section { background: linear-gradient(135deg, #1c1c3c, #3a2056); padding: 25px; border-radius: 8px; text-align: center; margin-top: 30px; box-shadow: 0 4px 15px rgba(58, 32, 86, 0.4); border: 1px solid #4a3066; }
+.teaser-section h3 { margin-top: 0; color: #fff; text-transform: uppercase; letter-spacing: 1px; font-size: 20px; }
+.teaser-section p { font-size: 1.05em; color: #ddd; }
+.modal-content::-webkit-scrollbar { width: 8px; }
+.modal-content::-webkit-scrollbar-track { background: #1a1a1a; }
+.modal-content::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
+
+  .bday-item { display: flex; gap: 12px; margin-bottom: 12px; padding: 10px; background: var(--card); border-radius: 8px; align-items: center; border-left: 4px solid var(--teal); }
+  .bday-item img { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; }
+  .bday-item .info { flex: 1; }
+  .bday-item .info b { display: block; color: var(--chalk); font-size: 16px; margin-bottom: 2px;}
+  .bday-item .info small { color: var(--muted); font-size: 13px; line-height: 1.3; display: block;}
+
+  .progression-map { display: flex; flex-direction: column-reverse; align-items: center; padding: 20px 0; overflow-y: auto; overflow-x: hidden; height: 100%; padding-bottom: 50vh; }
+  .progression-line { width: 6px; height: 26px; background: var(--card); transition: background 0.3s; }
+  .progression-line.done { background: var(--teal); }
+  .progression-step { width: 56px; height: 56px; border-radius: 50%; background: var(--card); color: var(--chalk); display: flex; justify-content: center; align-items: center; font-family: 'Anton', sans-serif; font-size: 22px; border: 4px solid #222; z-index: 2; transition: all 0.3s; position: relative; }
+  .progression-step.done { background: var(--teal); border-color: #3DDC84; color: #000; }
+  .progression-step.current { background: var(--beam); border-color: #FFF; color: #000; transform: scale(1.35); box-shadow: 0 0 20px var(--beam); z-index: 5; }
+  .progression-step.bonus { border-color: var(--ticket); background: #4a1c24; }
+  .progression-step.bonus.done { background: var(--teal); border-color: var(--ticket); }
+  .progression-step.claimable { animation: pulseBonus 1s infinite; cursor: pointer; background: var(--ticket); color: #fff; box-shadow: 0 0 15px var(--ticket); z-index: 6; }
+  .progression-step.fog { background: #111; border-color: #1a1a1a; color: transparent; text-shadow: 0 0 0 #444; transform: scale(0.9); }
+  
+  @keyframes pulseBonus { 0%, 100% { transform: scale(1.2); } 50% { transform: scale(1.4); box-shadow: 0 0 30px var(--ticket); } }
+
+
+  .cadrePhoto.emoji { display: grid; place-items: center; font-size: 64px; }
+  .cadrePhoto.emoji .inner-emoji { width: 100%; height: 100%; border-radius: 50%; background: var(--card); border: 3px solid var(--velvet); display: grid; place-items: center; }
+
+
+  /* --- Effets visuels avancés (Boutons et Logos) --- */
+  body.animations-actives button:not(.ghost):not(#chatToggle):not(.close-btn):not(#banner) {
+    position: relative; overflow: hidden; transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s;
+  }
+  body.animations-actives button:not(.ghost):not(#chatToggle):not(.close-btn):not(#banner)::after {
+    content: ""; position: absolute; top: 0; left: -100%; width: 50%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+    transform: skewX(-20deg); transition: none;
+  }
+  body.animations-actives button:not(.ghost):not(#chatToggle):not(.close-btn):not(#banner):hover,
+  body.animations-actives button:not(.ghost):not(#chatToggle):not(.close-btn):not(#banner):active {
+    transform: scale(1.03); box-shadow: 0 4px 15px rgba(245,185,66,0.3);
+  }
+  body.animations-actives button:not(.ghost):not(#chatToggle):not(.close-btn):not(#banner):hover::after,
+  body.animations-actives button:not(.ghost):not(#chatToggle):not(.close-btn):not(#banner):active::after {
+    animation: shine 0.6s ease;
+  }
+  @keyframes shine { 100% { left: 200%; } }
+  
+  body.animations-actives button.ghost:not(#btnQuitGame):not(#chatReduire) {
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s, border-color 0.2s;
+  }
+  body.animations-actives button.ghost:not(#btnQuitGame):not(#chatReduire):hover,
+  body.animations-actives button.ghost:not(#btnQuitGame):not(#chatReduire):active {
+    transform: scale(1.05); background: rgba(255,255,255,0.06); border-color: var(--beam); color: var(--chalk);
+  }
+  
+  body.animations-actives .mode { transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s, border-color 0.2s; }
+  body.animations-actives .mode:hover, body.animations-actives .mode:active {
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.5);
+    border-color: var(--beam);
+  }
+  body.animations-actives .mode:hover .ic, body.animations-actives .mode:active .ic { animation: bounceIcon 0.5s; }
+  @keyframes bounceIcon { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px) scale(1.1); } }
+
+  body.animations-actives #banner h1 em { display: inline-block; transition: transform 0.3s; }
+  body.animations-actives #banner:hover h1 em, body.animations-actives #banner:active h1 em { animation: wobble 0.6s ease-in-out; color: var(--ticket); }
+  @keyframes wobble { 0%, 100% { transform: rotate(0deg) scale(1); } 25% { transform: rotate(-8deg) scale(1.1); } 75% { transform: rotate(8deg) scale(1.1); } }
+  
+  body.animations-actives .amiLigne { transition: background 0.2s, transform 0.2s; }
+  body.animations-actives .amiLigne:hover { background: rgba(255,255,255,0.03); border-radius: 8px; transform: translateX(4px); }
+  
+  body.animations-actives .choices button { transition: transform 0.15s, border-color 0.15s, background 0.15s; }
+  body.animations-actives .choices button:hover:not(:disabled),
+  body.animations-actives .choices button:active:not(:disabled) {
+    transform: scale(1.02); border-color: var(--beam); box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+  }
+
 </style>
+
 </head>
 <body>
 <div class="wrap">
@@ -421,6 +492,7 @@
   <button id="banner" title="Revenir à l'accueil">
     <h1>MichBen <em>Ciné Quizz</em></h1>
   </button>
+  <button id="btnQuitGame" class="ghost hidden" style="position:absolute; top:20px; right:18px; font-size:22px; padding:4px 8px; z-index:50;" title="Quitter la partie">🏠</button>
 
   <!-- PRÉSENTATION + CONNEXION -->
   <section id="landing">
@@ -457,7 +529,7 @@
       <p class="tag">Comment ça marche</p>
       <ul class="how">
         <li><b>1.</b> Un synopsis s'affiche, sans le titre.</li>
-        <li><b>2.</b> Achetez des indices si vous séchez : année, réalisateur, acteurs, affiche floutée.</li>
+        <li><b>2.</b> Achetez des indices si vous séchez : année, créateur, acteurs, affiche floutée.</li>
         <li><b>3.</b> Répondez vite : le score fond avec le temps et le coût des indices.</li>
       </ul>
     </div>
@@ -505,12 +577,12 @@
       <p class="note" id="welcomeNote" style="margin-top:0"></p>
 
       <div id="carteProfil" class="hidden">
-        <div class="cadrePhoto">
+        <div class="cadrePhoto" id="cadreMaPhoto">
           <img id="grandePhoto" alt="Votre photo de profil">
         </div>
         <p class="bienvenue" id="motProfil"></p>
-        <p class="stat" id="statProfil"></p>
-        <div class="row" style="justify-content:center">
+        <div class="ficheStats" id="mesStatsDetaillees" style="margin: 16px 0; text-align: left;"></div>
+        <div class="row" style="justify-content:center" id="dlPhotoRow">
           <button id="btnTelechargerPhoto" class="ghost">⬇ Enregistrer ma photo</button>
         </div>
         <p class="feedback" id="photoMsg" style="text-align:center"></p>
@@ -524,11 +596,6 @@
         <button id="btnToMenu" class="ghost">Retour à l'accueil</button>
       </div>
       <p class="feedback" id="profileMsg"></p>
-      <div id="blocPaliers" style="margin-top:20px;padding-top:18px;border-top:1px solid rgba(237,232,220,.12)">
-        <p class="tag">Avantages de niveau</p>
-        <div class="paliers" id="listePaliers"></div>
-      </div>
-
       <div id="blocParrain" style="margin-top:20px;padding-top:18px;border-top:1px solid rgba(237,232,220,.12)">
         <p class="tag">Votre parrainage</p>
         <div id="monCode"></div>
@@ -543,7 +610,7 @@
   <section id="exchange" class="hidden">
     <div class="card">
       <p class="tag">Espace échange</p>
-      <p class="note" style="margin-top:0">Chaque partie terminée alimente votre cagnotte de points. Ici, vous les convertissez en tickets bonus, la monnaie qui sert à acheter les indices — année, réalisateur, acteurs, photo du film.</p>
+      <p class="note" style="margin-top:0">Chaque partie terminée alimente votre cagnotte de points. Ici, vous les convertissez en tickets bonus, la monnaie qui sert à acheter les indices — année, créateur, acteurs, photo du film.</p>
       <p class="note">Votre total au classement général n'est jamais entamé : échanger ne vous fait pas perdre votre place.</p>
 
       <div class="teamboard" style="margin:18px 0">
@@ -597,61 +664,6 @@
     </div>
   </section>
 
-  <!-- JOUEURS EN LIGNE -->
-  <section id="enligne" class="hidden">
-    <div class="card">
-      <p class="tag" id="enLigneTitre">Joueurs connectés</p>
-      <div class="listeEnLigne" id="listeEnLigne"></div>
-      <p class="note" id="enLigneVide"></p>
-      <div class="row"><button class="ghost" id="btnEnLigneBack">Retour à l'accueil</button></div>
-    </div>
-  </section>
-
-  <!-- SORTIES CINÉMA -->
-  <section id="sorties" class="hidden">
-    <div class="card">
-      <p class="tag" id="sortiesTitre">Sorties de la semaine</p>
-      <p class="note" style="margin-top:0">Les films sortis ce mercredi dans les salles françaises.
-        Mis à jour automatiquement chaque semaine.</p>
-      <div id="listeSorties"></div>
-      <p class="note" id="sortiesVide"></p>
-      <div class="row"><button class="ghost" id="btnSortiesBack">Retour à l'accueil</button></div>
-    </div>
-  </section>
-
-  <!-- SUGGESTIONS -->
-  <section id="suggestions" class="hidden">
-    <div class="card">
-      <p class="tag">Proposer un film</p>
-      <p class="note" style="margin-top:0">Un film manque au catalogue ? Proposez-le.
-        Les plus soutenus sont ajoutés en priorité.</p>
-      <label for="sugTitre">Titre du film</label>
-      <input id="sugTitre" maxlength="120" placeholder="Les Tontons flingueurs" autocomplete="off">
-      <div class="grid">
-        <div><label for="sugAnnee">Année (facultatif)</label><input id="sugAnnee" inputmode="numeric" maxlength="4" placeholder="1963"></div>
-        <div>
-          <label for="sugCategorie">Catégorie</label>
-          <select id="sugCategorie">
-            <option value="tous">Tous publics</option>
-            <option value="kid">Enfants et famille</option>
-          </select>
-        </div>
-      </div>
-      <label for="sugCommentaire" style="margin-top:12px">Pourquoi ce film ? (facultatif)</label>
-      <input id="sugCommentaire" maxlength="200" placeholder="Un classique que tout le monde connaît">
-      <div class="row"><button id="btnEnvoyerSug">Envoyer ma proposition</button></div>
-      <p class="feedback" id="sugMsg"></p>
-    </div>
-
-    <div class="card">
-      <p class="tag">Propositions en attente</p>
-      <p class="note" style="margin-top:0">Soutenez celles qui vous plaisent.</p>
-      <div id="listeSug"></div>
-      <p class="note" id="sugVide"></p>
-      <div class="row"><button class="ghost" id="btnSugBack">Retour à l'accueil</button></div>
-    </div>
-  </section>
-
   <!-- QUÊTES -->
   <section id="quetes" class="hidden">
     <div class="card">
@@ -687,6 +699,7 @@
           <span class="seauChiffre" id="seauChiffre">5</span>
         </div>
         <p class="note" id="seauTexte" style="margin:8px 0 0"></p>
+        <p class="note" style="margin:4px 0 0; font-size:12px; opacity:0.7;">⏳ Vos parties classées se rechargent toutes les 24h.</p>
       </div>
 
       <div id="bandeauSaison" style="background:var(--card);border-radius:12px;padding:14px;margin-top:14px">
@@ -708,14 +721,10 @@
   <section id="menu" class="hidden">
     <h2 id="hello">Bonjour</h2>
     <p class="wallet" id="walletMenu">🎟️ <b>0</b> crédits</p>
-    <div class="barreInfos">
-      <button class="puceInfo" id="btnEnLigne" title="Voir qui est connecté">
-        <span class="dot on"></span><b id="onlineNb">—</b>
-        <span id="onlineCount">joueurs en ligne</span>
-      </button>
-      <button class="puceInfo" id="btnSorties" title="Les sorties de la semaine">
-        🎬 <span>Sorties ciné</span>
-      </button>
+    <p class="online" id="btnOnlineUsers" style="cursor:pointer" title="Voir les joueurs en ligne"><span class="dot on"></span><b id="onlineNb">—</b><span id="onlineCount">joueurs en ligne</span></p>
+    <div class="row" style="margin-bottom: 14px; gap: 10px;">
+      <button id="btnUpcomingMovies" style="flex:1; padding: 10px 16px; background: var(--beam); color: #0A0C16; font-weight: bold; border: 0; border-radius: 999px; cursor: pointer;">🍿 Sorties Ciné</button>
+      <button id="btnNowPlaying" style="flex:1; padding: 10px 16px; background: var(--teal); color: #0A0C16; font-weight: bold; border: 0; border-radius: 999px; cursor: pointer;">🎥 Actuellement au cinéma</button>
     </div>
 
     <div class="barreNiveau" id="barreNiveau">
@@ -727,6 +736,9 @@
       <div class="jauge"><i id="niveauJauge" style="width:0%"></i></div>
     </div>
     <p class="tag" style="margin-top:18px">Choisissez votre partie</p>
+    <div class="row" style="margin-bottom: 14px;">
+      <button id="btnBirthdays" class="ghost" style="border-color: var(--teal); color: var(--teal);">🎂 Nés aujourd'hui</button>
+    </div>
     <div class="modes">
       <button class="mode" data-mode="solo"><span class="ic">🎬</span><span><b>Solo</b><small>Contre le chrono, pour s'entraîner</small></span></button>
       <button class="mode" data-mode="duel"><span class="ic">⚔️</span><span><b>Duel</b><small>Deux joueurs, face à face</small></span></button>
@@ -737,12 +749,14 @@
     <div class="row">
       <button class="ghost" id="btnExchange">Espace échange</button>
       <button class="ghost" id="btnBoard">Classement</button>
-      <button class="ghost" id="btnSuggerer">💡 Proposer un film</button>
       <button class="ghost" id="btnQuetes">Quêtes <span id="badgeQuetes" class="pastille hidden">0</span></button>
       <button class="ghost" id="btnFriends">Amis <span id="badgeAmis" class="pastille hidden">0</span></button>
       <button class="ghost" id="btnProfile">Profil</button>
     </div>
-    <div class="row"><button class="ghost hidden" id="btnModeration">Modération</button></div>
+        <div class="row"><button class="ghost hidden" id="btnModeration">Modération</button>
+      <button class="ghost hidden" id="btnAdminAccess" style="border-color:var(--beam); color:var(--beam)">⚙️ Administration</button>
+      <button class="ghost" id="btnSuggestion" style="border-color:var(--teal); color:var(--teal)">💡 Suggérer un film</button>
+    </div>
     <div class="card">
       <label for="joinCode">Rejoindre un salon existant</label>
       <input id="joinCode" maxlength="4" placeholder="ABCD" autocomplete="off">
@@ -777,7 +791,7 @@
         <div class="dots" id="dots"></div>
         <span class="roomcode hidden" id="roomCode"></span>
       </div>
-      <p class="tag" id="roundLabel">Manche 1</p>
+      <p class="tag" id="roundLabel">Question 1</p>
       <p class="synopsis" id="synopsis"></p>
       <div class="barreLecture">
         <button id="btnLire" class="ghost" title="Lire le synopsis à voix haute">🔊 Lire</button>
@@ -789,7 +803,6 @@
       <p class="pattern hidden" id="pattern"></p>
       <img id="hintPoster" class="poster hidden" alt="Photo du film">
       <p class="wallet" id="walletRound">🎟️ <b>0</b> crédits</p>
-      <p class="offerts hidden" id="offerts"></p>
       <div class="hints" id="hints"></div>
       <div class="choices" id="choices"></div>
       <p class="feedback" id="guessFeedback"></p>
@@ -797,7 +810,7 @@
       <div class="emojis hidden" id="emojiBar"></div>
       <div class="row">
         <button id="btnPause" class="ghost" style="flex:0 0 auto">⏸ Pause</button>
-        <button id="btnSkip" class="ghost hidden">Passer à la manche suivante</button>
+        <button id="btnSkip" class="ghost hidden">Passer à la question suivante</button>
       </div>
       <ul class="players" id="roundPlayers"></ul>
     </div>
@@ -1015,7 +1028,7 @@ const $ = (id) => {
   return el || INERTE;
 };
 const AVATARS = ["🎬","🍿","🎭","🕶️","👽","🦖","🤖","🧛","🐙","🌵","🎸","🚀"];
-const HINT_LABELS = {letters:"Nombre de lettres", year:"Année", director:"Réalisateur",
+const HINT_LABELS = {letters:"Nombre de lettres", year:"Année", director:"Créateur",
                      actors:"Acteurs", poster:"Photo du film"};
 const MODE_NAMES = {solo:"Solo", duel:"Duel", ffa:"Chacun pour soi", teams:"En équipes", ranked:"Partie classée"};
 
@@ -1050,14 +1063,16 @@ function setCredits(n){
   if (typeof n === "number") credits = n;
   document.querySelectorAll(".wallet b").forEach(el => el.textContent = credits);
 }
-let state = {code:null, mode:"ffa", isHost:false, hintCosts:{}, bought:{}, answered:false, timerId:null};
+let state = {code:null, mode:"ffa", isHost:false, hintCosts:{}, bought:{}, answered:false, timerId:null, freeHintsRemaining: 0, allHintsFree: false, coeursMax: 3};
 
 /** Chaque écran commence en haut : personne ne doit remonter à la main. */
 const show = id => {
-  ["landing","validation","parrainage","profile","board","exchange","friends","quetes",
-   "enligne","sorties","suggestions","moderation","menu","lobby","waiting","round","between","over"]
+  ["landing","validation","parrainage","profile","board","exchange","friends","quetes","moderation","menu","lobby","waiting","round","between","over"]
     .forEach(s => $(s).classList.toggle("hidden", s !== id));
   window.scrollTo({top: 0, behavior: "instant"});
+  
+  const inGame = ["round", "between", "lobby", "waiting"].includes(id);
+  $("btnQuitGame").classList.toggle("hidden", !inGame);
 };
 /** Photo du joueur si l'administration lui en a attribué une, émoji sinon. */
 const vignette = (j) => j?.photo
@@ -1077,12 +1092,43 @@ if (!window.tempsReelDispo) {
     b.disabled = true; b.style.opacity = .4;
     b.title = "Indisponible : le temps réel est bloqué par votre navigateur.";
   });
-  // le bouton reste cliquable : mieux vaut un message clair qu'un bouton mort
+  
+// Logic to show Admin button if admin
+if (["admin"].includes(me.role)) {
+    $("btnAdminAccess").classList.remove("hidden");
+    $("btnAdminAccess").onclick = () => window.location.href = "/admin.html";
+}
+
+        const suggestionModal = $("suggestionModal");
+        const btnSuggestion = $("btnSuggestion");
+        
+        btnSuggestion.onclick = () => suggestionModal.classList.add("active");
+        $("closeSuggestionBtn").onclick = () => suggestionModal.classList.remove("active");
+        
+        $("btnSendSugg").onclick = async () => {
+            const titre = $("suggTitre").value.trim();
+            const commentaire = $("suggComment").value.trim();
+            if(!titre) return;
+            
+            const res = await fetch("/api/suggestions", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({ titre, commentaire })
+            });
+            if(res.ok) {
+                $("suggFeedback").textContent = "Merci pour votre suggestion !";
+                $("suggFeedback").className = "feedback good";
+                $("suggTitre").value = ""; $("suggComment").value = "";
+                setTimeout(() => suggestionModal.classList.remove("active"), 2000);
+            }
+        };
+
+// le bouton reste cliquable : mieux vaut un message clair qu'un bouton mort
   $("btnJoin").title = "Le multijoueur exige la connexion temps réel.";
 }
 
 fetch("/api/config").then(r => r.json())
-  .then(c => { $("tipLink").href = c.tipUrl; tauxTicket = c.pointsParTicket || tauxTicket; })
+  .then(c => { $("tipLink").href = c.tipUrl; tauxTicket = c.pointsParTicket || tauxTicket; if (c.animationsAvancees !== false) document.body.classList.add("animations-actives"); })
   .catch(() => $("tipLink").classList.add("hidden"));
 
 /* ---------- Session ---------- */
@@ -1101,6 +1147,7 @@ async function loadSession(){
     setPoints(me.points ?? 0);
     if (!me.pseudoChosen) return firstVisit();
     majBadgeAmis();
+    chargerQuetes(); // Met à jour le niveau au chargement
     $("hello").innerHTML = `Bonjour ${esc(me.pseudo)}` +
       (["moderateur","admin"].includes(me.role) ? `<span class="badge-role">${esc(me.role)}</span>` : "");
     $("btnModeration").classList.toggle("hidden", !["moderateur","admin"].includes(me.role));
@@ -1573,17 +1620,11 @@ $("btnSkip").onclick = () => {
   socket.emit("round:skip", {code: state.code});
 };
 
-socket.on("avantages", ({coeurs, coeursMax, indicesOfferts, tousIndicesOfferts}) => {
-  state.coeursMax = coeursMax;
-  majCoeurs(coeurs, coeursMax);
-  majOfferts(indicesOfferts, tousIndicesOfferts);
-});
-
 socket.on("coeurs:maj", ({coeurs, elimine}) => {
   majCoeurs(coeurs, state.coeursMax, true);
   $("guessFeedback").textContent = elimine
     ? "Cœurs épuisés — vous êtes éliminé de cette partie."
-    : `Manche passée — ${coeurs} cœur${coeurs>1?"s":""} restant${coeurs>1?"s":""}.`;
+    : `Question passée — ${coeurs} cœur${coeurs>1?"s":""} restant${coeurs>1?"s":""}.`;
   $("guessFeedback").className = "feedback bad";
 });
 
@@ -1611,162 +1652,6 @@ socket.on("invite:recue", ({code, mode, de, avatar, joueurs}) => {
   };
   setTimeout(fermer, 45000);   // une invitation ne reste pas indéfiniment
 });
-
-/* ---------- Catégorie de catalogue ---------- */
-let categorie = localStorage.getItem("michben_categorie") || "tous";
-
-function majCategorie(){
-  $("categories").querySelectorAll("[data-cat]").forEach(b =>
-    b.setAttribute("aria-pressed", b.dataset.cat === categorie));
-  $("catNote").textContent = categorie === "kid"
-    ? "Uniquement des films familiaux et des dessins animés."
-    : "";
-}
-$("categories").querySelectorAll("[data-cat]").forEach(b => b.onclick = () => {
-  categorie = b.dataset.cat;
-  localStorage.setItem("michben_categorie", categorie);
-  majCategorie();
-});
-majCategorie();
-
-/* ---------- Suggestions de films ---------- */
-$("btnSuggerer").onclick = () => { chargerSuggestions(); show("suggestions"); };
-$("btnSugBack").onclick = () => show("menu");
-
-$("btnEnvoyerSug").onclick = async () => {
-  const titre = $("sugTitre").value.trim();
-  const dire = (t, ok) => { $("sugMsg").textContent = t; $("sugMsg").className = ok ? "feedback good" : "feedback bad"; };
-  if (titre.length < 2) return dire("Indiquez le titre du film.", false);
-
-  const res = await fetch("/api/suggestions", {method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({titre, annee: $("sugAnnee").value,
-                          commentaire: $("sugCommentaire").value,
-                          categorie: $("sugCategorie").value})});
-  const data = await res.json().catch(() => ({}));
-
-  if (!res.ok){
-    const messages = { TITRE_REQUIS: "Indiquez le titre du film.",
-                       TROP_DE_SUGGESTIONS: "Trois propositions par jour au maximum. À demain." };
-    return dire(messages[data.error] || "Envoi impossible.", false);
-  }
-  $("sugTitre").value = ""; $("sugAnnee").value = ""; $("sugCommentaire").value = "";
-  dire(data.deja
-    ? "Ce film était déjà proposé — votre soutien a été ajouté."
-    : "Proposition envoyée. Merci !", true);
-  chargerSuggestions();
-};
-
-async function chargerSuggestions(){
-  const liste = await fetch("/api/suggestions").then(r => r.json()).catch(() => []);
-  $("sugVide").textContent = liste.length ? "" : "Aucune proposition pour le moment. Soyez le premier.";
-  $("listeSug").innerHTML = liste.map(s => `
-    <div class="sugLigne">
-      <div class="quoi">
-        <b>${esc(s.titre)}${s.annee ? ` <small>(${s.annee})</small>` : ""}
-          ${s.categorie === "kid" ? '<span class="etiqKid">enfants</span>' : ""}</b>
-        <small>proposé par ${esc(s.auteur)} · ${s.soutiens} soutien${s.soutiens>1?"s":""}</small>
-      </div>
-      <button class="ghost ${s.soutenue ? "soutenue" : ""}" data-sug="${s.id}">
-        ${s.soutenue ? "★ Soutenu" : "☆ Soutenir"}</button>
-    </div>`).join("");
-
-  $("listeSug").querySelectorAll("[data-sug]").forEach(b => b.onclick = async () => {
-    await fetch(`/api/suggestions/${b.dataset.sug}/soutenir`, {method:"POST"});
-    chargerSuggestions();
-  });
-}
-
-/* ---------- Joueurs en ligne ---------- */
-$("btnEnLigne").onclick = async () => {
-  $("listeEnLigne").innerHTML = "";
-  $("enLigneVide").textContent = "Chargement…";
-  show("enligne");
-
-  const d = await fetch("/api/presence/liste").then(r => r.json()).catch(() => null);
-  if (!d) return ($("enLigneVide").textContent = "Liste indisponible.");
-
-  $("enLigneTitre").textContent = `${d.total} joueur${d.total>1?"s":""} connecté${d.total>1?"s":""}`;
-  $("enLigneVide").textContent = d.joueurs.length ? "" : "Personne d'autre n'est connecté pour l'instant.";
-
-  $("listeEnLigne").innerHTML = d.joueurs.map(j => `
-    <div class="amiLigne" ${j.moi ? "" : `data-fiche="${esc(j.id)}" data-pseudo="${esc(j.pseudo)}"
-      data-avatar="${j.avatar||"🎬"}" data-photo="${esc(j.photo||"")}" style="cursor:pointer"`}>
-      <span class="dot on"></span>
-      <span class="nom">${vignette(j)} ${esc(j.pseudo)}
-        ${j.moi ? '<small style="color:var(--muted)"> — vous</small>' : ""}
-        ${j.ami ? '<small style="color:var(--teal)"> · ami</small>' : ""}</span>
-      <small style="color:var(--muted)">niv. ${j.niveau}</small>
-    </div>`).join("");
-
-  $("listeEnLigne").querySelectorAll("[data-fiche]").forEach(n => n.onclick = () =>
-    ouvrirJoueur(n.dataset.fiche, n.dataset.pseudo, n.dataset.avatar, n.dataset.photo || null));
-};
-$("btnEnLigneBack").onclick = () => show("menu");
-
-/* ---------- Sorties cinéma ---------- */
-$("btnSorties").onclick = async () => {
-  $("listeSorties").innerHTML = "";
-  $("sortiesVide").textContent = "Chargement des sorties…";
-  show("sorties");
-
-  const d = await fetch("/api/sorties").then(r => r.json()).catch(() => null);
-  if (!d || !d.disponible)
-    return ($("sortiesVide").textContent = "Les sorties ne sont pas disponibles pour le moment.");
-
-  const semaine = new Date(d.semaine).toLocaleDateString("fr-FR",
-    {weekday:"long", day:"numeric", month:"long"});
-  $("sortiesTitre").textContent = `Sorties du ${semaine}`;
-  $("sortiesVide").textContent = "";
-
-  $("listeSorties").innerHTML = d.films.map(f => `
-    <div class="sortieFilm">
-      ${f.affiche ? `<img src="${esc(f.affiche)}" alt="" loading="lazy">` : ""}
-      <div class="txt">
-        <b>${esc(f.titre)}</b>
-        <small>${esc(f.synopsis || "Synopsis non disponible.")}${f.synopsis?.length >= 220 ? "…" : ""}</small>
-        ${f.note ? `<span class="note">★ ${f.note} / 10</span>` : ""}
-      </div>
-    </div>`).join("");
-};
-$("btnSortiesBack").onclick = () => show("menu");
-
-/* ---------- Avantages de niveau ---------- */
-let mesAvantages = null;
-
-function majOfferts(restants, tous){
-  const el = $("offerts");
-  if (tous){
-    el.textContent = "★ Tous les indices vous sont offerts";
-    el.classList.remove("hidden");
-  } else if (restants > 0){
-    el.textContent = `🎁 ${restants} indice${restants>1?"s":""} offert${restants>1?"s":""} cette manche`;
-    el.classList.remove("hidden");
-  } else el.classList.add("hidden");
-
-  state.indicesOfferts = restants;
-  state.tousIndicesOfferts = tous;
-}
-
-async function chargerAvantages(){
-  mesAvantages = await fetch("/api/avantages").then(r => r.json()).catch(() => null);
-  if (!mesAvantages) return;
-
-  const n = mesAvantages.niveau;
-  $("listePaliers").innerHTML = (mesAvantages.paliers || []).map(p => {
-    const atteint = n >= p.niveau;
-    const gains = [
-      `${p.coeurs} cœurs par partie`,
-      p.indicesOfferts >= 99 ? "tous les indices offerts"
-        : p.indicesOfferts ? `${p.indicesOfferts} indice${p.indicesOfferts>1?"s":""} offert${p.indicesOfferts>1?"s":""} par manche` : null,
-    ].filter(Boolean).join(" · ");
-    return `<div class="palier ${atteint ? "atteint" : ""}">
-      <span class="niv">${p.niveau}</span>
-      <span class="quoi"><b>${atteint ? "✓ " : ""}${esc(p.titre || "Palier")}</b><small>${gains}</small></span>
-      ${atteint ? "" : `<small style="color:var(--muted)">dans ${p.niveau - n} niveaux</small>`}
-    </div>`;
-  }).join("");
-}
 
 /* ---------- Niveaux et quêtes ---------- */
 let mesQuetes = [];
@@ -2022,8 +1907,10 @@ function ligneJoueur(j, boutons){
     <span class="nom" data-fiche="${esc(j.id)}" data-pseudo="${esc(j.pseudo)}"
       data-avatar="${j.avatar||"🎬"}" data-photo="${esc(j.photo||"")}"
       style="cursor:pointer">${vignette(j)} ${esc(j.pseudo)}</span>
+    <div style="display:flex; gap:6px; flex-wrap:wrap;">
     ${boutons.map(([a, l]) =>
-      `<button class="ghost" data-act="${a}" data-id="${esc(j.id)}">${l}</button>`).join("")}
+      `<button class="ghost" data-act="${a}" data-id="${esc(j.id)}" title="${a}" style="padding:6px 10px; font-size:15px;">${l}</button>`).join("")}
+    </div>
   </div>`;
 }
 
@@ -2033,7 +1920,16 @@ function brancher(){
 
   $("listeAmis").querySelectorAll("[data-act]").forEach(b => b.onclick = async () => {
     if (b.dataset.act === "inviter") return inviter(b.dataset.id, b);
+    if (b.dataset.act === "message") {
+        const nomEl = b.closest(".amiLigne").querySelector(".nom");
+        return ouvrirConversation(b.dataset.id, nomEl.dataset.pseudo, nomEl.dataset.avatar, nomEl.dataset.photo);
+    }
+    if (b.dataset.act === "donner") {
+        const nomEl = b.closest(".amiLigne").querySelector(".nom");
+        return offrirPoints(b.dataset.id, nomEl.dataset.pseudo);
+    }
     if (b.dataset.act === "bloquer" && !confirm("Bloquer ce joueur ?")) return;
+    if (b.dataset.act === "retirer" && !confirm("Retirer cet ami ?")) return;
     await agirAmi(b.dataset.act, b.dataset.id);
     ongletAmis === "recherche" ? chercher() : chargerAmis();
     majBadgeAmis();
@@ -2051,8 +1947,8 @@ async function chargerAmis(){
     const enSalon = Boolean(state.code);
     $("listeAmis").innerHTML = r.amis.map(j => ligneJoueur(j,
       enSalon && j.online
-        ? [["inviter","Inviter"], ["retirer","Retirer"], ["bloquer","Bloquer"]]
-        : [["retirer","Retirer"], ["bloquer","Bloquer"]])).join("");
+        ? [["bloquer","🚫"], ["retirer","❌"], ["donner","🎁"], ["message","✉️"], ["inviter","🎮 Inviter"]]
+        : [["bloquer","🚫"], ["retirer","❌"], ["donner","🎁"], ["message","✉️"]])).join("");
     $("amisVide").textContent = r.amis.length ? "" :
       "Aucun ami pour l'instant. Cherchez un pseudo dans l'onglet Rechercher.";
   } else if (ongletAmis === "demandes"){
@@ -2093,7 +1989,7 @@ $("btnSalonAmis").onclick = () => {
     $("amisMsg").className = "feedback good";
     return chargerAmis();
   }
-  socket.emit("room:create", {mode: modeAmis, categorie}, res => {
+  socket.emit("room:create", {mode: modeAmis}, res => {
     if (!res?.ok) return ($("amisMsg").textContent = "Création impossible.");
     state.code = res.code; state.mode = modeAmis; state.hostId = res.state.hostId;
     setChatVisible(true);
@@ -2153,6 +2049,11 @@ socket.on("notif", (notif) => {
   const image = photo
     ? `<img class="pfp" src="${esc(photo)}" alt="">`
     : `<span style="font-size:24px">${avatar || "🎬"}</span>`;
+
+  if (type === "friend_online")
+    bandeauNotif(`${image}<span><b>${esc(de)}</b> est en ligne
+      <small>Votre ami(e) vient de se connecter</small></span>`,
+      () => { ongletAmis = "amis"; $("btnFriends").click(); chargerAmis(); });
 
   if (type === "demande")
     bandeauNotif(`${image}<span><b>${esc(de)}</b> souhaite vous ajouter
@@ -2318,27 +2219,47 @@ $("avatars").querySelectorAll("[data-a]").forEach(b => b.onclick = () => {
  * Carte de profil : photo en grand, message d'accueil et résumé du parcours.
  * Le message varie selon l'ancienneté pour ne pas paraître mécanique.
  */
-function remplirCarteProfil(){
+async function remplirCarteProfil(){
   const carte = $("carteProfil");
-  if (!me?.photo) return carte.classList.add("hidden");
-
   carte.classList.remove("hidden");
-  $("grandePhoto").src = me.photo;
 
-  const parties = me.partiesGlobales || 0;
+  const cadre = $("cadreMaPhoto");
+  if (me?.photo) {
+    cadre.classList.remove("emoji");
+    cadre.innerHTML = `<img id="grandePhoto" src="${esc(me.photo)}" alt="Votre photo de profil" style="width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;background:var(--card);border:3px solid var(--velvet)">`;
+    $("dlPhotoRow").classList.remove("hidden");
+  } else {
+    cadre.classList.add("emoji");
+    cadre.innerHTML = `<div class="inner-emoji">${me?.avatar || "🎬"}</div>`;
+    $("dlPhotoRow").classList.add("hidden");
+  }
+
+  const parties = me?.partiesGlobales || 0;
   $("motProfil").textContent = parties === 0
-    ? `Bienvenue parmi nous, ${me.pseudo}`
+    ? `Bienvenue parmi nous, ${me?.pseudo}`
     : parties < 10
-      ? `Content de vous revoir, ${me.pseudo}`
-      : `${me.pseudo}, fidèle au poste`;
+      ? `Content de vous revoir, ${me?.pseudo}`
+      : `${me?.pseudo}, fidèle au poste`;
 
-  const morceaux = [];
-  if (parties) morceaux.push(`<b>${parties}</b> partie${parties>1?"s":""} jouée${parties>1?"s":""}`);
-  if (me.scoreGlobal) morceaux.push(`<b>${me.scoreGlobal}</b> points au total`);
-  morceaux.push(`<b>${me.credits ?? 0}</b> ticket${(me.credits ?? 0)>1?"s":""}`);
-  $("statProfil").innerHTML = morceaux.join(" · ") +
-    (parties >= 10 ? "<br>Merci de faire vivre le jeu." : "");
+  $("mesStatsDetaillees").innerHTML = "<p class='note' style='grid-column:1/-1;text-align:center;'>Chargement de vos statistiques...</p>";
   $("photoMsg").textContent = "";
+
+  const f = await fetch(`/api/players/${encodeURIComponent(me.id)}/fiche`).then(r => r.ok ? r.json() : null).catch(() => null);
+
+  if (f) {
+    const rang = (r) => r ? `${r.rang}<sup style="font-size:11px">e</sup>` : "—";
+    $("mesStatsDetaillees").innerHTML = `
+      <div><small>Points au total</small><b>${f.scoreGlobal}</b></div>
+      <div><small>Parties jouées</small><b>${f.partiesGlobales}</b></div>
+      <div><small>Moyenne par partie</small><b>${f.moyenne}</b></div>
+      <div><small>Amis</small><b>${f.amis}</b></div>
+      <div><small>Tickets bonus</small><b>${me.credits ?? 0}</b></div>
+      <div><small>Niveau</small><b>${me.niveau || 0}</b></div>
+      <div class="large"><small>Rang global · rang de la saison</small>
+        <b>${rang(f.rangGlobal)} · ${rang(f.rangSaison)}</b></div>`;
+  } else {
+    $("mesStatsDetaillees").innerHTML = `<p class="note" style="grid-column:1/-1;">Statistiques momentanément indisponibles.</p>`;
+  }
 }
 
 /** Enregistre la photo sur l'appareil du joueur. */
@@ -2368,7 +2289,6 @@ $("btnTelechargerPhoto").onclick = async () => {
 $("btnProfile").onclick = () => {
   remplirCarteProfil();
   chargerParrainage();
-  chargerAvantages();
   $("profileTitle").textContent = "Votre profil";
   $("welcomeNote").textContent = "";
   $("btnToMenu").classList.remove("hidden");
@@ -2530,10 +2450,10 @@ socket.on("chat:blocked", () =>
 
 
 /* ---------- Bannière : retour au menu ---------- */
-$("banner").onclick = () => {
+const quitterPartie = () => {
   if (!me) return;
-  if (state.code && ["round","between","lobby"].some(s => !$(s).classList.contains("hidden"))){
-    if (!confirm("Quitter la partie en cours et revenir au menu principal ?")) return;
+  if (state.code || ["round","between","lobby","waiting"].some(s => !$(s).classList.contains("hidden"))){
+    if (!confirm("⚠️ ATTENTION !\nQuitter la partie en cours vous fera perdre vos points non sauvegardés.\n\nVoulez-vous vraiment revenir à l'accueil ?")) return;
     socket.emit("room:leave");
     clearInterval(state.timerId);
     state.code = null;
@@ -2541,6 +2461,8 @@ $("banner").onclick = () => {
   }
   show("menu");
 };
+$("banner").onclick = quitterPartie;
+$("btnQuitGame").onclick = quitterPartie;
 
 /* ---------- Choix du mode ---------- */
 const niveau = "tous";   // le filtrage par niveau a été retiré du jeu
@@ -2569,13 +2491,12 @@ function majCoeurs(restants, max, casse){
 function afficherManche(m){
   state.coeursMax = m.coeursMax ?? 3;
   majCoeurs(m.coeurs ?? state.coeursMax, m.coeursMax);
-  majOfferts(m.indicesOfferts ?? 0, m.tousIndicesOfferts);
   state.hintCosts = m.hintCosts; state.hintCredits = m.hintCredits;
   state.posterStyle = m.posterStyle;
   state.vitesseSynopsis = m.vitesseSynopsis;
   if (m.hintLabels) Object.assign(HINT_LABELS, m.hintLabels);
   state.bought = {}; state.answered = false;
-  $("roundLabel").textContent = `Manche ${m.roundIndex + 1} sur ${m.total}`;
+  $("roundLabel").textContent = `Question ${m.roundIndex + 1} sur ${m.total}`;
   derouler(m.synopsis);
   $("dots").innerHTML = Array.from({length: m.total}, (_, i) =>
     `<i class="${i < m.roundIndex ? "done" : i === m.roundIndex ? "now" : ""}"></i>`).join("");
@@ -2616,9 +2537,8 @@ function renderHintsSolo(){
       return `<button class="bought" disabled>${libelle}${val}</button>`;
     }
     const jetons = (state.hintCredits||{})[type] ?? 1;
-    const gratuit = state.tousIndicesOfferts || state.indicesOfferts > 0;
-    return `<button class="${gratuit ? "gratuit" : (credits < jetons ? "broke" : "")}" data-hint="${type}">${libelle}
-      <span class="cost">${gratuit ? "offert" : `🎟️${jetons}`} · −${state.hintCosts[type]} pts</span></button>`;
+    return `<button class="${credits < jetons ? "broke" : ""}" data-hint="${type}">${libelle}
+      <span class="cost">🎟️${jetons} · −${state.hintCosts[type]} pts</span></button>`;
   }).join("");
   $("hints").querySelectorAll("[data-hint]").forEach(b => b.onclick = async () => {
     const r = await solo("hint", {type: b.dataset.hint});
@@ -2629,7 +2549,8 @@ function renderHintsSolo(){
     }
     state.bought[r.type] = r.value;
     setCredits(r.credits);
-    if (r.indicesOfferts !== undefined) majOfferts(r.indicesOfferts, state.tousIndicesOfferts);
+    if (r.freeHintsRemaining !== undefined) state.freeHintsRemaining = r.freeHintsRemaining;
+    if (r.allHintsFree !== undefined) state.allHintsFree = r.allHintsFree;
     if (r.type === "poster") appliquerAffiche(r.value);
     if (r.type === "letters"){ $("pattern").textContent = r.value; $("pattern").classList.remove("hidden"); }
     renderHintsSolo();
@@ -2684,7 +2605,7 @@ async function mancheSuivanteSolo(){
   afficherBilan(r.bilan);
   $("winner").textContent = r.coeursEpuises ? "Cœurs épuisés" : "Partie terminée";
   $("myResult").textContent = `${me.pseudo} — ${r.score} points` +
-    (r.coeursEpuises ? ` · ${r.manchesJouees} manche${r.manchesJouees>1?"s":""} sur ${r.manchesTotal}` : "");
+    (r.coeursEpuises ? ` · ${r.manchesJouees} question${r.manchesJouees>1?"s":""} sur ${r.manchesTotal}` : "");
   $("finalRank").innerHTML = `<li>${me.avatar||"🎬"} ${esc(me.pseudo)}<b>${r.score} pts</b></li>`;
   $("finalTeams").classList.add("hidden");
   show("over");
@@ -2695,14 +2616,10 @@ document.querySelectorAll(".mode").forEach(btn => btn.onclick = async () => {
 
   if (SANS_RESEAU.includes(mode)){
     const res = await fetch("/api/solo/start", {method:"POST",
-      headers:{"Content-Type":"application/json"}, body: JSON.stringify({mode, categorie})});
+      headers:{"Content-Type":"application/json"}, body: JSON.stringify({mode})});
     const m = res.ok ? await res.json() : null;
     if (!m){
       const err = await res.json().catch(() => ({}));
-      if (err.error === "NO_MOVIES")
-        return ($("joinError").textContent = categorie === "kid"
-          ? "Aucun film pour enfants dans le catalogue pour l'instant."
-          : "Aucun film disponible.");
       $("joinError").textContent = err.error === "PLUS_DE_PARTIES"
         ? `Seau vide : vos ${err.partiesMax} parties classées du jour sont utilisées. Il se remplit dans ${Math.ceil((err.prochaineRecharge||0) / 3600000)} h.`
         : "Aucun film disponible pour ce niveau.";
@@ -2716,7 +2633,7 @@ document.querySelectorAll(".mode").forEach(btn => btn.onclick = async () => {
   if (!window.tempsReelDispo)
     return ($("joinError").textContent = "Le multijoueur exige la connexion temps réel, bloquée par votre navigateur.");
 
-  socket.emit("room:create", {mode, categorie}, res => {
+  socket.emit("room:create", {mode}, res => {
     if (!res?.ok) return ($("joinError").textContent =
       "Aucun film disponible pour ce niveau — choisissez-en un autre.");
     state.code = res.code; state.mode = mode;
@@ -2773,9 +2690,9 @@ function renderLobby(s){
   $("marquee").innerHTML = s.code.split("").map(c => `<span class="flap">${c}</span>`).join("");
   $("lobbyCount").textContent = `${MODE_NAMES[s.mode]} — ${s.players.length} joueur${s.players.length>1?"s":""}`;
   $("lobbyPlayers").innerHTML = s.players.map(p =>
-    `<li class="${p.team||""}" data-joueur="${esc(p.userId||"")}" data-pseudo="${esc(p.pseudo)}"
-       data-avatar="${p.avatar||"🎬"}" data-photo="${p.photo||""}" style="cursor:pointer" title="Voir ce joueur">
-       <span class="dot ${p.online ? "on" : ""}"></span>${vignette(p)} ${esc(p.pseudo)}</li>`).join("");
+    `<li class="${p.team||""} ${p.online === false ? "off" : ""}" data-joueur="${esc(p.userId||"")}" data-pseudo="${esc(p.pseudo)}"
+       data-avatar="${p.avatar||"🎬"}" data-photo="${p.photo||""}" style="cursor:pointer; ${p.online === false ? "opacity:0.5;" : ""}" title="${p.online === false ? "Déconnecté" : "Voir ce joueur"}">
+       <span class="dot ${p.online !== false ? "on" : ""}"></span>${vignette(p)} ${esc(p.pseudo)}</li>`).join("");
   $("lobbyPlayers").querySelectorAll("[data-joueur]").forEach(li => li.onclick = () =>
     ouvrirJoueur(li.dataset.joueur, li.dataset.pseudo, li.dataset.avatar, li.dataset.photo || null));
   $("teamPicker").classList.toggle("hidden", s.mode !== "teams");
@@ -2817,6 +2734,14 @@ socket.on("round:start", ({roundIndex,total,synopsis,duration,hintCosts,hintCred
   renderHints(); runBeam(duration); show("round");
 });
 
+socket.on("player:round_info", (info) => {
+  state.coeursMax = info.coeursMax;
+  state.freeHintsRemaining = info.freeHintsRemaining;
+  state.allHintsFree = info.allHintsFree;
+  majCoeurs(info.coeurs, info.coeursMax);
+  renderHints();
+});
+
 function renderHints(){
   // seuls les indices activés dans l'administration sont proposés
   $("hints").innerHTML = Object.keys(state.hintCosts || {}).map(type => {
@@ -2826,10 +2751,12 @@ function renderHints(){
       return `<button class="bought" disabled>${libelle}${val}</button>`;
     }
     const jetons = (state.hintCredits||{})[type] ?? 1;
-    const gratuit = state.tousIndicesOfferts || state.indicesOfferts > 0;
-    const broke = !gratuit && credits < jetons ? " broke" : "";
-    return `<button class="${gratuit ? "gratuit" : broke.trim()}" data-hint="${type}">${libelle}
-      <span class="cost">${gratuit ? "offert" : `🎟️${jetons}`} · −${state.hintCosts[type]} pts</span></button>`;
+    
+    const isFree = state.allHintsFree || state.freeHintsRemaining > 0;
+    const broke = (!isFree && credits < jetons) ? " broke" : "";
+    const costText = isFree ? "GRATUIT" : `🎟️${jetons} · −${state.hintCosts[type]} pts`;
+    
+    return `<button class="${broke.trim()}" data-hint="${type}">${libelle}<span class="cost">${costText}</span></button>`;
   }).join("");
   $("hints").querySelectorAll("[data-hint]").forEach(btn => btn.onclick = () =>
     socket.emit("hint:buy", {code:state.code, type:btn.dataset.hint}, res => {
@@ -2842,6 +2769,8 @@ function renderHints(){
       }
       setCredits(res.credits);
       state.bought[res.type] = res.value;
+      if (res.freeHintsRemaining !== undefined) state.freeHintsRemaining = res.freeHintsRemaining;
+      if (res.allHintsFree !== undefined) state.allHintsFree = res.allHintsFree;
       if (res.type === "poster" && res.value){
         $("hintPoster").src = res.value; $("hintPoster").classList.remove("hidden");
       }
@@ -2931,7 +2860,7 @@ socket.on("round:end", ({answer, movieId, poster, year, scores, isHost, mode}) =
   $("btnNext").classList.toggle("hidden", !peutEnchainer);
   $("nextNote").textContent = peutEnchainer
     ? "Sinon, enchaînement automatique dans quelques secondes."
-    : "Manche suivante dans quelques secondes.";
+    : "Question suivante dans quelques secondes.";
   show("between");
 });
 
@@ -2996,5 +2925,438 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
 </script>
 
   </div>
+
+    
+    
+    <!-- MODALE ANNIVERSAIRES -->
+    <div class="modal-overlay" id="birthdaysModal">
+        <div class="modal-content">
+            <div class="modal-header" style="border-bottom-color: var(--teal);">
+                <h2>🎂 Nés un <span id="bdayDate"></span></h2>
+                <button class="close-btn" id="closeBdayBtn">&times;</button>
+            </div>
+            <div class="modal-body" id="bdayList" style="max-height: 60vh; overflow-y: auto;">
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALE JOUEURS EN LIGNE -->
+    <div class="modal-overlay" id="onlineUsersModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🟢 Joueurs en ligne</h2>
+                <button class="close-btn" id="closeOnlineUsersBtn">&times;</button>
+            </div>
+            <div class="modal-body" id="onlineUsersList" style="max-height: 60vh; overflow-y: auto;">
+                <p class="note" style="text-align:center">Chargement...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALE SORTIES CINEMA -->
+    <div class="modal-overlay" id="upcomingMoviesModal">
+        <div class="modal-content">
+            <div class="modal-header" style="border-bottom-color: var(--ticket);">
+                <h2>🍿 Sorties de la semaine</h2>
+                <button class="close-btn" id="closeUpcomingMoviesBtn">&times;</button>
+            </div>
+            <div class="modal-body" id="upcomingMoviesList" style="max-height: 60vh; overflow-y: auto;">
+                <p class="note" style="text-align:center">Recherche des nouveautés UGC, Pathé, Gaumont...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALE ACTUELLEMENT AU CINEMA -->
+    <div class="modal-overlay" id="nowPlayingModal">
+        <div class="modal-content">
+            <div class="modal-header" style="border-bottom-color: var(--teal);">
+                <h2>🎥 Actuellement au cinéma</h2>
+                <button class="close-btn" id="closeNowPlayingBtn">&times;</button>
+            </div>
+            <div class="modal-body" id="nowPlayingList" style="max-height: 60vh; overflow-y: auto;">
+                <p class="note" style="text-align:center">Recherche des films à l'affiche...</p>
+            </div>
+        </div>
+    </div>
+
+    
+    
+    <!-- MODALE SUGGESTION -->
+    <div class="modal-overlay" id="suggestionModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>💡 Suggérer un film</h2>
+                <button class="close-btn" id="closeSuggestionBtn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <label for="suggTitre">Titre du film</label>
+                <input id="suggTitre" placeholder="Titre du film...">
+                <label for="suggComment" style="margin-top:10px">Commentaire (facultatif)</label>
+                <textarea id="suggComment" rows="3" placeholder="Pourquoi ce film serait bien ?"></textarea>
+                <div class="row"><button id="btnSendSugg">Envoyer la suggestion</button></div>
+                <p class="feedback" id="suggFeedback"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALE PROGRESSION -->
+    <div class="modal-overlay" id="progressionModal">
+        <div class="modal-content" style="max-height: 85vh; display: flex; flex-direction: column;">
+            <div class="modal-header" style="border-bottom-color: var(--beam);">
+                <h2>🗺️ Votre Parcours</h2>
+                <button class="close-btn" id="closeProgressionBtn">&times;</button>
+            </div>
+            <div class="modal-body" style="flex: 1; padding: 0; display: flex; flex-direction: column; overflow: hidden;">
+                <div style="padding: 15px 25px; background: #111; border-bottom: 1px solid #333; text-align: center; position: sticky; top: 0; z-index: 10;">
+                    <p id="nextBonusText" style="margin: 0; font-size: 15px; color: var(--chalk);"></p>
+                </div>
+                <div id="progressionMap" class="progression-map">
+                    <p class='note' style='text-align:center; margin-top:20px;'>Génération de la carte...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BOUTON FLOTTANT ET MODALE D'AIDE -->
+    <div class="help-btn" id="helpBtn" title="Règles du jeu">?</div>
+    <div class="modal-overlay" id="rulesModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Comment jouer ? 🎬🎵</h2>
+                <button class="close-btn" id="closeBtn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Bienvenue ! Testez vos connaissances et défiez vos amis dans nos différents modes de jeu interactifs.</p>
+
+                <div class="mode-section cine">
+                    <h3>🍿 Mode Ciné Quiz</h3>
+                    <p>Prouvez que vous êtes incollable sur le 7ème art.</p>
+                    <ul>
+                        <li>Lisez attentivement la question affichée.</li>
+                        <li>Sélectionnez la bonne proposition avant la fin du chrono.</li>
+                        <li>Plus vous êtes rapide, plus vous marquez de points !</li>
+                    </ul>
+                </div>
+                <div class="teaser-section">
+                    <h3>🚀 L'aventure ne fait que commencer...</h3>
+                    <p>MichBen Ciné n'est que la <strong>toute première étape</strong>.</p>
+                    <p>Ce que vous voyez aujourd'hui est le point de départ d'une longue série de mini-jeux, d'expériences interactives et d'univers encore plus poussés qui arriveront très prochainement. Entraînez-vous bien, la suite s'annonce lourde !</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        document.getElementById('helpBtn').addEventListener('click', () => document.getElementById('rulesModal').classList.add('active'));
+        document.getElementById('closeBtn').addEventListener('click', () => document.getElementById('rulesModal').classList.remove('active'));
+        document.getElementById('rulesModal').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('rulesModal')) {
+                document.getElementById('rulesModal').classList.remove('active');
+            }
+        });
+    
+        function inviterOnlineUser(amiId, btn) {
+            if (!state.code) {
+                alert("Vous devez d'abord créer ou ouvrir un salon de jeu pour inviter des joueurs !");
+                return;
+            }
+            socket.emit("invite:send", {code: state.code, amiId}, res => {
+                if (!res?.ok){
+                    alert("Invitation impossible.");
+                    return;
+                }
+                btn.textContent = res.livree ? "Invité ✓" : "Hors ligne";
+                btn.disabled = true;
+            });
+        }
+    </script>
+
+    <script>
+        const btnOnlineUsers = document.getElementById("btnOnlineUsers");
+        const onlineUsersModal = document.getElementById("onlineUsersModal");
+        const closeOnlineUsersBtn = document.getElementById("closeOnlineUsersBtn");
+
+        if (btnOnlineUsers) {
+            btnOnlineUsers.addEventListener("click", async () => {
+                onlineUsersModal.classList.add("active");
+                document.getElementById("onlineUsersList").innerHTML = "<p class='note' style='text-align:center'>Chargement...</p>";
+                try {
+                    const res = await fetch("/api/presence/users");
+                    const users = await res.json();
+                    if (!users.length) {
+                        document.getElementById("onlineUsersList").innerHTML = "<p class='note'>Personne en ligne actuellement.</p>";
+                        return;
+                    }
+                    document.getElementById("onlineUsersList").innerHTML = users.map(u => `
+                        <div class="amiLigne" style="padding: 10px; background: var(--card); border-radius: 8px; margin-bottom: 8px; border: 1px solid rgba(237,232,220,.1); display:flex; align-items:center; gap:10px;">
+                            <span class="dot on"></span>
+                            <span class="nom" style="display:flex;align-items:center;gap:10px; flex:1;">
+                                ${u.photo ? `<img src="${u.photo}" class="pfp" alt="">` : `<div class="pfp" style="display:grid;place-items:center;font-size:20px">${u.avatar||'🎬'}</div>`}
+                                <span><b>${u.pseudo}</b> ${u.role !== 'joueur' ? `<span class="badge-role">${u.role}</span>` : ''}</span>
+                            </span>
+                            ${state.code && u.id !== me.id ? `<button class="ghost" onclick="inviterOnlineUser('${u.id}', this)" style="padding:6px 12px; font-size:13px;">Inviter</button>` : ''}
+                        </div>
+                    `).join("");
+                } catch(e) {
+                    document.getElementById("onlineUsersList").innerHTML = "<p class='note' style='color:var(--ticket)'>Erreur de chargement.</p>";
+                }
+            });
+            closeOnlineUsersBtn.addEventListener("click", () => onlineUsersModal.classList.remove("active"));
+            onlineUsersModal.addEventListener('click', (e) => {
+                if (e.target === onlineUsersModal) onlineUsersModal.classList.remove('active');
+            });
+        }
+
+        const btnUpcomingMovies = document.getElementById("btnUpcomingMovies");
+        const upcomingMoviesModal = document.getElementById("upcomingMoviesModal");
+        const closeUpcomingMoviesBtn = document.getElementById("closeUpcomingMoviesBtn");
+
+        if (btnUpcomingMovies) {
+            btnUpcomingMovies.addEventListener("click", async () => {
+                upcomingMoviesModal.classList.add("active");
+                document.getElementById("upcomingMoviesList").innerHTML = "<p class='note' style='text-align:center'>Recherche des nouveautés...</p>";
+                try {
+                    const res = await fetch("/api/movies/upcoming");
+                    const data = await res.json();
+                    
+                    if (data.error === "NO_KEY") {
+                        document.getElementById("upcomingMoviesList").innerHTML = "<p class='note' style='color:var(--ticket)'>Fonctionnalité en attente de configuration. L'administrateur doit renseigner une clé API TMDB dans les réglages.</p>";
+                        return;
+                    }
+                    if (!data.movies || data.movies.length === 0) {
+                        document.getElementById("upcomingMoviesList").innerHTML = "<p class='note'>Aucune sortie trouvée pour cette semaine.</p>";
+                        return;
+                    }
+                    
+                    // Formater la date en français
+                    const options = { day: 'numeric', month: 'long', year: 'numeric' };
+                    const d = new Date(data.dateDebut);
+                    const dateFr = d.toLocaleDateString('fr-FR', options);
+
+                    let html = `<p class="tag" style="margin-bottom:16px;">Semaine du mercredi ${dateFr}</p>`;
+                    html += data.movies.map(m => `
+                        <div class="bday-item" style="border-left-color: var(--ticket); align-items:flex-start;">
+                            ${m.poster ? `<img src="${m.poster}" alt="" style="width:70px;height:100px;border-radius:4px;">` : `<div style="width:70px;height:100px;border-radius:4px;background:#333;display:flex;align-items:center;justify-content:center;font-size:24px">🍿</div>`}
+                            <div class="info" style="flex:1;">
+                                <b style="font-family:'Anton', sans-serif; letter-spacing:1px; text-transform:uppercase; font-size:18px;">${m.title}</b>
+                                <div style="display:flex;gap:6px;margin:6px 0;">
+                                    <span style="font-size:11px;background:var(--ticket);padding:2px 6px;border-radius:4px;color:#fff;">⭐ ${m.vote.toFixed(1)}/10</span>
+                                </div>
+                                <small style="display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;">${m.overview || "Aucun synopsis disponible."}</small>
+                            </div>
+                        </div>
+                    `).join("");
+                    document.getElementById("upcomingMoviesList").innerHTML = html;
+                } catch(e) {
+                    document.getElementById("upcomingMoviesList").innerHTML = "<p class='note' style='color:var(--ticket)'>Erreur lors du chargement des sorties.</p>";
+                }
+            });
+            closeUpcomingMoviesBtn.addEventListener("click", () => upcomingMoviesModal.classList.remove("active"));
+            upcomingMoviesModal.addEventListener('click', (e) => {
+                if (e.target === upcomingMoviesModal) upcomingMoviesModal.classList.remove('active');
+            });
+        }
+    </script>
+
+
+    <script>
+        const btnBirthdays = document.getElementById("btnBirthdays");
+        const birthdaysModal = document.getElementById("birthdaysModal");
+        const closeBdayBtn = document.getElementById("closeBdayBtn");
+
+        if (btnBirthdays) {
+            const updateBdayText = () => {
+                const today = new Date();
+                const options = { day: 'numeric', month: 'long' };
+                const dateStr = today.toLocaleDateString('fr-FR', options);
+                btnBirthdays.innerHTML = `🎂 Célébrités nées le ${dateStr}`;
+                return { dateStr, mm: String(today.getMonth() + 1).padStart(2, '0'), dd: String(today.getDate()).padStart(2, '0') };
+            };
+            updateBdayText();
+            // Automatically update at midnight if page is left open
+            setInterval(updateBdayText, 60000);
+
+            btnBirthdays.addEventListener("click", async () => {
+                birthdaysModal.classList.add("active");
+                const { dateStr, mm, dd } = updateBdayText();
+                document.getElementById("bdayDate").textContent = dateStr;
+                document.getElementById("bdayList").innerHTML = "<p class='note' style='text-align:center'>Recherche dans les archives d'Hollywood...</p>";
+
+                try {
+                    const res = await fetch(`/api/birthdays?mm=${mm}&dd=${dd}`);
+                    const data = await res.json();
+                    if (!data.actors || data.actors.length === 0) {
+                        document.getElementById("bdayList").innerHTML = "<p class='note'>Aucune star majeure du cinéma répertoriée pour aujourd'hui.</p>";
+                        return;
+                    }
+                    
+                    document.getElementById("bdayList").innerHTML = data.actors.map(a => `
+                        <div class="bday-item">
+                            ${a.thumbnail ? `<img src="${a.thumbnail}" alt="">` : `<div style="width:50px;height:50px;border-radius:50%;background:#333;display:flex;align-items:center;justify-content:center;font-size:24px">🎬</div>`}
+                            <div class="info">
+                                <b>${a.name}</b>
+                                <small>${a.year} — ${a.description}</small>
+                            </div>
+                        </div>
+                    `).join("");
+                } catch (e) {
+                    document.getElementById("bdayList").innerHTML = "<p class='note' style='color:var(--ticket)'>Impossible de charger les données.</p>";
+                }
+            });
+
+            closeBdayBtn.addEventListener("click", () => birthdaysModal.classList.remove("active"));
+            birthdaysModal.addEventListener('click', (e) => {
+                if (e.target === birthdaysModal) birthdaysModal.classList.remove('active');
+            });
+        }
+    
+        const btnNowPlaying = document.getElementById("btnNowPlaying");
+        const nowPlayingModal = document.getElementById("nowPlayingModal");
+        const closeNowPlayingBtn = document.getElementById("closeNowPlayingBtn");
+
+        if (btnNowPlaying) {
+            btnNowPlaying.addEventListener("click", async () => {
+                nowPlayingModal.classList.add("active");
+                document.getElementById("nowPlayingList").innerHTML = "<p class='note' style='text-align:center'>Recherche des films à l'affiche...</p>";
+                try {
+                    const res = await fetch("/api/movies/now_playing");
+                    const data = await res.json();
+                    
+                    if (data.error === "NO_KEY") {
+                        document.getElementById("nowPlayingList").innerHTML = "<p class='note' style='color:var(--ticket)'>Fonctionnalité en attente de configuration. L'administrateur doit renseigner une clé API TMDB dans les réglages.</p>";
+                        return;
+                    }
+                    if (!data.movies || data.movies.length === 0) {
+                        document.getElementById("nowPlayingList").innerHTML = "<p class='note'>Aucun film à l'affiche trouvé.</p>";
+                        return;
+                    }
+
+                    let html = `<p class="tag" style="margin-bottom:16px;">Sélection des films du moment</p>`;
+                    html += data.movies.map(m => `
+                        <div class="bday-item" style="border-left-color: var(--teal); align-items:flex-start;">
+                            ${m.poster ? `<img src="${m.poster}" alt="" style="width:70px;height:100px;border-radius:4px;">` : `<div style="width:70px;height:100px;border-radius:4px;background:#333;display:flex;align-items:center;justify-content:center;font-size:24px">🎥</div>`}
+                            <div class="info" style="flex:1;">
+                                <b style="font-family:'Anton', sans-serif; letter-spacing:1px; text-transform:uppercase; font-size:18px;">${m.title}</b>
+                                <div style="display:flex;gap:6px;margin:6px 0;">
+                                    <span style="font-size:11px;background:var(--teal);padding:2px 6px;border-radius:4px;color:#161207;font-weight:bold;">⭐ ${m.vote.toFixed(1)}/10</span>
+                                </div>
+                                <small style="display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;">${m.overview || "Aucun synopsis disponible."}</small>
+                            </div>
+                        </div>
+                    `).join("");
+                    document.getElementById("nowPlayingList").innerHTML = html;
+                } catch(e) {
+                    document.getElementById("nowPlayingList").innerHTML = "<p class='note' style='color:var(--ticket)'>Erreur lors du chargement des films à l'affiche.</p>";
+                }
+            });
+            closeNowPlayingBtn.addEventListener("click", () => nowPlayingModal.classList.remove("active"));
+            nowPlayingModal.addEventListener('click', (e) => {
+                if (e.target === nowPlayingModal) nowPlayingModal.classList.remove('active');
+            });
+        }
+
+
+        const barreNiveau = document.getElementById("barreNiveau");
+        const progressionModal = document.getElementById("progressionModal");
+        const closeProgressionBtn = document.getElementById("closeProgressionBtn");
+
+        if (barreNiveau) {
+            barreNiveau.style.cursor = "pointer";
+            barreNiveau.title = "Voir ma progression";
+            barreNiveau.addEventListener("click", openProgression);
+            closeProgressionBtn.addEventListener("click", () => progressionModal.classList.remove("active"));
+            progressionModal.addEventListener("click", (e) => {
+                if (e.target === progressionModal) progressionModal.classList.remove("active");
+            });
+        }
+
+        async function openProgression() {
+            progressionModal.classList.add("active");
+            document.getElementById("progressionMap").innerHTML = "<p class='note' style='text-align:center; margin-top:20px;'>Génération de la carte...</p>";
+            
+            try {
+                const res = await fetch("/api/progression");
+                const data = await res.json();
+                
+                const { currentLevel, claimedBonuses, nextBonus, maxLevel } = data;
+                
+                if (nextBonus) {
+                    const diff = nextBonus - currentLevel;
+                    document.getElementById("nextBonusText").innerHTML = `Encore <b style="color:var(--beam)">${diff} niveau${diff>1?'x':''}</b> avant le prochain coffre 🎁 !`;
+                } else {
+                    document.getElementById("nextBonusText").textContent = "Vous avez atteint le sommet ! Félicitations !";
+                }
+                
+                let html = "";
+                // On affiche jusqu'à 8 niveaux au-dessus pour le brouillard
+                const visMax = Math.min(maxLevel, currentLevel + 8);
+                
+                for (let i = 1; i <= visMax; i++) {
+                    const isBonus = i === 5 || (i > 0 && i % 10 === 0);
+                    const isDone = i < currentLevel;
+                    const isCurrent = i === currentLevel;
+                    const isFog = i > currentLevel + 2; 
+                    
+                    let classes = "progression-step";
+                    if (isDone) classes += " done";
+                    if (isCurrent) classes += " current";
+                    if (isBonus) classes += " bonus";
+                    if (isFog && !isBonus) classes += " fog";
+                    
+                    const claimable = isBonus && i <= currentLevel && !claimedBonuses.includes(i);
+                    if (claimable) classes += " claimable";
+                    
+                    let content = i;
+                    if (isBonus) {
+                        if (claimedBonuses.includes(i)) content = "✅";
+                        else if (claimable) content = "🎁";
+                        else content = "📦";
+                    }
+                    if (isFog && !isBonus) content = "☁️";
+                    
+                    const clickAttr = claimable ? `onclick="claimBonus(${i})"` : "";
+                    const line = i > 1 ? `<div class="progression-line ${isDone || isCurrent ? 'done' : ''}"></div>` : "";
+                    
+                    html += `
+                    <div style="display:flex; flex-direction:column; align-items:center;">
+                        ${line}
+                        <div class="${classes}" id="step-${i}" ${clickAttr} title="Niveau ${i}">
+                            ${content}
+                        </div>
+                    </div>`;
+                }
+                
+                document.getElementById("progressionMap").innerHTML = html;
+                
+                // Animate scrolling to the current level
+                setTimeout(() => {
+                    const el = document.getElementById(`step-${currentLevel}`);
+                    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+                }, 150);
+                
+            } catch(e) {
+                document.getElementById("progressionMap").innerHTML = "<p class='note' style='color:var(--ticket)'>Erreur de chargement de la carte.</p>";
+            }
+        }
+
+        window.claimBonus = async (lvl) => {
+            const res = await fetch("/api/progression/claim", {
+                method: "POST", 
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({level: lvl})
+            });
+            const data = await res.json();
+            if (data.ok) {
+                bandeauNotif(`<span style="font-size:24px">🎉</span><span><b style="color:var(--beam)">Bonus récupéré !</b><small>+${data.reward.credits} tickets et +${data.reward.xp} xp</small></span>`);
+                if (typeof setCredits === "function") setCredits(data.credits);
+                if (data.niveau && typeof majNiveau === "function") majNiveau(data.niveau);
+                openProgression(); // Refresh map
+            } else {
+                alert("Erreur lors de la récupération du bonus.");
+            }
+        };
+
+</script>
+
 </body>
+
 </html>
