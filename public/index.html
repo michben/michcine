@@ -220,6 +220,11 @@
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
   select{width:100%;background:var(--card);border:1px solid rgba(237,232,220,.14);color:var(--chalk);
     border-radius:10px;padding:12px 13px;font:inherit;font-size:16px}
+  .ligneInvit{display:flex;gap:10px;align-items:center;padding:10px 0;
+    border-top:1px solid rgba(237,232,220,.1)}
+  .ligneInvit .nom{flex:1;min-width:0;font-size:15px}
+  .ligneInvit button{padding:8px 14px;font-size:13px;white-space:nowrap}
+  .ligneInvit button.envoye{border-color:var(--teal);color:var(--teal)}
   .invitation{position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:80;
     background:var(--velvet);border:1px solid var(--beam);border-radius:14px;padding:16px 18px;
     max-width:min(360px,calc(100vw - 24px));box-shadow:0 14px 40px rgba(0,0,0,.6);
@@ -337,6 +342,7 @@
     18%{opacity:1;transform:translateX(-50%) scale(1.08)}
     30%{transform:translateX(-50%) scale(1)}
     100%{opacity:0;transform:translateX(-50%) translateY(-26px) scale(1)}}
+  /* Le chat monte au-dessus du bouton d'aide, qui reste accessible. */
   #chatToggle{position:fixed;right:18px;bottom:18px;width:56px;height:56px;border-radius:50%;
     font-size:24px;padding:0;box-shadow:0 8px 24px rgba(0,0,0,.5);z-index:20}
   #chatToggle .badge{position:absolute;top:-4px;right:-4px;background:var(--ticket);color:#fff;
@@ -375,6 +381,8 @@
     .choices button{min-height:56px;font-size:15px}
     .hints .cost{display:block;margin:2px 0 0}
     #chatPanel{right:0;left:0;bottom:0;width:100%;max-height:72vh;border-radius:14px 14px 0 0}
+    /* le bouton d'aide s'efface pendant que le chat est ouvert */
+    body.chatOuvert .help-btn{opacity:0;pointer-events:none}
     #chatToggle{right:14px;bottom:14px}
     .urow input{width:70px}
     ol.rank li{font-size:15px}
@@ -485,7 +493,7 @@
 
 
   /* ── Bascule mode enfant, en haut à droite ─────────────────────── */
-  #btnModeEnfant{position:absolute;top:18px;right:16px;z-index:51;display:inline-flex;
+  #btnModeEnfant{position:absolute;top:18px;right:64px;z-index:51;display:inline-flex;
     align-items:center;gap:7px;font-size:14px;font-weight:600;padding:8px 14px;
     border-radius:999px;background:transparent;color:var(--teal);
     border:1px solid rgba(78,205,196,.5);cursor:pointer;transition:all .2s ease}
@@ -862,6 +870,16 @@
       </div>
       <p class="tag" style="margin-top:18px" id="lobbyCount">Joueurs</p>
       <ul class="players" id="lobbyPlayers"></ul>
+
+      <div id="inviterSalon" style="margin-top:16px;padding:14px;background:var(--card);border-radius:12px">
+        <p class="tag" style="margin-bottom:8px">Inviter des joueurs</p>
+        <p class="note" style="margin:0 0 10px">Ils recevront une notification et
+          pourront rejoindre d'un clic.</p>
+        <div id="listeInvitables"></div>
+        <p class="note" id="invitVide"></p>
+        <div class="row"><button class="ghost" id="btnRafraichirInvit">Actualiser la liste</button></div>
+      </div>
+
       <div class="row"><button id="btnStart">Lancer la partie</button></div>
       <p class="note" id="hostNote">En attente que l'hôte lance la partie.</p>
     </div>
@@ -2558,6 +2576,7 @@ $("chatReduire").onclick = (e) => {
 
 $("chatToggle").onclick = () => {
   $("chatPanel").classList.toggle("hidden");
+  document.body.classList.toggle("chatOuvert", !$("chatPanel").classList.contains("hidden"));
   if (chatOpen()){ chatUnread = 0; $("chatBadge").classList.add("hidden"); $("chatInput").focus(); }
 };
 function sendChat(){
@@ -2826,6 +2845,7 @@ $("btnJoin").onclick = () => {
 
 /* ---------- Lobby ---------- */
 function renderLobby(s){
+  setTimeout(chargerInvitables, 100);   // après le rendu de la liste des joueurs
   state.mode = s.mode;
   state.hostId = s.hostId;
   $("marquee").innerHTML = s.code.split("").map(c => `<span class="flap">${c}</span>`).join("");
@@ -2843,6 +2863,38 @@ function renderLobby(s){
 }
 document.querySelectorAll("[data-team]").forEach(b =>
   b.onclick = () => socket.emit("team:choose", {code:state.code, team:b.dataset.team}));
+/**
+ * Liste des joueurs connectés qu'on peut inviter dans le salon.
+ * Les amis apparaissent en tête : ce sont eux qu'on invite le plus souvent.
+ */
+async function chargerInvitables(){
+  if (!state.code) return;
+  const d = await fetch("/api/presence/liste").then(r => r.json()).catch(() => null);
+  if (!d){ $("invitVide").textContent = "Liste indisponible."; return; }
+
+  const dansLeSalon = new Set(
+    [...document.querySelectorAll("#lobbyPlayers [data-joueur]")].map(li => li.dataset.joueur));
+  const dispo = d.joueurs.filter(j => !j.moi && !dansLeSalon.has(j.id));
+
+  $("invitVide").textContent = dispo.length ? "" : "Aucun autre joueur connecté pour l'instant.";
+  $("listeInvitables").innerHTML = dispo.map(j => `
+    <div class="ligneInvit">
+      <span class="dot on"></span>
+      <span class="nom">${vignette(j)} ${esc(j.pseudo)}
+        ${j.ami ? '<small style="color:var(--teal)"> · ami</small>' : ""}</span>
+      <button class="ghost" data-invit="${esc(j.id)}">Inviter</button>
+    </div>`).join("");
+
+  $("listeInvitables").querySelectorAll("[data-invit]").forEach(b => b.onclick = () => {
+    socket.emit("invite:joueur", {code: state.code, cibleId: b.dataset.invit}, res => {
+      b.disabled = true;
+      b.classList.add("envoye");
+      b.textContent = res?.livree ? "Invité ✓" : "Hors ligne";
+    });
+  });
+}
+$("btnRafraichirInvit").onclick = chargerInvitables;
+
 $("btnStart").onclick = () => socket.emit("game:start", {code:state.code});
 socket.on("room:update", renderLobby);
 

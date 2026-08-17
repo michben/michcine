@@ -956,32 +956,82 @@ app.post("/api/progression/claim", (req, res) => {
 });
 
 
+/**
+ * Les suggestions vivent en base et non dans un fichier : le disque de Render
+ * est effacé à chaque déploiement, ce qui les faisait disparaître.
+ */
+let suggestions = [];
+const saveSuggestions = () => sauver("suggestions", suggestions);
+
 app.post("/api/suggestions", (req, res) => {
     const user = exigeCompte(req, res);
     if (!user) return;
-    const { titre, commentaire } = req.body;
-    if (!titre) return res.status(400).json({ error: "TITRE_MANQUANT" });
-    
-    const SUGGESTIONS_FILE = new URL("./suggestions.json", import.meta.url);
-    let suggestions = [];
-    try { suggestions = JSON.parse(fs.readFileSync(SUGGESTIONS_FILE, "utf8")); } catch(e) {}
-    
+    const titre = String(req.body.titre || "").trim().slice(0, 120);
+    if (titre.length < 2) return res.status(400).json({ error: "TITRE_MANQUANT" });
+
+    // trois suggestions par jour et par joueur
+    const depuis = Date.now() - 24 * 60 * 60 * 1000;
+    const recentes = suggestions.filter((x) => x.auteurId === user.id && x.at > depuis);
+    if (recentes.length >= 3) return res.status(429).json({ error: "TROP_DE_SUGGESTIONS" });
+
+    const deja = suggestions.find((x) => normalize(x.titre) === normalize(titre) && !x.traitee);
+    if (deja) {
+        if (!deja.soutiens?.includes(user.id)) {
+            deja.soutiens = [...(deja.soutiens || []), user.id];
+            saveSuggestions();
+        }
+        return res.json({ ok: true, deja: true, soutiens: deja.soutiens.length });
+    }
+
     suggestions.push({
-        auteur: user.pseudo,
-        titre,
-        commentaire: commentaire || "",
-        date: new Date().toISOString()
+        id: (suggestions.at(-1)?.id || 0) + 1,
+        auteur: user.pseudo, auteurId: user.id,
+        titre, commentaire: String(req.body.commentaire || "").trim().slice(0, 200),
+        soutiens: [user.id], traitee: false,
+        at: Date.now(), date: new Date().toISOString(),
     });
-    fs.writeFileSync(SUGGESTIONS_FILE, JSON.stringify(suggestions, null, 2));
+    saveSuggestions();
     res.json({ ok: true });
 });
 
-app.get("/api/admin/suggestions", requireAdmin, (req, res) => {
-    const SUGGESTIONS_FILE = new URL("./suggestions.json", import.meta.url);
-    try {
-        res.json(JSON.parse(fs.readFileSync(SUGGESTIONS_FILE, "utf8")));
-    } catch(e) { res.json([]); }
+/** Suggestions visibles par les joueurs, pour qu'ils puissent les soutenir. */
+app.get("/api/suggestions", (req, res) => {
+    const user = exigeCompte(req, res);
+    if (!user) return;
+    res.json(suggestions
+        .filter((x) => !x.traitee)
+        .sort((a, b) => (b.soutiens?.length || 0) - (a.soutiens?.length || 0) || b.at - a.at)
+        .slice(0, 30)
+        .map((x) => ({ id: x.id, titre: x.titre, auteur: x.auteur,
+                       soutiens: x.soutiens?.length || 0,
+                       soutenue: x.soutiens?.includes(user.id) || false })));
 });
+
+app.post("/api/suggestions/:id/soutenir", (req, res) => {
+    const user = exigeCompte(req, res);
+    if (!user) return;
+    const x = suggestions.find((y) => y.id === Number(req.params.id));
+    if (!x) return res.status(404).json({ error: "INTROUVABLE" });
+    x.soutiens = x.soutiens || [];
+    const i = x.soutiens.indexOf(user.id);
+    i === -1 ? x.soutiens.push(user.id) : x.soutiens.splice(i, 1);
+    saveSuggestions();
+    res.json({ ok: true, soutiens: x.soutiens.length, soutenue: i === -1 });
+});
+
+app.put("/api/admin/suggestions/:id", requireAdmin, (req, res) => {
+    const x = suggestions.find((y) => y.id === Number(req.params.id));
+    if (!x) return res.status(404).json({ error: "INTROUVABLE" });
+    x.traitee = req.body.traitee !== false;
+    saveSuggestions();
+    res.json({ ok: true });
+});
+
+app.get("/api/admin/suggestions", requireAdmin, (_req, res) =>
+    res.json(suggestions.slice().sort((a, b) =>
+        (a.traitee ? 1 : 0) - (b.traitee ? 1 : 0) ||
+        (b.soutiens?.length || 0) - (a.soutiens?.length || 0)))
+);
 
 /* ---------- amis ---------- */
 
@@ -1139,6 +1189,29 @@ app.post("/api/parrainage/rejoindre", (req, res) => {
 });
 
 app.get("/api/presence", (_req, res) => res.json({ enLigne: nombreEnLigne() }));
+
+/** Liste des joueurs actuellement connectés, pour les inviter en partie. */
+app.get("/api/presence/liste", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (!user) return;
+
+  const vus = new Set();
+  const joueurs = [];
+  for (const [, socket] of io.of("/").sockets) {
+    const u = socket.data.user;
+    if (!u || vus.has(u.id)) continue;      // un joueur peut avoir plusieurs onglets
+    vus.add(u.id);
+    if (estBloque(user.id, u.id)) continue;
+    joueurs.push({
+      id: u.id, pseudo: u.pseudo, avatar: u.avatar, photo: u.photo || null,
+      niveau: u.niveau || 0,
+      ami: statutRelation(user.id, u.id) === "ami",
+      moi: u.id === user.id,
+    });
+  }
+  joueurs.sort((a, b) => (b.ami - a.ami) || (b.niveau - a.niveau));
+  res.json({ total: joueurs.length, joueurs });
+});
 app.get("/api/presence/users", (req, res) => {
   res.json(getConnectedUsers());
 });
@@ -2150,6 +2223,26 @@ io.on("connection", (socket) => {
     cb?.({ ok: true, livree });
   });
 
+  /** Invite un joueur connecté dans le salon en cours. */
+  socket.on("invite:joueur", ({ code, cibleId }, cb) => {
+    const room = rooms.get(code);
+    // les joueurs sont indexés par identifiant de compte, pas de socket
+    if (!room || !room.players.has(user.id)) return cb?.({ ok: false, error: "PAS_DANS_LE_SALON" });
+    if (estBloque(user.id, cibleId)) return cb?.({ ok: false, error: "BLOQUE" });
+
+    let livree = false;
+    for (const [, s] of io.of("/").sockets) {
+      if (s.data.user?.id !== cibleId) continue;
+      s.emit("invite:recue", {
+        code: room.code, mode: room.mode,
+        de: user.pseudo, avatar: user.avatar, photo: user.photo || null,
+        joueurs: room.players.size,
+      });
+      livree = true;
+    }
+    cb?.({ ok: true, livree });
+  });
+
   socket.on("room:leave", () => leaveAllRooms(socket));
 
   socket.on("disconnect", () => leaveAllRooms(socket));
@@ -2223,6 +2316,7 @@ empreinteAdmin = await charger("adminPass", null, null);
 palmares = await charger("palmares", null, []);
 chargerSaison(await charger("saison", null, null));
 progression = await charger("quetes", null, {});
+suggestions = await charger("suggestions", null, []);
 for (const [id, liste] of Object.entries(await charger("vus", null, {})))
   vusParJoueur.set(id, liste);
 conversations = await charger("conversations", null, {});
