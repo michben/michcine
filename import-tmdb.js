@@ -144,6 +144,8 @@ async function collecte(label, params, cible, vf) {
         votes: d.vote_count || 0,
         difficulty: niveau(d.vote_count || 0),
         animation: estAnime,
+        // les films d'animation et familiaux alimentent la catégorie Enfants
+        categorie: (d.genres || []).some((g) => [16, 10751].includes(g.id)) ? "kid" : "tous",
         vf,
         enabled: true,
       };
@@ -211,6 +213,7 @@ const compte = (f) => movies.filter(f).length;
 console.log(`\n${movies.length} films écrits dans movies.json`);
 console.log(`  français : ${compte((m) => m.vf)} · internationaux : ${compte((m) => !m.vf)}`);
 console.log(`  animation : ${compte((m) => m.animation)} (plafond ${MAX_ANIMATION})`);
+console.log(`  catégorie Enfants : ${compte((m) => m.categorie === "kid")}`);
 for (const n of ["facile", "moyen", "difficile"])
   console.log(`  ${n} : ${compte((m) => m.difficulty === n)}`);
 
