@@ -17,7 +17,7 @@ import { createRequire } from "module";
 import { dirname, join } from "path";
 import crypto from "crypto";
 import fs from "fs";
-import { mountAuth, userFromCookie, addRankedPoints,
+import { mountAuth, userFromCookie, connecterManuel, creerCompte, estCompteEnfant, addRankedPoints,
          spendCredits, grantCredits, getCredits, CREDITS_PER_GAME,
          listUsers, adminUpdateUser, adminDeleteUser, grantAll,
          grantPoints, getPoints, exchangePoints,
@@ -515,6 +515,14 @@ app.put("/api/admin/users/:id/photo", requireAdmin, (req, res) => {
 
 /** Exempte un compte de parrainage — utile pour les premiers joueurs. */
 /** Valide l'adresse email d'un compte sans lui envoyer de code. */
+app.post("/api/admin/comptes", requireAdmin, (req, res) => {
+  console.log("Creating user with body:", req.body);
+  const r = creerCompte(req.body);
+  if (r.error) return res.status(400).json(r);
+  const { motDePasse, ...compte } = r.user;
+  res.status(201).json(compte);
+});
+
 app.put("/api/admin/users/:id/valider", requireAdmin, (req, res) => {
   const user = validerManuellement(req.params.id);
   if (!user) return res.status(404).json({ error: "NOT_FOUND" });

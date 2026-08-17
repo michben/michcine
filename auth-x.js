@@ -915,3 +915,34 @@ setInterval(() => {
   const limit = Date.now() - 15 * 60 * 1000;
   for (const [k, v] of pending) if (v.createdAt < limit) pending.delete(k);
 }, 60 * 60 * 1000).unref?.();
+
+export function creerCompte({ identifiant, motDePasse, pseudo, avatar, photo, estEnfant }) {
+  const id = String(identifiant || "").trim().toLowerCase();
+  if (!/^[a-z0-9._-]{3,20}$/.test(id)) return { error: "IDENTIFIANT_INVALIDE" };
+  if (String(motDePasse || "").length < 4) return { error: "MOT_DE_PASSE_COURT" };
+  if (Object.values(users).some((u) => u.identifiant === id)) return { error: "IDENTIFIANT_PRIS" };
+
+  const cle = `kid:${id}`;
+  users[cle] = {
+    id: cle, identifiant: id, motDePasse: hacher(motDePasse),
+    pseudo: String(pseudo || id).trim().slice(0, 20), pseudoChosen: true,
+    avatar: avatar || (estEnfant ? "🧸" : "🎬"), photo: photo || null,
+    compteEnfant: !!estEnfant,
+    fondateur: true, emailVerifie: true, role: "joueur",
+    totalScore: 0, gamesPlayed: 0, scoreGlobal: 0, partiesGlobales: 0,
+    credits: STARTING_CREDITS, points: 0, xp: 0, niveau: 0,
+    amis: [], demandesRecues: [], demandesEnvoyees: [], bloques: [], claimedBonuses: [],
+  };
+  saveUsers();
+  return { user: users[cle] };
+}
+
+export function connecterManuel(identifiant, motDePasse) {
+  const id = String(identifiant || "").trim().toLowerCase();
+  const u = Object.values(users).find((x) => x.identifiant === id);
+  if (!u || !verifierMotDePasse(motDePasse, u.motDePasse)) return { error: "IDENTIFIANTS_INVALIDES" };
+  if (u.banned) return { error: "BANNI" };
+  return { user: u };
+}
+
+export const estCompteEnfant = (u) => Boolean(u?.compteEnfant);

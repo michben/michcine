@@ -2,8 +2,8 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="/favicon.svg">
+<link rel="icon" href="/api/favicon">
+<link rel="apple-touch-icon" href="/api/favicon">
 <meta name="theme-color" content="#0A0C16">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MichBen — Catalogue de films</title>
@@ -82,8 +82,9 @@
       <button id="tabMovies" aria-selected="true">Films</button>
       <button id="tabUsers" aria-selected="false">Joueurs</button>
       <button id="tabReports" aria-selected="false">Signalements</button>
-      <button id="tabSug" aria-selected="false">Suggestions <span id="badgeSug" class="chip hidden">0</span></button>
-      <button id="tabReglages" aria-selected="false">Réglages</button>
+            <button id="tabReglages" aria-selected="false">Réglages</button>
+      <button id="tabSorties" aria-selected="false">Sorties Ciné</button>
+      <button id="tabNowPlaying" aria-selected="false">Au Cinéma</button>
     </div>
 
     <div id="paneMovies">
@@ -103,22 +104,6 @@
         <div>
           <label for="bulkRating">Note minimale (sur 10)</label>
           <input id="bulkRating" inputmode="decimal" placeholder="6.5">
-        </div>
-        <div>
-          <label for="bulkCategorie">Catégorie concernée</label>
-          <select id="bulkCategorie">
-            <option value="toutes">Toutes</option>
-            <option value="tous">Tous publics</option>
-            <option value="kid">Enfants</option>
-          </select>
-        </div>
-        <div>
-          <label for="bulkVers">Reclasser vers</label>
-          <select id="bulkVers">
-            <option value="">— ne pas reclasser —</option>
-            <option value="kid">Enfants</option>
-            <option value="tous">Tous publics</option>
-          </select>
         </div>
       </div>
       <div class="row">
@@ -142,18 +127,13 @@
       </div>
       <label for="actors">Acteurs principaux</label>
       <input id="actors" placeholder="Marlon Brando, Al Pacino">
-      <label for="categorieFilm">Catégorie</label>
-      <select id="categorieFilm">
-        <option value="tous">Tous publics</option>
-        <option value="kid">Enfants et famille</option>
-      </select>
-      <label for="poster" style="margin-top:14px">URL de l'affiche</label>
+      <label for="poster">URL de l'affiche</label>
       <input id="poster" placeholder="https://image.tmdb.org/t/p/w500/…">
       <label for="still" style="margin-top:14px">Image d'indice (sans titre imprimé)</label>
       <input id="still" placeholder="https://image.tmdb.org/t/p/w780/…">
 
       <div style="margin-top:20px;padding-top:18px;border-top:1px solid rgba(237,232,220,.12)">
-        <p class="tag" style="margin-bottom:8px">Cadrage de l'image d'indice pour ce film</p>
+        <p class="tag" style="margin-bottom:8px">Cadrage de l'image d'indice pour ce série</p>
         <label style="display:flex;align-items:center;gap:9px;text-transform:none;letter-spacing:0;font-size:15px;color:var(--chalk);margin-bottom:12px">
           <input type="checkbox" id="fSuivreGlobal" checked style="width:auto">
           Utiliser le réglage général
@@ -200,7 +180,6 @@
         <button data-f="facile" aria-pressed="false">Facile</button>
         <button data-f="moyen" aria-pressed="false">Moyen</button>
         <button data-f="difficile" aria-pressed="false">Difficile</button>
-        <button data-f="kid" aria-pressed="false">🧸 Enfants</button>
         <button data-f="off" aria-pressed="false">Désactivés</button>
       </div>
       <div id="list"></div>
@@ -222,13 +201,39 @@
       </div>
     </div>
 
-    <div id="paneSug" class="hidden">
+    
+    <div id="paneSorties" class="hidden">
       <div class="card">
-        <p class="tag" id="sugCount">Suggestions des joueurs</p>
+        <p class="tag" id="sortiesCount">Sorties Ciné de la Semaine</p>
         <p style="color:var(--muted);font-size:13px;margin:0 0 8px;line-height:1.6">
-          Classées par nombre de soutiens. « Chercher » interroge TMDB et prépare la fiche
-          du film : il ne reste qu'à l'enregistrer dans l'onglet Films.</p>
-        <div id="sugList"></div>
+          Gérez les films affichés aux joueurs pour cette semaine. Ajoutez manuellement un film avec son lien TMDB pour forcer son affichage.
+        </p>
+        <div class="row" style="margin-bottom: 16px;">
+          <input type="text" id="tmdbUrlInput" placeholder="Ex: https://www.themoviedb.org/movie/12345-..." style="flex:1;">
+          <button id="btnAddCustomSortie">Ajouter via TMDB</button>
+        </div>
+        <div class="row">
+          <button id="btnLoadSorties">Rafraîchir les sorties</button>
+        </div>
+        <div id="sortiesList" style="margin-top: 16px;"></div>
+      </div>
+    </div>
+
+    
+    <div id="paneNowPlaying" class="hidden">
+      <div class="card">
+        <p class="tag" id="nowPlayingCount">Actuellement au cinéma</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 8px;line-height:1.6">
+          Gérez les films affichés aux joueurs pour la sélection "Actuellement au cinéma". Ajoutez manuellement un film avec son lien TMDB pour forcer son affichage.
+        </p>
+        <div class="row" style="margin-bottom: 16px;">
+          <input type="text" id="tmdbUrlInputNow" placeholder="Ex: https://www.themoviedb.org/movie/12345-..." style="flex:1;">
+          <button id="btnAddCustomNowPlaying">Ajouter via TMDB</button>
+        </div>
+        <div class="row">
+          <button id="btnLoadNowPlaying">Rafraîchir la liste</button>
+        </div>
+        <div id="nowPlayingListUI" style="margin-top: 16px;"></div>
       </div>
     </div>
 
@@ -278,6 +283,7 @@
           <div><label for="rDepart">Tickets offerts à l'inscription</label><input id="rDepart" type="number" min="0" max="1000"></div>
           <div><label for="rPartie">Tickets gagnés par partie</label><input id="rPartie" type="number" min="0" max="100"></div>
           <div><label for="rTaux">Points pour 1 ticket (échange)</label><input id="rTaux" type="number" min="10" max="100000"></div>
+          <div style="grid-column: 1 / -1;"><label for="rTmdbKey">Clé API TMDB (Pour les prochaines sorties cinéma)</label><input id="rTmdbKey" type="text" placeholder="Entrez votre clé API TheMovieDB"></div>
           <div><label for="rGrace">Délai après la 1re bonne réponse (s)</label><input id="rGrace" type="number" min="0" max="120"></div>
           <div>
             <label for="rVitesse">Dévoilement du synopsis (ms) — 0 pour désactiver</label>
@@ -299,6 +305,20 @@
           <button id="btnResetReglages" class="ghost">Valeurs par défaut</button>
         </div>
         <p class="msg" id="reglagesMsg"></p>
+      </div>
+
+      <div class="card">
+        <p class="tag">Apparence du site</p>
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer;font-size:15px;color:var(--chalk);text-transform:none;letter-spacing:0">
+          <input type="checkbox" id="rAnimAvancees" style="width:auto">
+          Activer les effets visuels (Animations boutons au survol/toucher)
+        </label>
+        <label for="favInput">Changer le Favicon (l'icône de l'onglet)</label>
+        <input type="file" id="favInput" accept=".png, .svg, .ico, .jpg, .jpeg" style="background: transparent; border: none; padding: 0;">
+        <div class="row">
+          <button id="btnUploadFavicon">Uploader le favicon</button>
+        </div>
+        <p class="msg" id="favMsg"></p>
       </div>
 
       <div class="card" id="alerteMdp" style="border-color:rgba(228,88,110,.5)">
@@ -325,24 +345,27 @@
     </div>
 
     <div id="paneUsers" class="hidden">
-      <div class="card">
-        <p class="tag">Créer un compte enfant</p>
+            <div class="card">
+        <p class="tag">Générateur de code d'entrée VIP</p>
         <p style="color:var(--muted);font-size:13px;margin:0 0 10px;line-height:1.6">
-          Un compte enfant n'accède qu'au catalogue Enfants, sans amis, messagerie,
-          échange ni liste de joueurs. Il se connecte avec l'identifiant et le mot de
-          passe que vous choisissez ici.</p>
-        <div class="grid">
-          <div><label for="kidIdent">Identifiant</label><input id="kidIdent" placeholder="lea" maxlength="20"></div>
-          <div><label for="kidPseudo">Pseudo affiché</label><input id="kidPseudo" placeholder="Léa" maxlength="20"></div>
-          <div><label for="kidPass">Mot de passe</label><input id="kidPass" type="text" placeholder="4 caractères minimum"></div>
-          <div><label for="kidAvatar">Avatar</label><input id="kidAvatar" placeholder="🧸" maxlength="8"></div>
-        </div>
-        <label for="kidPhoto" style="margin-top:12px">Photo de profil (facultatif)</label>
-        <input id="kidPhoto" type="url" placeholder="https://…/photo.jpg">
-        <div class="row"><button id="btnCreerEnfant">Créer le compte</button></div>
-        <p class="msg" id="kidMsg"></p>
+          Générez un code d'invitation illimité à distribuer pour contourner le blocage d'inscription.
+        </p>
+        <div class="row">
+          <button id="btnGenInvite">Générer un code VIP</button>
       </div>
-
+      <div class="card">
+        <p class="tag">Créer un compte (Manuel)</p>
+        <input id="newId" placeholder="Identifiant">
+        <input id="newMdp" type="password" placeholder="Mot de passe" style="margin-top:8px;">
+        <label style="display:flex;align-items:center;gap:8px;margin-top:8px;">
+           <input type="checkbox" id="newIsKid" style="width:auto;"> Compte Enfant
+        </label>
+        <button id="btnCreateUser" style="margin-top:8px;">Créer le compte</button>
+        <p class="msg" id="createMsg"></p>
+        </div>
+        <p class="msg" id="inviteMsg"></p>
+      </div>
+      
       <div class="card">
         <p class="tag">Avant d'activer le parrainage</p>
         <p style="color:var(--muted);font-size:13px;margin:0 0 10px;line-height:1.6">
@@ -376,7 +399,6 @@
 <script>
 const $ = id => document.getElementById(id);
 const FIELDS = ["title","synopsis","acceptedAnswers","year","director","actors","poster","still"];
-const CHAMP_CAT = "categorieFilm";
 let token = "", movies = [], editingId = null;
 
 const api = (path, options = {}) => fetch(path, {
@@ -403,10 +425,7 @@ $("filters").querySelectorAll("[data-f]").forEach(b => b.onclick = () => {
 
 function render(){
   const vus = movies.filter(m =>
-    filtre === "tous" ? true
-    : filtre === "off" ? m.enabled === false
-    : filtre === "kid" ? m.categorie === "kid"
-    : m.difficulty === filtre);
+    filtre === "tous" ? true : filtre === "off" ? m.enabled === false : m.difficulty === filtre);
   const actifs = movies.filter(m => m.enabled !== false).length;
   $("countLabel").textContent =
     `${vus.length} affiché${vus.length>1?"s":""} · ${actifs} actifs sur ${movies.length}`;
@@ -414,7 +433,7 @@ function render(){
     <div class="item ${m.enabled === false ? "off" : ""}">
       <img src="${m.poster||""}" alt="" onerror="this.style.visibility='hidden'">
       <div>
-        <strong>${esc(m.title)}<span class="lvl">${m.difficulty||"?"}</span>${m.categorie === "kid" ? '<span class="lvl" style="border-color:var(--teal);color:var(--teal)">enfants</span>' : ""}${m.cadrageImage ? '<span class="lvl" style="border-color:var(--beam);color:var(--beam)">cadrage</span>' : ""}</strong>
+        <strong>${esc(m.title)}<span class="lvl">${m.difficulty||"?"}</span>${m.cadrageImage ? '<span class="lvl" style="border-color:var(--beam);color:var(--beam)">cadrage</span>' : ""}</strong>
         <small>${m.year||"—"} · ${m.rating ? m.rating+"/10 · " : ""}${esc(m.director||"réalisateur non renseigné")}</small>
       </div>
       <button class="ghost" data-toggle="${m.id}">${m.enabled === false ? "Activer" : "Retirer"}</button>
@@ -432,7 +451,7 @@ function render(){
   $("list").querySelectorAll("[data-del]").forEach(b => b.onclick = () => remove(Number(b.dataset.del)));
 }
 
-/* ---------- Cadrage propre à un film ---------- */
+/* ---------- Cadrage propre à un série ---------- */
 function majApercuFilm(){
   const url = $("still").value.trim() || $("poster").value.trim();
   const img = $("fApercu");
@@ -452,7 +471,7 @@ function majApercuFilm(){
   img.style.filter = Number(source.flou) ? `blur(${Number(source.flou) / 10}px)` : "";
 
   if (global) $("fApercuMsg").textContent =
-    "Réglage général appliqué. Décochez pour ajuster ce film en particulier.";
+    "Réglage général appliqué. Décochez pour ajuster ce série en particulier.";
 }
 
 for (const id of ["fSuivreGlobal","fZoom","fFlou","fCadrage","still","poster"])
@@ -462,7 +481,7 @@ for (const id of ["fSuivreGlobal","fZoom","fFlou","fCadrage","still","poster"])
     majApercuFilm();
   });
 
-/** Le formulaire lit et écrit le cadrage du film en cours d'édition. */
+/** Le formulaire lit et écrit le cadrage du série en cours d'édition. */
 function chargerCadrage(m){
   const c = m?.cadrageImage;
   $("fSuivreGlobal").checked = !c;
@@ -483,7 +502,6 @@ function edit(id){
   editingId = id;
   FIELDS.forEach(f => $(f).value = Array.isArray(m[f]) ? m[f].filter(a=>a!==m.title).join(", ") : (m[f] ?? ""));
   chargerCadrage(m);
-  $(CHAMP_CAT).value = m.categorie || "tous";
   $("formTitle").textContent = `Modifier : ${m.title}`;
   $("btnCancel").classList.remove("hidden");
   window.scrollTo({top:0, behavior:"smooth"});
@@ -493,7 +511,6 @@ function resetForm(){
   editingId = null;
   FIELDS.forEach(f => $(f).value = "");
   chargerCadrage(null);
-  $(CHAMP_CAT).value = "tous";
   $("formTitle").textContent = "Nouveau film";
   $("btnCancel").classList.add("hidden");
 }
@@ -504,22 +521,19 @@ async function loadStats(){
   if (!res.ok) return;
   const s = await res.json();
   $("stats").textContent = `${s.actifs} films actifs sur ${s.total} — `
-    + Object.entries(s.parNiveau).map(([n,v]) => `${n} ${v.actifs}/${v.total}`).join(", ")
-    + ` · catégorie Enfants : ${s.parCategorie?.kidActifs ?? 0} actifs sur ${s.parCategorie?.kid ?? 0}`;
+    + Object.entries(s.parNiveau).map(([n,v]) => `${n} ${v.actifs}/${v.total}`).join(", ");
   $("stats").className = "msg";
 }
 
 async function bulk(enabled){
   const res = await api("/api/admin/movies/bulk", {method:"POST", body: JSON.stringify({
     difficulty: $("bulkLevel").value,
-    categorie: $("bulkCategorie").value,
-    definirCategorie: $("bulkVers").value || undefined,
     minRating: $("bulkRating").value || 0,
     enabled,
   })});
   const data = await res.json();
   $("bulkMsg").textContent = res.ok
-    ? `${data.touched} films ${enabled ? "activés" : "désactivés"} — ${data.actifs} actifs au total.`
+    ? `${data.touched} séries ${enabled ? "activés" : "désactivés"} — ${data.actifs} actifs au total.`
     : "Échec.";
   $("bulkMsg").className = res.ok ? "msg ok" : "msg err";
   const liste = await api("/api/movies");
@@ -532,7 +546,6 @@ $("btnDisable").onclick = () => bulk(false);
 $("btnSave").onclick = async () => {
   const body = Object.fromEntries(FIELDS.map(f => [f, $(f).value.trim()]));
   body.cadrageImage = cadrageSaisi();
-  body.categorie = $(CHAMP_CAT).value;
   if (!body.title || !body.synopsis){
     $("formMsg").textContent = "Le titre et le synopsis sont obligatoires.";
     $("formMsg").className = "msg err"; return;
@@ -567,81 +580,179 @@ function tab(which){
   for (const [nom, onglet, volet] of [["movies","tabMovies","paneMovies"],
                                       ["users","tabUsers","paneUsers"],
                                       ["reports","tabReports","paneReports"],
-                                      ["sug","tabSug","paneSug"],
-                                      ["reglages","tabReglages","paneReglages"]]) {
+                                      ["reglages","tabReglages","paneReglages"],
+                                      ["sorties","tabSorties","paneSorties"],
+                                      ["nowplaying","tabNowPlaying","paneNowPlaying"]]) {
     $(onglet).setAttribute("aria-selected", which === nom);
     $(volet).classList.toggle("hidden", which !== nom);
   }
   if (which === "users") loadUsers();
   if (which === "reports"){ loadReports(); loadConversations(); }
-  if (which === "sug") loadSuggestions();
   if (which === "reglages"){ etatSecurite(); chargerReglages(); }
+  if (which === "sorties") loadSorties();
+  if (which === "nowplaying") loadNowPlaying();
 }
 $("tabMovies").onclick = () => tab("movies");
 $("tabUsers").onclick = () => tab("users");
 $("tabReports").onclick = () => tab("reports");
-$("tabSug").onclick = () => tab("sug");
 $("tabReglages").onclick = () => tab("reglages");
+$("tabSorties").onclick = () => tab("sorties");
+$("tabNowPlaying").onclick = () => tab("nowplaying");
 
-/* ---------- Suggestions des joueurs ---------- */
-async function loadSuggestions(){
-  const res = await api("/api/admin/suggestions");
-  if (!res.ok) return;
-  const liste = await res.json();
-  const nouvelles = liste.filter(s => s.statut === "nouvelle");
 
-  $("sugCount").textContent = `${nouvelles.length} en attente · ${liste.length} au total`;
-  $("badgeSug").textContent = nouvelles.length;
-  $("badgeSug").classList.toggle("hidden", nouvelles.length === 0);
+$("btnLoadSorties").onclick = loadSorties;
 
-  $("sugList").innerHTML = liste.length ? liste.map(s => `
-    <div class="urow ${s.statut !== "nouvelle" ? "banned" : ""}">
-      <div class="who">
-        <strong>${esc(s.titre)}${s.annee ? ` (${s.annee})` : ""}
-          ${s.categorie === "kid" ? '<span class="lvl" style="border-color:var(--teal);color:var(--teal)">enfants</span>' : ""}</strong>
-        <small>${s.soutiens.length} soutien${s.soutiens.length>1?"s":""} · proposé par ${esc(s.auteur)}</small>
-        ${s.commentaire ? `<small>« ${esc(s.commentaire)} »</small>` : ""}
+$("btnAddCustomSortie").onclick = async () => {
+    const url = $("tmdbUrlInput").value.trim();
+    const match = url.match(/movie\/(\d+)/);
+    if (!match) return alert("Lien TMDB invalide. Utilisez un lien comme https://www.themoviedb.org/movie/12345");
+    const id = Number(match[1]);
+    await api("/api/admin/sorties/custom", { method: "POST", body: JSON.stringify({ id }) });
+    $("tmdbUrlInput").value = "";
+    loadSorties();
+};
+
+window.toggleHideSortie = async (id, currentlyHidden) => {
+    const endpoint = currentlyHidden ? "/api/admin/sorties/unhide" : "/api/admin/sorties/hide";
+    await api(endpoint, { method: "POST", body: JSON.stringify({ id }) });
+    loadSorties();
+};
+
+window.removeCustomSortie = async (id) => {
+    await api("/api/admin/sorties/remove-custom", { method: "POST", body: JSON.stringify({ id }) });
+    loadSorties();
+};
+
+async function loadSorties() {
+  $("sortiesList").innerHTML = "<p class='msg'>Chargement des sorties TMDB...</p>";
+  try {
+    const res = await api("/api/movies/upcoming");
+    const data = await res.json();
+    if (data.error && data.error === "NO_KEY") {
+      $("sortiesList").innerHTML = "<p class='msg err'>Erreur: La clé API TMDB n'est pas configurée dans les Réglages.</p>";
+      return;
+    }
+    if (!data.movies || data.movies.length === 0) {
+      $("sortiesList").innerHTML = "<p class='msg'>Aucune sortie trouvée.</p>";
+      return;
+    }
+    
+    $("sortiesList").innerHTML = data.movies.map((m, i) => `
+      <div class="urow ${m.hidden ? 'banned' : ''}" style="align-items:flex-start">
+        <img src="${m.poster || ''}" style="width:50px;height:75px;object-fit:cover;border-radius:4px;background:#333;margin-right:10px;">
+        <div class="who" style="flex:1;">
+          <strong>${esc(m.title)} ${m.custom ? '<span class="chip" style="color:var(--teal);border-color:var(--teal);">Ajouté</span>' : ''} ${m.hidden ? '<span class="chip">Masqué</span>' : ''}</strong>
+          <small>⭐ ${m.vote ? m.vote.toFixed(1) : '?'} / 10</small>
+          <div style="margin-top:4px;font-size:13px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">
+            ${esc(m.overview || "Aucun synopsis disponible.")}
+          </div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:5px;">
+            <button class="ghost" onclick="importSortie(${i})">Pré-remplir</button>
+            <button class="ghost" onclick="toggleHideSortie(${m.id}, ${m.hidden})">${m.hidden ? 'Afficher' : 'Masquer'}</button>
+            ${m.custom ? `<button class="danger" onclick="removeCustomSortie(${m.id})">Retirer</button>` : ''}
+        </div>
       </div>
-      ${s.statut === "nouvelle" ? `
-        <button class="ghost" data-chercher="${s.id}">Chercher</button>
-        <button class="ghost" data-ajoutee="${s.id}">Traitée</button>
-        <button class="danger" data-refusee="${s.id}">Refuser</button>`
-        : `<span class="chip">${s.statut}</span>`}
-    </div>`).join("") : "<p class='msg'>Aucune suggestion pour l'instant.</p>";
-
-  const statuer = async (id, statut) => {
-    await api(`/api/admin/suggestions/${id}`, {method:"PUT", body: JSON.stringify({statut})});
-    loadSuggestions();
-  };
-  $("sugList").querySelectorAll("[data-ajoutee]").forEach(b => b.onclick = () => statuer(b.dataset.ajoutee, "ajoutee"));
-  $("sugList").querySelectorAll("[data-refusee]").forEach(b => b.onclick = () => statuer(b.dataset.refusee, "refusee"));
-
-  $("sugList").querySelectorAll("[data-chercher]").forEach(b => b.onclick = async () => {
-    b.textContent = "Recherche…"; b.disabled = true;
-    const r = await api(`/api/admin/suggestions/${b.dataset.chercher}/chercher`, {method:"POST"});
-    const d = await r.json().catch(() => ({}));
-    b.disabled = false; b.textContent = "Chercher";
-
-    if (!r.ok || !d.trouve) return alert(d.error === "TMDB_ABSENT"
-      ? "Ajoutez la variable TMDB_API_KEY sur Render pour utiliser la recherche."
-      : "Film introuvable sur TMDB. Saisissez-le à la main.");
-
-    // on préremplit le formulaire de l'onglet Films
-    resetForm();
-    for (const [champ, valeur] of Object.entries(d.film))
-      if ($(champ)) $(champ).value = valeur ?? "";
-    if ($("categorieFilm")) $("categorieFilm").value = d.film.categorie;
-    tab("movies");
-    window.scrollTo({top: 0, behavior: "smooth"});
-    $("formMsg").textContent = "Fiche préremplie depuis TMDB — vérifiez le synopsis puis enregistrez.";
-    $("formMsg").className = "msg ok";
-  });
+    `).join("");
+    
+    window.lastSorties = data.movies;
+  } catch (e) {
+    $("sortiesList").innerHTML = "<p class='msg err'>Impossible de charger les sorties.</p>";
+  }
 }
+
+window.importSortie = function(idx) {
+  const m = window.lastSorties[idx];
+  $("tabMovies").click();
+  resetForm();
+  $("title").value = m.title || "";
+  $("synopsis").value = m.overview || "";
+  $("poster").value = m.poster || "";
+  $("still").value = m.poster || "";
+  $("year").value = new Date().getFullYear();
+  $("formTitle").textContent = "Nouveau film (Importé depuis Sorties Ciné)";
+  window.scrollTo({top:0, behavior:"smooth"});
+};
+
+
+$("btnLoadNowPlaying").onclick = loadNowPlaying;
+
+$("btnAddCustomNowPlaying").onclick = async () => {
+    const url = $("tmdbUrlInputNow").value.trim();
+    const match = url.match(/movie\/(\d+)/);
+    if (!match) return alert("Lien TMDB invalide. Utilisez un lien comme https://www.themoviedb.org/movie/12345");
+    const id = Number(match[1]);
+    await api("/api/admin/nowplaying/custom", { method: "POST", body: JSON.stringify({ id }) });
+    $("tmdbUrlInputNow").value = "";
+    loadNowPlaying();
+};
+
+window.toggleHideNowPlaying = async (id, currentlyHidden) => {
+    const endpoint = currentlyHidden ? "/api/admin/nowplaying/unhide" : "/api/admin/nowplaying/hide";
+    await api(endpoint, { method: "POST", body: JSON.stringify({ id }) });
+    loadNowPlaying();
+};
+
+window.removeCustomNowPlaying = async (id) => {
+    await api("/api/admin/nowplaying/remove-custom", { method: "POST", body: JSON.stringify({ id }) });
+    loadNowPlaying();
+};
+
+async function loadNowPlaying() {
+  $("nowPlayingListUI").innerHTML = "<p class='msg'>Chargement des films à l'affiche...</p>";
+  try {
+    const res = await api("/api/movies/now_playing");
+    const data = await res.json();
+    if (data.error && data.error === "NO_KEY") {
+      $("nowPlayingListUI").innerHTML = "<p class='msg err'>Erreur: La clé API TMDB n'est pas configurée dans les Réglages.</p>";
+      return;
+    }
+    if (!data.movies || data.movies.length === 0) {
+      $("nowPlayingListUI").innerHTML = "<p class='msg'>Aucun film trouvé.</p>";
+      return;
+    }
+    
+    $("nowPlayingListUI").innerHTML = data.movies.map((m, i) => `
+      <div class="urow ${m.hidden ? 'banned' : ''}" style="align-items:flex-start">
+        <img src="${m.poster || ''}" style="width:50px;height:75px;object-fit:cover;border-radius:4px;background:#333;margin-right:10px;">
+        <div class="who" style="flex:1;">
+          <strong>${esc(m.title)} ${m.custom ? '<span class="chip" style="color:var(--teal);border-color:var(--teal);">Ajouté</span>' : ''} ${m.hidden ? '<span class="chip">Masqué</span>' : ''}</strong>
+          <small>⭐ ${m.vote ? m.vote.toFixed(1) : '?'} / 10</small>
+          <div style="margin-top:4px;font-size:13px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">
+            ${esc(m.overview || "Aucun synopsis disponible.")}
+          </div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:5px;">
+            <button class="ghost" onclick="importNowPlaying(${i})">Pré-remplir</button>
+            <button class="ghost" onclick="toggleHideNowPlaying(${m.id}, ${m.hidden})">${m.hidden ? 'Afficher' : 'Masquer'}</button>
+            ${m.custom ? `<button class="danger" onclick="removeCustomNowPlaying(${m.id})">Retirer</button>` : ''}
+        </div>
+      </div>
+    `).join("");
+    
+    window.lastNowPlaying = data.movies;
+  } catch (e) {
+    $("nowPlayingListUI").innerHTML = "<p class='msg err'>Impossible de charger les films.</p>";
+  }
+}
+
+window.importNowPlaying = function(idx) {
+  const m = window.lastNowPlaying[idx];
+  $("tabMovies").click();
+  resetForm();
+  $("title").value = m.title || "";
+  $("synopsis").value = m.overview || "";
+  $("poster").value = m.poster || "";
+  $("still").value = m.poster || "";
+  $("year").value = new Date().getFullYear();
+  $("formTitle").textContent = "Nouveau film (Importé depuis Au Cinéma)";
+  window.scrollTo({top:0, behavior:"smooth"});
+};
 
 /* ---------- Réglages du jeu ---------- */
 let reglages = null;
 
-const CHAMPS = { rDuree:"roundDuration", rBase:"basePoints", rDepart:"creditsDepart",
+const CHAMPS = { rTmdbKey:"tmdbApiKey", rDuree:"roundDuration", rBase:"basePoints", rDepart:"creditsDepart",
                  rPartie:"creditsParPartie", rTaux:"pointsParTicket", rGrace:"graceApresPremier",
                  rVitesse:"vitesseSynopsis", rParties:"partiesClasseesParJour",
                  rDonMax:"transfertMax", rDonJour:"transfertParJour", rCoeurs:"coeurs",
@@ -659,6 +770,7 @@ async function chargerReglages(){
   $("rFlou").value = p.flou; $("rFlouVal").textContent = p.flou;
   $("rCadrage").value = p.cadrage;
   majApercu();
+  $("rAnimAvancees").checked = reglages.animationsAvancees !== false;
 
   $("listeIndices").innerHTML = Object.entries(reglages.indices).map(([cle, v]) => `
     <div class="urow">
@@ -691,7 +803,10 @@ for (const id of ["rZoom","rFlou","rCadrage"])
 
 $("btnSaveReglages").onclick = async () => {
   const corps = { indices: {} };
-  for (const [champ, cle] of Object.entries(CHAMPS)) corps[cle] = Number($(champ).value);
+  for (const [champ, cle] of Object.entries(CHAMPS)) {
+    if (cle === "tmdbApiKey") corps[cle] = $(champ).value.trim();
+    else corps[cle] = Number($(champ).value);
+  }
 
   for (const cle of Object.keys(reglages.indices)) {
     corps.indices[cle] = {
@@ -701,6 +816,7 @@ $("btnSaveReglages").onclick = async () => {
       tickets: Number($("listeIndices").querySelector(`[data-tickets="${cle}"]`).value),
     };
   }
+  corps.animationsAvancees = $("rAnimAvancees").checked;
   Object.assign(corps.indices.poster, {
     zoom: Number($("rZoom").value), flou: Number($("rFlou").value), cadrage: $("rCadrage").value,
   });
@@ -752,6 +868,29 @@ $("btnChangerMdp").onclick = async () => {
 };
 
 /* ---------- Conversations signalées ---------- */
+$("btnUploadFavicon").onclick = () => {
+  const file = $("favInput").files[0];
+  if (!file) {
+    $("favMsg").textContent = "Veuillez sélectionner un fichier.";
+    $("favMsg").className = "msg err";
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    $("favMsg").textContent = "Upload en cours...";
+    $("favMsg").className = "msg";
+    const res = await api("/api/admin/favicon", { method: "POST", body: JSON.stringify({ image: e.target.result, ext: file.name.split('.').pop() }) });
+    if (res.ok) {
+      $("favMsg").textContent = "Favicon mis à jour ! Rechargez la page (Ctrl+F5) pour voir le résultat.";
+      $("favMsg").className = "msg ok";
+    } else {
+      $("favMsg").textContent = "Erreur lors de l'upload.";
+      $("favMsg").className = "msg err";
+    }
+  };
+  reader.readAsDataURL(file);
+};
+
 async function loadConversations(){
   const res = await api("/api/admin/conversations");
   if (!res.ok) return;
@@ -823,9 +962,13 @@ function renderUsers(){
   $("userList").innerHTML = players.map(u => `
     <div class="urow ${u.banned?"banned":""}">
       <div class="who">
-        <strong>${u.avatar||"🎬"} ${esc(u.pseudo||"(sans pseudo)")}${u.banned?'<span class="chip">banni</span>':""}</strong>
+        <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+          <span style="font-size:18px;">${u.avatar||"🎬"}</span>
+          <input type="text" data-pseudo="${u.id}" value="${esc(u.pseudo||"")}" placeholder="Pseudo" style="width:130px; padding:4px 8px; font-size:14px; font-weight:bold; border:1px solid rgba(237,232,220,.2); border-radius:6px; background:var(--velvet); color:var(--chalk);">
+          ${u.banned?'<span class="chip">banni</span>':""}
+        </div>
         <small>${u.totalScore||0} pts · ${u.gamesPlayed||0} parties${u.xHandle?" · @"+esc(u.xHandle):""}${u.online?" · en ligne":""}</small>
-        <small>${u.compteEnfant ? "🧸 compte enfant · " : ""}niveau ${u.niveau || 0}${u.codeParrain ? " · code "+esc(u.codeParrain) : ""}${u.fondateur ? " · fondateur" : ""}${u.email && !u.emailVerifie ? " · email à valider" : ""}</small>
+        <small>niveau ${u.niveau || 0}${u.codeParrain ? " · code "+esc(u.codeParrain) : ""}${u.fondateur ? " · fondateur" : ""}${u.email && !u.emailVerifie ? " · email à valider" : ""}</small>
       </div>
       <img src="${u.photo || ""}" alt="" class="pfp ${u.photo ? "" : "vide"}"
            onerror="this.classList.add('vide')" title="${u.photo ? "Photo attribuée" : "Aucune photo"}">
@@ -839,7 +982,6 @@ function renderUsers(){
       ${u.email && !u.emailVerifie
         ? `<button class="ghost" data-valider="${u.id}" title="Valider l'adresse sans envoi de code">✉ Valider</button>`
         : ""}
-      ${u.compteEnfant ? `<button class="ghost" data-kidpass="${u.id}" title="Changer le mot de passe">🔑</button>` : ""}
       <button class="ghost" data-fondateur="${u.id}" title="Dispense de code d'invitation">
         ${u.fondateur ? "★ Fondateur" : "☆ Fondateur"}</button>
       <button class="ghost" data-save="${u.id}">Enregistrer</button>
@@ -859,17 +1001,10 @@ function renderUsers(){
     const credits = Number($("userList").querySelector(`[data-credits="${CSS.escape(id)}"]`).value);
     const role = $("userList").querySelector(`[data-role="${CSS.escape(id)}"]`).value;
     const photo = $("userList").querySelector(`[data-photo="${CSS.escape(id)}"]`).value.trim();
-    await api(`/api/admin/users/${encodeURIComponent(id)}`, {method:"PUT", body:JSON.stringify({credits, role, photo})});
+    const pseudo = $("userList").querySelector(`[data-pseudo="${CSS.escape(id)}"]`).value.trim();
+    await api(`/api/admin/users/${encodeURIComponent(id)}`, {method:"PUT", body:JSON.stringify({credits, role, photo, pseudo})});
     loadUsers();
   });
-  $("userList").querySelectorAll("[data-kidpass]").forEach(b => b.onclick = async () => {
-    const nouveau = prompt("Nouveau mot de passe (4 caractères minimum) :");
-    if (!nouveau) return;
-    const r = await api(`/api/admin/enfants/${encodeURIComponent(b.dataset.kidpass)}/motdepasse`,
-      {method:"PUT", body: JSON.stringify({motDePasse: nouveau})});
-    alert(r.ok ? "Mot de passe changé." : "Mot de passe refusé (trop court ?).");
-  });
-
   $("userList").querySelectorAll("[data-valider]").forEach(b => b.onclick = async () => {
     await api(`/api/admin/users/${encodeURIComponent(b.dataset.valider)}/valider`, {method:"PUT"});
     loadUsers();
@@ -895,32 +1030,12 @@ function renderUsers(){
   });
 }
 
-$("btnCreerEnfant").onclick = async () => {
-  const dire = (t, ok) => { $("kidMsg").textContent = t; $("kidMsg").className = ok ? "msg ok" : "msg err"; };
-  const identifiant = $("kidIdent").value.trim().toLowerCase();
-  const motDePasse = $("kidPass").value;
-
-  if (!/^[a-z0-9._-]{3,20}$/.test(identifiant))
-    return dire("Identifiant : 3 à 20 caractères, lettres, chiffres, point, tiret.", false);
-  if (motDePasse.length < 4) return dire("Mot de passe : 4 caractères minimum.", false);
-
-  const res = await api("/api/admin/enfants", {method:"POST", body: JSON.stringify({
-    identifiant, motDePasse,
-    pseudo: $("kidPseudo").value.trim() || identifiant,
-    avatar: $("kidAvatar").value.trim() || "🧸",
-    photo: $("kidPhoto").value.trim(),
-  })});
-  const data = await res.json().catch(() => ({}));
-
-  if (!res.ok){
-    const messages = { IDENTIFIANT_PRIS: "Cet identifiant est déjà utilisé.",
-                       IDENTIFIANT_INVALIDE: "Identifiant invalide.",
-                       MOT_DE_PASSE_COURT: "Mot de passe trop court." };
-    return dire(messages[data.error] || "Création impossible.", false);
-  }
-  dire(`Compte « ${identifiant} » créé. Transmettez l'identifiant et le mot de passe à l'enfant.`, true);
-  $("kidIdent").value = $("kidPass").value = $("kidPseudo").value = $("kidPhoto").value = "";
-  loadUsers();
+$("btnGenInvite").onclick = async () => {
+  const res = await api("/api/admin/invite", {method:"POST"});
+  if (!res.ok) return $("inviteMsg").textContent = "Erreur de génération.";
+  const data = await res.json();
+  $("inviteMsg").innerHTML = `Code généré : <b style="color:var(--beam);font-size:18px">${data.code}</b>`;
+  $("inviteMsg").className = "msg ok";
 };
 
 $("btnTousFondateurs").onclick = async () => {
@@ -948,7 +1063,19 @@ $("btnGrantAll").onclick = async () => {
   loadUsers();
 };
 
-const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+    $("btnCreateUser").onclick = async () => {
+        const res = await api("/api/admin/comptes", {method:"POST", body: JSON.stringify({
+            identifiant: $("newId").value,
+            motDePasse: $("newMdp").value,
+            estEnfant: $("newIsKid").checked
+        })});
+        if(res.ok) { $("createMsg").textContent = "Compte créé !"; $("createMsg").className="msg ok"; }
+        else { $("createMsg").textContent = "Erreur création."; $("createMsg").className="msg err"; }
+        loadUsers();
+    };
+    const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+    
 </script>
 </body>
 </html>
