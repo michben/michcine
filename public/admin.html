@@ -349,6 +349,24 @@
     </div>
 
     <div id="paneUsers" class="hidden">
+      <div class="card">
+        <p class="tag">🧸 Créer un compte enfant</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 10px;line-height:1.6">
+          Un compte enfant n'accède qu'aux films de la catégorie Enfants, sans amis,
+          messagerie ni échange. Il se connecte avec l'identifiant et le mot de passe
+          que vous choisissez ici.</p>
+        <div class="grid">
+          <div><label for="kidIdent">Identifiant</label><input id="kidIdent" placeholder="lea" maxlength="20"></div>
+          <div><label for="kidPseudo">Pseudo affiché</label><input id="kidPseudo" placeholder="Léa" maxlength="20"></div>
+          <div><label for="kidPass">Mot de passe</label><input id="kidPass" type="text" placeholder="4 caractères minimum"></div>
+          <div><label for="kidAvatar">Avatar</label><input id="kidAvatar" placeholder="🧸" maxlength="8"></div>
+        </div>
+        <label for="kidPhoto" style="margin-top:12px">Photo de profil (facultatif)</label>
+        <input id="kidPhoto" type="url" placeholder="https://…/photo.jpg">
+        <div class="row"><button id="btnCreerEnfant">Créer le compte</button></div>
+        <p class="msg" id="kidMsg"></p>
+      </div>
+
             <div class="card">
         <p class="tag">Générateur de code d'entrée VIP</p>
         <p style="color:var(--muted);font-size:13px;margin:0 0 10px;line-height:1.6">
@@ -957,6 +975,34 @@ async function loadReports(){
 
 /* ---------- Joueurs ---------- */
 let players = [];
+document.getElementById("btnCreerEnfant").onclick = async () => {
+  const dire = (t, ok) => { $("kidMsg").textContent = t; $("kidMsg").className = ok ? "msg ok" : "msg err"; };
+  const identifiant = $("kidIdent").value.trim().toLowerCase();
+  const motDePasse = $("kidPass").value;
+
+  if (!/^[a-z0-9._-]{3,20}$/.test(identifiant))
+    return dire("Identifiant : 3 à 20 caractères, lettres, chiffres, point ou tiret.", false);
+  if (motDePasse.length < 4) return dire("Mot de passe : 4 caractères minimum.", false);
+
+  const res = await api("/api/admin/enfants", {method:"POST", body: JSON.stringify({
+    identifiant, motDePasse,
+    pseudo: $("kidPseudo").value.trim() || identifiant,
+    avatar: $("kidAvatar").value.trim() || "🧸",
+    photo: $("kidPhoto").value.trim(),
+  })});
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok){
+    const messages = { IDENTIFIANT_PRIS: "Cet identifiant est déjà utilisé.",
+                       IDENTIFIANT_INVALIDE: "Identifiant invalide.",
+                       MOT_DE_PASSE_COURT: "Mot de passe trop court." };
+    return dire(messages[data.error] || "Création impossible.", false);
+  }
+  dire(`Compte « ${identifiant} » créé. Transmettez l'identifiant et le mot de passe à l'enfant.`, true);
+  $("kidIdent").value = $("kidPass").value = $("kidPseudo").value = $("kidPhoto").value = "";
+  loadUsers();
+};
+
 async function loadUsers(){
   const res = await api("/api/admin/users");
   if (!res.ok) return;
@@ -988,6 +1034,7 @@ function renderUsers(){
       ${u.email && !u.emailVerifie
         ? `<button class="ghost" data-valider="${u.id}" title="Valider l'adresse sans envoi de code">✉ Valider</button>`
         : ""}
+      ${u.compteEnfant ? `<button class="ghost" data-kidpass="${u.id}" title="Changer le mot de passe">🔑</button>` : ""}
       <button class="ghost" data-fondateur="${u.id}" title="Dispense de code d'invitation">
         ${u.fondateur ? "★ Fondateur" : "☆ Fondateur"}</button>
       <button class="ghost" data-save="${u.id}">Enregistrer</button>
@@ -1001,6 +1048,14 @@ function renderUsers(){
     const img = champ.previousElementSibling;
     img.src = champ.value.trim();
     img.classList.toggle("vide", !champ.value.trim());
+  });
+
+  $("userList").querySelectorAll("[data-kidpass]").forEach(b => b.onclick = async () => {
+    const nouveau = prompt("Nouveau mot de passe (4 caractères minimum) :");
+    if (!nouveau) return;
+    const r = await api(`/api/admin/enfants/${encodeURIComponent(b.dataset.kidpass)}/motdepasse`,
+      {method:"PUT", body: JSON.stringify({motDePasse: nouveau})});
+    alert(r.ok ? "Mot de passe changé." : "Mot de passe refusé (trop court ?).");
   });
 
   $("userList").querySelectorAll("[data-save]").forEach(b => b.onclick = async () => {

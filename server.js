@@ -28,7 +28,8 @@ import { mountAuth, userFromCookie, addRankedPoints,
          leaderboard, reinitialiserClassement, definirPhoto, fichePublique,
          retirerPoints, grantPointsDon, ajouterXp, infoNiveau, validerManuellement,
          verifierCode, rattacherParrain, infoParrainage, verifierCodeParrain,
-         parrainageManquant, parrainageObligatoire, genererCodeAdmin } from "./auth-x.js";
+         parrainageManquant, parrainageObligatoire, genererCodeAdmin ,
+         creerCompteEnfant, changerMotDePasseEnfant, estCompteEnfant} from "./auth-x.js";
 
 const app = express();
 app.use(express.json({ limit: '10mb' })); // Limite augmentée pour l'upload d'images
@@ -168,6 +169,8 @@ const niveauDepuisVotes = (v = 0) => (v >= 8000 ? "facile" : v >= 2500 ? "moyen"
 function normaliserFilms() {
   for (const m of movies) {
     if (!m.difficulty) m.difficulty = niveauDepuisVotes(m.votes);
+    // les films d'animation alimentent d'office la catégorie Enfants
+    if (!m.categorie) m.categorie = m.animation ? "kid" : "tous";
     if (m.enabled === undefined) m.enabled = true;
   }
 }
@@ -312,10 +315,11 @@ app.get("/api/movies", requireAdmin, (_req, res) => res.json(movies));
 
 /** Active ou désactive des films en lot, selon niveau et note minimale. */
 app.post("/api/admin/movies/bulk", requireAdmin, (req, res) => {
-  const { difficulty, minRating, enabled } = req.body;
+  const { difficulty, minRating, enabled, definirCategorie } = req.body;
   let touched = 0;
   for (const m of movies) {
     if (difficulty && difficulty !== "tous" && m.difficulty !== difficulty) continue;
+    if (["kid", "tous"].includes(definirCategorie)) { m.categorie = definirCategorie; touched++; continue; }
     if (minRating && (m.rating || 0) < Number(minRating)) continue;
     m.enabled = enabled !== false;
     touched++;
@@ -351,7 +355,11 @@ app.get("/api/admin/stats", requireAdmin, (_req, res) => {
       total: movies.filter((m) => m.difficulty === n).length,
       actifs: movies.filter((m) => m.difficulty === n && m.enabled).length,
     };
-  res.json({ total: movies.length, actifs: movies.filter((m) => m.enabled).length, parNiveau });
+  res.json({ total: movies.length, actifs: movies.filter((m) => m.enabled).length, parNiveau,
+    parCategorie: {
+      kid: movies.filter((m) => m.categorie === "kid").length,
+      kidActifs: movies.filter((m) => m.categorie === "kid" && m.enabled !== false).length,
+    } });
 });
 
 /* ---------- administration des joueurs ---------- */
@@ -429,6 +437,7 @@ function sanitizeMovie(body) {
     cadrageImage: cadragePropre(body.cadrageImage),
     rating: Number(body.rating) || null,
     votes: Number(body.votes) || 0,
+    categorie: body.categorie === "kid" ? "kid" : "tous",
     difficulty: ["facile", "moyen", "difficile"].includes(body.difficulty)
       ? body.difficulty : niveauDepuisVotes(Number(body.votes) || 0),
     enabled: body.enabled !== false,
@@ -515,6 +524,18 @@ app.put("/api/admin/users/:id/photo", requireAdmin, (req, res) => {
 
 /** Exempte un compte de parrainage — utile pour les premiers joueurs. */
 /** Valide l'adresse email d'un compte sans lui envoyer de code. */
+app.post("/api/admin/enfants", requireAdmin, (req, res) => {
+  const r = creerCompteEnfant(req.body);
+  if (r.error) return res.status(400).json(r);
+  const { motDePasse, ...compte } = r.user;
+  res.status(201).json(compte);
+});
+
+app.put("/api/admin/enfants/:id/motdepasse", requireAdmin, (req, res) => {
+  const r = changerMotDePasseEnfant(req.params.id, req.body.motDePasse);
+  r.error ? res.status(400).json(r) : res.json(r);
+});
+
 app.put("/api/admin/users/:id/valider", requireAdmin, (req, res) => {
   const user = validerManuellement(req.params.id);
   if (!user) return res.status(404).json({ error: "NOT_FOUND" });
@@ -547,6 +568,14 @@ app.put("/api/admin/users/:id/role", requireAdmin, (req, res) => {
 });
 
 /** Renvoie l'utilisateur connecté, ou termine la requête en 401. */
+/** Fonctions sociales interdites aux comptes enfants. */
+function exigeCompteAdulte(req, res) {
+  const user = exigeCompte(req, res);
+  if (!user) return null;
+  if (estCompteEnfant(user)) { res.status(403).json({ error: "COMPTE_ENFANT" }); return null; }
+  return user;
+}
+
 function exigeCompte(req, res) {
   const user = userFromCookie(req.headers.cookie);
   if (!user) { res.status(401).json({ error: "NOT_AUTHENTICATED" }); return null; }
@@ -617,7 +646,7 @@ app.post("/api/solo/start", (req, res) => {
   if (parrainageManquant(user)) return res.status(403).json({ error: "PARRAINAGE_REQUIS" });
 
   const { mode = "solo", rounds } = req.body;
-  const vivier = movies.filter((m) => m.enabled !== false);
+  const vivier = filtrerCatalogue(req.body.categorie, user);
   if (!vivier.length) return res.status(400).json({ error: "NO_MOVIES" });
 
   if (mode === "ranked" && partiesRestantes(user.id) <= 0)
@@ -781,7 +810,7 @@ const cleConv = (a, b) => [a, b].sort().join("|");
 const saveConversations = () => sauver("conversations", conversations);
 
 app.get("/api/messages/:id", (req, res) => {
-  const user = exigeCompte(req, res);
+  const user = exigeCompteAdulte(req, res);
   if (!user) return;
   const autre = req.params.id;
   if (statutRelation(user.id, autre) !== "ami")
@@ -804,7 +833,7 @@ app.get("/api/messages/:id", (req, res) => {
 });
 
 app.post("/api/messages/:id", (req, res) => {
-  const user = exigeCompte(req, res);
+  const user = exigeCompteAdulte(req, res);
   if (!user) return;
   const autre = req.params.id;
   if (statutRelation(user.id, autre) !== "ami")
@@ -826,14 +855,15 @@ app.post("/api/messages/:id", (req, res) => {
   saveConversations();
 
   notifier(autre, { type: "message", de: user.pseudo, avatar: user.avatar,
-                    photo: user.photo || null, id: user.id, apercu: texte.slice(0, 60) });
+                    photo: user.photo || null,
+    compteEnfant: Boolean(user.compteEnfant), id: user.id, apercu: texte.slice(0, 60) });
 
   res.json({ ok: true });
 });
 
 /** Nombre de messages non lus, par expéditeur. */
 app.get("/api/messages", (req, res) => {
-  const user = exigeCompte(req, res);
+  const user = exigeCompteAdulte(req, res);
   if (!user) return;
   const parAmi = {};
   let total = 0;
@@ -965,12 +995,12 @@ function notifier(userId, charge) {
 }
 
 app.get("/api/friends", (req, res) => {
-  const user = exigeCompte(req, res);
+  const user = exigeCompteAdulte(req, res);
   if (user) res.json(relations(user.id));
 });
 
 app.get("/api/players/search", (req, res) => {
-  const user = exigeCompte(req, res);
+  const user = exigeCompteAdulte(req, res);
   if (!user) return;
   const trouves = chercherJoueurs(req.query.q, user.id)
     .map((j) => ({ ...j, relation: statutRelation(user.id, j.id) }));
@@ -999,7 +1029,7 @@ const ACTIONS = {
 };
 
 app.post("/api/friends/:action", (req, res) => {
-  const user = exigeCompte(req, res);
+  const user = exigeCompteAdulte(req, res);
   if (!user) return;
   const action = ACTIONS[req.params.action];
   if (!action) return res.status(400).json({ error: "ACTION_INCONNUE" });
@@ -1370,7 +1400,7 @@ app.get("/api/config", (_req, res) => res.json({
 const donsRecents = new Map();   // userId -> [{ montant, at }]
 
 app.post("/api/points/donner", (req, res) => {
-  const user = exigeCompte(req, res);
+  const user = exigeCompteAdulte(req, res);
   if (!user) return;
 
   const cible = String(req.body.id || "");
@@ -1443,7 +1473,9 @@ function buildChoices(movie) {
   const memeEpoque = actifs.filter(
     (m) => m.id !== movie.id && m.year && movie.year && Math.abs(m.year - movie.year) <= 12
   );
-  const vivier = melange(memeEpoque.length >= 3 ? memeEpoque : actifs.filter((m) => m.id !== movie.id));
+  const vivier = melange(memeEpoque.length >= 3 ? memeEpoque
+    : actifs.filter((m) => m.id !== movie.id
+        && (m.categorie || "tous") === (movie.categorie || "tous")));
 
   const leurres = [];
   for (const m of vivier) {
@@ -1599,6 +1631,16 @@ function titlePattern(title) {
  * titres bien plus souvent que ne le perçoit un joueur — c'est le reproche
  * le plus fréquent sur ce type de jeu.
  */
+/**
+ * Catalogue jouable. Un compte enfant est restreint côté serveur : le filtre
+ * ne se contourne pas depuis le navigateur.
+ */
+function filtrerCatalogue(categorie, user) {
+  const actifs = movies.filter((m) => m.enabled !== false);
+  const kid = estCompteEnfant(user) || categorie === "kid";
+  return kid ? actifs.filter((m) => m.categorie === "kid") : actifs;
+}
+
 function choisirFilms(vivier, nombre, userId) {
   const vus = new Set(historiqueVus(userId));
   const frais = vivier.filter((m) => !vus.has(m.id));
@@ -1816,8 +1858,8 @@ io.on("connection", (socket) => {
     io.emit("presence", { enLigne: nombreEnLigne() });
   });
 
-  socket.on("room:create", ({ rounds, mode }, cb) => {
-    const vivier = movies.filter((m) => m.enabled !== false);
+  socket.on("room:create", ({ rounds, mode, categorie }, cb) => {
+    const vivier = filtrerCatalogue(categorie, user);
     if (vivier.length === 0) return cb?.({ ok: false, error: "NO_MOVIES" });
 
     const code = generateRoomCode();

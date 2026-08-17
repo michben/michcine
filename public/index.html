@@ -483,6 +483,79 @@
     transform: scale(1.02); border-color: var(--beam); box-shadow: 0 4px 10px rgba(0,0,0,0.3);
   }
 
+
+  /* ── Bascule mode enfant, en haut à droite ─────────────────────── */
+  #btnModeEnfant{position:absolute;top:18px;right:16px;z-index:51;display:inline-flex;
+    align-items:center;gap:7px;font-size:14px;font-weight:600;padding:8px 14px;
+    border-radius:999px;background:transparent;color:var(--teal);
+    border:1px solid rgba(78,205,196,.5);cursor:pointer;transition:all .2s ease}
+  #btnModeEnfant:hover{background:rgba(78,205,196,.12);border-color:var(--teal)}
+  #btnModeEnfant.actif{background:var(--teal);color:#0A0C16;border-color:var(--teal)}
+  #btnModeEnfant span{font-size:13px}
+  @media(max-width:620px){ #btnModeEnfant span{display:none} #btnModeEnfant{padding:9px 11px} }
+
+  /* Un liseré vert rappelle en permanence qu'on est en mode enfant. */
+  body.modeEnfant{box-shadow:inset 0 0 0 3px rgba(78,205,196,.55)}
+  body.modeEnfant .wrap{padding-top:30px}
+
+  /* ── Motifs de fond des cartes de niveau ───────────────────────── */
+  .carteNiveau{position:relative;overflow:hidden;border-radius:16px;padding:16px;
+    background:var(--card);border:1px solid rgba(237,232,220,.1)}
+  .carteNiveau::before{content:"";position:absolute;inset:0;opacity:.16;pointer-events:none}
+  .carteNiveau > *{position:relative;z-index:1}
+  .carteNiveau::after{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--muted)}
+
+  /* palier 0 — pellicule */
+  .carteNiveau.palier-0::before{
+    background-image:
+      linear-gradient(90deg, transparent 0 6px, var(--chalk) 6px 10px, transparent 10px 22px),
+      linear-gradient(180deg, transparent 0 8px, var(--chalk) 8px 12px, transparent 12px 100%);
+    background-size:22px 100%, 100% 40px}
+
+  /* palier 1 — faisceaux de projecteur */
+  .carteNiveau.palier-1::before{opacity:.13;
+    background-image:repeating-linear-gradient(115deg,
+      transparent 0 18px, var(--beam) 18px 21px, transparent 21px 46px)}
+  .carteNiveau.palier-1::after{background:var(--teal)}
+
+  /* palier 2 — sièges de salle */
+  .carteNiveau.palier-2::before{opacity:.18;background-size:34px 30px;
+    background-image:
+      radial-gradient(circle at 50% 120%, var(--ticket) 12px, transparent 13px),
+      radial-gradient(circle at 0 120%, var(--ticket) 12px, transparent 13px),
+      radial-gradient(circle at 100% 120%, var(--ticket) 12px, transparent 13px)}
+  .carteNiveau.palier-2::after{background:var(--ticket)}
+
+  /* palier 3 — ciel étoilé */
+  .carteNiveau.palier-3::before{opacity:.34;background-size:120px 120px;
+    background-image:
+      radial-gradient(circle at 20% 24%, var(--beam) 2px, transparent 3px),
+      radial-gradient(circle at 68% 12%, var(--chalk) 1.5px, transparent 2.5px),
+      radial-gradient(circle at 42% 62%, var(--beam) 2.5px, transparent 3.5px),
+      radial-gradient(circle at 86% 48%, var(--chalk) 2px, transparent 3px),
+      radial-gradient(circle at 12% 82%, var(--beam) 1.5px, transparent 2.5px),
+      radial-gradient(circle at 60% 88%, var(--chalk) 2px, transparent 3px)}
+  .carteNiveau.palier-3::after{background:var(--beam)}
+
+  /* palier 4 — rayons dorés en rotation lente */
+  .carteNiveau.palier-4{border-color:rgba(245,185,66,.45);box-shadow:0 0 30px rgba(245,185,66,.16)}
+  .carteNiveau.palier-4::before{opacity:.14;animation:rayons 34s linear infinite;
+    background:conic-gradient(from 0deg at 50% 50%,
+      transparent 0deg, var(--beam) 12deg, transparent 24deg,
+      transparent 60deg, var(--beam) 72deg, transparent 84deg,
+      transparent 120deg, var(--beam) 132deg, transparent 144deg,
+      transparent 180deg, var(--beam) 192deg, transparent 204deg,
+      transparent 240deg, var(--beam) 252deg, transparent 264deg,
+      transparent 300deg, var(--beam) 312deg, transparent 324deg)}
+  .carteNiveau.palier-4::after{background:linear-gradient(180deg,var(--beam),var(--ticket),var(--teal))}
+  @keyframes rayons{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion:reduce){.carteNiveau.palier-4::before{animation:none}}
+
+  /* ── Connexion enfant sur l'accueil ────────────────────────────── */
+  .blocEnfant{margin-top:18px}
+  .blocEnfant summary{cursor:pointer;color:var(--teal);font-size:15px;list-style:none;
+    padding:12px 14px;border:1px solid var(--teal);border-radius:10px;text-align:center}
+  .blocEnfant summary::-webkit-details-marker{display:none}
 </style>
 
 </head>
@@ -493,6 +566,7 @@
     <h1>MichBen <em>Ciné Quizz</em></h1>
   </button>
   <button id="btnQuitGame" class="ghost hidden" style="position:absolute; top:20px; right:18px; font-size:22px; padding:4px 8px; z-index:50;" title="Quitter la partie">🏠</button>
+  <button id="btnModeEnfant" title="Basculer en mode enfant">🧸<span>Mode enfant</span></button>
 
   <!-- PRÉSENTATION + CONNEXION -->
   <section id="landing">
@@ -519,6 +593,18 @@
         <button id="btnMailInscription" class="ghost">Créer un compte</button>
       </div>
       <p class="feedback bad" id="mailError"></p>
+
+      <details class="blocEnfant">
+        <summary>🧸 Connexion enfant</summary>
+        <p class="note" style="margin-top:10px">Avec l'identifiant et le mot de passe
+          fournis par un parent.</p>
+        <label for="kidId">Identifiant</label>
+        <input id="kidId" maxlength="20" autocomplete="username" placeholder="lea">
+        <label for="kidMdp" style="margin-top:12px">Mot de passe</label>
+        <input id="kidMdp" type="password" autocomplete="current-password">
+        <div class="row"><button id="btnKidConnexion">Se connecter</button></div>
+        <p class="feedback bad" id="kidError"></p>
+      </details>
 
 
       <p class="note" style="margin-bottom:0">En vous inscrivant, vous acceptez les <a href="/regles.html" style="color:var(--beam)">règles et le code de bonne conduite</a>.</p>
@@ -1135,6 +1221,59 @@ fetch("/api/config").then(r => r.json())
 let me = null;
 const AVATAR_LIST = AVATARS;
 
+
+/* ---------- Mode enfant ---------- */
+
+/**
+ * Le mode enfant restreint le catalogue et masque les fonctions sociales.
+ * Un compte enfant y est verrouillé — le bouton ne lui sert pas à en sortir.
+ */
+let modeEnfant = localStorage.getItem("michben_modeEnfant") === "1";
+
+function appliquerModeEnfant(){
+  const verrouille = Boolean(me?.compteEnfant);
+  const actif = verrouille || modeEnfant;
+
+  document.body.classList.toggle("modeEnfant", actif);
+  $("btnModeEnfant").classList.toggle("actif", actif);
+  $("btnModeEnfant").title = verrouille
+    ? "Compte enfant : mode permanent"
+    : actif ? "Revenir au catalogue complet" : "Basculer en mode enfant";
+
+  // les fonctions sociales n'ont pas leur place dans un compte enfant
+  if (verrouille)
+    for (const id of ["btnFriends","btnExchange","btnSuggerer","btnEnLigne","btnModeration","btnAdmin"])
+      document.getElementById(id)?.classList.add("hidden");
+
+  window.categorieJeu = actif ? "kid" : "tous";
+}
+
+$("btnModeEnfant").onclick = () => {
+  if (me?.compteEnfant)
+    return alert("Ce compte est un compte enfant : le mode est permanent.");
+  modeEnfant = !modeEnfant;
+  localStorage.setItem("michben_modeEnfant", modeEnfant ? "1" : "0");
+  appliquerModeEnfant();
+};
+
+/* ---------- Connexion d'un compte enfant ---------- */
+document.getElementById("btnKidConnexion").onclick = async () => {
+  const identifiant = $("kidId").value.trim(), motDePasse = $("kidMdp").value;
+  if (!identifiant || !motDePasse)
+    return ($("kidError").textContent = "Renseignez l'identifiant et le mot de passe.");
+
+  const res = await fetch("/auth/enfant", {method:"POST",
+    headers:{"Content-Type":"application/json"}, body: JSON.stringify({identifiant, motDePasse})});
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok)
+    return ($("kidError").textContent = data.error === "BANNI"
+      ? "Ce compte a été désactivé."
+      : "Identifiant ou mot de passe incorrect.");
+
+  $("kidMdp").value = "";
+  location.reload();   // la session a changé : on repart proprement
+};
+
 async function loadSession(){
   try {
     const res = await fetch("/api/me", { credentials: "same-origin" });
@@ -1143,6 +1282,7 @@ async function loadSession(){
       return show("landing");
     }
     me = await res.json();
+    appliquerModeEnfant();
     setCredits(me.credits ?? 0);
     setPoints(me.points ?? 0);
     if (!me.pseudoChosen) return firstVisit();
@@ -1989,7 +2129,7 @@ $("btnSalonAmis").onclick = () => {
     $("amisMsg").className = "feedback good";
     return chargerAmis();
   }
-  socket.emit("room:create", {mode: modeAmis}, res => {
+  socket.emit("room:create", {mode: modeAmis, categorie: window.categorieJeu || "tous"}, res => {
     if (!res?.ok) return ($("amisMsg").textContent = "Création impossible.");
     state.code = res.code; state.mode = modeAmis; state.hostId = res.state.hostId;
     setChatVisible(true);
@@ -2616,7 +2756,8 @@ document.querySelectorAll(".mode").forEach(btn => btn.onclick = async () => {
 
   if (SANS_RESEAU.includes(mode)){
     const res = await fetch("/api/solo/start", {method:"POST",
-      headers:{"Content-Type":"application/json"}, body: JSON.stringify({mode})});
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({mode, categorie: window.categorieJeu || "tous"})});
     const m = res.ok ? await res.json() : null;
     if (!m){
       const err = await res.json().catch(() => ({}));
@@ -2633,7 +2774,7 @@ document.querySelectorAll(".mode").forEach(btn => btn.onclick = async () => {
   if (!window.tempsReelDispo)
     return ($("joinError").textContent = "Le multijoueur exige la connexion temps réel, bloquée par votre navigateur.");
 
-  socket.emit("room:create", {mode}, res => {
+  socket.emit("room:create", {mode, categorie: window.categorieJeu || "tous"}, res => {
     if (!res?.ok) return ($("joinError").textContent =
       "Aucun film disponible pour ce niveau — choisissez-en un autre.");
     state.code = res.code; state.mode = mode;
