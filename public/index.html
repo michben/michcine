@@ -220,11 +220,6 @@
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
   select{width:100%;background:var(--card);border:1px solid rgba(237,232,220,.14);color:var(--chalk);
     border-radius:10px;padding:12px 13px;font:inherit;font-size:16px}
-  .ligneInvit{display:flex;gap:10px;align-items:center;padding:10px 0;
-    border-top:1px solid rgba(237,232,220,.1)}
-  .ligneInvit .nom{flex:1;min-width:0;font-size:15px}
-  .ligneInvit button{padding:8px 14px;font-size:13px;white-space:nowrap}
-  .ligneInvit button.envoye{border-color:var(--teal);color:var(--teal)}
   .invitation{position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:80;
     background:var(--velvet);border:1px solid var(--beam);border-radius:14px;padding:16px 18px;
     max-width:min(360px,calc(100vw - 24px));box-shadow:0 14px 40px rgba(0,0,0,.6);
@@ -342,7 +337,6 @@
     18%{opacity:1;transform:translateX(-50%) scale(1.08)}
     30%{transform:translateX(-50%) scale(1)}
     100%{opacity:0;transform:translateX(-50%) translateY(-26px) scale(1)}}
-  /* Le chat monte au-dessus du bouton d'aide, qui reste accessible. */
   #chatToggle{position:fixed;right:18px;bottom:18px;width:56px;height:56px;border-radius:50%;
     font-size:24px;padding:0;box-shadow:0 8px 24px rgba(0,0,0,.5);z-index:20}
   #chatToggle .badge{position:absolute;top:-4px;right:-4px;background:var(--ticket);color:#fff;
@@ -381,8 +375,6 @@
     .choices button{min-height:56px;font-size:15px}
     .hints .cost{display:block;margin:2px 0 0}
     #chatPanel{right:0;left:0;bottom:0;width:100%;max-height:72vh;border-radius:14px 14px 0 0}
-    /* le bouton d'aide s'efface pendant que le chat est ouvert */
-    body.chatOuvert .help-btn{opacity:0;pointer-events:none}
     #chatToggle{right:14px;bottom:14px}
     .urow input{width:70px}
     ol.rank li{font-size:15px}
@@ -491,82 +483,6 @@
     transform: scale(1.02); border-color: var(--beam); box-shadow: 0 4px 10px rgba(0,0,0,0.3);
   }
 
-
-  /* ── Bascule mode enfant, en haut à droite ─────────────────────── */
-  /* Bascule mode enfant, sous le champ de code : bien visible, sans gêner. */
-  #btnModeEnfant{display:inline-flex;align-items:center;justify-content:center;gap:8px;
-    width:100%;font-size:15px;font-weight:600;padding:13px 18px;border-radius:12px;
-    background:rgba(78,205,196,.12);color:var(--teal);
-    border:1px solid rgba(78,205,196,.5);cursor:pointer;transition:all .2s ease}
-  #btnModeEnfant:hover{background:rgba(78,205,196,.12);border-color:var(--teal)}
-  /* un fond plein le détache du titre, il passait inaperçu */
-
-  #btnModeEnfant.actif{background:var(--teal);color:#0A0C16;border-color:var(--teal)}
-  #btnModeEnfant span{font-size:13px}
-
-
-  /* Un liseré vert rappelle en permanence qu'on est en mode enfant. */
-  body.modeEnfant{box-shadow:inset 0 0 0 3px rgba(78,205,196,.55)}
-  body.modeEnfant .wrap{padding-top:30px}
-
-  /* ── Motifs de fond des cartes de niveau ───────────────────────── */
-  .carteNiveau{position:relative;overflow:hidden;border-radius:16px;padding:16px;
-    background:var(--card);border:1px solid rgba(237,232,220,.1)}
-  .carteNiveau::before{content:"";position:absolute;inset:0;opacity:.16;pointer-events:none}
-  .carteNiveau > *{position:relative;z-index:1}
-  .carteNiveau::after{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--muted)}
-
-  /* palier 0 — pellicule */
-  .carteNiveau.palier-0::before{
-    background-image:
-      linear-gradient(90deg, transparent 0 6px, var(--chalk) 6px 10px, transparent 10px 22px),
-      linear-gradient(180deg, transparent 0 8px, var(--chalk) 8px 12px, transparent 12px 100%);
-    background-size:22px 100%, 100% 40px}
-
-  /* palier 1 — faisceaux de projecteur */
-  .carteNiveau.palier-1::before{opacity:.13;
-    background-image:repeating-linear-gradient(115deg,
-      transparent 0 18px, var(--beam) 18px 21px, transparent 21px 46px)}
-  .carteNiveau.palier-1::after{background:var(--teal)}
-
-  /* palier 2 — sièges de salle */
-  .carteNiveau.palier-2::before{opacity:.18;background-size:34px 30px;
-    background-image:
-      radial-gradient(circle at 50% 120%, var(--ticket) 12px, transparent 13px),
-      radial-gradient(circle at 0 120%, var(--ticket) 12px, transparent 13px),
-      radial-gradient(circle at 100% 120%, var(--ticket) 12px, transparent 13px)}
-  .carteNiveau.palier-2::after{background:var(--ticket)}
-
-  /* palier 3 — ciel étoilé */
-  .carteNiveau.palier-3::before{opacity:.34;background-size:120px 120px;
-    background-image:
-      radial-gradient(circle at 20% 24%, var(--beam) 2px, transparent 3px),
-      radial-gradient(circle at 68% 12%, var(--chalk) 1.5px, transparent 2.5px),
-      radial-gradient(circle at 42% 62%, var(--beam) 2.5px, transparent 3.5px),
-      radial-gradient(circle at 86% 48%, var(--chalk) 2px, transparent 3px),
-      radial-gradient(circle at 12% 82%, var(--beam) 1.5px, transparent 2.5px),
-      radial-gradient(circle at 60% 88%, var(--chalk) 2px, transparent 3px)}
-  .carteNiveau.palier-3::after{background:var(--beam)}
-
-  /* palier 4 — rayons dorés en rotation lente */
-  .carteNiveau.palier-4{border-color:rgba(245,185,66,.45);box-shadow:0 0 30px rgba(245,185,66,.16)}
-  .carteNiveau.palier-4::before{opacity:.14;animation:rayons 34s linear infinite;
-    background:conic-gradient(from 0deg at 50% 50%,
-      transparent 0deg, var(--beam) 12deg, transparent 24deg,
-      transparent 60deg, var(--beam) 72deg, transparent 84deg,
-      transparent 120deg, var(--beam) 132deg, transparent 144deg,
-      transparent 180deg, var(--beam) 192deg, transparent 204deg,
-      transparent 240deg, var(--beam) 252deg, transparent 264deg,
-      transparent 300deg, var(--beam) 312deg, transparent 324deg)}
-  .carteNiveau.palier-4::after{background:linear-gradient(180deg,var(--beam),var(--ticket),var(--teal))}
-  @keyframes rayons{to{transform:rotate(360deg)}}
-  @media (prefers-reduced-motion:reduce){.carteNiveau.palier-4::before{animation:none}}
-
-  /* ── Connexion enfant sur l'accueil ────────────────────────────── */
-  .blocEnfant{margin-top:18px}
-  .blocEnfant summary{cursor:pointer;color:var(--teal);font-size:15px;list-style:none;
-    padding:12px 14px;border:1px solid var(--teal);border-radius:10px;text-align:center}
-  .blocEnfant summary::-webkit-details-marker{display:none}
 </style>
 
 </head>
@@ -578,8 +494,19 @@
   </button>
   <button id="btnQuitGame" class="ghost hidden" style="position:absolute; top:20px; right:18px; font-size:22px; padding:4px 8px; z-index:50;" title="Quitter la partie">🏠</button>
 
-
   <!-- PRÉSENTATION + CONNEXION -->
+    <div class="card" id="manualLoginCard">
+      <p class="tag">Connexion Identifiant</p>
+      <label for="manId">Identifiant</label>
+      <input id="manId" placeholder="monid">
+      <label for="manMdp" style="margin-top:12px">Mot de passe</label>
+      <input id="manMdp" type="password" placeholder="••••">
+      <div class="row">
+        <button id="btnManConnexion">Se connecter</button>
+      </div>
+      <p class="feedback bad" id="manError"></p>
+    </div>
+
   <section id="landing">
     <p class="baseline">Un synopsis s'affiche, vous devinez le film. Plus vous répondez vite et sans indice, plus vous marquez. Seul ou jusqu'à 16 joueurs.</p>
     <span class="free">100 % gratuit</span>
@@ -604,18 +531,6 @@
         <button id="btnMailInscription" class="ghost">Créer un compte</button>
       </div>
       <p class="feedback bad" id="mailError"></p>
-
-      <details class="blocEnfant">
-        <summary>🧸 Connexion enfant</summary>
-        <p class="note" style="margin-top:10px">Avec l'identifiant et le mot de passe
-          fournis par un parent.</p>
-        <label for="kidId">Identifiant</label>
-        <input id="kidId" maxlength="20" autocomplete="username" placeholder="lea">
-        <label for="kidMdp" style="margin-top:12px">Mot de passe</label>
-        <input id="kidMdp" type="password" autocomplete="current-password">
-        <div class="row"><button id="btnKidConnexion">Se connecter</button></div>
-        <p class="feedback bad" id="kidError"></p>
-      </details>
 
 
       <p class="note" style="margin-bottom:0">En vous inscrivant, vous acceptez les <a href="/regles.html" style="color:var(--beam)">règles et le code de bonne conduite</a>.</p>
@@ -850,17 +765,11 @@
       <button class="ghost" id="btnFriends">Amis <span id="badgeAmis" class="pastille hidden">0</span></button>
       <button class="ghost" id="btnProfile">Profil</button>
     </div>
-        <div class="row"><button class="ghost hidden" id="btnModeration">Modération</button>
-      <button class="ghost hidden" id="btnAdminAccess" style="border-color:var(--beam); color:var(--beam)">⚙️ Administration</button>
-      <button class="ghost" id="btnSuggestion" style="border-color:var(--teal); color:var(--teal)">💡 Suggérer un film</button>
-    </div>
+    <div class="row"><button class="ghost hidden" id="btnModeration">Modération</button></div>
     <div class="card">
       <label for="joinCode">Rejoindre un salon existant</label>
       <input id="joinCode" maxlength="4" placeholder="ABCD" autocomplete="off">
       <div class="row"><button id="btnJoin" class="ghost">Rejoindre</button></div>
-      <div class="row" style="margin-top:16px">
-        <button id="btnModeEnfant" title="Basculer en mode enfant">🧸 <span>Mode enfant</span></button>
-      </div>
       <p class="feedback bad" id="joinError"></p>
     </div>
   </section>
@@ -876,16 +785,6 @@
       </div>
       <p class="tag" style="margin-top:18px" id="lobbyCount">Joueurs</p>
       <ul class="players" id="lobbyPlayers"></ul>
-
-      <div id="inviterSalon" style="margin-top:16px;padding:14px;background:var(--card);border-radius:12px">
-        <p class="tag" style="margin-bottom:8px">Inviter des joueurs</p>
-        <p class="note" style="margin:0 0 10px">Ils recevront une notification et
-          pourront rejoindre d'un clic.</p>
-        <div id="listeInvitables"></div>
-        <p class="note" id="invitVide"></p>
-        <div class="row"><button class="ghost" id="btnRafraichirInvit">Actualiser la liste</button></div>
-      </div>
-
       <div class="row"><button id="btnStart">Lancer la partie</button></div>
       <p class="note" id="hostNote">En attente que l'hôte lance la partie.</p>
     </div>
@@ -1203,88 +1102,17 @@ if (!window.tempsReelDispo) {
     b.title = "Indisponible : le temps réel est bloqué par votre navigateur.";
   });
   
-/**
- * Bouton d'administration : réservé aux comptes admin.
- * Le test est dans une fonction car « me » n'existe qu'une fois la session
- * chargée — l'exécuter directement interrompait tout le script.
- */
-function majBoutonAdmin(){
-  if (me?.role !== "admin") return;
-  $("btnAdminAccess").classList.remove("hidden");
-  $("btnAdminAccess").onclick = () => window.location.href = "/admin.html";
-}
-
-/**
- * La fenêtre de suggestion est déclarée bien plus bas dans la page que ce
- * script : on attend donc le chargement complet avant de la relier, sinon
- * le bouton reste sans effet.
- */
-function brancherSuggestions(){
-  const modal = document.getElementById("suggestionModal");
-  const bouton = document.getElementById("btnSuggestion");
-
-  // diagnostic visible : si un élément manque, on le dit plutôt que de rester muet
-  if (!modal || !bouton) {
-    const manquants = [!bouton && "btnSuggestion", !modal && "suggestionModal"].filter(Boolean);
-    console.warn("Suggestions non branchées, éléments absents :", manquants.join(", "));
-    if (bouton) bouton.onclick = () =>
-      alert("La fenêtre de suggestion est introuvable dans la page (" + manquants.join(", ") + ").");
-    return;
-  }
-  console.info("Suggestions branchées.");
-
-  bouton.onclick = () => {
-    document.getElementById("suggFeedback").textContent = "";
-    modal.classList.add("active");
-    document.getElementById("suggTitre")?.focus();
-  };
-  document.getElementById("closeSuggestionBtn").onclick = () => modal.classList.remove("active");
-  modal.onclick = (e) => { if (e.target === modal) modal.classList.remove("active"); };
-
-  document.getElementById("btnSendSugg").onclick = async () => {
-    const champTitre = document.getElementById("suggTitre");
-    const champComm = document.getElementById("suggComment");
-    const retour = document.getElementById("suggFeedback");
-    const titre = champTitre.value.trim();
-
-    const dire = (texte, ok) => {
-      retour.textContent = texte;
-      retour.className = ok ? "feedback good" : "feedback bad";
+    $("btnManConnexion").onclick = async () => {
+        const res = await fetch("/auth/manuel", {method:"POST", headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({identifiant: $("manId").value, motDePasse: $("manMdp").value})});
+        const data = await res.json().catch(() => ({}));
+        if(!res.ok) return $("manError").textContent = "Identifiants invalides.";
+        me = data;
+        socket.disconnect().connect();
+        $("hello").textContent = `Bonjour ${me.pseudo}`;
+        show("menu");
     };
-    if (titre.length < 2) return dire("Indiquez le titre du film.", false);
-
-    const res = await fetch("/api/suggestions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ titre, commentaire: champComm.value.trim() }),
-    });
-    const data = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      const messages = {
-        TITRE_MANQUANT: "Indiquez le titre du film.",
-        TROP_DE_SUGGESTIONS: "Trois propositions par jour au maximum. À demain.",
-        NOT_AUTHENTICATED: "Connectez-vous pour proposer un film.",
-      };
-      return dire(messages[data.error] || "Envoi impossible.", false);
-    }
-
-    dire(data.deja
-      ? "Ce film était déjà proposé — votre soutien a été ajouté."
-      : "Merci ! Votre proposition a bien été envoyée.", true);
-    champTitre.value = ""; champComm.value = "";
-    setTimeout(() => modal.classList.remove("active"), 2200);
-  };
-}
-
-// selon le moment où ce script s'exécute, la page peut déjà être chargée :
-// dans ce cas l'événement ne se déclenche plus jamais.
-if (document.readyState === "loading")
-  document.addEventListener("DOMContentLoaded", brancherSuggestions);
-else
-  brancherSuggestions();
-
-// le bouton reste cliquable : mieux vaut un message clair qu'un bouton mort
+    // le bouton reste cliquable : mieux vaut un message clair qu'un bouton mort
   $("btnJoin").title = "Le multijoueur exige la connexion temps réel.";
 }
 
@@ -1296,59 +1124,6 @@ fetch("/api/config").then(r => r.json())
 let me = null;
 const AVATAR_LIST = AVATARS;
 
-
-/* ---------- Mode enfant ---------- */
-
-/**
- * Le mode enfant restreint le catalogue et masque les fonctions sociales.
- * Un compte enfant y est verrouillé — le bouton ne lui sert pas à en sortir.
- */
-let modeEnfant = localStorage.getItem("michben_modeEnfant") === "1";
-
-function appliquerModeEnfant(){
-  const verrouille = Boolean(me?.compteEnfant);
-  const actif = verrouille || modeEnfant;
-
-  document.body.classList.toggle("modeEnfant", actif);
-  $("btnModeEnfant").classList.toggle("actif", actif);
-  $("btnModeEnfant").title = verrouille
-    ? "Compte enfant : mode permanent"
-    : actif ? "Revenir au catalogue complet" : "Basculer en mode enfant";
-
-  // les fonctions sociales n'ont pas leur place dans un compte enfant
-  if (verrouille)
-    for (const id of ["btnFriends","btnExchange","btnSuggerer","btnEnLigne","btnModeration","btnAdmin"])
-      document.getElementById(id)?.classList.add("hidden");
-
-  window.categorieJeu = actif ? "kid" : "tous";
-}
-
-$("btnModeEnfant").onclick = () => {
-  if (me?.compteEnfant)
-    return alert("Ce compte est un compte enfant : le mode est permanent.");
-  modeEnfant = !modeEnfant;
-  localStorage.setItem("michben_modeEnfant", modeEnfant ? "1" : "0");
-  appliquerModeEnfant();
-};
-
-/* ---------- Connexion d'un compte enfant ---------- */
-document.getElementById("btnKidConnexion").onclick = async () => {
-  const identifiant = $("kidId").value.trim(), motDePasse = $("kidMdp").value;
-  if (!identifiant || !motDePasse)
-    return ($("kidError").textContent = "Renseignez l'identifiant et le mot de passe.");
-
-  const res = await fetch("/auth/enfant", {method:"POST",
-    headers:{"Content-Type":"application/json"}, body: JSON.stringify({identifiant, motDePasse})});
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok)
-    return ($("kidError").textContent = data.error === "BANNI"
-      ? "Ce compte a été désactivé."
-      : "Identifiant ou mot de passe incorrect.");
-
-  $("kidMdp").value = "";
-  location.reload();   // la session a changé : on repart proprement
-};
-
 async function loadSession(){
   try {
     const res = await fetch("/api/me", { credentials: "same-origin" });
@@ -1357,8 +1132,6 @@ async function loadSession(){
       return show("landing");
     }
     me = await res.json();
-    appliquerModeEnfant();
-    majBoutonAdmin();
     setCredits(me.credits ?? 0);
     setPoints(me.points ?? 0);
     if (!me.pseudoChosen) return firstVisit();
@@ -2205,7 +1978,7 @@ $("btnSalonAmis").onclick = () => {
     $("amisMsg").className = "feedback good";
     return chargerAmis();
   }
-  socket.emit("room:create", {mode: modeAmis, categorie: window.categorieJeu || "tous"}, res => {
+  socket.emit("room:create", {mode: modeAmis}, res => {
     if (!res?.ok) return ($("amisMsg").textContent = "Création impossible.");
     state.code = res.code; state.mode = modeAmis; state.hostId = res.state.hostId;
     setChatVisible(true);
@@ -2634,7 +2407,6 @@ $("chatReduire").onclick = (e) => {
 
 $("chatToggle").onclick = () => {
   $("chatPanel").classList.toggle("hidden");
-  document.body.classList.toggle("chatOuvert", !$("chatPanel").classList.contains("hidden"));
   if (chatOpen()){ chatUnread = 0; $("chatBadge").classList.add("hidden"); $("chatInput").focus(); }
 };
 function sendChat(){
@@ -2833,8 +2605,7 @@ document.querySelectorAll(".mode").forEach(btn => btn.onclick = async () => {
 
   if (SANS_RESEAU.includes(mode)){
     const res = await fetch("/api/solo/start", {method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({mode, categorie: window.categorieJeu || "tous"})});
+      headers:{"Content-Type":"application/json"}, body: JSON.stringify({mode})});
     const m = res.ok ? await res.json() : null;
     if (!m){
       const err = await res.json().catch(() => ({}));
@@ -2851,7 +2622,7 @@ document.querySelectorAll(".mode").forEach(btn => btn.onclick = async () => {
   if (!window.tempsReelDispo)
     return ($("joinError").textContent = "Le multijoueur exige la connexion temps réel, bloquée par votre navigateur.");
 
-  socket.emit("room:create", {mode, categorie: window.categorieJeu || "tous"}, res => {
+  socket.emit("room:create", {mode}, res => {
     if (!res?.ok) return ($("joinError").textContent =
       "Aucun film disponible pour ce niveau — choisissez-en un autre.");
     state.code = res.code; state.mode = mode;
@@ -2903,7 +2674,6 @@ $("btnJoin").onclick = () => {
 
 /* ---------- Lobby ---------- */
 function renderLobby(s){
-  setTimeout(chargerInvitables, 100);   // après le rendu de la liste des joueurs
   state.mode = s.mode;
   state.hostId = s.hostId;
   $("marquee").innerHTML = s.code.split("").map(c => `<span class="flap">${c}</span>`).join("");
@@ -2921,38 +2691,6 @@ function renderLobby(s){
 }
 document.querySelectorAll("[data-team]").forEach(b =>
   b.onclick = () => socket.emit("team:choose", {code:state.code, team:b.dataset.team}));
-/**
- * Liste des joueurs connectés qu'on peut inviter dans le salon.
- * Les amis apparaissent en tête : ce sont eux qu'on invite le plus souvent.
- */
-async function chargerInvitables(){
-  if (!state.code) return;
-  const d = await fetch("/api/presence/liste").then(r => r.json()).catch(() => null);
-  if (!d){ $("invitVide").textContent = "Liste indisponible."; return; }
-
-  const dansLeSalon = new Set(
-    [...document.querySelectorAll("#lobbyPlayers [data-joueur]")].map(li => li.dataset.joueur));
-  const dispo = d.joueurs.filter(j => !j.moi && !dansLeSalon.has(j.id));
-
-  $("invitVide").textContent = dispo.length ? "" : "Aucun autre joueur connecté pour l'instant.";
-  $("listeInvitables").innerHTML = dispo.map(j => `
-    <div class="ligneInvit">
-      <span class="dot on"></span>
-      <span class="nom">${vignette(j)} ${esc(j.pseudo)}
-        ${j.ami ? '<small style="color:var(--teal)"> · ami</small>' : ""}</span>
-      <button class="ghost" data-invit="${esc(j.id)}">Inviter</button>
-    </div>`).join("");
-
-  $("listeInvitables").querySelectorAll("[data-invit]").forEach(b => b.onclick = () => {
-    socket.emit("invite:joueur", {code: state.code, cibleId: b.dataset.invit}, res => {
-      b.disabled = true;
-      b.classList.add("envoye");
-      b.textContent = res?.livree ? "Invité ✓" : "Hors ligne";
-    });
-  });
-}
-$("btnRafraichirInvit").onclick = chargerInvitables;
-
 $("btnStart").onclick = () => socket.emit("game:start", {code:state.code});
 socket.on("room:update", renderLobby);
 
@@ -3231,25 +2969,6 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
     </div>
 
     
-    
-    <!-- MODALE SUGGESTION -->
-    <div class="modal-overlay" id="suggestionModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>💡 Suggérer un film</h2>
-                <button class="close-btn" id="closeSuggestionBtn">&times;</button>
-            </div>
-            <div class="modal-body">
-                <label for="suggTitre">Titre du film</label>
-                <input id="suggTitre" placeholder="Titre du film...">
-                <label for="suggComment" style="margin-top:10px">Commentaire (facultatif)</label>
-                <textarea id="suggComment" rows="3" placeholder="Pourquoi ce film serait bien ?"></textarea>
-                <div class="row"><button id="btnSendSugg">Envoyer la suggestion</button></div>
-                <p class="feedback" id="suggFeedback"></p>
-            </div>
-        </div>
-    </div>
-
     <!-- MODALE PROGRESSION -->
     <div class="modal-overlay" id="progressionModal">
         <div class="modal-content" style="max-height: 85vh; display: flex; flex-direction: column;">

@@ -84,8 +84,7 @@
       <button id="tabReports" aria-selected="false">Signalements</button>
             <button id="tabReglages" aria-selected="false">Réglages</button>
       <button id="tabSorties" aria-selected="false">Sorties Ciné</button>
-            <button id="tabNowPlaying" aria-selected="false">Au Cinéma</button>
-      <button id="tabSugg" aria-selected="false">Suggestions</button>
+      <button id="tabNowPlaying" aria-selected="false">Au Cinéma</button>
     </div>
 
     <div id="paneMovies">
@@ -221,9 +220,6 @@
     </div>
 
     
-
-    <div id="paneSugg" class="hidden"><div class="card"><p class="tag">Suggestions des joueurs</p><div id="suggList"></div></div></div>
-
     <div id="paneNowPlaying" class="hidden">
       <div class="card">
         <p class="tag" id="nowPlayingCount">Actuellement au cinéma</p>
@@ -349,24 +345,6 @@
     </div>
 
     <div id="paneUsers" class="hidden">
-      <div class="card">
-        <p class="tag">🧸 Créer un compte enfant</p>
-        <p style="color:var(--muted);font-size:13px;margin:0 0 10px;line-height:1.6">
-          Un compte enfant n'accède qu'aux films de la catégorie Enfants, sans amis,
-          messagerie ni échange. Il se connecte avec l'identifiant et le mot de passe
-          que vous choisissez ici.</p>
-        <div class="grid">
-          <div><label for="kidIdent">Identifiant</label><input id="kidIdent" placeholder="lea" maxlength="20"></div>
-          <div><label for="kidPseudo">Pseudo affiché</label><input id="kidPseudo" placeholder="Léa" maxlength="20"></div>
-          <div><label for="kidPass">Mot de passe</label><input id="kidPass" type="text" placeholder="4 caractères minimum"></div>
-          <div><label for="kidAvatar">Avatar</label><input id="kidAvatar" placeholder="🧸" maxlength="8"></div>
-        </div>
-        <label for="kidPhoto" style="margin-top:12px">Photo de profil (facultatif)</label>
-        <input id="kidPhoto" type="url" placeholder="https://…/photo.jpg">
-        <div class="row"><button id="btnCreerEnfant">Créer le compte</button></div>
-        <p class="msg" id="kidMsg"></p>
-      </div>
-
             <div class="card">
         <p class="tag">Générateur de code d'entrée VIP</p>
         <p style="color:var(--muted);font-size:13px;margin:0 0 10px;line-height:1.6">
@@ -374,6 +352,16 @@
         </p>
         <div class="row">
           <button id="btnGenInvite">Générer un code VIP</button>
+      </div>
+      <div class="card">
+        <p class="tag">Créer un compte (Enfant ou Adulte)</p>
+        <input id="newId" placeholder="Identifiant">
+        <input id="newMdp" type="password" placeholder="Mot de passe" style="margin-top:8px;">
+        <label style="display:flex;align-items:center;gap:8px;margin-top:8px;">
+           <input type="checkbox" id="newIsKid" style="width:auto;"> Compte Enfant
+        </label>
+        <button id="btnCreateUser" style="margin-top:8px;">Créer le compte</button>
+        <p class="msg" id="createMsg"></p>
         </div>
         <p class="msg" id="inviteMsg"></p>
       </div>
@@ -589,7 +577,7 @@ async function remove(id){
 
 /* ---------- Onglets ---------- */
 function tab(which){
-  for (const [nom, onglet, volet] of [["movies","tabMovies","paneMovies"], ["sugg","tabSugg","paneSugg"],
+  for (const [nom, onglet, volet] of [["movies","tabMovies","paneMovies"],
                                       ["users","tabUsers","paneUsers"],
                                       ["reports","tabReports","paneReports"],
                                       ["reglages","tabReglages","paneReglages"],
@@ -961,48 +949,8 @@ async function loadReports(){
     b.onclick = () => confirm("Retirer ce film du catalogue ?") && agir(b.dataset.retirer, {retirerFilm:true}));
 }
 
-
-    async function loadSuggestions() {
-      const res = await api("/api/admin/suggestions");
-      const list = await res.json();
-      $("suggList").innerHTML = list.map(s => `
-        <div class="item">
-            <div><strong>${esc(s.titre)}</strong><small>Par ${esc(s.auteur)} le ${new Date(s.date).toLocaleDateString()}</small></div>
-            <div style="font-size:13px; color:var(--muted)">${esc(s.commentaire)}</div>
-        </div>
-      `).join("");
-    }
-
 /* ---------- Joueurs ---------- */
 let players = [];
-document.getElementById("btnCreerEnfant").onclick = async () => {
-  const dire = (t, ok) => { $("kidMsg").textContent = t; $("kidMsg").className = ok ? "msg ok" : "msg err"; };
-  const identifiant = $("kidIdent").value.trim().toLowerCase();
-  const motDePasse = $("kidPass").value;
-
-  if (!/^[a-z0-9._-]{3,20}$/.test(identifiant))
-    return dire("Identifiant : 3 à 20 caractères, lettres, chiffres, point ou tiret.", false);
-  if (motDePasse.length < 4) return dire("Mot de passe : 4 caractères minimum.", false);
-
-  const res = await api("/api/admin/enfants", {method:"POST", body: JSON.stringify({
-    identifiant, motDePasse,
-    pseudo: $("kidPseudo").value.trim() || identifiant,
-    avatar: $("kidAvatar").value.trim() || "🧸",
-    photo: $("kidPhoto").value.trim(),
-  })});
-  const data = await res.json().catch(() => ({}));
-
-  if (!res.ok){
-    const messages = { IDENTIFIANT_PRIS: "Cet identifiant est déjà utilisé.",
-                       IDENTIFIANT_INVALIDE: "Identifiant invalide.",
-                       MOT_DE_PASSE_COURT: "Mot de passe trop court." };
-    return dire(messages[data.error] || "Création impossible.", false);
-  }
-  dire(`Compte « ${identifiant} » créé. Transmettez l'identifiant et le mot de passe à l'enfant.`, true);
-  $("kidIdent").value = $("kidPass").value = $("kidPseudo").value = $("kidPhoto").value = "";
-  loadUsers();
-};
-
 async function loadUsers(){
   const res = await api("/api/admin/users");
   if (!res.ok) return;
@@ -1034,13 +982,11 @@ function renderUsers(){
       ${u.email && !u.emailVerifie
         ? `<button class="ghost" data-valider="${u.id}" title="Valider l'adresse sans envoi de code">✉ Valider</button>`
         : ""}
-      ${u.compteEnfant ? `<button class="ghost" data-kidpass="${u.id}" title="Changer le mot de passe">🔑</button>` : ""}
       <button class="ghost" data-fondateur="${u.id}" title="Dispense de code d'invitation">
         ${u.fondateur ? "★ Fondateur" : "☆ Fondateur"}</button>
       <button class="ghost" data-save="${u.id}">Enregistrer</button>
       <button class="ghost" data-ban="${u.id}">${u.banned?"Réactiver":"Bannir"}</button>
       <button class="danger" data-del="${u.id}">Supprimer</button>
-      <button class="ghost" style="color:var(--teal)" data-debug="${u.id}">🔍 Debug</button>
     </div>`).join("");
 
   // aperçu immédiat quand on colle une adresse
@@ -1048,14 +994,6 @@ function renderUsers(){
     const img = champ.previousElementSibling;
     img.src = champ.value.trim();
     img.classList.toggle("vide", !champ.value.trim());
-  });
-
-  $("userList").querySelectorAll("[data-kidpass]").forEach(b => b.onclick = async () => {
-    const nouveau = prompt("Nouveau mot de passe (4 caractères minimum) :");
-    if (!nouveau) return;
-    const r = await api(`/api/admin/enfants/${encodeURIComponent(b.dataset.kidpass)}/motdepasse`,
-      {method:"PUT", body: JSON.stringify({motDePasse: nouveau})});
-    alert(r.ok ? "Mot de passe changé." : "Mot de passe refusé (trop court ?).");
   });
 
   $("userList").querySelectorAll("[data-save]").forEach(b => b.onclick = async () => {
@@ -1067,22 +1005,10 @@ function renderUsers(){
     await api(`/api/admin/users/${encodeURIComponent(id)}`, {method:"PUT", body:JSON.stringify({credits, role, photo, pseudo})});
     loadUsers();
   });
-  $("userList").querySelectorAll("[data-debug]").forEach(b => b.onclick = async () => {
-    const res = await api(`/api/admin/debug-user/${encodeURIComponent(b.dataset.debug)}`, {method:"POST"});
-    if(res.ok) { alert("Compte debuggé : email validé, ban levé."); loadUsers(); }
-    else { alert("Erreur debug."); }
-  });
-
   $("userList").querySelectorAll("[data-valider]").forEach(b => b.onclick = async () => {
     await api(`/api/admin/users/${encodeURIComponent(b.dataset.valider)}/valider`, {method:"PUT"});
     loadUsers();
   });
-  $("userList").querySelectorAll("[data-debug]").forEach(b => b.onclick = async () => {
-    const res = await api(`/api/admin/debug-user/${encodeURIComponent(b.dataset.debug)}`, {method:"POST"});
-    if(res.ok) { alert("Compte debuggé : email validé, ban levé."); loadUsers(); }
-    else { alert("Erreur debug."); }
-  });
-
 
   $("userList").querySelectorAll("[data-fondateur]").forEach(b => b.onclick = async () => {
     const u = players.find(p => p.id === b.dataset.fondateur);
@@ -1090,36 +1016,18 @@ function renderUsers(){
       {method:"PUT", body: JSON.stringify({fondateur: !u.fondateur})});
     loadUsers();
   });
-  $("userList").querySelectorAll("[data-debug]").forEach(b => b.onclick = async () => {
-    const res = await api(`/api/admin/debug-user/${encodeURIComponent(b.dataset.debug)}`, {method:"POST"});
-    if(res.ok) { alert("Compte debuggé : email validé, ban levé."); loadUsers(); }
-    else { alert("Erreur debug."); }
-  });
-
 
   $("userList").querySelectorAll("[data-ban]").forEach(b => b.onclick = async () => {
     const u = players.find(p => p.id === b.dataset.ban);
     await api(`/api/admin/users/${encodeURIComponent(u.id)}`, {method:"PUT", body:JSON.stringify({banned: !u.banned})});
     loadUsers();
   });
-  $("userList").querySelectorAll("[data-debug]").forEach(b => b.onclick = async () => {
-    const res = await api(`/api/admin/debug-user/${encodeURIComponent(b.dataset.debug)}`, {method:"POST"});
-    if(res.ok) { alert("Compte debuggé : email validé, ban levé."); loadUsers(); }
-    else { alert("Erreur debug."); }
-  });
-
   $("userList").querySelectorAll("[data-del]").forEach(b => b.onclick = async () => {
     const u = players.find(p => p.id === b.dataset.del);
     if (!confirm(`Supprimer définitivement le compte « ${u.pseudo || u.id} » ?`)) return;
     await api(`/api/admin/users/${encodeURIComponent(u.id)}`, {method:"DELETE"});
     loadUsers();
   });
-  $("userList").querySelectorAll("[data-debug]").forEach(b => b.onclick = async () => {
-    const res = await api(`/api/admin/debug-user/${encodeURIComponent(b.dataset.debug)}`, {method:"POST"});
-    if(res.ok) { alert("Compte debuggé : email validé, ban levé."); loadUsers(); }
-    else { alert("Erreur debug."); }
-  });
-
 }
 
 $("btnGenInvite").onclick = async () => {
@@ -1155,20 +1063,19 @@ $("btnGrantAll").onclick = async () => {
   loadUsers();
 };
 
-const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-</script>
 
-<script>
-async function autoLogin() {
-    const res = await fetch("/api/admin/check");
-    const status = await res.json();
-    if (status.isAdmin || status.isMod) {
-        // Try to unlock with a generic token if the user is verified by session
-        $("token").value = "session-granted";
-        $("btnAuth").click();
-    }
-}
-autoLogin();
+    $("btnCreateUser").onclick = async () => {
+        const res = await api("/api/admin/enfants", {method:"POST", body: JSON.stringify({
+            identifiant: $("newId").value,
+            motDePasse: $("newMdp").value,
+            estEnfant: $("newIsKid").checked
+        })});
+        if(res.ok) { $("createMsg").textContent = "Compte créé !"; $("createMsg").className="msg ok"; }
+        else { $("createMsg").textContent = "Erreur création."; $("createMsg").className="msg err"; }
+        loadUsers();
+    };
+    const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+    
 </script>
 </body>
 </html>

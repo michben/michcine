@@ -262,58 +262,6 @@ function verifierMotDePasse(motDePasse, empreinte) {
   return crypto.timingSafeEqual(Buffer.from(calcule), Buffer.from(attendu));
 }
 
-
-/* ------------------------------------------------------------------ */
-/* Comptes enfants                                                     */
-/*                                                                     */
-/* Créés depuis la console avec un identifiant et un mot de passe       */
-/* choisis par l'administrateur. Ils n'accèdent qu'au catalogue         */
-/* Enfants, sans amis ni messagerie : un enfant ne doit pas pouvoir     */
-/* être contacté par un inconnu.                                       */
-/* ------------------------------------------------------------------ */
-
-export function creerCompteEnfant({ identifiant, motDePasse, pseudo, avatar, photo }) {
-  const id = String(identifiant || "").trim().toLowerCase();
-  if (!/^[a-z0-9._-]{3,20}$/.test(id)) return { error: "IDENTIFIANT_INVALIDE" };
-  if (String(motDePasse || "").length < 4) return { error: "MOT_DE_PASSE_COURT" };
-  if (Object.values(users).some((u) => u.identifiant === id)) return { error: "IDENTIFIANT_PRIS" };
-
-  const cle = `kid:${id}`;
-  users[cle] = {
-    id: cle, identifiant: id, motDePasse: hacher(motDePasse),
-    pseudo: String(pseudo || id).trim().slice(0, 20), pseudoChosen: true,
-    avatar: avatar || "🧸", photo: photo || null,
-    compteEnfant: true,
-    fondateur: true,                 // dispensé de code de parrainage
-    emailVerifie: true,              // rien à valider
-    role: "joueur",
-    totalScore: 0, gamesPlayed: 0, scoreGlobal: 0, partiesGlobales: 0,
-    credits: STARTING_CREDITS, points: 0, xp: 0, niveau: 0,
-    amis: [], demandesRecues: [], demandesEnvoyees: [], bloques: [],
-  };
-  saveUsers();
-  return { user: users[cle] };
-}
-
-export function connecterEnfant(identifiant, motDePasse) {
-  const id = String(identifiant || "").trim().toLowerCase();
-  const u = Object.values(users).find((x) => x.identifiant === id && x.compteEnfant);
-  if (!u || !verifierMotDePasse(motDePasse, u.motDePasse)) return { error: "IDENTIFIANTS_INVALIDES" };
-  if (u.banned) return { error: "BANNI" };
-  return { user: u };
-}
-
-export function changerMotDePasseEnfant(id, motDePasse) {
-  const u = users[id];
-  if (!u || !u.compteEnfant) return { error: "INTROUVABLE" };
-  if (String(motDePasse || "").length < 4) return { error: "MOT_DE_PASSE_COURT" };
-  u.motDePasse = hacher(motDePasse);
-  saveUsers();
-  return { ok: true };
-}
-
-export const estCompteEnfant = (u) => Boolean(u?.compteEnfant);
-
 const parEmail = (email) => Object.values(users).find((u) => u.email === email);
 
 export function inscrireEmail(email, motDePasse) {
@@ -562,7 +510,7 @@ export function chercherJoueurs(requete, saufId, limite = 15) {
   const q = String(requete || "").trim().toLowerCase();
   if (q.length < 2) return [];
   return Object.values(users)
-    .filter((u) => u.pseudoChosen && u.id !== saufId && !u.banned && !u.compteEnfant &&
+    .filter((u) => u.pseudoChosen && u.id !== saufId && !u.banned &&
                    (u.pseudo || "").toLowerCase().includes(q) &&
                    !(u.bloques || []).includes(saufId))
     .slice(0, limite)
@@ -844,13 +792,6 @@ export function mountAuth(app) {
 
   app.get("/api/captcha", (_req, res) =>
     res.json({ siteKey: process.env.TURNSTILE_SITE_KEY || null }));
-
-  app.post("/auth/enfant", (req, res) => {
-    const r = connecterEnfant(req.body.identifiant, req.body.motDePasse);
-    if (r.error) return res.status(401).json(r);
-    createSession(res, r.user);
-    res.json(sansSecret(r.user));
-  });
 
   app.post("/auth/email/connexion", (req, res) => {
     const r = connecterEmail(req.body.email, req.body.motDePasse);
