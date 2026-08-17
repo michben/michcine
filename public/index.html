@@ -493,14 +493,16 @@
 
 
   /* ── Bascule mode enfant, en haut à droite ─────────────────────── */
-  #btnModeEnfant{position:absolute;top:18px;right:64px;z-index:51;display:inline-flex;
+  #btnModeEnfant{position:absolute;top:62px;right:16px;z-index:51;display:inline-flex;
     align-items:center;gap:7px;font-size:14px;font-weight:600;padding:8px 14px;
     border-radius:999px;background:transparent;color:var(--teal);
     border:1px solid rgba(78,205,196,.5);cursor:pointer;transition:all .2s ease}
   #btnModeEnfant:hover{background:rgba(78,205,196,.12);border-color:var(--teal)}
+  /* un fond plein le détache du titre, il passait inaperçu */
+  #btnModeEnfant{background:rgba(78,205,196,.12);box-shadow:0 2px 12px rgba(0,0,0,.35)}
   #btnModeEnfant.actif{background:var(--teal);color:#0A0C16;border-color:var(--teal)}
   #btnModeEnfant span{font-size:13px}
-  @media(max-width:620px){ #btnModeEnfant span{display:none} #btnModeEnfant{padding:9px 11px} }
+  @media(max-width:620px){ #btnModeEnfant span{display:none} #btnModeEnfant{padding:9px 12px;top:56px} }
 
   /* Un liseré vert rappelle en permanence qu'on est en mode enfant. */
   body.modeEnfant{box-shadow:inset 0 0 0 3px rgba(78,205,196,.55)}
@@ -1197,35 +1199,70 @@ if (!window.tempsReelDispo) {
     b.title = "Indisponible : le temps réel est bloqué par votre navigateur.";
   });
   
-// Logic to show Admin button if admin
-if (["admin"].includes(me.role)) {
-    $("btnAdminAccess").classList.remove("hidden");
-    $("btnAdminAccess").onclick = () => window.location.href = "/admin.html";
+/**
+ * Bouton d'administration : réservé aux comptes admin.
+ * Le test est dans une fonction car « me » n'existe qu'une fois la session
+ * chargée — l'exécuter directement interrompait tout le script.
+ */
+function majBoutonAdmin(){
+  if (me?.role !== "admin") return;
+  $("btnAdminAccess").classList.remove("hidden");
+  $("btnAdminAccess").onclick = () => window.location.href = "/admin.html";
 }
 
-        const suggestionModal = $("suggestionModal");
-        const btnSuggestion = $("btnSuggestion");
-        
-        btnSuggestion.onclick = () => suggestionModal.classList.add("active");
-        $("closeSuggestionBtn").onclick = () => suggestionModal.classList.remove("active");
-        
-        $("btnSendSugg").onclick = async () => {
-            const titre = $("suggTitre").value.trim();
-            const commentaire = $("suggComment").value.trim();
-            if(!titre) return;
-            
-            const res = await fetch("/api/suggestions", {
-                method: "POST",
-                headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({ titre, commentaire })
-            });
-            if(res.ok) {
-                $("suggFeedback").textContent = "Merci pour votre suggestion !";
-                $("suggFeedback").className = "feedback good";
-                $("suggTitre").value = ""; $("suggComment").value = "";
-                setTimeout(() => suggestionModal.classList.remove("active"), 2000);
-            }
-        };
+/**
+ * La fenêtre de suggestion est déclarée bien plus bas dans la page que ce
+ * script : on attend donc le chargement complet avant de la relier, sinon
+ * le bouton reste sans effet.
+ */
+document.addEventListener("DOMContentLoaded", () => {
+  const modal = document.getElementById("suggestionModal");
+  const bouton = document.getElementById("btnSuggestion");
+  if (!modal || !bouton) return;
+
+  bouton.onclick = () => {
+    document.getElementById("suggFeedback").textContent = "";
+    modal.classList.add("active");
+    document.getElementById("suggTitre")?.focus();
+  };
+  document.getElementById("closeSuggestionBtn").onclick = () => modal.classList.remove("active");
+  modal.onclick = (e) => { if (e.target === modal) modal.classList.remove("active"); };
+
+  document.getElementById("btnSendSugg").onclick = async () => {
+    const champTitre = document.getElementById("suggTitre");
+    const champComm = document.getElementById("suggComment");
+    const retour = document.getElementById("suggFeedback");
+    const titre = champTitre.value.trim();
+
+    const dire = (texte, ok) => {
+      retour.textContent = texte;
+      retour.className = ok ? "feedback good" : "feedback bad";
+    };
+    if (titre.length < 2) return dire("Indiquez le titre du film.", false);
+
+    const res = await fetch("/api/suggestions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ titre, commentaire: champComm.value.trim() }),
+    });
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      const messages = {
+        TITRE_MANQUANT: "Indiquez le titre du film.",
+        TROP_DE_SUGGESTIONS: "Trois propositions par jour au maximum. À demain.",
+        NOT_AUTHENTICATED: "Connectez-vous pour proposer un film.",
+      };
+      return dire(messages[data.error] || "Envoi impossible.", false);
+    }
+
+    dire(data.deja
+      ? "Ce film était déjà proposé — votre soutien a été ajouté."
+      : "Merci ! Votre proposition a bien été envoyée.", true);
+    champTitre.value = ""; champComm.value = "";
+    setTimeout(() => modal.classList.remove("active"), 2200);
+  };
+});
 
 // le bouton reste cliquable : mieux vaut un message clair qu'un bouton mort
   $("btnJoin").title = "Le multijoueur exige la connexion temps réel.";
@@ -1301,6 +1338,7 @@ async function loadSession(){
     }
     me = await res.json();
     appliquerModeEnfant();
+    majBoutonAdmin();
     setCredits(me.credits ?? 0);
     setPoints(me.points ?? 0);
     if (!me.pseudoChosen) return firstVisit();
