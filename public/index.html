@@ -505,8 +505,9 @@
         <button id="btnManConnexion">Se connecter</button>
       </div>
       <p class="feedback bad" id="manError"></p>
+      <button class="ghost" id="btnManBack">Retour</button>
     </div>
-
+  </section>
   <section id="landing">
     <p class="baseline">Un synopsis s'affiche, vous devinez le film. Plus vous répondez vite et sans indice, plus vous marquez. Seul ou jusqu'à 16 joueurs.</p>
     <span class="free">100 % gratuit</span>
@@ -1102,6 +1103,7 @@ if (!window.tempsReelDispo) {
     b.title = "Indisponible : le temps réel est bloqué par votre navigateur.";
   });
   
+    $("btnManBack").onclick = () => show("landing");
     $("btnManConnexion").onclick = async () => {
         const res = await fetch("/auth/manuel", {method:"POST", headers:{"Content-Type":"application/json"},
             body: JSON.stringify({identifiant: $("manId").value, motDePasse: $("manMdp").value})});

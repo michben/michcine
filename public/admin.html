@@ -354,7 +354,7 @@
           <button id="btnGenInvite">Générer un code VIP</button>
       </div>
       <div class="card">
-        <p class="tag">Créer un compte (Enfant ou Adulte)</p>
+        <p class="tag">Créer un compte (Manuel)</p>
         <input id="newId" placeholder="Identifiant">
         <input id="newMdp" type="password" placeholder="Mot de passe" style="margin-top:8px;">
         <label style="display:flex;align-items:center;gap:8px;margin-top:8px;">
@@ -1065,7 +1065,7 @@ $("btnGrantAll").onclick = async () => {
 
 
     $("btnCreateUser").onclick = async () => {
-        const res = await api("/api/admin/enfants", {method:"POST", body: JSON.stringify({
+        const res = await api("/api/admin/comptes", {method:"POST", body: JSON.stringify({
             identifiant: $("newId").value,
             motDePasse: $("newMdp").value,
             estEnfant: $("newIsKid").checked

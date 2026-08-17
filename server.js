@@ -516,7 +516,6 @@ app.put("/api/admin/users/:id/photo", requireAdmin, (req, res) => {
 /** Exempte un compte de parrainage — utile pour les premiers joueurs. */
 /** Valide l'adresse email d'un compte sans lui envoyer de code. */
 app.post("/api/admin/comptes", requireAdmin, (req, res) => {
-  console.log("Creating user with body:", req.body);
   const r = creerCompte(req.body);
   if (r.error) return res.status(400).json(r);
   const { motDePasse, ...compte } = r.user;
