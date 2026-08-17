@@ -16,22 +16,21 @@ import { charger, sauver, initStockage, enBase } from "./db.js";
 import { createRequire } from "module";
 import { dirname, join } from "path";
 import crypto from "crypto";
-import fs from "fs";
 import { mountAuth, userFromCookie, addRankedPoints,
          spendCredits, grantCredits, getCredits, CREDITS_PER_GAME,
          listUsers, adminUpdateUser, adminDeleteUser, grantAll,
          grantPoints, getPoints, exchangePoints,
-         marquerEnLigne, marquerHorsLigne, estEnLigne, nombreEnLigne, getConnectedUsers,
+         marquerEnLigne, marquerHorsLigne, estEnLigne, nombreEnLigne,
          estModerateur, definirRole, ROLES, chargerUtilisateurs,
          relations, demanderAmi, accepterAmi, retirerAmi, bloquer,
          chercherJoueurs, statutRelation, estBloque, emailAValider,
          leaderboard, reinitialiserClassement, definirPhoto, fichePublique,
          retirerPoints, grantPointsDon, ajouterXp, infoNiveau, validerManuellement,
          verifierCode, rattacherParrain, infoParrainage, verifierCodeParrain,
-         parrainageManquant, parrainageObligatoire, genererCodeAdmin } from "./auth-x.js";
+         parrainageManquant, parrainageObligatoire } from "./auth-x.js";
 
 const app = express();
-app.use(express.json({ limit: '10mb' })); // Limite augmentée pour l'upload d'images
+app.use(express.json());
 /**
  * Les pages HTML ne doivent jamais rester en cache : sinon un joueur garde
  * l'ancienne version après une mise à jour et croit le jeu cassé.
@@ -81,10 +80,8 @@ const io = new Server(httpServer, { cors: { origin: "*" }, path: "/rt" });
  * Ils sont conservés en base : un changement survit aux redéploiements.
  */
 const REGLAGES_DEFAUT = {
-  animationsAvancees: true,
   roundDuration: 60,                 // secondes
   basePoints: 1000,
-  tmdbApiKey: "",
   creditsDepart: 12,
   creditsParPartie: 4,
   pointsParTicket: 250,
@@ -99,6 +96,18 @@ const REGLAGES_DEFAUT = {
   xpParPartie: 40,                   // expérience versée pour une partie terminée
   xpParBonneReponse: 12,
   xpParVictoire: 60,                 // bonus en multijoueur
+
+  /**
+   * Avantages débloqués par le niveau. Chaque palier ajoute quelque chose de
+   * concret : la progression doit changer la façon de jouer, pas seulement
+   * afficher un chiffre plus grand.
+   */
+  paliers: [
+    { niveau: 50,  coeurs: 3, indicesOfferts: 1, titre: "Habitué" },
+    { niveau: 100, coeurs: 4, indicesOfferts: 1, titre: "Cinéphile" },
+    { niveau: 200, coeurs: 5, indicesOfferts: 2, titre: "Expert" },
+    { niveau: 300, coeurs: 6, indicesOfferts: 99, titre: "Légende" },
+  ],
   graceApresPremier: 15,             // secondes
   vitesseSynopsis: 2800,             // durée totale du dévoilement, en millisecondes (0 = désactivé)
   indices: {
@@ -169,9 +178,133 @@ function normaliserFilms() {
   for (const m of movies) {
     if (!m.difficulty) m.difficulty = niveauDepuisVotes(m.votes);
     if (m.enabled === undefined) m.enabled = true;
+    if (!m.categorie) m.categorie = m.animation ? "kid" : "tous";
   }
 }
 const saveMovies = () => sauver("movies", movies, MOVIES_FILE);
+
+/* ------------------------------------------------------------------ */
+/* Suggestions de films par les joueurs                                */
+/* ------------------------------------------------------------------ */
+
+let suggestions = [];
+const saveSuggestions = () => sauver("suggestions", suggestions);
+
+app.post("/api/suggestions", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (!user) return;
+
+  const titre = String(req.body.titre || "").trim().slice(0, 120);
+  if (titre.length < 2) return res.status(400).json({ error: "TITRE_REQUIS" });
+
+  // trois suggestions par jour et par joueur : assez pour proposer, pas pour inonder
+  const depuis = Date.now() - 24 * 60 * 60 * 1000;
+  const recentes = suggestions.filter((s) => s.auteurId === user.id && s.at > depuis);
+  if (recentes.length >= 3) return res.status(429).json({ error: "TROP_DE_SUGGESTIONS" });
+
+  const deja = suggestions.find(
+    (s) => s.statut === "nouvelle" && normalize(s.titre) === normalize(titre)
+  );
+  if (deja) {
+    if (!deja.soutiens.includes(user.id)) { deja.soutiens.push(user.id); saveSuggestions(); }
+    return res.json({ ok: true, deja: true, soutiens: deja.soutiens.length });
+  }
+
+  suggestions.push({
+    id: (suggestions.at(-1)?.id || 0) + 1,
+    titre,
+    annee: Number(req.body.annee) || null,
+    commentaire: String(req.body.commentaire || "").trim().slice(0, 200),
+    categorie: req.body.categorie === "kid" ? "kid" : "tous",
+    auteurId: user.id, auteur: user.pseudo,
+    soutiens: [user.id],
+    statut: "nouvelle", at: Date.now(),
+  });
+  saveSuggestions();
+  res.status(201).json({ ok: true });
+});
+
+/** Les suggestions déjà proposées, pour que chacun puisse les soutenir. */
+app.get("/api/suggestions", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (!user) return;
+  const liste = suggestions
+    .filter((s) => s.statut === "nouvelle")
+    .sort((a, b) => b.soutiens.length - a.soutiens.length || b.at - a.at)
+    .slice(0, 40)
+    .map((s) => ({ id: s.id, titre: s.titre, annee: s.annee, categorie: s.categorie,
+                   auteur: s.auteur, soutiens: s.soutiens.length,
+                   soutenue: s.soutiens.includes(user.id) }));
+  res.json(liste);
+});
+
+app.post("/api/suggestions/:id/soutenir", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (!user) return;
+  const s = suggestions.find((x) => x.id === Number(req.params.id));
+  if (!s) return res.status(404).json({ error: "INTROUVABLE" });
+
+  const i = s.soutiens.indexOf(user.id);
+  i === -1 ? s.soutiens.push(user.id) : s.soutiens.splice(i, 1);
+  saveSuggestions();
+  res.json({ ok: true, soutiens: s.soutiens.length, soutenue: i === -1 });
+});
+
+app.get("/api/admin/suggestions", requireModerateur, (_req, res) =>
+  res.json(suggestions.slice().sort((a, b) =>
+    (a.statut === "nouvelle" ? -1 : 1) - (b.statut === "nouvelle" ? -1 : 1) ||
+    b.soutiens.length - a.soutiens.length))
+);
+
+app.put("/api/admin/suggestions/:id", requireModerateur, (req, res) => {
+  const s = suggestions.find((x) => x.id === Number(req.params.id));
+  if (!s) return res.status(404).json({ error: "INTROUVABLE" });
+  if (["nouvelle", "ajoutee", "refusee"].includes(req.body.statut)) s.statut = req.body.statut;
+  saveSuggestions();
+  res.json(s);
+});
+
+/** Cherche le film sur TMDB pour préremplir l'ajout au catalogue. */
+app.post("/api/admin/suggestions/:id/chercher", requireAdmin, async (req, res) => {
+  const s = suggestions.find((x) => x.id === Number(req.params.id));
+  const cle = process.env.TMDB_API_KEY;
+  if (!s) return res.status(404).json({ error: "INTROUVABLE" });
+  if (!cle) return res.status(400).json({ error: "TMDB_ABSENT" });
+
+  const url = new URL("https://api.themoviedb.org/3/search/movie");
+  url.searchParams.set("api_key", cle);
+  url.searchParams.set("language", "fr-FR");
+  url.searchParams.set("query", s.titre);
+  if (s.annee) url.searchParams.set("year", s.annee);
+
+  try {
+    const data = await fetch(url).then((r) => r.json());
+    const m = (data.results || [])[0];
+    if (!m) return res.json({ trouve: false });
+
+    const detail = await fetch(
+      `https://api.themoviedb.org/3/movie/${m.id}?api_key=${cle}&language=fr-FR&append_to_response=credits`
+    ).then((r) => r.json());
+
+    res.json({
+      trouve: true,
+      film: {
+        title: detail.title,
+        synopsis: detail.overview || "",
+        year: Number((detail.release_date || "").slice(0, 4)) || null,
+        director: (detail.credits?.crew || []).find((c) => c.job === "Director")?.name || "",
+        actors: (detail.credits?.cast || []).slice(0, 3).map((c) => c.name).join(", "),
+        poster: detail.poster_path ? `https://image.tmdb.org/t/p/w500${detail.poster_path}` : "",
+        still: detail.backdrop_path ? `https://image.tmdb.org/t/p/w780${detail.backdrop_path}` : "",
+        votes: detail.vote_count || 0,
+        rating: Math.round((detail.vote_average || 0) * 10) / 10,
+        categorie: (detail.genres || []).some((g) => [16, 10751].includes(g.id)) ? "kid" : "tous",
+      },
+    });
+  } catch (e) {
+    res.status(500).json({ error: "RECHERCHE_ECHOUEE", detail: e.message });
+  }
+});
 
 /* ---------- signalements d'anomalies ---------- */
 
@@ -214,36 +347,6 @@ app.post("/api/admin/password", requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
-app.get("/api/favicon", (req, res) => {
-  const exts = ["png", "svg", "ico", "jpg", "jpeg"];
-  for (const ext of exts) {
-    const p = join(process.cwd(), "public", `favicon.${ext}`);
-    if (fs.existsSync(p)) return res.sendFile(p);
-  }
-  res.status(404).end();
-});
-
-app.post("/api/admin/favicon", requireAdmin, (req, res) => {
-  try {
-    const { image, ext } = req.body;
-    if (!image) return res.status(400).json({ error: "NO_IMAGE" });
-    const publicDir = join(process.cwd(), "public");
-    if (!fs.existsSync(publicDir)) fs.mkdirSync(publicDir, { recursive: true });
-    
-    for (const e of ["svg", "png", "ico", "jpg", "jpeg"]) {
-       const p = join(publicDir, `favicon.${e}`);
-       if (fs.existsSync(p)) fs.unlinkSync(p);
-    }
-    const cleanExt = ["svg", "png", "ico", "jpg", "jpeg"].includes(String(ext).toLowerCase()) ? String(ext).toLowerCase() : "png";
-    const base64Data = image.split(';base64,').pop();
-    fs.writeFileSync(join(publicDir, `favicon.${cleanExt}`), Buffer.from(base64Data, 'base64'));
-    res.json({ ok: true });
-  } catch (error) {
-    console.error("Erreur upload favicon:", error);
-    res.status(500).json({ error: "INTERNAL_ERROR", details: error.message });
-  }
-});
-
 app.get("/api/admin/reglages", requireAdmin, (_req, res) => res.json(REGLAGES));
 
 app.put("/api/admin/reglages", requireAdmin, (req, res) => {
@@ -263,8 +366,6 @@ app.put("/api/admin/reglages", requireAdmin, (req, res) => {
   REGLAGES.partiesClasseesParJour = borne(r.partiesClasseesParJour, 1, 100, REGLAGES.partiesClasseesParJour);
   REGLAGES.transfertMax     = borne(r.transfertMax, 0, 100000, REGLAGES.transfertMax);
   REGLAGES.transfertParJour = borne(r.transfertParJour, 0, 500000, REGLAGES.transfertParJour);
-  if (typeof r.tmdbApiKey === 'string') REGLAGES.tmdbApiKey = r.tmdbApiKey;
-  REGLAGES.animationsAvancees = r.animationsAvancees !== false;
   REGLAGES.coeurs           = borne(r.coeurs, 1, 10, REGLAGES.coeurs);
   REGLAGES.xpBase           = borne(r.xpBase, 10, 10000, REGLAGES.xpBase);
   REGLAGES.xpCroissance     = borne(r.xpCroissance, 1.01, 2, REGLAGES.xpCroissance);
@@ -272,6 +373,16 @@ app.put("/api/admin/reglages", requireAdmin, (req, res) => {
   REGLAGES.xpParPartie      = borne(r.xpParPartie, 0, 1000, REGLAGES.xpParPartie);
   REGLAGES.xpParBonneReponse= borne(r.xpParBonneReponse, 0, 500, REGLAGES.xpParBonneReponse);
   REGLAGES.xpParVictoire    = borne(r.xpParVictoire, 0, 1000, REGLAGES.xpParVictoire);
+
+  if (Array.isArray(r.paliers))
+    REGLAGES.paliers = r.paliers
+      .map((p) => ({
+        niveau: borne(p.niveau, 1, 1000, 50),
+        coeurs: borne(p.coeurs, 1, 10, REGLAGES.coeurs),
+        indicesOfferts: borne(p.indicesOfferts, 0, 99, 0),
+        titre: String(p.titre || "").slice(0, 24) || null,
+      }))
+      .sort((a, b) => a.niveau - b.niveau);
 
   for (const [cle, valeurs] of Object.entries(r.indices || {})) {
     const cible = REGLAGES.indices[cle];
@@ -312,12 +423,16 @@ app.get("/api/movies", requireAdmin, (_req, res) => res.json(movies));
 
 /** Active ou désactive des films en lot, selon niveau et note minimale. */
 app.post("/api/admin/movies/bulk", requireAdmin, (req, res) => {
-  const { difficulty, minRating, enabled } = req.body;
+  const { difficulty, minRating, enabled, categorie, definirCategorie } = req.body;
   let touched = 0;
   for (const m of movies) {
     if (difficulty && difficulty !== "tous" && m.difficulty !== difficulty) continue;
+    if (categorie && categorie !== "toutes" && (m.categorie || "tous") !== categorie) continue;
     if (minRating && (m.rating || 0) < Number(minRating)) continue;
-    m.enabled = enabled !== false;
+
+    // on peut soit activer/désactiver, soit reclasser en lot
+    if (["kid", "tous"].includes(definirCategorie)) m.categorie = definirCategorie;
+    else m.enabled = enabled !== false;
     touched++;
   }
   saveMovies();
@@ -339,19 +454,20 @@ app.post("/api/admin/movies/reimport", requireAdmin, async (_req, res) => {
   }
 });
 
-app.post("/api/admin/invite", requireAdmin, (req, res) => {
-  const code = genererCodeAdmin();
-  res.json({ code });
-});
-
 app.get("/api/admin/stats", requireAdmin, (_req, res) => {
+  const parCategorie = {
+    tous: movies.filter((m) => (m.categorie || "tous") === "tous").length,
+    kid: movies.filter((m) => m.categorie === "kid").length,
+    kidActifs: movies.filter((m) => m.categorie === "kid" && m.enabled !== false).length,
+  };
   const parNiveau = {};
   for (const n of ["facile", "moyen", "difficile"])
     parNiveau[n] = {
       total: movies.filter((m) => m.difficulty === n).length,
       actifs: movies.filter((m) => m.difficulty === n && m.enabled).length,
     };
-  res.json({ total: movies.length, actifs: movies.filter((m) => m.enabled).length, parNiveau });
+  res.json({ total: movies.length, actifs: movies.filter((m) => m.enabled).length,
+             parNiveau, parCategorie });
 });
 
 /* ---------- administration des joueurs ---------- */
@@ -429,6 +545,7 @@ function sanitizeMovie(body) {
     cadrageImage: cadragePropre(body.cadrageImage),
     rating: Number(body.rating) || null,
     votes: Number(body.votes) || 0,
+    categorie: body.categorie === "kid" ? "kid" : "tous",
     difficulty: ["facile", "moyen", "difficile"].includes(body.difficulty)
       ? body.difficulty : niveauDepuisVotes(Number(body.votes) || 0),
     enabled: body.enabled !== false,
@@ -548,27 +665,7 @@ function exigeCompte(req, res) {
 /* filtrants). Ici, tout se joue en requêtes HTTP ordinaires.          */
 /* ------------------------------------------------------------------ */
 
-
-/** Calcule les avantages d'un joueur en fonction de son niveau */
-function getAvantagesNiveau(niveau) {
-  let extraCoeurs = 0;
-  if (niveau >= 300) extraCoeurs = 3;
-  else if (niveau >= 200) extraCoeurs = 2;
-  else if (niveau >= 100) extraCoeurs = 1;
-
-  let freeHints = 0;
-  let allFree = false;
-  if (niveau >= 300) {
-    allFree = true;
-  } else if (niveau >= 50) {
-    freeHints = 1; // 1 indice gratuit par partie
-  }
-
-  return { extraCoeurs, freeHints, allFree };
-}
-
-const parties = new Map();
-   // userId -> partie en cours
+const parties = new Map();   // userId -> partie en cours
 
 const vueManche = (p) => ({
   roundIndex: p.index,
@@ -579,20 +676,21 @@ const vueManche = (p) => ({
   hintCosts: CONFIG.HINT_COSTS,
   hintCredits: CONFIG.HINT_CREDITS,
   coeurs: p.coeurs,
-  coeursMax: p.coeursMax,
-  freeHintsRemaining: p.freeHintsRemaining,
-  allHintsFree: p.allHintsFree,
+  coeursMax: p.coeursMax ?? REGLAGES.coeurs,
+  indicesOfferts: p.offertsRestants ?? p.indicesOfferts ?? 0,
+  tousIndicesOfferts: Boolean(p.tousIndicesOfferts),
   hintLabels: libellesIndices(),
   posterStyle: styleAffiche(p.playlist[p.index]),
   vitesseSynopsis: REGLAGES.vitesseSynopsis,
 });
 
 function demarrerManche(p) {
+  // les indices offerts se renouvellent à chaque manche
+  p.offertsRestants = p.indicesOfferts || 0;
   const film = p.playlist[p.index];
   p.choices = buildChoices(film);
   p.startedAt = Date.now();
   p.hints = [];
-  p.paidHints = [];
   p.repondu = false;
   p.pauseA = null;
   return vueManche(p);
@@ -603,8 +701,8 @@ app.post("/api/solo/start", (req, res) => {
   if (!user) return;
   if (parrainageManquant(user)) return res.status(403).json({ error: "PARRAINAGE_REQUIS" });
 
-  const { mode = "solo", rounds } = req.body;
-  const vivier = movies.filter((m) => m.enabled !== false);
+  const { mode = "solo", rounds, categorie } = req.body;
+  const vivier = filtrerCatalogue(categorie);
   if (!vivier.length) return res.status(400).json({ error: "NO_MOVIES" });
 
   if (mode === "ranked" && partiesRestantes(user.id) <= 0)
@@ -612,18 +710,15 @@ app.post("/api/solo/start", (req, res) => {
                                   prochaineRecharge: prochaineRecharge(user.id) });
 
   const nombre = Math.min(Number(rounds) || 10, vivier.length);
-  const niveau = infoNiveau(user.id)?.niveau || 0;
-  const avantages = getAvantagesNiveau(niveau);
-  
+  const av = avantages(user.id);
   const p = {
     mode: mode === "ranked" ? "ranked" : "solo",
     playlist: choisirFilms(vivier, nombre, user.id),
-    index: 0, score: 0, 
-    coeursMax: REGLAGES.coeurs + avantages.extraCoeurs,
-    coeurs: REGLAGES.coeurs + avantages.extraCoeurs,
-    freeHintsRemaining: avantages.freeHints,
-    allHintsFree: avantages.allFree,
-    paidHints: []
+    index: 0, score: 0,
+    coeurs: av.coeurs,
+    coeursMax: av.coeurs,
+    indicesOfferts: av.indicesOfferts,
+    tousIndicesOfferts: av.tousIndicesOfferts,
   };
   memoriserVus(user.id, p.playlist);
   parties.set(user.id, p);
@@ -660,13 +755,12 @@ app.post("/api/solo/hint", (req, res) => {
   if (!CONFIG.HINT_COSTS[type]) return res.status(400).json({ error: "UNKNOWN_HINT" });
   if (p.hints.includes(type)) return res.status(400).json({ error: "ALREADY_BOUGHT" });
 
-  const isFree = p.allHintsFree || p.freeHintsRemaining > 0;
-  if (!isFree) {
-    if (!spendCredits(user.id, CONFIG.HINT_CREDITS[type]))
-      return res.status(400).json({ error: "NO_CREDITS" });
-    p.paidHints.push(type);
-  } else {
-    if (!p.allHintsFree) p.freeHintsRemaining--;
+  // un joueur de haut niveau dispose d'indices offerts à chaque manche
+  const offert = p.tousIndicesOfferts || (p.offertsRestants || 0) > 0;
+  if (offert) {
+    if (!p.tousIndicesOfferts) p.offertsRestants--;
+  } else if (!spendCredits(user.id, CONFIG.HINT_CREDITS[type])) {
+    return res.status(400).json({ error: "NO_CREDITS" });
   }
 
   p.hints.push(type);
@@ -674,7 +768,8 @@ app.post("/api/solo/hint", (req, res) => {
   const value = type === "poster" ? (film.still || film.poster)
               : type === "letters" ? titlePattern(film.title)
               : film[type];
-  res.json({ ok: true, type, value, credits: getCredits(user.id), freeHintsRemaining: p.freeHintsRemaining, allHintsFree: p.allHintsFree });
+  res.json({ ok: true, type, value, credits: getCredits(user.id),
+             offert, indicesOfferts: p.offertsRestants ?? 0 });
 });
 
 app.post("/api/solo/answer", (req, res) => {
@@ -691,7 +786,7 @@ app.post("/api/solo/answer", (req, res) => {
 
   let points = 0;
   if (juste) {
-    points = computeScore({ elapsedMs: Date.now() - p.startedAt, hintsUsed: p.paidHints });
+    points = computeScore({ elapsedMs: Date.now() - p.startedAt, hintsUsed: p.hints });
     p.score += points;
     p.bonnes = (p.bonnes || 0) + 1;
     if (!p.hints.length) p.sansIndice = (p.sansIndice || 0) + 1;
@@ -775,17 +870,11 @@ app.get("/api/messages/:id", (req, res) => {
     return res.status(403).json({ error: "PAS_AMI" });
 
   const conv = conversations[cleConv(user.id, autre)] || { messages: [] };
-  
-  // Flash : efface les messages de plus de 24h
-  const limit = Date.now() - 24 * 60 * 60 * 1000;
-  conv.messages = conv.messages.filter(m => m.at > limit);
-  
   // on marque comme lus les messages de l'autre
   let change = false;
   for (const m of conv.messages)
     if (m.de === autre && !m.lu) { m.lu = true; change = true; }
-  
-  saveConversations(); // on sauvegarde toujours pour purger les vieux messages
+  if (change) saveConversations();
 
   res.json({ messages: conv.messages.slice(-100) });
 });
@@ -803,11 +892,6 @@ app.post("/api/messages/:id", (req, res) => {
 
   const cle = cleConv(user.id, autre);
   const conv = conversations[cle] || (conversations[cle] = { messages: [], signale: false });
-  
-  // Flash : nettoyage avant ajout
-  const limit = Date.now() - 24 * 60 * 60 * 1000;
-  conv.messages = conv.messages.filter(m => m.at > limit);
-  
   conv.messages.push({ de: user.id, texte, at: Date.now(), lu: false });
   if (conv.messages.length > 300) conv.messages = conv.messages.slice(-300);
   saveConversations();
@@ -824,17 +908,12 @@ app.get("/api/messages", (req, res) => {
   if (!user) return;
   const parAmi = {};
   let total = 0;
-  const limit = Date.now() - 24 * 60 * 60 * 1000;
   for (const [cle, conv] of Object.entries(conversations)) {
-    // Purge au passage
-    conv.messages = conv.messages.filter(m => m.at > limit);
-    
     if (!cle.includes(user.id)) continue;
     const autre = cle.split("|").find((x) => x !== user.id);
     const n = conv.messages.filter((m) => m.de === autre && !m.lu).length;
     if (n) { parAmi[autre] = n; total += n; }
   }
-  saveConversations();
   res.json({ total, parAmi });
 });
 
@@ -865,104 +944,6 @@ app.post("/api/admin/conversations/:cle/traiter", requireModerateur, (req, res) 
   conv.signale = false;
   saveConversations();
   res.json({ ok: true });
-});
-
-
-/* ---------- Progression & Map ---------- */
-function isBonusLevel(lvl) {
-    return lvl === 5 || (lvl > 0 && lvl % 10 === 0);
-}
-function getBonusReward(lvl) {
-    // Ex: +x crédits, +x xp
-    return { credits: 2 + Math.floor(lvl / 10), xp: lvl * 10 };
-}
-
-app.get("/api/progression", (req, res) => {
-    const user = exigeCompte(req, res);
-    if (!user) return;
-    const n = infoNiveau(user.id, { base: REGLAGES.xpBase, croissance: REGLAGES.xpCroissance, plafond: REGLAGES.niveauMax })?.niveau || 0;
-    const claimed = user.claimedBonuses || [];
-    
-    let nextBonus = null;
-    for (let i = n + 1; i <= REGLAGES.niveauMax; i++) {
-        if (isBonusLevel(i)) { nextBonus = i; break; }
-    }
-    
-    res.json({ currentLevel: n, claimedBonuses: claimed, nextBonus, maxLevel: REGLAGES.niveauMax });
-});
-
-app.post("/api/progression/claim", (req, res) => {
-    const user = exigeCompte(req, res);
-    if (!user) return;
-    const lvl = Number(req.body.level);
-    const n = infoNiveau(user.id, { base: REGLAGES.xpBase, croissance: REGLAGES.xpCroissance, plafond: REGLAGES.niveauMax })?.niveau || 0;
-    
-    if (lvl > n) return res.status(400).json({ error: "NIVEAU_NON_ATTEINT" });
-    if (!isBonusLevel(lvl)) return res.status(400).json({ error: "PAS_UN_BONUS" });
-    
-    user.claimedBonuses = user.claimedBonuses || [];
-    if (user.claimedBonuses.includes(lvl)) return res.status(400).json({ error: "DEJA_RECLAME" });
-    
-    user.claimedBonuses.push(lvl);
-    
-    const reward = getBonusReward(lvl);
-    grantCredits(user.id, reward.credits);
-    const nv = ajouterXp(user.id, reward.xp, { base: REGLAGES.xpBase, croissance: REGLAGES.xpCroissance, plafond: REGLAGES.niveauMax });
-    
-    res.json({ ok: true, reward, credits: getCredits(user.id), niveau: nv });
-});
-
-
-app.post("/api/suggestions", (req, res) => {
-    const user = exigeCompte(req, res);
-    if (!user) return;
-    const { titre, commentaire } = req.body;
-    if (!titre) return res.status(400).json({ error: "TITRE_MANQUANT" });
-    
-    const SUGGESTIONS_FILE = new URL("./suggestions.json", import.meta.url);
-    let suggestions = [];
-    try { suggestions = JSON.parse(fs.readFileSync(SUGGESTIONS_FILE, "utf8")); } catch(e) {}
-    
-    suggestions.push({
-        auteur: user.pseudo,
-        titre,
-        commentaire: commentaire || "",
-        date: new Date().toISOString()
-    });
-    fs.writeFileSync(SUGGESTIONS_FILE, JSON.stringify(suggestions, null, 2));
-    res.json({ ok: true });
-});
-
-app.get("/api/admin/suggestions", requireAdmin, (req, res) => {
-    const SUGGESTIONS_FILE = new URL("./suggestions.json", import.meta.url);
-    try {
-        res.json(JSON.parse(fs.readFileSync(SUGGESTIONS_FILE, "utf8")));
-    } catch(e) { res.json([]); }
-});
-
-
-app.post("/api/machine/tirer", (req, res) => {
-    const user = exigeCompte(req, res);
-    if (!user) return;
-    const gratuit = req.body.gratuit;
-    const U = users[user.id];
-    
-    if (gratuit) {
-        const last = U.lastFreeSpin || 0;
-        if (Date.now() - last < 24 * 60 * 60 * 1000) return res.status(400).json({ error: "TROP_TOT" });
-        U.lastFreeSpin = Date.now();
-    } else {
-        if (!spendCredits(user.id, 100)) return res.status(400).json({ error: "SOLDE_INSUFFISANT" });
-    }
-    
-    const tirage = Math.random();
-    let gain = 50;
-    if (tirage > 0.95) gain = 1000;
-    else if (tirage > 0.70) gain = 250;
-    
-    grantPoints(user.id, gain);
-    saveUsers();
-    res.json({ gain, points: getPoints(user.id) });
 });
 
 /* ---------- amis ---------- */
@@ -1039,7 +1020,7 @@ app.post("/api/friends/:action", (req, res) => {
 const QUETES = {
   jouer3:      { titre: "Jouer 3 parties",              cible: 3,  tickets: 3, xp: 60 },
   bonnes10:    { titre: "Trouver 10 films",             cible: 10, tickets: 4, xp: 80 },
-  sansIndice:  { titre: "Gagner 3 questions sans indice", cible: 3,  tickets: 5, xp: 100 },
+  sansIndice:  { titre: "Gagner 3 manches sans indice", cible: 3,  tickets: 5, xp: 100 },
   sansFaute:   { titre: "Terminer une partie sans faute", cible: 1, tickets: 6, xp: 120 },
 };
 
@@ -1095,6 +1076,31 @@ app.post("/api/quetes/:cle/reclamer", (req, res) => {
              credits: getCredits(user.id), niveau });
 });
 
+/**
+ * Avantages du joueur selon son niveau : cœurs supplémentaires, indices
+ * offerts, et titre affiché. Le palier le plus élevé atteint l'emporte.
+ */
+function avantages(userId) {
+  const niveau = niveauJoueur(userId)?.niveau ?? 0;
+  const atteints = (REGLAGES.paliers || []).filter((p) => niveau >= p.niveau);
+  const dernier = atteints.at(-1);
+
+  const prochain = (REGLAGES.paliers || []).find((p) => niveau < p.niveau) || null;
+  return {
+    niveau,
+    coeurs: dernier?.coeurs ?? REGLAGES.coeurs,
+    indicesOfferts: dernier?.indicesOfferts ?? 0,
+    titre: dernier?.titre ?? null,
+    tousIndicesOfferts: (dernier?.indicesOfferts ?? 0) >= 99,
+    prochain,
+  };
+}
+
+app.get("/api/avantages", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (user) res.json({ ...avantages(user.id), paliers: REGLAGES.paliers });
+});
+
 const reglagesNiveau = () => ({
   base: REGLAGES.xpBase, croissance: REGLAGES.xpCroissance, plafond: REGLAGES.niveauMax,
 });
@@ -1121,208 +1127,105 @@ app.post("/api/parrainage/rejoindre", (req, res) => {
 });
 
 app.get("/api/presence", (_req, res) => res.json({ enLigne: nombreEnLigne() }));
-app.get("/api/presence/users", (req, res) => {
-  res.json(getConnectedUsers());
-});
 
+/** Liste des joueurs actuellement connectés. */
+app.get("/api/presence/liste", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (!user) return;
 
-const SORTIES_FILE = new URL("./sorties.json", import.meta.url);
-let sortiesConfig = { hidden: [], custom: [] };
-const saveSortiesConfig = () => sauver("sortiesConfig", sortiesConfig, SORTIES_FILE);
-
-const NOWPLAYING_FILE = new URL("./nowplaying.json", import.meta.url);
-let nowPlayingConfig = { hidden: [], custom: [] };
-const saveNowPlayingConfig = () => sauver("nowPlayingConfig", nowPlayingConfig, NOWPLAYING_FILE);
-
-app.post("/api/admin/sorties/hide", requireAdmin, (req, res) => {
-    const id = Number(req.body.id);
-    if (id && !sortiesConfig.hidden.includes(id)) {
-        sortiesConfig.hidden.push(id);
-        saveSortiesConfig();
-    }
-    res.json({ ok: true });
-});
-
-app.post("/api/admin/sorties/unhide", requireAdmin, (req, res) => {
-    const id = Number(req.body.id);
-    sortiesConfig.hidden = sortiesConfig.hidden.filter(x => x !== id);
-    saveSortiesConfig();
-    res.json({ ok: true });
-});
-
-app.post("/api/admin/sorties/custom", requireAdmin, (req, res) => {
-    const id = Number(req.body.id);
-    if (id && !sortiesConfig.custom.includes(id)) {
-        sortiesConfig.custom.push(id);
-        saveSortiesConfig();
-    }
-    res.json({ ok: true });
-});
-
-app.post("/api/admin/sorties/remove-custom", requireAdmin, (req, res) => {
-    const id = Number(req.body.id);
-    sortiesConfig.custom = sortiesConfig.custom.filter(x => x !== id);
-    saveSortiesConfig();
-    res.json({ ok: true });
-});
-
-app.post("/api/admin/nowplaying/hide", requireAdmin, (req, res) => {
-    const id = Number(req.body.id);
-    if (id && !nowPlayingConfig.hidden.includes(id)) {
-        nowPlayingConfig.hidden.push(id);
-        saveNowPlayingConfig();
-    }
-    res.json({ ok: true });
-});
-
-app.post("/api/admin/nowplaying/unhide", requireAdmin, (req, res) => {
-    const id = Number(req.body.id);
-    nowPlayingConfig.hidden = nowPlayingConfig.hidden.filter(x => x !== id);
-    saveNowPlayingConfig();
-    res.json({ ok: true });
-});
-
-app.post("/api/admin/nowplaying/custom", requireAdmin, (req, res) => {
-    const id = Number(req.body.id);
-    if (id && !nowPlayingConfig.custom.includes(id)) {
-        nowPlayingConfig.custom.push(id);
-        saveNowPlayingConfig();
-    }
-    res.json({ ok: true });
-});
-
-app.post("/api/admin/nowplaying/remove-custom", requireAdmin, (req, res) => {
-    const id = Number(req.body.id);
-    nowPlayingConfig.custom = nowPlayingConfig.custom.filter(x => x !== id);
-    saveNowPlayingConfig();
-    res.json({ ok: true });
-});
-
-app.get("/api/movies/upcoming", async (req, res) => {
-  try {
-    const tmdbKey = REGLAGES.tmdbApiKey;
-    if (!tmdbKey) return res.json({ error: "NO_KEY", movies: [] });
-    
-    const isAdmin = motDePasseAdminValide(req.get("x-admin-token"));
-
-    const now = new Date();
-    const day = now.getDay();
-    const diffToWed = (3 - day + 7) % 7; 
-    
-    const wednesday = new Date(now);
-    wednesday.setDate(now.getDate() + (day >= 3 ? (3 - day) : diffToWed));
-    
-    const nextTuesday = new Date(wednesday);
-    nextTuesday.setDate(wednesday.getDate() + 6);
-
-    const fmt = d => d.toISOString().split('T')[0];
-    const gte = fmt(wednesday);
-    const lte = fmt(nextTuesday);
-
-    const url = `https://api.themoviedb.org/3/discover/movie?api_key=${tmdbKey}&language=fr-FR&region=FR&primary_release_date.gte=${gte}&primary_release_date.lte=${lte}&with_release_type=3&sort_by=popularity.desc`;
-    const response = await fetch(url);
-    if (!response.ok) return res.json({ error: "API_ERROR", movies: [] });
-    
-    const data = await response.json();
-    let results = data.results || [];
-    
-    const customMovies = [];
-    for (const cid of (sortiesConfig.custom || [])) {
-        try {
-            const cRes = await fetch(`https://api.themoviedb.org/3/movie/${cid}?api_key=${tmdbKey}&language=fr-FR`);
-            if (cRes.ok) {
-                customMovies.push(await cRes.json());
-            }
-        } catch(e){}
-    }
-    
-    const allMovies = [...customMovies, ...results];
-    const seen = new Set();
-    const finalMovies = [];
-    
-    for (const m of allMovies) {
-        if (seen.has(m.id)) continue;
-        seen.add(m.id);
-        
-        const isHidden = (sortiesConfig.hidden || []).includes(m.id);
-        const isCustom = (sortiesConfig.custom || []).includes(m.id);
-        
-        if (isHidden && !isAdmin) continue;
-        
-        finalMovies.push({
-            id: m.id,
-            title: m.title,
-            overview: m.overview,
-            poster: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : null,
-            vote: m.vote_average,
-            hidden: isHidden,
-            custom: isCustom
-        });
-    }
-
-    res.json({ 
-        dateDebut: gte, 
-        movies: isAdmin ? finalMovies : finalMovies.slice(0, 10)
+  const vus = new Set();
+  const joueurs = [];
+  for (const [, socket] of io.of("/").sockets) {
+    const u = socket.data.user;
+    if (!u || vus.has(u.id)) continue;      // un joueur peut avoir plusieurs onglets
+    vus.add(u.id);
+    if (estBloque(user.id, u.id)) continue; // on ne montre pas ceux qui nous ont bloqué
+    joueurs.push({
+      id: u.id, pseudo: u.pseudo, avatar: u.avatar, photo: u.photo || null,
+      niveau: u.niveau || 0, role: u.role || "joueur",
+      ami: statutRelation(user.id, u.id) === "ami",
+      moi: u.id === user.id,
     });
-  } catch (err) {
-    console.error("Erreur upcoming:", err);
-    res.json({ error: "INTERNAL_ERROR", movies: [] });
   }
+  joueurs.sort((a, b) => (b.ami - a.ami) || (b.niveau - a.niveau));
+  res.json({ total: joueurs.length, joueurs });
 });
 
+/* ------------------------------------------------------------------ */
+/* Sorties cinéma de la semaine                                        */
+/*                                                                     */
+/* Les sorties françaises paraissent le mercredi. On interroge TMDB     */
+/* une fois par jour et on conserve le résultat : inutile de les        */
+/* solliciter à chaque visite d'un joueur.                             */
+/* ------------------------------------------------------------------ */
 
+let sorties = { semaine: null, films: [], maj: 0 };
 
-app.get("/api/movies/now_playing", async (req, res) => {
+/** Mercredi de la semaine en cours (ou celui à venir si l'on est avant). */
+function mercrediCourant() {
+  const d = new Date();
+  const jour = d.getDay();                       // 0 = dimanche, 3 = mercredi
+  const recul = (jour - 3 + 7) % 7;              // jours écoulés depuis mercredi
+  d.setDate(d.getDate() - recul);
+  return d.toISOString().slice(0, 10);
+}
+
+async function rafraichirSorties() {
+  const cle = process.env.TMDB_API_KEY;
+  if (!cle) return { erreur: "TMDB_ABSENT" };
+
+  const mercredi = mercrediCourant();
+  const fin = new Date(mercredi);
+  fin.setDate(fin.getDate() + 6);
+
+  const url = new URL("https://api.themoviedb.org/3/discover/movie");
+  Object.entries({
+    api_key: cle, language: "fr-FR", region: "FR",
+    sort_by: "popularity.desc",
+    with_release_type: "3|2",                    // sortie en salle
+    "release_date.gte": mercredi,
+    "release_date.lte": fin.toISOString().slice(0, 10),
+    "vote_count.gte": 0,
+  }).forEach(([k, v]) => url.searchParams.set(k, v));
+
   try {
-    const tmdbKey = REGLAGES.tmdbApiKey;
-    if (!tmdbKey) return res.json({ error: "NO_KEY", movies: [] });
-    
-    const isAdmin = motDePasseAdminValide(req.get("x-admin-token"));
-    const url = `https://api.themoviedb.org/3/movie/now_playing?api_key=${tmdbKey}&language=fr-FR&region=FR`;
-    
-    const response = await fetch(url);
-    if (!response.ok) return res.json({ error: "API_ERROR", movies: [] });
-    
-    const data = await response.json();
-    let results = data.results || [];
-    
-    const customMovies = [];
-    for (const cid of (nowPlayingConfig.custom || [])) {
-        try {
-            const cRes = await fetch(`https://api.themoviedb.org/3/movie/${cid}?api_key=${tmdbKey}&language=fr-FR`);
-            if (cRes.ok) customMovies.push(await cRes.json());
-        } catch(e){}
-    }
-    
-    const allMovies = [...customMovies, ...results];
-    const seen = new Set();
-    const finalMovies = [];
-    
-    for (const m of allMovies) {
-        if (seen.has(m.id)) continue;
-        seen.add(m.id);
-        
-        const isHidden = (nowPlayingConfig.hidden || []).includes(m.id);
-        const isCustom = (nowPlayingConfig.custom || []).includes(m.id);
-        
-        if (isHidden && !isAdmin) continue;
-        
-        finalMovies.push({
-            id: m.id,
-            title: m.title,
-            overview: m.overview,
-            poster: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : null,
-            vote: m.vote_average,
-            hidden: isHidden,
-            custom: isCustom
-        });
-    }
-
-    res.json({ movies: isAdmin ? finalMovies : finalMovies.slice(0, 15) });
-  } catch (err) {
-    console.error("Erreur now_playing:", err);
-    res.json({ error: "INTERNAL_ERROR", movies: [] });
+    const data = await fetch(url).then((r) => r.json());
+    sorties = {
+      semaine: mercredi,
+      maj: Date.now(),
+      films: (data.results || []).slice(0, 12).map((m) => ({
+        titre: m.title,
+        synopsis: (m.overview || "").slice(0, 220),
+        affiche: m.poster_path ? `https://image.tmdb.org/t/p/w342${m.poster_path}` : null,
+        date: m.release_date,
+        note: Math.round((m.vote_average || 0) * 10) / 10,
+        popularite: Math.round(m.popularity || 0),
+      })),
+    };
+    sauver("sorties", sorties);
+    return sorties;
+  } catch (e) {
+    console.error("Sorties cinéma indisponibles :", e.message);
+    return { erreur: "INDISPONIBLE" };
   }
+}
+
+app.get("/api/sorties", async (_req, res) => {
+  const perime = !sorties.semaine
+    || sorties.semaine !== mercrediCourant()
+    || Date.now() - sorties.maj > 24 * 60 * 60 * 1000;
+
+  if (perime) await rafraichirSorties();
+  res.json({
+    semaine: sorties.semaine,
+    films: sorties.films,
+    disponible: sorties.films.length > 0,
+  });
+});
+
+app.post("/api/admin/sorties/rafraichir", requireAdmin, async (_req, res) => {
+  const r = await rafraichirSorties();
+  res.json(r.erreur ? { error: r.erreur } : { ok: true, films: sorties.films.length });
 });
 
 app.get("/api/leaderboard", (req, res) =>
@@ -1339,40 +1242,8 @@ app.get("/api/saison", (req, res) => {
   });
 });
 
-app.get("/api/birthdays", async (req, res) => {
-  try {
-    let mm, dd;
-    if (req.query.mm && req.query.dd) {
-        mm = req.query.mm;
-        dd = req.query.dd;
-    } else {
-        const today = new Date();
-        mm = String(today.getMonth() + 1).padStart(2, '0');
-        dd = String(today.getDate()).padStart(2, '0');
-    }
-    const response = await fetch(`https://fr.wikipedia.org/api/rest_v1/feed/onthisday/births/${mm}/${dd}`);
-    if (!response.ok) return res.json({ actors: [] });
-    const data = await response.json();
-    
-    const actors = data.births.filter(b => {
-      const text = (b.text || "").toLowerCase();
-      return text.includes("acteur") || text.includes("actrice") || text.includes("réalisateur") || text.includes("cinéaste");
-    }).map(b => ({
-      name: b.pages && b.pages[0] ? b.pages[0].title.replace(/_/g, ' ') : "Inconnu",
-      year: b.year,
-      description: b.text,
-      thumbnail: b.pages && b.pages[0] && b.pages[0].thumbnail ? b.pages[0].thumbnail.source : null
-    })).sort((a, b) => b.year - a.year);
-    
-    res.json({ actors: actors.slice(0, 15) });
-  } catch (err) {
-    console.error("Erreur anniversaires:", err);
-    res.json({ actors: [] });
-  }
-});
-
 app.get("/api/config", (_req, res) => res.json({
-  tipUrl: CONFIG.TIP_URL, maxPlayers: CONFIG.MAX_PLAYERS, pointsParTicket: CONFIG.POINTS_PAR_TICKET, animationsAvancees: REGLAGES.animationsAvancees,
+  tipUrl: CONFIG.TIP_URL, maxPlayers: CONFIG.MAX_PLAYERS, pointsParTicket: CONFIG.POINTS_PAR_TICKET,
 }));
 
 /**
@@ -1451,7 +1322,11 @@ function generateRoomCode() {
  * dans la même décennie — sinon le bon titre saute aux yeux.
  */
 function buildChoices(movie) {
-  const actifs = movies.filter((m) => m.enabled !== false);
+  // les leurres viennent de la même catégorie : sinon un film adulte
+  // au milieu de trois dessins animés trahirait la réponse
+  const actifs = movies.filter(
+    (m) => m.enabled !== false && (m.categorie || "tous") === (movie.categorie || "tous")
+  );
   const memeEpoque = actifs.filter(
     (m) => m.id !== movie.id && m.year && movie.year && Math.abs(m.year - movie.year) <= 12
   );
@@ -1547,6 +1422,15 @@ function consommerPartieClassee(userId) {
   const recentes = partiesRecentes(userId);
   saison.participations[userId] = [...recentes, Date.now()];
   sauver("saison", saison);
+}
+
+/**
+ * Catalogue jouable. La catégorie « kid » ne retient que les films familiaux
+ * et l'animation : c'est un filtre de contenu, pas de difficulté.
+ */
+function filtrerCatalogue(categorie) {
+  const actifs = movies.filter((m) => m.enabled !== false);
+  return categorie === "kid" ? actifs.filter((m) => m.categorie === "kid") : actifs;
 }
 
 /** Libellés des indices actifs, tels que définis dans l'administration. */
@@ -1680,8 +1564,8 @@ function publicState(room) {
     mode: room.mode,
     roundIndex: room.roundIndex,
     players: [...room.players.values()].map((p) => ({
-      id: p.id, userId: p.userId, pseudo: p.pseudo, avatar: p.avatar, score: p.score,
-      team: p.team, hasAnswered: p.hasAnswered, online: p.online !== false,
+      id: p.id, pseudo: p.pseudo, avatar: p.avatar, score: p.score,
+      team: p.team, hasAnswered: p.hasAnswered,
     })),
     teams: room.mode === "teams" ? teamScores(room) : null,
   };
@@ -1713,8 +1597,14 @@ function startRound(room) {
   for (const p of room.players.values()) {
     p.hasAnswered = false;
     p.hints = [];
-    p.paidHints = [];
-    if (p.coeurs === undefined) p.coeurs = p.coeursMax ?? REGLAGES.coeurs;
+    if (p.coeurs === undefined) {
+      const av = avantages(p.userId);
+      p.coeurs = av.coeurs;
+      p.coeursMax = av.coeurs;
+      p.indicesOfferts = av.indicesOfferts;
+      p.tousIndicesOfferts = av.tousIndicesOfferts;
+    }
+    p.offertsRestants = p.indicesOfferts || 0;
   }
 
   io.to(room.code).emit("round:start", {
@@ -1730,17 +1620,16 @@ function startRound(room) {
     choices: room.choices,
   });
 
+  // chaque joueur reçoit ses propres avantages de niveau
+  for (const p of room.players.values())
+    io.to(p.id).emit("avantages", {
+      coeurs: p.coeurs, coeursMax: p.coeursMax ?? REGLAGES.coeurs,
+      indicesOfferts: p.offertsRestants ?? 0,
+      tousIndicesOfferts: Boolean(p.tousIndicesOfferts),
+    });
+
   clearTimeout(room.timer);
   room.timer = setTimeout(() => endRound(room), CONFIG.ROUND_DURATION_MS);
-  
-  for (const p of room.players.values()) {
-    io.to(p.id).emit("player:round_info", {
-      coeursMax: p.coeursMax,
-      coeurs: p.coeurs,
-      freeHintsRemaining: p.freeHintsRemaining,
-      allHintsFree: p.allHintsFree
-    });
-  }
 }
 
 function endRound(room) {
@@ -1805,31 +1694,13 @@ io.on("connection", (socket) => {
   marquerEnLigne(user.id);
   io.emit("presence", { enLigne: nombreEnLigne() });
 
-  // Notify friends that this user just connected
-  const mesRelations = relations(user.id);
-  if (mesRelations && mesRelations.amis) {
-      for (const ami of mesRelations.amis) {
-          for (const [, s] of io.of("/").sockets) {
-              if (s.data.user?.id === ami.id) {
-                  s.emit("notif", {
-                      type: "friend_online",
-                      de: user.pseudo,
-                      avatar: user.avatar,
-                      photo: user.photo || null,
-                      id: user.id
-                  });
-              }
-          }
-      }
-  }
-
   socket.on("disconnect", () => {
     marquerHorsLigne(user.id);
     io.emit("presence", { enLigne: nombreEnLigne() });
   });
 
-  socket.on("room:create", ({ rounds, mode }, cb) => {
-    const vivier = movies.filter((m) => m.enabled !== false);
+  socket.on("room:create", ({ rounds, mode, categorie }, cb) => {
+    const vivier = filtrerCatalogue(categorie);
     if (vivier.length === 0) return cb?.({ ok: false, error: "NO_MOVIES" });
 
     const code = generateRoomCode();
@@ -1837,6 +1708,7 @@ io.on("connection", (socket) => {
     const room = {
       code, hostId: socket.id, status: "lobby", roundIndex: 0,
       mode: ["solo", "ffa", "duel", "teams", "ranked"].includes(mode) ? mode : "ffa",
+      categorie: categorie === "kid" ? "kid" : "tous",
       players: new Map(),
       playlist: choisirFilms(vivier, count, user.id),
       currentMovie: null, startedAt: null, timer: null, nextTimer: null, graceTimer: null,
@@ -1845,82 +1717,26 @@ io.on("connection", (socket) => {
     rooms.set(code, room);
     joinRoom(socket, room, user);
     cb?.({ ok: true, code, state: publicState(room) });
-    if (room.mode === "solo" || room.mode === "ranked") {
-        startRound(room); // le solo démarre immédiatement
-    } else {
-        // Mode multijoueur : on notifie automatiquement les amis en ligne
-        const mesRelations = relations(user.id);
-        if (mesRelations && mesRelations.amis) {
-            for (const ami of mesRelations.amis) {
-                for (const [, s] of io.of("/").sockets) {
-                    if (s.data.user?.id === ami.id) {
-                        s.emit("invite:recue", {
-                            code: room.code,
-                            mode: room.mode,
-                            de: user.pseudo,
-                            avatar: user.avatar,
-                            joueurs: 1
-                        });
-                    }
-                }
-            }
-        }
-    }
+    if (room.mode === "solo" || room.mode === "ranked") startRound(room); // le solo démarre immédiatement
   });
 
   socket.on("room:join", ({ code }, cb) => {
     const room = rooms.get(String(code || "").toUpperCase());
     if (!room) return cb?.({ ok: false, error: "ROOM_NOT_FOUND" });
-    
-    const existingPlayer = room.players.get(user.id);
-    const enCours = room.status !== "lobby";
-    
-    if (existingPlayer) {
-       existingPlayer.id = socket.id;
-       existingPlayer.online = true;
-       socket.join(room.code);
-       io.to(room.code).emit("room:update", publicState(room));
-       
-       cb?.({ ok: true, code: room.code, state: publicState(room), waiting: enCours && existingPlayer.hasAnswered,
-           roundIndex: room.roundIndex, total: room.playlist.length });
-           
-       if (room.status === "playing" && !existingPlayer.hasAnswered) {
-          const movie = room.currentMovie;
-          io.to(socket.id).emit("round:start", {
-            roundIndex: room.roundIndex,
-            total: room.playlist.length,
-            synopsis: masquerReponse(movie.synopsis, movie),
-            duration: CONFIG.ROUND_DURATION_MS,
-            hintCosts: CONFIG.HINT_COSTS,
-            hintCredits: CONFIG.HINT_CREDITS,
-            hintLabels: libellesIndices(),
-            posterStyle: styleAffiche(movie),
-            vitesseSynopsis: REGLAGES.vitesseSynopsis,
-            choices: room.choices,
-          });
-          io.to(socket.id).emit("player:round_info", {
-            coeursMax: existingPlayer.coeursMax,
-            coeurs: existingPlayer.coeurs,
-            freeHintsRemaining: existingPlayer.freeHintsRemaining,
-            allHintsFree: existingPlayer.allHintsFree
-          });
-       }
-       return;
-    }
-    
     const limit = room.mode === "duel" ? 2 : CONFIG.MAX_PLAYERS;
     if (room.players.size >= limit) return cb?.({ ok: false, error: "ROOM_FULL" });
     if (room.status === "finished") return cb?.({ ok: false, error: "GAME_OVER" });
 
+    const enCours = room.status !== "lobby";
     joinRoom(socket, room, user);
-    if (enCours) room.players.get(user.id).hasAnswered = true; // n'entre qu'à la manche suivante
+    if (enCours) room.players.get(socket.id).hasAnswered = true; // n'entre qu'à la manche suivante
     cb?.({ ok: true, code: room.code, state: publicState(room), waiting: enCours,
            roundIndex: room.roundIndex, total: room.playlist.length });
   });
 
   socket.on("team:choose", ({ code, team }) => {
     const room = rooms.get(code);
-    const player = room?.players.get(socket.data.user.id);
+    const player = room?.players.get(socket.id);
     if (!room || !player || room.status !== "lobby" || !["A", "B"].includes(team)) return;
     player.team = team;
     io.to(room.code).emit("room:update", publicState(room));
@@ -1934,19 +1750,17 @@ io.on("connection", (socket) => {
 
   socket.on("hint:buy", ({ code, type }, cb) => {
     const room = rooms.get(code);
-    const player = room?.players.get(socket.data.user.id);
+    const player = room?.players.get(socket.id);
     if (!room || !player || room.status !== "playing") return cb?.({ ok: false });
     if (room.pauseA) return cb?.({ ok: false, error: "EN_PAUSE" });
     if (!CONFIG.HINT_COSTS[type]) return cb?.({ ok: false, error: "UNKNOWN_HINT" });
     if (player.hints.includes(type)) return cb?.({ ok: false, error: "ALREADY_BOUGHT" });
 
-    const isFree = player.allHintsFree || player.freeHintsRemaining > 0;
-    if (!isFree) {
-      if (!spendCredits(player.userId, CONFIG.HINT_CREDITS[type]))
-        return cb?.({ ok: false, error: "NO_CREDITS" });
-      player.paidHints.push(type);
-    } else {
-      if (!player.allHintsFree) player.freeHintsRemaining--;
+    const offert = player.tousIndicesOfferts || (player.offertsRestants || 0) > 0;
+    if (offert) {
+      if (!player.tousIndicesOfferts) player.offertsRestants--;
+    } else if (!spendCredits(player.userId, CONFIG.HINT_CREDITS[type])) {
+      return cb?.({ ok: false, error: "NO_CREDITS" });
     }
 
     player.hints.push(type);
@@ -1954,12 +1768,13 @@ io.on("connection", (socket) => {
       type === "poster" ? (room.currentMovie.still || room.currentMovie.poster) // sans titre imprimé
     : type === "letters" ? titlePattern(room.currentMovie.title)
     : room.currentMovie[type];
-    cb?.({ ok: true, type, value, credits: getCredits(player.userId), freeHintsRemaining: player.freeHintsRemaining, allHintsFree: player.allHintsFree });
+    cb?.({ ok: true, type, value, credits: getCredits(player.userId),
+           offert, indicesOfferts: player.offertsRestants ?? 0 });
   });
 
   socket.on("answer:submit", ({ code, guess, choiceId }, cb) => {
     const room = rooms.get(code);
-    const player = room?.players.get(socket.data.user.id);
+    const player = room?.players.get(socket.id);
     if (!room || !player || room.status !== "playing" || player.hasAnswered) return cb?.({ ok: false });
     if (room.pauseA) return cb?.({ ok: false, error: "EN_PAUSE" });
 
@@ -1972,7 +1787,7 @@ io.on("connection", (socket) => {
     if (!correct) {
       if (!parClic) return cb?.({ ok: true, correct: false });
       player.hasAnswered = true;
-      player.coeurs = Math.max(0, (player.coeurs ?? player.coeursMax) - 1);
+      player.coeurs = Math.max(0, (player.coeurs ?? REGLAGES.coeurs) - 1);
       io.to(room.code).emit("player:answered", { id: player.id, pseudo: player.pseudo, team: player.team, points: 0 });
       if ([...room.players.values()].every((p) => p.hasAnswered)) endRound(room);
       return cb?.({ ok: true, correct: false, final: true,
@@ -1980,12 +1795,12 @@ io.on("connection", (socket) => {
     }
 
     player.hasAnswered = true;
-    let points = computeScore({ elapsedMs: Date.now() - room.startedAt, hintsUsed: player.paidHints });
+    let points = computeScore({ elapsedMs: Date.now() - room.startedAt, hintsUsed: player.hints });
     if (parClic) points = Math.max(30, Math.round(points * CONFIG.CHOICE_RATIO));
     player.score += points;
 
     cb?.({ ok: true, correct: true, points, movieId: room.currentMovie.id,
-           coeurs: player.coeurs ?? player.coeursMax });
+           coeurs: player.coeurs ?? REGLAGES.coeurs });
     io.to(room.code).emit("player:answered", { id: player.id, pseudo: player.pseudo, team: player.team, points });
 
     const tousTrouve = [...room.players.values()]
@@ -2004,7 +1819,7 @@ io.on("connection", (socket) => {
    *  réponse en cours sont bloqués : sinon le chat devient un anti-jeu. */
   socket.on("chat:send", ({ code, text }) => {
     const room = rooms.get(code);
-    const player = room?.players.get(socket.data.user.id);
+    const player = room?.players.get(socket.id);
     if (!room || !player) return;
 
     const message = String(text || "").trim().slice(0, 200);
@@ -2031,13 +1846,13 @@ io.on("connection", (socket) => {
   /** Un joueur qui a déjà répondu (ou qui joue seul) peut enchaîner. */
   socket.on("round:skip", ({ code }) => {
     const room = rooms.get(code);
-    const player = room?.players.get(socket.data.user.id);
+    const player = room?.players.get(socket.id);
     if (!room || !player || room.status !== "playing") return;
 
     // renoncer à la manche coûte un cœur, comme une mauvaise réponse
     if (!player.hasAnswered) {
       player.hasAnswered = true;
-      player.coeurs = Math.max(0, (player.coeurs ?? player.coeursMax) - 1);
+      player.coeurs = Math.max(0, (player.coeurs ?? REGLAGES.coeurs) - 1);
       socket.emit("coeurs:maj", { coeurs: player.coeurs, elimine: player.coeurs === 0 });
     }
     if ([...room.players.values()].every((p) => p.hasAnswered || p.coeurs === 0)) endRound(room);
@@ -2046,7 +1861,7 @@ io.on("connection", (socket) => {
   /** Enchaîner sans attendre la fin de l'entracte. */
   socket.on("round:next", ({ code }) => {
     const room = rooms.get(code);
-    if (!room || !room.players.has(socket.data.user.id) || room.status !== "intermission") return;
+    if (!room || !room.players.has(socket.id) || room.status !== "intermission") return;
     if (!["solo", "ranked"].includes(room.mode) && room.hostId !== socket.id) return; // l'hôte décide
     clearTimeout(room.nextTimer);
     startRound(room);
@@ -2093,7 +1908,7 @@ io.on("connection", (socket) => {
 
   socket.on("reaction", ({ code, emoji }) => {
     const room = rooms.get(code);
-    const player = room?.players.get(socket.data.user.id);
+    const player = room?.players.get(socket.id);
     if (!room || !player || !EMOJIS.includes(emoji)) return;
     if (Date.now() - derniereReaction < 700) return;   // évite le matraquage
     derniereReaction = Date.now();
@@ -2103,7 +1918,7 @@ io.on("connection", (socket) => {
   /** Invite un ami dans le salon en cours. Il reçoit une notification. */
   socket.on("invite:send", ({ code, amiId }, cb) => {
     const room = rooms.get(code);
-    if (!room || !room.players.has(socket.data.user.id)) return cb?.({ ok: false });
+    if (!room || !room.players.has(socket.id)) return cb?.({ ok: false });
     if (statutRelation(user.id, amiId) !== "ami") return cb?.({ ok: false, error: "PAS_AMI" });
     if (estBloque(user.id, amiId)) return cb?.({ ok: false, error: "BLOQUE" });
 
@@ -2125,26 +1940,14 @@ io.on("connection", (socket) => {
   socket.on("disconnect", () => leaveAllRooms(socket));
 
   function leaveAllRooms(socket) {
-    const userId = socket.data.user?.id;
     for (const room of rooms.values()) {
-      const p = room.players.get(userId);
-      if (!p || p.id !== socket.id) continue;
-      
-      if (room.status === "lobby") {
-          room.players.delete(userId);
-      } else {
-          p.online = false;
-      }
+      if (!room.players.delete(socket.id)) continue;
       socket.leave(room.code);
-      
-      const activePlayers = [...room.players.values()].filter(x => x.online !== false);
-      if (activePlayers.length === 0) {
+      if (room.players.size === 0) {
         clearTimeout(room.timer); clearTimeout(room.nextTimer); clearTimeout(room.graceTimer);
         rooms.delete(room.code);
       } else {
-        if (room.hostId === socket.id && activePlayers.length > 0) {
-            room.hostId = activePlayers[0].id;
-        }
+        if (room.hostId === socket.id) room.hostId = [...room.players.keys()][0];
         io.to(room.code).emit("room:update", publicState(room));
       }
     }
@@ -2152,21 +1955,14 @@ io.on("connection", (socket) => {
 });
 
 function joinRoom(socket, room, user) {
-  const niveau = infoNiveau(user.id)?.niveau || 0;
-  const avantages = getAvantagesNiveau(niveau);
-
-  room.players.set(user.id, {
+  room.players.set(socket.id, {
     id: socket.id,
     userId: user.id,
     pseudo: user.pseudo,
     avatar: user.avatar || "🎬",
     photo: user.photo || null,
     team: room.mode === "teams" ? balancedTeam(room) : null,
-    score: 0, hints: [], paidHints: [], hasAnswered: false,
-    coeursMax: REGLAGES.coeurs + avantages.extraCoeurs,
-    coeurs: REGLAGES.coeurs + avantages.extraCoeurs,
-    freeHintsRemaining: avantages.freeHints,
-    allHintsFree: avantages.allFree
+    score: 0, hints: [], hasAnswered: false,
   });
   socket.join(room.code);
   io.to(room.code).emit("room:update", publicState(room));
@@ -2189,15 +1985,15 @@ await initStockage();
 movies = await charger("movies", MOVIES_FILE, []);
 normaliserFilms();
 reports = await charger("reports", REPORTS_FILE, []);
+suggestions = await charger("suggestions", null, []);
 empreinteAdmin = await charger("adminPass", null, null);
 palmares = await charger("palmares", null, []);
 chargerSaison(await charger("saison", null, null));
 progression = await charger("quetes", null, {});
+sorties = await charger("sorties", null, { semaine: null, films: [], maj: 0 });
 for (const [id, liste] of Object.entries(await charger("vus", null, {})))
   vusParJoueur.set(id, liste);
 conversations = await charger("conversations", null, {});
-  sortiesConfig = await charger("sortiesConfig", SORTIES_FILE, { hidden: [], custom: [] });
-  nowPlayingConfig = await charger("nowPlayingConfig", NOWPLAYING_FILE, { hidden: [], custom: [] });
 REGLAGES = { ...structuredClone(REGLAGES_DEFAUT), ...(await charger("reglages", null, {})) };
 if (!empreinteAdmin)
   console.warn("⚠️  Mot de passe d'administration par défaut : changez-le depuis /admin.html");

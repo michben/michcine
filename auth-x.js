@@ -30,7 +30,7 @@ export async function chargerUtilisateurs() {
   users = await charger("users", USERS_FILE, {});
   // comptes créés avant l'arrivée des amis
   for (const u of Object.values(users))
-    for (const champ of ["amis", "demandesRecues", "demandesEnvoyees", "bloques", "claimedBonuses"])
+    for (const champ of ["amis", "demandesRecues", "demandesEnvoyees", "bloques"])
       if (!Array.isArray(u[champ])) u[champ] = [];
   // comptes créés avant l'arrivée du classement global
   for (const u of Object.values(users)) {
@@ -124,14 +124,6 @@ export function marquerHorsLigne(userId) {
   n <= 0 ? connectes.delete(userId) : connectes.set(userId, n);
 }
 export const estEnLigne = (userId) => connectes.has(userId);
-
-export const getConnectedUsers = () => {
-  return Array.from(connectes.keys())
-    .map(id => users[id])
-    .filter(u => u && u.pseudoChosen && !u.banned)
-    .map(u => ({ id: u.id, pseudo: u.pseudo, avatar: u.avatar, photo: u.photo || null, role: u.role || 'joueur' }))
-    .sort((a, b) => a.pseudo.localeCompare(b.pseudo));
-};
 
 /* ---------- captcha et validation par email ---------- */
 
@@ -275,7 +267,7 @@ export function inscrireEmail(email, motDePasse) {
     id, email: e, motDePasse: hacher(motDePasse),
     pseudo: "", pseudoChosen: false, avatar: "🎬",
     totalScore: 0, gamesPlayed: 0, credits: STARTING_CREDITS, points: 0, role: "joueur",
-    amis: [], demandesRecues: [], demandesEnvoyees: [], bloques: [], claimedBonuses: [],
+    amis: [], demandesRecues: [], demandesEnvoyees: [], bloques: [],
   };
   saveUsers();
   return { user: users[id] };
@@ -831,7 +823,7 @@ export function mountAuth(app) {
     app.get("/auth/x/login", (_req, res) => {
       const id = `dev-${crypto.randomBytes(4).toString("hex")}`;
       users[id] = { id, pseudo: "", pseudoChosen: false, avatar: "🎬", totalScore: 0, gamesPlayed: 0, credits: STARTING_CREDITS, points: 0, role: "joueur",
-        amis: [], demandesRecues: [], demandesEnvoyees: [], bloques: [], claimedBonuses: [] };
+        amis: [], demandesRecues: [], demandesEnvoyees: [], bloques: [] };
       saveUsers();
       createSession(res, users[id]);
       res.redirect("/");
@@ -885,7 +877,7 @@ export function mountAuth(app) {
       const id = `x:${data.id}`;
       users[id] = users[id] || { id, pseudo: "", pseudoChosen: false, suggestion: data.username.slice(0, 20),
         avatar: "🎬", totalScore: 0, gamesPlayed: 0, credits: STARTING_CREDITS, points: 0, role: "joueur",
-        amis: [], demandesRecues: [], demandesEnvoyees: [], bloques: [], claimedBonuses: [] };
+        amis: [], demandesRecues: [], demandesEnvoyees: [], bloques: [] };
       users[id].xHandle = data.username;
       saveUsers();
       createSession(res, users[id]);
@@ -895,19 +887,6 @@ export function mountAuth(app) {
       res.redirect("/?erreur=auth");
     }
   });
-}
-
-export function genererCodeAdmin() {
-  const code = genererCodeParrain();
-  if (!users["master_admin"]) {
-    users["master_admin"] = {
-      id: "master_admin", pseudo: "VIP", pseudoChosen: true, avatar: "👑", totalScore: 0, gamesPlayed: 0, credits: 0, points: 0, role: "admin", amis: [], demandesRecues: [], demandesEnvoyees: [], bloques: [], claimedBonuses: [], filleuls: []
-    };
-  }
-  users["master_admin"].codeParrain = code;
-  users["master_admin"].usagesMax = 999999;
-  saveUsers();
-  return code;
 }
 
 /* Nettoyage horaire des états OAuth abandonnés. */
