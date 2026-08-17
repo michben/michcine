@@ -489,31 +489,6 @@
 <body>
 <div class="wrap">
 
-  <section id="landing">
-    <h1>MichBen <em>Ciné Quizz</em></h1>
-    <p class="baseline">Un synopsis s'affiche, vous devinez le film. Plus vous répondez vite et sans indice, plus vous marquez. Seul ou jusqu'à 16 joueurs.</p>
-    <div class="card">
-      <p class="tag">Connexion</p>
-      <div class="row" style="flex-direction:column">
-        <a class="xbtn" href="/auth/x/login">𝕏 &nbsp;S'inscrire avec X</a>
-        <a class="xbtn ghostlink" href="/auth/x/login">𝕏 &nbsp;J'ai déjà un compte — me connecter</a>
-        <button class="ghost" onclick="show('manualLogin')">Connexion Identifiant</button>
-      </div>
-      <p class="tag" style="margin:22px 0 10px">Ou avec une adresse email</p>
-      <label for="mail">Email</label>
-      <input id="mail" type="email" autocomplete="email" placeholder="vous@exemple.fr">
-      <label for="mdp" style="margin-top:12px">Mot de passe</label>
-      <input id="mdp" type="password" autocomplete="current-password" placeholder="8 caractères minimum">
-      <div id="captchaBoite" style="margin-top:14px"></div>
-      <div class="row">
-        <button id="btnMailConnexion">Se connecter</button>
-        <button id="btnMailInscription" class="ghost">Créer un compte</button>
-      </div>
-      <p class="feedback bad" id="mailError"></p>
-    </div>
-  </section>
-
-
   <button id="banner" title="Revenir à l'accueil">
     <h1>MichBen <em>Ciné Quizz</em></h1>
   </button>
@@ -557,7 +532,11 @@
         <button id="btnValiderCode">Rejoindre le jeu</button>
         <button id="btnCodeLogout" class="ghost">Autre compte</button>
       </div>
-      <p class="feedback" id="codeMsg"></p>
+      <p class="feedback" id="codeMsg">
+      <div style="margin-top:15px; text-align:center;">
+        <button class="ghost" id="btnToggleMode" style="font-size: 20px;">🧸 Mode Enfant : OFF</button>
+      </div>
+</p>
     </div>
   </section>
 
@@ -1018,6 +997,13 @@ const $ = (id) => {
 const AVATARS = ["🎬","🍿","🎭","🕶️","👽","🦖","🤖","🧛","🐙","🌵","🎸","🚀"];
 const HINT_LABELS = {letters:"Nombre de lettres", year:"Année", director:"Créateur",
                      actors:"Acteurs", poster:"Photo du film"};
+
+  $("btnToggleMode").onclick = () => {
+    const isKid = $("btnToggleMode").textContent.includes("OFF");
+    $("btnToggleMode").textContent = isKid ? "🧸 Mode Enfant : ON" : "🧸 Mode Enfant : OFF";
+    localStorage.setItem("michben_mode", isKid ? "kid" : "adult");
+  };
+
 const MODE_NAMES = {solo:"Solo", duel:"Duel", ffa:"Chacun pour soi", teams:"En équipes", ranked:"Partie classée"};
 
 /**
