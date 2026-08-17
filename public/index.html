@@ -493,16 +493,17 @@
 
 
   /* ── Bascule mode enfant, en haut à droite ─────────────────────── */
-  #btnModeEnfant{position:absolute;top:62px;right:16px;z-index:51;display:inline-flex;
-    align-items:center;gap:7px;font-size:14px;font-weight:600;padding:8px 14px;
-    border-radius:999px;background:transparent;color:var(--teal);
+  /* Bascule mode enfant, sous le champ de code : bien visible, sans gêner. */
+  #btnModeEnfant{display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    width:100%;font-size:15px;font-weight:600;padding:13px 18px;border-radius:12px;
+    background:rgba(78,205,196,.12);color:var(--teal);
     border:1px solid rgba(78,205,196,.5);cursor:pointer;transition:all .2s ease}
   #btnModeEnfant:hover{background:rgba(78,205,196,.12);border-color:var(--teal)}
   /* un fond plein le détache du titre, il passait inaperçu */
-  #btnModeEnfant{background:rgba(78,205,196,.12);box-shadow:0 2px 12px rgba(0,0,0,.35)}
+
   #btnModeEnfant.actif{background:var(--teal);color:#0A0C16;border-color:var(--teal)}
   #btnModeEnfant span{font-size:13px}
-  @media(max-width:620px){ #btnModeEnfant span{display:none} #btnModeEnfant{padding:9px 12px;top:56px} }
+
 
   /* Un liseré vert rappelle en permanence qu'on est en mode enfant. */
   body.modeEnfant{box-shadow:inset 0 0 0 3px rgba(78,205,196,.55)}
@@ -576,7 +577,7 @@
     <h1>MichBen <em>Ciné Quizz</em></h1>
   </button>
   <button id="btnQuitGame" class="ghost hidden" style="position:absolute; top:20px; right:18px; font-size:22px; padding:4px 8px; z-index:50;" title="Quitter la partie">🏠</button>
-  <button id="btnModeEnfant" title="Basculer en mode enfant">🧸<span>Mode enfant</span></button>
+
 
   <!-- PRÉSENTATION + CONNEXION -->
   <section id="landing">
@@ -857,6 +858,9 @@
       <label for="joinCode">Rejoindre un salon existant</label>
       <input id="joinCode" maxlength="4" placeholder="ABCD" autocomplete="off">
       <div class="row"><button id="btnJoin" class="ghost">Rejoindre</button></div>
+      <div class="row" style="margin-top:16px">
+        <button id="btnModeEnfant" title="Basculer en mode enfant">🧸 <span>Mode enfant</span></button>
+      </div>
       <p class="feedback bad" id="joinError"></p>
     </div>
   </section>
@@ -1215,10 +1219,19 @@ function majBoutonAdmin(){
  * script : on attend donc le chargement complet avant de la relier, sinon
  * le bouton reste sans effet.
  */
-document.addEventListener("DOMContentLoaded", () => {
+function brancherSuggestions(){
   const modal = document.getElementById("suggestionModal");
   const bouton = document.getElementById("btnSuggestion");
-  if (!modal || !bouton) return;
+
+  // diagnostic visible : si un élément manque, on le dit plutôt que de rester muet
+  if (!modal || !bouton) {
+    const manquants = [!bouton && "btnSuggestion", !modal && "suggestionModal"].filter(Boolean);
+    console.warn("Suggestions non branchées, éléments absents :", manquants.join(", "));
+    if (bouton) bouton.onclick = () =>
+      alert("La fenêtre de suggestion est introuvable dans la page (" + manquants.join(", ") + ").");
+    return;
+  }
+  console.info("Suggestions branchées.");
 
   bouton.onclick = () => {
     document.getElementById("suggFeedback").textContent = "";
@@ -1262,7 +1275,14 @@ document.addEventListener("DOMContentLoaded", () => {
     champTitre.value = ""; champComm.value = "";
     setTimeout(() => modal.classList.remove("active"), 2200);
   };
-});
+}
+
+// selon le moment où ce script s'exécute, la page peut déjà être chargée :
+// dans ce cas l'événement ne se déclenche plus jamais.
+if (document.readyState === "loading")
+  document.addEventListener("DOMContentLoaded", brancherSuggestions);
+else
+  brancherSuggestions();
 
 // le bouton reste cliquable : mieux vaut un message clair qu'un bouton mort
   $("btnJoin").title = "Le multijoueur exige la connexion temps réel.";
