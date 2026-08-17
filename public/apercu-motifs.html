@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Motifs des cartes de niveau — aperçu</title>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
+<style>
+  :root{--ink:#0A0C16;--velvet:#151A2E;--card:#1C2238;--beam:#F5B942;
+        --ticket:#E4586E;--teal:#4ECDC4;--chalk:#EDE8DC;--muted:#7C819B}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--ink);color:var(--chalk);
+    font-family:'Space Grotesk',system-ui,sans-serif;padding:26px 18px}
+  .wrap{max-width:520px;margin:0 auto}
+  h1{font-family:'Anton',sans-serif;text-transform:uppercase;letter-spacing:.04em;
+    font-size:26px;margin:0 0 6px}
+  h1 em{font-style:normal;color:var(--beam)}
+  p.sous{color:var(--muted);font-size:14px;margin:0 0 24px}
+  .grille{display:flex;flex-direction:column;gap:14px}
+  .tete{display:flex;align-items:center;gap:12px}
+  .pastille{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;flex:0 0 auto;
+    background:linear-gradient(140deg,var(--beam),var(--ticket));color:#161207;
+    font-family:'JetBrains Mono',monospace;font-weight:700;font-size:16px}
+  .titre{flex:1}
+  .titre b{display:block;font-family:'Anton',sans-serif;text-transform:uppercase;
+    letter-spacing:.03em;font-size:18px;font-weight:400}
+  .titre small{color:var(--muted);font-size:13px}
+  .jauge{height:6px;background:rgba(10,12,22,.6);border-radius:99px;overflow:hidden;margin-top:12px}
+  .jauge i{display:block;height:100%;background:linear-gradient(90deg,var(--ticket),var(--beam))}
+</style>
+<link rel="stylesheet" href="motifs-niveaux.css">
+</head>
+<body>
+<div class="wrap">
+  <h1>Cartes de <em>niveau</em></h1>
+  <p class="sous">Un motif par palier, en CSS pur — aucune image à charger.</p>
+
+  <div class="grille">
+    <div class="carteNiveau palier-0">
+      <div class="tete">
+        <span class="pastille">7</span>
+        <span class="titre"><b>Nouveau venu</b><small>Pellicule · niveaux 0 à 49</small></span>
+      </div>
+      <div class="jauge"><i style="width:34%"></i></div>
+    </div>
+
+    <div class="carteNiveau palier-1">
+      <div class="tete">
+        <span class="pastille">62</span>
+        <span class="titre"><b>Habitué</b><small>Projecteurs · 3 cœurs, 1 indice offert</small></span>
+      </div>
+      <div class="jauge"><i style="width:58%"></i></div>
+    </div>
+
+    <div class="carteNiveau palier-2">
+      <div class="tete">
+        <span class="pastille">128</span>
+        <span class="titre"><b>Cinéphile</b><small>Sièges de salle · 4 cœurs, 1 indice offert</small></span>
+      </div>
+      <div class="jauge"><i style="width:41%"></i></div>
+    </div>
+
+    <div class="carteNiveau palier-3">
+      <div class="tete">
+        <span class="pastille">214</span>
+        <span class="titre"><b>Expert</b><small>Étoiles · 5 cœurs, 2 indices offerts</small></span>
+      </div>
+      <div class="jauge"><i style="width:76%"></i></div>
+    </div>
+
+    <div class="carteNiveau palier-4">
+      <div class="tete">
+        <span class="pastille">300</span>
+        <span class="titre"><b>Légende</b><small>Rayons dorés · 6 cœurs, tous les indices offerts</small></span>
+      </div>
+      <div class="jauge"><i style="width:100%"></i></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,108 @@
+/**
+ * Motifs de fond des cartes de niveau — MichBen Ciné Quizz
+ *
+ * Chaque palier a son propre motif, dessiné en CSS pur : aucune image à
+ * charger, et le rendu reste net sur tous les écrans. Le motif change à
+ * mesure que le joueur progresse, ce qui rend la montée visible d'un coup
+ * d'œil sans avoir à lire un chiffre.
+ *
+ * Usage : <div class="carteNiveau palier-3"> … </div>
+ */
+
+.carteNiveau{
+  position:relative;
+  overflow:hidden;
+  border-radius:16px;
+  padding:18px;
+  background:var(--card);
+  border:1px solid rgba(237,232,220,.1);
+}
+
+/* Le motif vit dans une couche séparée, sous le contenu. */
+.carteNiveau::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  opacity:.16;
+  pointer-events:none;
+}
+
+.carteNiveau > *{ position:relative; z-index:1; }
+
+/* ── Palier 0 : débutant — pellicule ─────────────────────────────── */
+.carteNiveau.palier-0::before{
+  background-image:
+    linear-gradient(90deg, transparent 0 6px, var(--chalk) 6px 10px, transparent 10px 22px),
+    linear-gradient(180deg, transparent 0 8px, var(--chalk) 8px 12px, transparent 12px 100%);
+  background-size:22px 100%, 100% 40px;
+}
+
+/* ── Palier 1 : habitué — projecteurs ────────────────────────────── */
+.carteNiveau.palier-1::before{
+  background-image:
+    repeating-linear-gradient(115deg,
+      transparent 0 18px, var(--beam) 18px 21px, transparent 21px 46px);
+  opacity:.13;
+}
+
+/* ── Palier 2 : cinéphile — sièges de salle ──────────────────────── */
+.carteNiveau.palier-2::before{
+  background-image:
+    radial-gradient(circle at 50% 120%, var(--ticket) 12px, transparent 13px),
+    radial-gradient(circle at 0 120%, var(--ticket) 12px, transparent 13px),
+    radial-gradient(circle at 100% 120%, var(--ticket) 12px, transparent 13px);
+  background-size:34px 30px;
+  opacity:.18;
+}
+
+/* ── Palier 3 : expert — étoiles ─────────────────────────────────── */
+.carteNiveau.palier-3::before{
+  background-image:
+    radial-gradient(circle at 20% 24%, var(--beam) 2px, transparent 3px),
+    radial-gradient(circle at 68% 12%, var(--chalk) 1.5px, transparent 2.5px),
+    radial-gradient(circle at 42% 62%, var(--beam) 2.5px, transparent 3.5px),
+    radial-gradient(circle at 86% 48%, var(--chalk) 2px, transparent 3px),
+    radial-gradient(circle at 12% 82%, var(--beam) 1.5px, transparent 2.5px),
+    radial-gradient(circle at 60% 88%, var(--chalk) 2px, transparent 3px);
+  background-size:120px 120px;
+  opacity:.34;
+}
+
+/* ── Palier 4 : légende — rayons dorés, en mouvement lent ────────── */
+.carteNiveau.palier-4{
+  border-color:rgba(245,185,66,.45);
+  box-shadow:0 0 30px rgba(245,185,66,.16);
+}
+.carteNiveau.palier-4::before{
+  background:
+    conic-gradient(from 0deg at 50% 50%,
+      transparent 0deg, var(--beam) 12deg, transparent 24deg,
+      transparent 60deg, var(--beam) 72deg, transparent 84deg,
+      transparent 120deg, var(--beam) 132deg, transparent 144deg,
+      transparent 180deg, var(--beam) 192deg, transparent 204deg,
+      transparent 240deg, var(--beam) 252deg, transparent 264deg,
+      transparent 300deg, var(--beam) 312deg, transparent 324deg);
+  opacity:.14;
+  animation:rayons 34s linear infinite;
+}
+@keyframes rayons{ to{ transform:rotate(360deg); } }
+
+/* Un liseré coloré rappelle le palier sur le bord gauche. */
+.carteNiveau::after{
+  content:"";
+  position:absolute;
+  left:0; top:0; bottom:0;
+  width:4px;
+  background:var(--muted);
+}
+.carteNiveau.palier-1::after{ background:var(--teal); }
+.carteNiveau.palier-2::after{ background:var(--ticket); }
+.carteNiveau.palier-3::after{ background:var(--beam); }
+.carteNiveau.palier-4::after{
+  background:linear-gradient(180deg, var(--beam), var(--ticket), var(--teal));
+}
+
+/* Certaines personnes sont gênées par le mouvement : on le coupe. */
+@media (prefers-reduced-motion:reduce){
+  .carteNiveau.palier-4::before{ animation:none; }
+}
