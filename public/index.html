@@ -493,6 +493,7 @@
     <h1>MichBen <em>Ciné Quizz</em></h1>
   </button>
   <button id="btnQuitGame" class="ghost hidden" style="position:absolute; top:20px; right:18px; font-size:22px; padding:4px 8px; z-index:50;" title="Quitter la partie">🏠</button>
+<button id="btnSlot" style="position:absolute; top:20px; right:60px; font-size:20px; padding:4px 8px; z-index:50;" title="Machine à sous">🎰</button>
 
   <!-- PRÉSENTATION + CONNEXION -->
   <section id="landing">
@@ -930,6 +931,164 @@
 
 <!-- Moteur temps réel servi sous un nom neutre : les bloqueurs qui filtrent
      le mot « socket.io » ne le reconnaissent pas. -->
+
+<div id="voilePause" class="hidden">
+    <div class="boitePause">
+      <p class="tag" style="margin-bottom:6px">Partie en pause</p>
+      <p class="grosChiffre" id="pauseReste">--</p>
+      <p class="note" id="pauseQui" style="margin:0 0 18px"></p>
+      <button id="btnReprendre">Reprendre la partie</button>
+      <div class="row"><button id="btnQuitterPause" class="ghost">Quitter la partie</button></div>
+    </div>
+
+<script src="/js/moteur.js"></script>
+
+
+
+
+  </div>
+
+    
+    
+    <!-- MODALE ANNIVERSAIRES -->
+    <div class="modal-overlay" id="birthdaysModal">
+        <div class="modal-content">
+            <div class="modal-header" style="border-bottom-color: var(--teal);">
+                <h2>🎂 Nés un <span id="bdayDate"></span></h2>
+                <button class="close-btn" id="closeBdayBtn">&times;</button>
+            </div>
+            <div class="modal-body" id="bdayList" style="max-height: 60vh; overflow-y: auto;">
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALE JOUEURS EN LIGNE -->
+    <div class="modal-overlay" id="onlineUsersModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🟢 Joueurs en ligne</h2>
+                <button class="close-btn" id="closeOnlineUsersBtn">&times;</button>
+            </div>
+            <div class="modal-body" id="onlineUsersList" style="max-height: 60vh; overflow-y: auto;">
+                <p class="note" style="text-align:center">Chargement...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALE SORTIES CINEMA -->
+    <div class="modal-overlay" id="upcomingMoviesModal">
+        <div class="modal-content">
+            <div class="modal-header" style="border-bottom-color: var(--ticket);">
+                <h2>🍿 Sorties de la semaine</h2>
+                <button class="close-btn" id="closeUpcomingMoviesBtn">&times;</button>
+            </div>
+            <div class="modal-body" id="upcomingMoviesList" style="max-height: 60vh; overflow-y: auto;">
+                <p class="note" style="text-align:center">Recherche des nouveautés UGC, Pathé, Gaumont...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALE ACTUELLEMENT AU CINEMA -->
+    <div class="modal-overlay" id="nowPlayingModal">
+        <div class="modal-content">
+            <div class="modal-header" style="border-bottom-color: var(--teal);">
+                <h2>🎥 Actuellement au cinéma</h2>
+                <button class="close-btn" id="closeNowPlayingBtn">&times;</button>
+            </div>
+            <div class="modal-body" id="nowPlayingList" style="max-height: 60vh; overflow-y: auto;">
+                <p class="note" style="text-align:center">Recherche des films à l'affiche...</p>
+            </div>
+        </div>
+    </div>
+
+    
+    
+    
+    <div class="modal-overlay" id="slotModal">
+        <div class="modal-content">
+            <div class="modal-header"><h2>🎰 Machine à sous</h2><button class="close-btn" id="closeSlotBtn">&times;</button></div>
+            <div class="modal-body" style="text-align:center">
+                <div id="slotAnim" style="font-size:64px; margin:20px;">❓</div>
+                <p id="slotResult">Tentez votre chance !</p>
+                <div class="row">
+                    <button id="btnSlotGratuit">Partie gratuite (1/24h)</button>
+                    <button id="btnSlotPayant" class="ghost">Payer 100 points</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALE SUGGESTION -->
+    <div class="modal-overlay" id="suggestionModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>💡 Suggérer un film</h2>
+                <button class="close-btn" id="closeSuggestionBtn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <label for="suggTitre">Titre du film</label>
+                <input id="suggTitre" placeholder="Titre du film...">
+                <label for="suggComment" style="margin-top:10px">Commentaire (facultatif)</label>
+                <textarea id="suggComment" rows="3" placeholder="Pourquoi ce film serait bien ?"></textarea>
+                <div class="row"><button id="btnSendSugg">Envoyer la suggestion</button></div>
+                <p class="feedback" id="suggFeedback"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALE PROGRESSION -->
+    <div class="modal-overlay" id="progressionModal">
+        <div class="modal-content" style="max-height: 85vh; display: flex; flex-direction: column;">
+            <div class="modal-header" style="border-bottom-color: var(--beam);">
+                <h2>🗺️ Votre Parcours</h2>
+                <button class="close-btn" id="closeProgressionBtn">&times;</button>
+            </div>
+            <div class="modal-body" style="flex: 1; padding: 0; display: flex; flex-direction: column; overflow: hidden;">
+                <div style="padding: 15px 25px; background: #111; border-bottom: 1px solid #333; text-align: center; position: sticky; top: 0; z-index: 10;">
+                    <p id="nextBonusText" style="margin: 0; font-size: 15px; color: var(--chalk);"></p>
+                </div>
+                <div id="progressionMap" class="progression-map">
+                    <p class='note' style='text-align:center; margin-top:20px;'>Génération de la carte...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BOUTON FLOTTANT ET MODALE D'AIDE -->
+    <div class="help-btn" id="helpBtn" title="Règles du jeu">?</div>
+    <div class="modal-overlay" id="rulesModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Comment jouer ? 🎬🎵</h2>
+                <button class="close-btn" id="closeBtn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Bienvenue ! Testez vos connaissances et défiez vos amis dans nos différents modes de jeu interactifs.</p>
+
+                <div class="mode-section cine">
+                    <h3>🍿 Mode Ciné Quiz</h3>
+                    <p>Prouvez que vous êtes incollable sur le 7ème art.</p>
+                    <ul>
+                        <li>Lisez attentivement la question affichée.</li>
+                        <li>Sélectionnez la bonne proposition avant la fin du chrono.</li>
+                        <li>Plus vous êtes rapide, plus vous marquez de points !</li>
+                    </ul>
+                </div>
+                <div class="teaser-section">
+                    <h3>🚀 L'aventure ne fait que commencer...</h3>
+                    <p>MichBen Ciné n'est que la <strong>toute première étape</strong>.</p>
+                    <p>Ce que vous voyez aujourd'hui est le point de départ d'une longue série de mini-jeux, d'expériences interactives et d'univers encore plus poussés qui arriveront très prochainement. Entraînez-vous bien, la suite s'annonce lourde !</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+
+    
+
+
+    
+
 <script>
 /* Toute erreur de script devient visible à l'écran : sans cela, une seule
    ligne fautive fige l'interface sans que personne ne sache pourquoi. */
@@ -948,25 +1107,30 @@ window.addEventListener("error", (e) => {
 
   boite.textContent = `Erreur : ${e.message} (${source.split("/").pop()}:${e.lineno})`;
   boite.classList.remove("hidden");
-});
-</script>
-<div id="voilePause" class="hidden">
-    <div class="boitePause">
-      <p class="tag" style="margin-bottom:6px">Partie en pause</p>
-      <p class="grosChiffre" id="pauseReste">--</p>
-      <p class="note" id="pauseQui" style="margin:0 0 18px"></p>
-      <button id="btnReprendre">Reprendre la partie</button>
-      <div class="row"><button id="btnQuitterPause" class="ghost">Quitter la partie</button></div>
-    </div>
 
-<script src="/js/moteur.js"></script>
-<script>
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
+
+
 /* Dernier recours si le fichier local est lui aussi filtré. */
 if (typeof io === "undefined") {
   document.write('<scr' + 'ipt src="https://cdn.jsdelivr.net/npm/socket.io-client@4.8.1/dist/socket.io.min.js"><\/scr' + 'ipt>');
 }
-</script>
-<script>
+
+
 /**
  * Si Socket.IO reste indisponible (bloqueur, pare-feu, réseau filtrant), on
  * remplace l'objet par une coquille inerte. Le profil, l'espace échange, le
@@ -991,8 +1155,8 @@ if (!window.tempsReelDispo) {
   window.io = () => coquille;
   var io = window.io;   // « var » pour que le nom soit aussi visible sans préfixe
 }
-</script>
-<script>
+
+
 // withCredentials garantit l'envoi du cookie de session, y compris après
 // une redirection entre le domaine avec et sans www.
 /* Le chemin par défaut « /socket.io » est lui aussi filtré par certains
@@ -1000,7 +1164,22 @@ if (!window.tempsReelDispo) {
 /* Une panne du moteur ne doit jamais empêcher le reste du jeu de fonctionner. */
 const socket = (() => {
   try {
-    return io({ withCredentials: true, path: window.cheminTempsReel });
+    return io({ withCredentials: true, path: window.cheminTempsReel 
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
   } catch (e) {
     console.warn("Temps réel indisponible :", e.message);
     window.tempsReelDispo = false;
@@ -1069,7 +1248,22 @@ let state = {code:null, mode:"ffa", isHost:false, hintCosts:{}, bought:{}, answe
 const show = id => {
   ["landing","validation","parrainage","profile","board","exchange","friends","quetes","moderation","menu","lobby","waiting","round","between","over"]
     .forEach(s => $(s).classList.toggle("hidden", s !== id));
-  window.scrollTo({top: 0, behavior: "instant"});
+  window.scrollTo({top: 0, behavior: "instant"
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
   
   const inGame = ["round", "between", "lobby", "waiting"].includes(id);
   $("btnQuitGame").classList.toggle("hidden", !inGame);
@@ -1091,7 +1285,22 @@ if (!window.tempsReelDispo) {
     if (["solo", "ranked"].includes(b.dataset.mode)) return;   // ces modes restent jouables
     b.disabled = true; b.style.opacity = .4;
     b.title = "Indisponible : le temps réel est bloqué par votre navigateur.";
-  });
+  
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
   
 // Logic to show Admin button if admin
 if (["admin"].includes(me.role)) {
@@ -1099,7 +1308,7 @@ if (["admin"].includes(me.role)) {
     $("btnAdminAccess").onclick = () => window.location.href = "/admin.html";
 }
 
-        
+        const suggestionModal = $("suggestionModal");
         const btnSuggestion = $("btnSuggestion");
         
         btnSuggestion.onclick = () => suggestionModal.classList.add("active");
@@ -1114,7 +1323,22 @@ if (["admin"].includes(me.role)) {
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
                 body: JSON.stringify({ titre, commentaire })
-            });
+            
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
             if(res.ok) {
                 $("suggFeedback").textContent = "Merci pour votre suggestion !";
                 $("suggFeedback").className = "feedback good";
@@ -1137,7 +1361,22 @@ const AVATAR_LIST = AVATARS;
 
 async function loadSession(){
   try {
-    const res = await fetch("/api/me", { credentials: "same-origin" });
+    const res = await fetch("/api/me", { credentials: "same-origin" 
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
     if (!res.ok) {
       $("diag").textContent = `Non connecté (réponse ${res.status}).`;
       return show("landing");
@@ -1182,12 +1421,42 @@ fetch("/api/captcha").then(r => r.json()).then(({siteKey}) => {
     sitekey: siteKey,
     callback: (t) => { captchaJeton = t; },
     "expired-callback": () => { captchaJeton = ""; },
-  });
+  
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
   const s = document.createElement("script");
   s.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?onload=captchaPret&render=explicit";
   s.async = true;
   document.head.append(s);
-}).catch(() => {});
+}).catch(() => {
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
 
 /* ---------- Validation de l'adresse email ---------- */
 const MESSAGES_CODE = {
@@ -1209,7 +1478,22 @@ function ecranValidation(){
    avant ce changement : il n'est simplement plus proposé à l'inscription. */
 $("btnValider").onclick = async () => {
   const res = await fetch("/auth/email/code", {method:"POST",
-    headers:{"Content-Type":"application/json"}, body: JSON.stringify({code: $("codeVal").value})});
+    headers:{"Content-Type":"application/json"}, body: JSON.stringify({code: $("codeVal").value})
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
   const data = await res.json().catch(() => ({}));
   if (!res.ok){
     $("valMsg").textContent = MESSAGES_CODE[data.error] || "Validation impossible.";
@@ -1224,14 +1508,44 @@ $("btnValider").onclick = async () => {
 };
 
 $("btnRenvoyer").onclick = async () => {
-  const res = await fetch("/auth/email/renvoyer", {method:"POST"});
+  const res = await fetch("/auth/email/renvoyer", {method:"POST"
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
   const data = await res.json().catch(() => ({}));
   $("valMsg").textContent = res.ok ? "Nouveau code envoyé." : (MESSAGES_CODE[data.error] || "Envoi impossible.");
   $("valMsg").className = res.ok ? "feedback good" : "feedback bad";
 };
 
 $("btnValLogout").onclick = async () => {
-  try { await fetch("/auth/logout", {method:"POST"}); } catch {}
+  try { await fetch("/auth/logout", {method:"POST"
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+}); } catch {}
   location.href = "/";
 };
 
@@ -1251,7 +1565,22 @@ async function authMail(chemin){
 
   const res = await fetch(`/auth/email/${chemin}`, {method:"POST",
     headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({email, motDePasse, captcha: captchaJeton})});
+    body: JSON.stringify({email, motDePasse, captcha: captchaJeton})
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
   const data = await res.json().catch(() => ({}));
   if (!res.ok) return ($("mailError").textContent = MESSAGES_MAIL[data.error] || "Connexion impossible.");
 
@@ -1272,7 +1601,22 @@ async function authMail(chemin){
 }
 $("btnMailConnexion").onclick = () => authMail("connexion");
 $("btnMailInscription").onclick = () => authMail("inscription");
-$("mdp").addEventListener("keydown", e => { if (e.key === "Enter") authMail("connexion"); });
+$("mdp").addEventListener("keydown", e => { if (e.key === "Enter") authMail("connexion"); 
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
 
 
 
@@ -1345,7 +1689,22 @@ async function chargerConversation(){
 
   $("msgLog").innerHTML = r.messages.length
     ? r.messages.map(m => {
-        const heure = new Date(m.at).toLocaleTimeString("fr-FR", {hour:"2-digit", minute:"2-digit"});
+        const heure = new Date(m.at).toLocaleTimeString("fr-FR", {hour:"2-digit", minute:"2-digit"
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
         return `<div class="bulle ${m.de === me.id ? "moi" : "lui"}">${esc(m.texte)}<small>${heure}</small></div>`;
       }).join("")
     : "<p class='note'>Aucun message. Écrivez le premier.</p>";
@@ -1357,11 +1716,41 @@ async function envoyerMessage(){
   if (!texte || !convAvec) return;
   $("msgTexte").value = "";
   const res = await fetch(`/api/messages/${encodeURIComponent(convAvec.id)}`, {method:"POST",
-    headers:{"Content-Type":"application/json"}, body: JSON.stringify({texte})});
+    headers:{"Content-Type":"application/json"}, body: JSON.stringify({texte})
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
   if (res.ok) chargerConversation();
 }
 $("msgEnvoyer").onclick = envoyerMessage;
-$("msgTexte").addEventListener("keydown", e => { if (e.key === "Enter") envoyerMessage(); });
+$("msgTexte").addEventListener("keydown", e => { if (e.key === "Enter") envoyerMessage(); 
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
 $("msgFermer").onclick = () => { $("popMessages").classList.add("hidden"); convAvec = null; };
 $("popMessages").onclick = e => { if (e.target.id === "popMessages") $("msgFermer").click(); };
 
@@ -1370,7 +1759,22 @@ $("msgSignaler").onclick = async () => {
   const motif = prompt("Que reprochez-vous à cette conversation ? Un modérateur l'examinera.");
   if (!motif) return;
   await fetch(`/api/messages/${encodeURIComponent(convAvec.id)}/signaler`, {method:"POST",
-    headers:{"Content-Type":"application/json"}, body: JSON.stringify({motif})});
+    headers:{"Content-Type":"application/json"}, body: JSON.stringify({motif})
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
   alert("Signalement transmis à la modération.");
 };
 
@@ -1391,7 +1795,22 @@ async function offrirPoints(id, pseudo){
   if (!montant || montant <= 0) return;
 
   const res = await fetch("/api/points/donner", {method:"POST",
-    headers:{"Content-Type":"application/json"}, body: JSON.stringify({id, points: montant})});
+    headers:{"Content-Type":"application/json"}, body: JSON.stringify({id, points: montant})
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
   const data = await res.json().catch(() => ({}));
   if (!res.ok){
     const messages = {
@@ -1501,6 +1920,21 @@ $("codeParrain").addEventListener("input", async (e) => {
     (r.restants ? `<br><small>${r.restants} invitation${r.restants>1?"s":""} encore disponible${r.restants>1?"s":""}</small>` : "") +
     `</p>`;
   $("apercuParrain").classList.remove("hidden");
+
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
 });
 
 $("btnValiderCode").onclick = async () => {
@@ -1508,7 +1942,22 @@ $("btnValiderCode").onclick = async () => {
   if (code.length !== 6) return ($("codeMsg").textContent = "Le code contient 6 caractères.",
                                  $("codeMsg").className = "feedback bad");
   const res = await fetch("/api/parrainage/rejoindre", {method:"POST",
-    headers:{"Content-Type":"application/json"}, body: JSON.stringify({code})});
+    headers:{"Content-Type":"application/json"}, body: JSON.stringify({code})
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
   const data = await res.json().catch(() => ({}));
   if (!res.ok){
     const messages = { CODE_INCONNU: "Ce code n'existe pas.",
@@ -1526,7 +1975,22 @@ $("btnValiderCode").onclick = async () => {
 };
 
 $("btnCodeLogout").onclick = async () => {
-  try { await fetch("/auth/logout", {method:"POST"}); } catch {}
+  try { await fetch("/auth/logout", {method:"POST"
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+}); } catch {}
   location.href = "/";
 };
 
@@ -1592,11 +2056,41 @@ function afficherPause(actif, reste, par){
 
 async function basculerPause(){
   if (SANS_RESEAU.includes(state.mode)){
-    const r = await solo("pause", {reprendre: enPause});
+    const r = await solo("pause", {reprendre: enPause
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
     if (r) afficherPause(r.enPause, r.reste);
     return;
   }
-  socket.emit("game:pause", {code: state.code, reprendre: enPause});
+  socket.emit("game:pause", {code: state.code, reprendre: enPause
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
 }
 $("btnPause").onclick = basculerPause;
 $("btnReprendre").onclick = basculerPause;
@@ -1617,7 +2111,22 @@ socket.on("game:paused", ({enPause: actif, reste, par}) => afficherPause(actif, 
 $("btnSkip").onclick = () => {
   if (!state.answered && !confirm("Passer sans répondre coûte un cœur. Continuer ?")) return;
   if (SANS_RESEAU.includes(state.mode)) return mancheSuivanteSolo();
-  socket.emit("round:skip", {code: state.code});
+  socket.emit("round:skip", {code: state.code
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
 };
 
 socket.on("coeurs:maj", ({coeurs, elimine}) => {
@@ -1626,6 +2135,21 @@ socket.on("coeurs:maj", ({coeurs, elimine}) => {
     ? "Cœurs épuisés — vous êtes éliminé de cette partie."
     : `Question passée — ${coeurs} cœur${coeurs>1?"s":""} restant${coeurs>1?"s":""}.`;
   $("guessFeedback").className = "feedback bad";
+
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
 });
 
 /* ---------- Invitations reçues ---------- */
@@ -1648,9 +2172,39 @@ socket.on("invite:recue", ({code, mode, de, avatar, joueurs}) => {
       setChatVisible(true);
       renderLobby(res.state);
       show("lobby");
-    });
+    
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
   };
   setTimeout(fermer, 45000);   // une invitation ne reste pas indéfiniment
+
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
 });
 
 /* ---------- Niveaux et quêtes ---------- */
@@ -1701,7 +2255,22 @@ async function chargerQuetes(){
 
   $("listeQuetes").querySelectorAll("[data-quete]").forEach(b => b.onclick = async () => {
     b.disabled = true;
-    const res = await fetch(`/api/quetes/${b.dataset.quete}/reclamer`, {method:"POST"});
+    const res = await fetch(`/api/quetes/${b.dataset.quete}/reclamer`, {method:"POST"
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
     if (!res.ok) return chargerQuetes();
     const d = await res.json();
     setCredits(d.credits);
@@ -1710,7 +2279,22 @@ async function chargerQuetes(){
     bandeauNotif(`<span style="font-size:24px">🎁</span><span><b>${d.tickets} tickets et ${d.xp} xp</b>
       <small>Récompense récupérée</small></span>`);
     chargerQuetes();
-  });
+  
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
 }
 
 $("btnQuetes").onclick = () => { chargerQuetes(); show("quetes"); };
@@ -1742,7 +2326,22 @@ function majPresence(n){
   $("onlineCount").textContent = n > 1 ? "joueurs en ligne" : "joueur en ligne";
 }
 socket.on("presence", ({enLigne}) => majPresence(enLigne));
-fetch("/api/presence").then(r => r.json()).then(d => majPresence(d.enLigne)).catch(() => {});
+fetch("/api/presence").then(r => r.json()).then(d => majPresence(d.enLigne)).catch(() => {
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
 
 /* ---------- Espace échange ---------- */
 let points = 0, tauxTicket = 250, choixEchange = 0, saisonInfo = null;
@@ -1776,13 +2375,43 @@ function renderAmounts(){
     choixEchange = Number(b.dataset.t);
     $("xAmounts").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
     $("btnDoExchange").disabled = false;
-  });
+  
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
 }
 
 $("btnDoExchange").onclick = async () => {
   if (!choixEchange) return;
   const res = await fetch("/api/exchange", {method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({points: choixEchange * tauxTicket})});
+    body: JSON.stringify({points: choixEchange * tauxTicket})
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
   const data = await res.json();
   if (!res.ok){
     $("xMsg").textContent = data.error === "NOT_ENOUGH_POINTS" ? "Cagnotte insuffisante." : "Échange impossible.";
@@ -1817,7 +2446,22 @@ const ETATS = {
 
 async function agirAmi(action, id){
   const res = await fetch(`/api/friends/${action}`, {method:"POST",
-    headers:{"Content-Type":"application/json"}, body: JSON.stringify({id})});
+    headers:{"Content-Type":"application/json"}, body: JSON.stringify({id})
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
   return res.ok ? res.json() : null;
 }
 
@@ -1886,7 +2530,22 @@ async function ouvrirJoueur(id, pseudo, avatar, photoJoueur){
     $("popJoueur").classList.add("hidden");
     if (!$("friends").classList.contains("hidden")) chargerAmis();
     majBadgeAmis();
-  });
+  
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
 }
 $("popFermer").onclick = () => $("popJoueur").classList.add("hidden");
 $("popJoueur").onclick = e => { if (e.target.id === "popJoueur") $("popJoueur").classList.add("hidden"); };
@@ -1896,6 +2555,21 @@ $("tabsAmis").querySelectorAll("[data-onglet]").forEach(b => b.onclick = () => {
   $("tabsAmis").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
   $("voletRecherche").classList.toggle("hidden", ongletAmis !== "recherche");
   ongletAmis === "recherche" ? ($("listeAmis").innerHTML = "", $("amisVide").textContent = "") : chargerAmis();
+
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
 });
 
 $("btnFriends").onclick = () => { chargerAmis(); majBadgeAmis(); show("friends"); };
@@ -1933,7 +2607,22 @@ function brancher(){
     await agirAmi(b.dataset.act, b.dataset.id);
     ongletAmis === "recherche" ? chercher() : chargerAmis();
     majBadgeAmis();
-  });
+  
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
 }
 
 async function chargerAmis(){
@@ -1974,13 +2663,43 @@ async function chercher(){
   brancher();
 }
 $("btnChercher").onclick = chercher;
-$("quiChercher").addEventListener("keydown", e => { if (e.key === "Enter") chercher(); });
+$("quiChercher").addEventListener("keydown", e => { if (e.key === "Enter") chercher(); 
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
 
 /** Crée un salon depuis l'écran Amis, sans repasser par le menu. */
 let modeAmis = "duel";
 $("modeAmis").querySelectorAll("[data-m]").forEach(b => b.onclick = () => {
   modeAmis = b.dataset.m;
   $("modeAmis").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
 });
 
 $("btnSalonAmis").onclick = () => {
@@ -1996,7 +2715,22 @@ $("btnSalonAmis").onclick = () => {
     $("amisMsg").textContent = `Salon ${res.code} créé. Invitez vos amis en ligne ci-dessous.`;
     $("amisMsg").className = "feedback good";
     chargerAmis();
-  });
+  
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
 };
 
 /** Envoie une invitation à un ami connecté. */
@@ -2009,7 +2743,22 @@ function inviter(amiId, bouton){
     }
     bouton.textContent = res.livree ? "Invité ✓" : "Hors ligne";
     bouton.disabled = true;
-  });
+  
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
 }
 
 /**
@@ -2053,12 +2802,42 @@ socket.on("notif", (notif) => {
   if (type === "friend_online")
     bandeauNotif(`${image}<span><b>${esc(de)}</b> est en ligne
       <small>Votre ami(e) vient de se connecter</small></span>`,
-      () => { ongletAmis = "amis"; $("btnFriends").click(); chargerAmis(); });
+      () => { ongletAmis = "amis"; $("btnFriends").click(); chargerAmis(); 
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
 
   if (type === "demande")
     bandeauNotif(`${image}<span><b>${esc(de)}</b> souhaite vous ajouter
       <small>Touchez pour répondre</small></span>`,
-      () => { ongletAmis = "demandes"; $("btnFriends").click(); chargerAmis(); });
+      () => { ongletAmis = "demandes"; $("btnFriends").click(); chargerAmis(); 
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
 
   if (type === "message"){
     majBadgeMessages();
@@ -2077,6 +2856,21 @@ socket.on("notif", (notif) => {
     bandeauNotif(`${image}<span><b>${esc(de)}</b> a accepté votre demande
       <small>Vous êtes désormais amis</small></span>`,
       () => $("btnFriends").click());
+
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
 });
 
 /* ---------- Modération ---------- */
@@ -2085,7 +2879,22 @@ fetch("/api/reports/motifs").then(r => r.json()).then(m => {
   motifs = m;
   $("reportMotif").innerHTML = Object.entries(m)
     .map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("");
-}).catch(() => {});
+}).catch(() => {
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
 
 $("btnReport").onclick = () => {
   $("reportBox").classList.toggle("hidden");
@@ -2096,7 +2905,22 @@ $("btnReportSend").onclick = async () => {
   if (!filmCourant) return;
   const res = await fetch("/api/reports", {method:"POST", headers:{"Content-Type":"application/json"},
     body: JSON.stringify({movieId: filmCourant, motif: $("reportMotif").value,
-                          commentaire: $("reportComment").value})});
+                          commentaire: $("reportComment").value})
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
   const data = await res.json().catch(() => ({}));
   $("reportBox").classList.add("hidden");
   $("reportComment").value = "";
@@ -2130,7 +2954,22 @@ $("btnModeration").onclick = async () => {
 
   const agir = async (id, corps) => {
     await fetch(`/api/reports/${id}`, {method:"PUT", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify(corps)});
+      body: JSON.stringify(corps)
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
     $("btnModeration").click();
   };
   $("modList").querySelectorAll("[data-clore]").forEach(b =>
@@ -2148,6 +2987,21 @@ $("tabsClassement").querySelectorAll("[data-c]").forEach(b => b.onclick = () => 
   $("tabsClassement").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
   $("bandeauSaison").classList.toggle("hidden", typeClassement !== "saison");
   $("btnBoard").click();
+
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
 });
 
 /** Informations de saison : durée restante et parties classées disponibles. */
@@ -2214,6 +3068,21 @@ $("btnReplay").onclick = () => show("menu");
 $("avatars").innerHTML = AVATAR_LIST.map(a => `<button data-a="${a}">${a}</button>`).join("");
 $("avatars").querySelectorAll("[data-a]").forEach(b => b.onclick = () => {
   $("avatars").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
 });
 /**
  * Carte de profil : photo en grand, message d'accueil et résumé du parcours.
@@ -2269,7 +3138,22 @@ $("btnTelechargerPhoto").onclick = async () => {
     const blob = await fetch(me.photo, { mode: "cors" }).then(r => {
       if (!r.ok) throw new Error(r.status);
       return r.blob();
-    });
+    
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -2318,7 +3202,22 @@ $("btnSaveProfile").onclick = async () => {
   }
   const avatar = ($("avatars").querySelector('[aria-pressed="true"]') || {}).dataset?.a || me.avatar;
   const res = await fetch("/api/profile", {method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({pseudo, avatar})});
+    body: JSON.stringify({pseudo, avatar})
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
   if (!res.ok){
     const err = await res.json().catch(() => ({}));
     $("profileMsg").textContent = err.error === "PSEUDO_TAKEN"
@@ -2344,7 +3243,22 @@ $("btnToMenu").onclick = () => show("menu");
 $("btnLogout").onclick = async () => {
   if (!confirm("Se déconnecter de ce compte ?")) return;
   if (state.code) socket.emit("room:leave");
-  try { await fetch("/auth/logout", {method:"POST"}); } catch {}
+  try { await fetch("/auth/logout", {method:"POST"
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+}); } catch {}
   socket.disconnect();
   location.href = "/";
 };
@@ -2371,7 +3285,22 @@ function confettis(){
         l: 5 + Math.random() * 7, h: 8 + Math.random() * 10,
         rot: Math.random() * 6.28, dRot: (Math.random()-0.5) * 0.35,
         c: COULEURS[(Math.random() * COULEURS.length) | 0],
-      });
+      
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
     }
   }
 
@@ -2423,11 +3352,41 @@ $("chatToggle").onclick = () => {
 function sendChat(){
   const text = $("chatInput").value.trim();
   if (!text || !state.code) return;
-  socket.emit("chat:send", {code: state.code, text});
+  socket.emit("chat:send", {code: state.code, text
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
   $("chatInput").value = "";
 }
 $("chatSend").onclick = sendChat;
-$("chatInput").addEventListener("keydown", e => { if (e.key === "Enter") sendChat(); });
+$("chatInput").addEventListener("keydown", e => { if (e.key === "Enter") sendChat(); 
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
 
 function chatLine(html, cls){
   const p = document.createElement("p");
@@ -2443,6 +3402,21 @@ socket.on("chat:message", ({pseudo, avatar, text}) => {
     $("chatBadge").textContent = chatUnread;
     $("chatBadge").classList.remove("hidden");
   }
+
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
 });
 socket.on("chat:blocked", () =>
   chatLine("Message bloqué : il contenait la réponse de la manche en cours.", "sys"));
@@ -2473,7 +3447,22 @@ const SANS_RESEAU = ["solo", "ranked"];
 
 async function solo(chemin, corps){
   const res = await fetch(`/api/solo/${chemin}`, {method:"POST",
-    headers:{"Content-Type":"application/json"}, body: JSON.stringify(corps || {})});
+    headers:{"Content-Type":"application/json"}, body: JSON.stringify(corps || {})
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
   return res.ok ? res.json() : null;
 }
 
@@ -2541,7 +3530,22 @@ function renderHintsSolo(){
       <span class="cost">🎟️${jetons} · −${state.hintCosts[type]} pts</span></button>`;
   }).join("");
   $("hints").querySelectorAll("[data-hint]").forEach(b => b.onclick = async () => {
-    const r = await solo("hint", {type: b.dataset.hint});
+    const r = await solo("hint", {type: b.dataset.hint
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
     if (!r){
       $("guessFeedback").textContent = "Crédits insuffisants — terminez une partie pour en regagner.";
       $("guessFeedback").className = "feedback bad";
@@ -2554,7 +3558,22 @@ function renderHintsSolo(){
     if (r.type === "poster") appliquerAffiche(r.value);
     if (r.type === "letters"){ $("pattern").textContent = r.value; $("pattern").classList.remove("hidden"); }
     renderHintsSolo();
-  });
+  
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
 }
 
 function renderChoicesSolo(liste){
@@ -2563,7 +3582,22 @@ function renderChoicesSolo(liste){
     if (state.answered) return;
     state.answered = true;
     $("choices").querySelectorAll("button").forEach(b => b.disabled = true);
-    const r = await solo("answer", {choiceId: Number(btn.dataset.choice)});
+    const r = await solo("answer", {choiceId: Number(btn.dataset.choice)
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
     if (!r) return;
     arreterLecture();
     clearInterval(state.timerId);
@@ -2571,7 +3605,22 @@ function renderChoicesSolo(liste){
     btn.classList.add(r.correct ? "good" : "bad");
     $("choices").querySelectorAll("button").forEach(b => {
       if (Number(b.dataset.choice) === r.movieId) b.classList.add("good");
-    });
+    
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
     if (r.correct) bravo(r.points);
     $("guessFeedback").textContent = r.correct ? `Trouvé ! +${r.points} points` : "Mauvaise réponse.";
     $("guessFeedback").className = r.correct ? "feedback good" : "feedback bad";
@@ -2587,7 +3636,22 @@ function renderChoicesSolo(liste){
       clearTimeout(state.suiteId);
       state.suiteId = setTimeout(mancheSuivanteSolo, 4200);
     }, r.correct ? 900 : 700);
-  });
+  
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
 }
 
 async function mancheSuivanteSolo(){
@@ -2616,7 +3680,22 @@ document.querySelectorAll(".mode").forEach(btn => btn.onclick = async () => {
 
   if (SANS_RESEAU.includes(mode)){
     const res = await fetch("/api/solo/start", {method:"POST",
-      headers:{"Content-Type":"application/json"}, body: JSON.stringify({mode})});
+      headers:{"Content-Type":"application/json"}, body: JSON.stringify({mode})
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
     const m = res.ok ? await res.json() : null;
     if (!m){
       const err = await res.json().catch(() => ({}));
@@ -2640,11 +3719,56 @@ document.querySelectorAll(".mode").forEach(btn => btn.onclick = async () => {
     setChatVisible(true);
     if (mode === "solo" || mode === "ranked") return; // démarre tout seul
     renderLobby(res.state); show("lobby");
-  });
+  
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
+
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
 });
 
 $("joinCode").addEventListener("input", e => e.target.value = e.target.value.toUpperCase().replace(/[^A-Z]/g,""));
-$("joinCode").addEventListener("keydown", e => { if (e.key === "Enter") $("btnJoin").click(); });
+$("joinCode").addEventListener("keydown", e => { if (e.key === "Enter") $("btnJoin").click(); 
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
 $("btnJoin").onclick = () => {
   const code = $("joinCode").value.trim().toUpperCase();
 
@@ -2680,7 +3804,22 @@ $("btnJoin").onclick = () => {
       return show("waiting");
     }
     renderLobby(res.state); show("lobby");
-  });
+  
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
 };
 
 /* ---------- Lobby ---------- */
@@ -2702,7 +3841,22 @@ function renderLobby(s){
 }
 document.querySelectorAll("[data-team]").forEach(b =>
   b.onclick = () => socket.emit("team:choose", {code:state.code, team:b.dataset.team}));
-$("btnStart").onclick = () => socket.emit("game:start", {code:state.code});
+$("btnStart").onclick = () => socket.emit("game:start", {code:state.code
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
 socket.on("room:update", renderLobby);
 
 /* ---------- Manche ---------- */
@@ -2732,6 +3886,21 @@ socket.on("round:start", ({roundIndex,total,synopsis,duration,hintCosts,hintCred
   $("roundPlayers").innerHTML = "";
   $("guessFeedback").textContent=""; $("guessFeedback").className="feedback";
   renderHints(); runBeam(duration); show("round");
+
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
 });
 
 socket.on("player:round_info", (info) => {
@@ -2740,6 +3909,21 @@ socket.on("player:round_info", (info) => {
   state.allHintsFree = info.allHintsFree;
   majCoeurs(info.coeurs, info.coeursMax);
   renderHints();
+
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
 });
 
 function renderHints(){
@@ -2797,8 +3981,38 @@ function renderChoices(list){
                       : `Mauvaise réponse — ${res.coeurs} cœur${res.coeurs>1?"s":""} restant${res.coeurs>1?"s":""}.`;
       $("guessFeedback").className = res.correct ? "feedback good" : "feedback bad";
       $("btnSkip").classList.remove("hidden");
-    });
-  });
+    
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
+  
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
 }
 
 socket.on("player:answered", ({pseudo, team}) => {
@@ -2806,6 +4020,21 @@ socket.on("player:answered", ({pseudo, team}) => {
   if (team) li.className = team;
   li.textContent = `${pseudo} a trouvé`;
   $("roundPlayers").prepend(li);
+
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
 });
 
 function runBeam(duration){
@@ -2825,7 +4054,22 @@ function runBeam(duration){
           if (r) $("guessFeedback").textContent = `Temps écoulé — c'était ${r.answer}.`;
           $("guessFeedback").className = "feedback bad";
           setTimeout(mancheSuivanteSolo, 2200);
-        });
+        
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
       }
     }
   };
@@ -2840,7 +4084,22 @@ $("btnNext").onclick = () => {
     clearTimeout(state.suiteId);
     return mancheSuivanteSolo();
   }
-  socket.emit("round:next", {code: state.code});
+  socket.emit("round:next", {code: state.code
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
 };
 
 socket.on("round:end", ({answer, movieId, poster, year, scores, isHost, mode}) => {
@@ -2862,6 +4121,21 @@ socket.on("round:end", ({answer, movieId, poster, year, scores, isHost, mode}) =
     ? "Sinon, enchaînement automatique dans quelques secondes."
     : "Question suivante dans quelques secondes.";
   show("between");
+
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
 });
 
 /**
@@ -2884,11 +4158,41 @@ socket.on("connect_error", err => {
     (raisons[err.message] || `Connexion au serveur impossible (${err.message}).`) +
     " Nouvelle tentative en cours…";
   // on ne renvoie plus à l'accueil : Socket.IO retente tout seul
+
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
 });
 
 socket.on("connect", () => {
   $("authError").textContent = "";
   if (me && me.pseudoChosen && $("landing").classList.contains("hidden") === false) show("menu");
+
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
 });
 
 socket.on("game:end", ({ranking, mode, teams, credits: solde, points: cagnotte, bilan}) => {
@@ -2917,142 +4221,50 @@ socket.on("game:end", ({ranking, mode, teams, credits: solde, points: cagnotte, 
     board.classList.remove("hidden");
   } else board.classList.add("hidden");
   show("over");
+
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
 });
 
 /* La couleur d'équipe suit le joueur jusqu'au classement final. */
 const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
   .map(p => `<li class="${p.team||""}">${vignette(p)} ${esc(p.pseudo)}<b>${p.score} pts</b></li>`).join("");
-</script>
 
-  </div>
 
-    
-    
-    <!-- MODALE ANNIVERSAIRES -->
-    <div class="modal-overlay" id="birthdaysModal">
-        <div class="modal-content">
-            <div class="modal-header" style="border-bottom-color: var(--teal);">
-                <h2>🎂 Nés un <span id="bdayDate"></span></h2>
-                <button class="close-btn" id="closeBdayBtn">&times;</button>
-            </div>
-            <div class="modal-body" id="bdayList" style="max-height: 60vh; overflow-y: auto;">
-            </div>
-        </div>
-    </div>
-
-    <!-- MODALE JOUEURS EN LIGNE -->
-    <div class="modal-overlay" id="onlineUsersModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>🟢 Joueurs en ligne</h2>
-                <button class="close-btn" id="closeOnlineUsersBtn">&times;</button>
-            </div>
-            <div class="modal-body" id="onlineUsersList" style="max-height: 60vh; overflow-y: auto;">
-                <p class="note" style="text-align:center">Chargement...</p>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODALE SORTIES CINEMA -->
-    <div class="modal-overlay" id="upcomingMoviesModal">
-        <div class="modal-content">
-            <div class="modal-header" style="border-bottom-color: var(--ticket);">
-                <h2>🍿 Sorties de la semaine</h2>
-                <button class="close-btn" id="closeUpcomingMoviesBtn">&times;</button>
-            </div>
-            <div class="modal-body" id="upcomingMoviesList" style="max-height: 60vh; overflow-y: auto;">
-                <p class="note" style="text-align:center">Recherche des nouveautés UGC, Pathé, Gaumont...</p>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODALE ACTUELLEMENT AU CINEMA -->
-    <div class="modal-overlay" id="nowPlayingModal">
-        <div class="modal-content">
-            <div class="modal-header" style="border-bottom-color: var(--teal);">
-                <h2>🎥 Actuellement au cinéma</h2>
-                <button class="close-btn" id="closeNowPlayingBtn">&times;</button>
-            </div>
-            <div class="modal-body" id="nowPlayingList" style="max-height: 60vh; overflow-y: auto;">
-                <p class="note" style="text-align:center">Recherche des films à l'affiche...</p>
-            </div>
-        </div>
-    </div>
-
-    
-    
-    <!-- MODALE SUGGESTION -->
-    <div class="modal-overlay" id="suggestionModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>💡 Suggérer un film</h2>
-                <button class="close-btn" id="closeSuggestionBtn">&times;</button>
-            </div>
-            <div class="modal-body">
-                <label for="suggTitre">Titre du film</label>
-                <input id="suggTitre" placeholder="Titre du film...">
-                <label for="suggComment" style="margin-top:10px">Commentaire (facultatif)</label>
-                <textarea id="suggComment" rows="3" placeholder="Pourquoi ce film serait bien ?"></textarea>
-                <div class="row"><button id="btnSendSugg">Envoyer la suggestion</button></div>
-                <p class="feedback" id="suggFeedback"></p>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODALE PROGRESSION -->
-    <div class="modal-overlay" id="progressionModal">
-        <div class="modal-content" style="max-height: 85vh; display: flex; flex-direction: column;">
-            <div class="modal-header" style="border-bottom-color: var(--beam);">
-                <h2>🗺️ Votre Parcours</h2>
-                <button class="close-btn" id="closeProgressionBtn">&times;</button>
-            </div>
-            <div class="modal-body" style="flex: 1; padding: 0; display: flex; flex-direction: column; overflow: hidden;">
-                <div style="padding: 15px 25px; background: #111; border-bottom: 1px solid #333; text-align: center; position: sticky; top: 0; z-index: 10;">
-                    <p id="nextBonusText" style="margin: 0; font-size: 15px; color: var(--chalk);"></p>
-                </div>
-                <div id="progressionMap" class="progression-map">
-                    <p class='note' style='text-align:center; margin-top:20px;'>Génération de la carte...</p>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- BOUTON FLOTTANT ET MODALE D'AIDE -->
-    <div class="help-btn" id="helpBtn" title="Règles du jeu">?</div>
-    <div class="modal-overlay" id="rulesModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Comment jouer ? 🎬🎵</h2>
-                <button class="close-btn" id="closeBtn">&times;</button>
-            </div>
-            <div class="modal-body">
-                <p>Bienvenue ! Testez vos connaissances et défiez vos amis dans nos différents modes de jeu interactifs.</p>
-
-                <div class="mode-section cine">
-                    <h3>🍿 Mode Ciné Quiz</h3>
-                    <p>Prouvez que vous êtes incollable sur le 7ème art.</p>
-                    <ul>
-                        <li>Lisez attentivement la question affichée.</li>
-                        <li>Sélectionnez la bonne proposition avant la fin du chrono.</li>
-                        <li>Plus vous êtes rapide, plus vous marquez de points !</li>
-                    </ul>
-                </div>
-                <div class="teaser-section">
-                    <h3>🚀 L'aventure ne fait que commencer...</h3>
-                    <p>MichBen Ciné n'est que la <strong>toute première étape</strong>.</p>
-                    <p>Ce que vous voyez aujourd'hui est le point de départ d'une longue série de mini-jeux, d'expériences interactives et d'univers encore plus poussés qui arriveront très prochainement. Entraînez-vous bien, la suite s'annonce lourde !</p>
-                </div>
-            </div>
-        </div>
-    </div>
-    <script>
         document.getElementById('helpBtn').addEventListener('click', () => document.getElementById('rulesModal').classList.add('active'));
         document.getElementById('closeBtn').addEventListener('click', () => document.getElementById('rulesModal').classList.remove('active'));
         document.getElementById('rulesModal').addEventListener('click', (e) => {
             if (e.target === document.getElementById('rulesModal')) {
                 document.getElementById('rulesModal').classList.remove('active');
             }
-        });
+        
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
     
         function inviterOnlineUser(amiId, btn) {
             if (!state.code) {
@@ -3066,11 +4278,25 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
                 }
                 btn.textContent = res.livree ? "Invité ✓" : "Hors ligne";
                 btn.disabled = true;
-            });
-        }
-    </script>
+            
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
 
-    <script>
+});
+        }
+    
+
         const btnOnlineUsers = document.getElementById("btnOnlineUsers");
         const onlineUsersModal = document.getElementById("onlineUsersModal");
         const closeOnlineUsersBtn = document.getElementById("closeOnlineUsersBtn");
@@ -3099,11 +4325,41 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
                 } catch(e) {
                     document.getElementById("onlineUsersList").innerHTML = "<p class='note' style='color:var(--ticket)'>Erreur de chargement.</p>";
                 }
-            });
+            
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
             closeOnlineUsersBtn.addEventListener("click", () => onlineUsersModal.classList.remove("active"));
             onlineUsersModal.addEventListener('click', (e) => {
                 if (e.target === onlineUsersModal) onlineUsersModal.classList.remove('active');
-            });
+            
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
         }
 
         const btnUpcomingMovies = document.getElementById("btnUpcomingMovies");
@@ -3149,16 +4405,44 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
                 } catch(e) {
                     document.getElementById("upcomingMoviesList").innerHTML = "<p class='note' style='color:var(--ticket)'>Erreur lors du chargement des sorties.</p>";
                 }
-            });
+            
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
             closeUpcomingMoviesBtn.addEventListener("click", () => upcomingMoviesModal.classList.remove("active"));
             upcomingMoviesModal.addEventListener('click', (e) => {
                 if (e.target === upcomingMoviesModal) upcomingMoviesModal.classList.remove('active');
-            });
+            
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
         }
-    </script>
+    
 
-
-    <script>
         const btnBirthdays = document.getElementById("btnBirthdays");
         const birthdaysModal = document.getElementById("birthdaysModal");
         const closeBdayBtn = document.getElementById("closeBdayBtn");
@@ -3201,12 +4485,42 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
                 } catch (e) {
                     document.getElementById("bdayList").innerHTML = "<p class='note' style='color:var(--ticket)'>Impossible de charger les données.</p>";
                 }
-            });
+            
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
 
             closeBdayBtn.addEventListener("click", () => birthdaysModal.classList.remove("active"));
             birthdaysModal.addEventListener('click', (e) => {
                 if (e.target === birthdaysModal) birthdaysModal.classList.remove('active');
-            });
+            
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
         }
     
         const btnNowPlaying = document.getElementById("btnNowPlaying");
@@ -3247,11 +4561,41 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
                 } catch(e) {
                     document.getElementById("nowPlayingList").innerHTML = "<p class='note' style='color:var(--ticket)'>Erreur lors du chargement des films à l'affiche.</p>";
                 }
-            });
+            
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
             closeNowPlayingBtn.addEventListener("click", () => nowPlayingModal.classList.remove("active"));
             nowPlayingModal.addEventListener('click', (e) => {
                 if (e.target === nowPlayingModal) nowPlayingModal.classList.remove('active');
-            });
+            
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
         }
 
 
@@ -3266,7 +4610,22 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
             closeProgressionBtn.addEventListener("click", () => progressionModal.classList.remove("active"));
             progressionModal.addEventListener("click", (e) => {
                 if (e.target === progressionModal) progressionModal.classList.remove("active");
-            });
+            
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
         }
 
         async function openProgression() {
@@ -3330,7 +4689,22 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
                 // Animate scrolling to the current level
                 setTimeout(() => {
                     const el = document.getElementById(`step-${currentLevel}`);
-                    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+                    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" 
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
                 }, 150);
                 
             } catch(e) {
@@ -3343,7 +4717,22 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
                 method: "POST", 
                 headers: {"Content-Type": "application/json"},
                 body: JSON.stringify({level: lvl})
-            });
+            
+const slotModal = $("slotModal");
+$("btnSlot").onclick = () => slotModal.classList.add("active");
+$("closeSlotBtn").onclick = () => slotModal.classList.remove("active");
+const jouerMachine = async (gratuit) => {
+    const res = await fetch("/api/machine/tirer", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({gratuit})});
+    if(!res.ok) return alert("Pas assez de points ou trop tôt !");
+    const d = await res.json();
+    $("slotAnim").textContent = "🎰";
+    $("slotResult").textContent = `Vous avez gagné ${d.gain} points !`;
+    setPoints(d.points);
+};
+$("btnSlotGratuit").onclick = () => jouerMachine(true);
+$("btnSlotPayant").onclick = () => jouerMachine(false);
+
+});
             const data = await res.json();
             if (data.ok) {
                 bandeauNotif(`<span style="font-size:24px">🎉</span><span><b style="color:var(--beam)">Bonus récupéré !</b><small>+${data.reward.credits} tickets et +${data.reward.xp} xp</small></span>`);
@@ -3355,82 +4744,6 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
             }
         };
 
-</script>
-
-<script>
-// Suggestion Modal Safe Initialization
-document.addEventListener("DOMContentLoaded", () => {
-    const suggestionModal = document.getElementById("suggestionModal");
-    const btnSuggestion = document.getElementById("btnSuggestion");
-    const closeSuggestionBtn = document.getElementById("closeSuggestionBtn");
-    const btnSendSugg = document.getElementById("btnSendSugg");
-    
-    if (btnSuggestion && suggestionModal) {
-        btnSuggestion.onclick = (e) => {
-            e.preventDefault();
-            suggestionModal.classList.add("active");
-        };
-    }
-    if (closeSuggestionBtn && suggestionModal) {
-        closeSuggestionBtn.onclick = (e) => {
-            e.preventDefault();
-            suggestionModal.classList.remove("active");
-        };
-    }
-    if (suggestionModal) {
-        suggestionModal.onclick = (e) => {
-            if (e.target === suggestionModal) {
-                suggestionModal.classList.remove("active");
-            }
-        };
-    }
-    if (btnSendSugg) {
-        btnSendSugg.onclick = async (e) => {
-            e.preventDefault();
-            const titreInput = document.getElementById("suggTitre");
-            const commentInput = document.getElementById("suggComment");
-            const feedbackEl = document.getElementById("suggFeedback");
-            
-            const titre = titreInput ? titreInput.value.trim() : "";
-            const commentaire = commentInput ? commentInput.value.trim() : "";
-            
-            if (!titre) {
-                if (feedbackEl) {
-                    feedbackEl.textContent = "Veuillez entrer un titre de film.";
-                    feedbackEl.className = "feedback bad";
-                }
-                return;
-            }
-            
-            try {
-                const res = await fetch("/api/suggestions", {
-                    method: "POST",
-                    headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({ titre, commentaire })
-                });
-                if(res.ok) {
-                    if (feedbackEl) {
-                        feedbackEl.textContent = "Merci pour votre suggestion ! 🎉";
-                        feedbackEl.className = "feedback good";
-                    }
-                    if (titreInput) titreInput.value = "";
-                    if (commentInput) commentInput.value = "";
-                    setTimeout(() => suggestionModal.classList.remove("active"), 2000);
-                } else {
-                    if (feedbackEl) {
-                        feedbackEl.textContent = "Erreur lors de l'envoi.";
-                        feedbackEl.className = "feedback bad";
-                    }
-                }
-            } catch (err) {
-                if (feedbackEl) {
-                    feedbackEl.textContent = "Erreur réseau.";
-                    feedbackEl.className = "feedback bad";
-                }
-            }
-        };
-    }
-});
 </script>
 </body>
 

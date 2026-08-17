@@ -521,19 +521,6 @@ app.put("/api/admin/users/:id/valider", requireAdmin, (req, res) => {
   res.json({ ok: true, emailVerifie: true });
 });
 
-
-app.post("/api/admin/debug-user/:id", requireAdmin, (req, res) => {
-    const userId = req.params.id;
-    const user = users[userId];
-    if (!user) return res.status(404).json({ error: "NOT_FOUND" });
-    
-    // Reset status to allow login if it was an issue
-    user.banned = false;
-    user.emailVerifie = true; // Auto-verify email
-    saveUsers();
-    res.json({ ok: true, user: { ...user, motDePasse: "***" } });
-});
-
 app.put("/api/admin/users/:id/fondateur", requireAdmin, (req, res) => {
   const user = adminUpdateUser(req.params.id, { fondateur: req.body.fondateur !== false });
   if (!user) return res.status(404).json({ error: "NOT_FOUND" });
@@ -951,6 +938,31 @@ app.get("/api/admin/suggestions", requireAdmin, (req, res) => {
     try {
         res.json(JSON.parse(fs.readFileSync(SUGGESTIONS_FILE, "utf8")));
     } catch(e) { res.json([]); }
+});
+
+
+app.post("/api/machine/tirer", (req, res) => {
+    const user = exigeCompte(req, res);
+    if (!user) return;
+    const gratuit = req.body.gratuit;
+    const U = users[user.id];
+    
+    if (gratuit) {
+        const last = U.lastFreeSpin || 0;
+        if (Date.now() - last < 24 * 60 * 60 * 1000) return res.status(400).json({ error: "TROP_TOT" });
+        U.lastFreeSpin = Date.now();
+    } else {
+        if (!spendCredits(user.id, 100)) return res.status(400).json({ error: "SOLDE_INSUFFISANT" });
+    }
+    
+    const tirage = Math.random();
+    let gain = 50;
+    if (tirage > 0.95) gain = 1000;
+    else if (tirage > 0.70) gain = 250;
+    
+    grantPoints(user.id, gain);
+    saveUsers();
+    res.json({ gain, points: getPoints(user.id) });
 });
 
 /* ---------- amis ---------- */
