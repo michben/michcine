@@ -17,7 +17,7 @@ import { createRequire } from "module";
 import { dirname, join } from "path";
 import crypto from "crypto";
 import fs from "fs";
-import { mountAuth, userFromCookie, connecterManuel, creerCompte, estCompteEnfant, addRankedPoints,
+import { mountAuth, userFromCookie, addRankedPoints,
          spendCredits, grantCredits, getCredits, CREDITS_PER_GAME,
          listUsers, adminUpdateUser, adminDeleteUser, grantAll,
          grantPoints, getPoints, exchangePoints,
@@ -28,7 +28,8 @@ import { mountAuth, userFromCookie, connecterManuel, creerCompte, estCompteEnfan
          leaderboard, reinitialiserClassement, definirPhoto, fichePublique,
          retirerPoints, grantPointsDon, ajouterXp, infoNiveau, validerManuellement,
          verifierCode, rattacherParrain, infoParrainage, verifierCodeParrain,
-         parrainageManquant, parrainageObligatoire, genererCodeAdmin } from "./auth-x.js";
+         parrainageManquant, parrainageObligatoire, genererCodeAdmin ,
+         creerCompteEnfant, changerMotDePasseEnfant, estCompteEnfant} from "./auth-x.js";
 
 const app = express();
 app.use(express.json({ limit: '10mb' })); // Limite augmentée pour l'upload d'images
@@ -168,6 +169,8 @@ const niveauDepuisVotes = (v = 0) => (v >= 8000 ? "facile" : v >= 2500 ? "moyen"
 function normaliserFilms() {
   for (const m of movies) {
     if (!m.difficulty) m.difficulty = niveauDepuisVotes(m.votes);
+    // les films d'animation alimentent d'office la catégorie Enfants
+    if (!m.categorie) m.categorie = m.animation ? "kid" : "tous";
     if (m.enabled === undefined) m.enabled = true;
   }
 }
@@ -312,10 +315,11 @@ app.get("/api/movies", requireAdmin, (_req, res) => res.json(movies));
 
 /** Active ou désactive des films en lot, selon niveau et note minimale. */
 app.post("/api/admin/movies/bulk", requireAdmin, (req, res) => {
-  const { difficulty, minRating, enabled } = req.body;
+  const { difficulty, minRating, enabled, definirCategorie } = req.body;
   let touched = 0;
   for (const m of movies) {
     if (difficulty && difficulty !== "tous" && m.difficulty !== difficulty) continue;
+    if (["kid", "tous"].includes(definirCategorie)) { m.categorie = definirCategorie; touched++; continue; }
     if (minRating && (m.rating || 0) < Number(minRating)) continue;
     m.enabled = enabled !== false;
     touched++;
@@ -351,7 +355,11 @@ app.get("/api/admin/stats", requireAdmin, (_req, res) => {
       total: movies.filter((m) => m.difficulty === n).length,
       actifs: movies.filter((m) => m.difficulty === n && m.enabled).length,
     };
-  res.json({ total: movies.length, actifs: movies.filter((m) => m.enabled).length, parNiveau });
+  res.json({ total: movies.length, actifs: movies.filter((m) => m.enabled).length, parNiveau,
+    parCategorie: {
+      kid: movies.filter((m) => m.categorie === "kid").length,
+      kidActifs: movies.filter((m) => m.categorie === "kid" && m.enabled !== false).length,
+    } });
 });
 
 /* ---------- administration des joueurs ---------- */
@@ -429,6 +437,7 @@ function sanitizeMovie(body) {
     cadrageImage: cadragePropre(body.cadrageImage),
     rating: Number(body.rating) || null,
     votes: Number(body.votes) || 0,
+    categorie: body.categorie === "kid" ? "kid" : "tous",
     difficulty: ["facile", "moyen", "difficile"].includes(body.difficulty)
       ? body.difficulty : niveauDepuisVotes(Number(body.votes) || 0),
     enabled: body.enabled !== false,
@@ -515,17 +524,35 @@ app.put("/api/admin/users/:id/photo", requireAdmin, (req, res) => {
 
 /** Exempte un compte de parrainage — utile pour les premiers joueurs. */
 /** Valide l'adresse email d'un compte sans lui envoyer de code. */
-app.post("/api/admin/comptes", requireAdmin, (req, res) => {
-  const r = creerCompte(req.body);
+app.post("/api/admin/enfants", requireAdmin, (req, res) => {
+  const r = creerCompteEnfant(req.body);
   if (r.error) return res.status(400).json(r);
   const { motDePasse, ...compte } = r.user;
   res.status(201).json(compte);
+});
+
+app.put("/api/admin/enfants/:id/motdepasse", requireAdmin, (req, res) => {
+  const r = changerMotDePasseEnfant(req.params.id, req.body.motDePasse);
+  r.error ? res.status(400).json(r) : res.json(r);
 });
 
 app.put("/api/admin/users/:id/valider", requireAdmin, (req, res) => {
   const user = validerManuellement(req.params.id);
   if (!user) return res.status(404).json({ error: "NOT_FOUND" });
   res.json({ ok: true, emailVerifie: true });
+});
+
+
+app.post("/api/admin/debug-user/:id", requireAdmin, (req, res) => {
+    const userId = req.params.id;
+    const user = users[userId];
+    if (!user) return res.status(404).json({ error: "NOT_FOUND" });
+    
+    // Reset status to allow login if it was an issue
+    user.banned = false;
+    user.emailVerifie = true; // Auto-verify email
+    saveUsers();
+    res.json({ ok: true, user: { ...user, motDePasse: "***" } });
 });
 
 app.put("/api/admin/users/:id/fondateur", requireAdmin, (req, res) => {
@@ -541,6 +568,14 @@ app.put("/api/admin/users/:id/role", requireAdmin, (req, res) => {
 });
 
 /** Renvoie l'utilisateur connecté, ou termine la requête en 401. */
+/** Fonctions sociales interdites aux comptes enfants. */
+function exigeCompteAdulte(req, res) {
+  const user = exigeCompte(req, res);
+  if (!user) return null;
+  if (estCompteEnfant(user)) { res.status(403).json({ error: "COMPTE_ENFANT" }); return null; }
+  return user;
+}
+
 function exigeCompte(req, res) {
   const user = userFromCookie(req.headers.cookie);
   if (!user) { res.status(401).json({ error: "NOT_AUTHENTICATED" }); return null; }
@@ -611,7 +646,7 @@ app.post("/api/solo/start", (req, res) => {
   if (parrainageManquant(user)) return res.status(403).json({ error: "PARRAINAGE_REQUIS" });
 
   const { mode = "solo", rounds } = req.body;
-  const vivier = movies.filter((m) => m.enabled !== false);
+  const vivier = filtrerCatalogue(req.body.categorie, user);
   if (!vivier.length) return res.status(400).json({ error: "NO_MOVIES" });
 
   if (mode === "ranked" && partiesRestantes(user.id) <= 0)
@@ -775,7 +810,7 @@ const cleConv = (a, b) => [a, b].sort().join("|");
 const saveConversations = () => sauver("conversations", conversations);
 
 app.get("/api/messages/:id", (req, res) => {
-  const user = exigeCompte(req, res);
+  const user = exigeCompteAdulte(req, res);
   if (!user) return;
   const autre = req.params.id;
   if (statutRelation(user.id, autre) !== "ami")
@@ -798,7 +833,7 @@ app.get("/api/messages/:id", (req, res) => {
 });
 
 app.post("/api/messages/:id", (req, res) => {
-  const user = exigeCompte(req, res);
+  const user = exigeCompteAdulte(req, res);
   if (!user) return;
   const autre = req.params.id;
   if (statutRelation(user.id, autre) !== "ami")
@@ -820,14 +855,15 @@ app.post("/api/messages/:id", (req, res) => {
   saveConversations();
 
   notifier(autre, { type: "message", de: user.pseudo, avatar: user.avatar,
-                    photo: user.photo || null, id: user.id, apercu: texte.slice(0, 60) });
+                    photo: user.photo || null,
+    compteEnfant: Boolean(user.compteEnfant), id: user.id, apercu: texte.slice(0, 60) });
 
   res.json({ ok: true });
 });
 
 /** Nombre de messages non lus, par expéditeur. */
 app.get("/api/messages", (req, res) => {
-  const user = exigeCompte(req, res);
+  const user = exigeCompteAdulte(req, res);
   if (!user) return;
   const parAmi = {};
   let total = 0;
@@ -919,6 +955,84 @@ app.post("/api/progression/claim", (req, res) => {
     res.json({ ok: true, reward, credits: getCredits(user.id), niveau: nv });
 });
 
+
+/**
+ * Les suggestions vivent en base et non dans un fichier : le disque de Render
+ * est effacé à chaque déploiement, ce qui les faisait disparaître.
+ */
+let suggestions = [];
+const saveSuggestions = () => sauver("suggestions", suggestions);
+
+app.post("/api/suggestions", (req, res) => {
+    const user = exigeCompte(req, res);
+    if (!user) return;
+    const titre = String(req.body.titre || "").trim().slice(0, 120);
+    if (titre.length < 2) return res.status(400).json({ error: "TITRE_MANQUANT" });
+
+    // trois suggestions par jour et par joueur
+    const depuis = Date.now() - 24 * 60 * 60 * 1000;
+    const recentes = suggestions.filter((x) => x.auteurId === user.id && x.at > depuis);
+    if (recentes.length >= 3) return res.status(429).json({ error: "TROP_DE_SUGGESTIONS" });
+
+    const deja = suggestions.find((x) => normalize(x.titre) === normalize(titre) && !x.traitee);
+    if (deja) {
+        if (!deja.soutiens?.includes(user.id)) {
+            deja.soutiens = [...(deja.soutiens || []), user.id];
+            saveSuggestions();
+        }
+        return res.json({ ok: true, deja: true, soutiens: deja.soutiens.length });
+    }
+
+    suggestions.push({
+        id: (suggestions.at(-1)?.id || 0) + 1,
+        auteur: user.pseudo, auteurId: user.id,
+        titre, commentaire: String(req.body.commentaire || "").trim().slice(0, 200),
+        soutiens: [user.id], traitee: false,
+        at: Date.now(), date: new Date().toISOString(),
+    });
+    saveSuggestions();
+    res.json({ ok: true });
+});
+
+/** Suggestions visibles par les joueurs, pour qu'ils puissent les soutenir. */
+app.get("/api/suggestions", (req, res) => {
+    const user = exigeCompte(req, res);
+    if (!user) return;
+    res.json(suggestions
+        .filter((x) => !x.traitee)
+        .sort((a, b) => (b.soutiens?.length || 0) - (a.soutiens?.length || 0) || b.at - a.at)
+        .slice(0, 30)
+        .map((x) => ({ id: x.id, titre: x.titre, auteur: x.auteur,
+                       soutiens: x.soutiens?.length || 0,
+                       soutenue: x.soutiens?.includes(user.id) || false })));
+});
+
+app.post("/api/suggestions/:id/soutenir", (req, res) => {
+    const user = exigeCompte(req, res);
+    if (!user) return;
+    const x = suggestions.find((y) => y.id === Number(req.params.id));
+    if (!x) return res.status(404).json({ error: "INTROUVABLE" });
+    x.soutiens = x.soutiens || [];
+    const i = x.soutiens.indexOf(user.id);
+    i === -1 ? x.soutiens.push(user.id) : x.soutiens.splice(i, 1);
+    saveSuggestions();
+    res.json({ ok: true, soutiens: x.soutiens.length, soutenue: i === -1 });
+});
+
+app.put("/api/admin/suggestions/:id", requireAdmin, (req, res) => {
+    const x = suggestions.find((y) => y.id === Number(req.params.id));
+    if (!x) return res.status(404).json({ error: "INTROUVABLE" });
+    x.traitee = req.body.traitee !== false;
+    saveSuggestions();
+    res.json({ ok: true });
+});
+
+app.get("/api/admin/suggestions", requireAdmin, (_req, res) =>
+    res.json(suggestions.slice().sort((a, b) =>
+        (a.traitee ? 1 : 0) - (b.traitee ? 1 : 0) ||
+        (b.soutiens?.length || 0) - (a.soutiens?.length || 0)))
+);
+
 /* ---------- amis ---------- */
 
 /**
@@ -931,12 +1045,12 @@ function notifier(userId, charge) {
 }
 
 app.get("/api/friends", (req, res) => {
-  const user = exigeCompte(req, res);
+  const user = exigeCompteAdulte(req, res);
   if (user) res.json(relations(user.id));
 });
 
 app.get("/api/players/search", (req, res) => {
-  const user = exigeCompte(req, res);
+  const user = exigeCompteAdulte(req, res);
   if (!user) return;
   const trouves = chercherJoueurs(req.query.q, user.id)
     .map((j) => ({ ...j, relation: statutRelation(user.id, j.id) }));
@@ -965,7 +1079,7 @@ const ACTIONS = {
 };
 
 app.post("/api/friends/:action", (req, res) => {
-  const user = exigeCompte(req, res);
+  const user = exigeCompteAdulte(req, res);
   if (!user) return;
   const action = ACTIONS[req.params.action];
   if (!action) return res.status(400).json({ error: "ACTION_INCONNUE" });
@@ -1075,6 +1189,29 @@ app.post("/api/parrainage/rejoindre", (req, res) => {
 });
 
 app.get("/api/presence", (_req, res) => res.json({ enLigne: nombreEnLigne() }));
+
+/** Liste des joueurs actuellement connectés, pour les inviter en partie. */
+app.get("/api/presence/liste", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (!user) return;
+
+  const vus = new Set();
+  const joueurs = [];
+  for (const [, socket] of io.of("/").sockets) {
+    const u = socket.data.user;
+    if (!u || vus.has(u.id)) continue;      // un joueur peut avoir plusieurs onglets
+    vus.add(u.id);
+    if (estBloque(user.id, u.id)) continue;
+    joueurs.push({
+      id: u.id, pseudo: u.pseudo, avatar: u.avatar, photo: u.photo || null,
+      niveau: u.niveau || 0,
+      ami: statutRelation(user.id, u.id) === "ami",
+      moi: u.id === user.id,
+    });
+  }
+  joueurs.sort((a, b) => (b.ami - a.ami) || (b.niveau - a.niveau));
+  res.json({ total: joueurs.length, joueurs });
+});
 app.get("/api/presence/users", (req, res) => {
   res.json(getConnectedUsers());
 });
@@ -1336,7 +1473,7 @@ app.get("/api/config", (_req, res) => res.json({
 const donsRecents = new Map();   // userId -> [{ montant, at }]
 
 app.post("/api/points/donner", (req, res) => {
-  const user = exigeCompte(req, res);
+  const user = exigeCompteAdulte(req, res);
   if (!user) return;
 
   const cible = String(req.body.id || "");
@@ -1409,7 +1546,9 @@ function buildChoices(movie) {
   const memeEpoque = actifs.filter(
     (m) => m.id !== movie.id && m.year && movie.year && Math.abs(m.year - movie.year) <= 12
   );
-  const vivier = melange(memeEpoque.length >= 3 ? memeEpoque : actifs.filter((m) => m.id !== movie.id));
+  const vivier = melange(memeEpoque.length >= 3 ? memeEpoque
+    : actifs.filter((m) => m.id !== movie.id
+        && (m.categorie || "tous") === (movie.categorie || "tous")));
 
   const leurres = [];
   for (const m of vivier) {
@@ -1565,6 +1704,16 @@ function titlePattern(title) {
  * titres bien plus souvent que ne le perçoit un joueur — c'est le reproche
  * le plus fréquent sur ce type de jeu.
  */
+/**
+ * Catalogue jouable. Un compte enfant est restreint côté serveur : le filtre
+ * ne se contourne pas depuis le navigateur.
+ */
+function filtrerCatalogue(categorie, user) {
+  const actifs = movies.filter((m) => m.enabled !== false);
+  const kid = estCompteEnfant(user) || categorie === "kid";
+  return kid ? actifs.filter((m) => m.categorie === "kid") : actifs;
+}
+
 function choisirFilms(vivier, nombre, userId) {
   const vus = new Set(historiqueVus(userId));
   const frais = vivier.filter((m) => !vus.has(m.id));
@@ -1782,8 +1931,8 @@ io.on("connection", (socket) => {
     io.emit("presence", { enLigne: nombreEnLigne() });
   });
 
-  socket.on("room:create", ({ rounds, mode }, cb) => {
-    const vivier = movies.filter((m) => m.enabled !== false);
+  socket.on("room:create", ({ rounds, mode, categorie }, cb) => {
+    const vivier = filtrerCatalogue(categorie, user);
     if (vivier.length === 0) return cb?.({ ok: false, error: "NO_MOVIES" });
 
     const code = generateRoomCode();
@@ -2074,6 +2223,26 @@ io.on("connection", (socket) => {
     cb?.({ ok: true, livree });
   });
 
+  /** Invite un joueur connecté dans le salon en cours. */
+  socket.on("invite:joueur", ({ code, cibleId }, cb) => {
+    const room = rooms.get(code);
+    // les joueurs sont indexés par identifiant de compte, pas de socket
+    if (!room || !room.players.has(user.id)) return cb?.({ ok: false, error: "PAS_DANS_LE_SALON" });
+    if (estBloque(user.id, cibleId)) return cb?.({ ok: false, error: "BLOQUE" });
+
+    let livree = false;
+    for (const [, s] of io.of("/").sockets) {
+      if (s.data.user?.id !== cibleId) continue;
+      s.emit("invite:recue", {
+        code: room.code, mode: room.mode,
+        de: user.pseudo, avatar: user.avatar, photo: user.photo || null,
+        joueurs: room.players.size,
+      });
+      livree = true;
+    }
+    cb?.({ ok: true, livree });
+  });
+
   socket.on("room:leave", () => leaveAllRooms(socket));
 
   socket.on("disconnect", () => leaveAllRooms(socket));
@@ -2147,6 +2316,7 @@ empreinteAdmin = await charger("adminPass", null, null);
 palmares = await charger("palmares", null, []);
 chargerSaison(await charger("saison", null, null));
 progression = await charger("quetes", null, {});
+suggestions = await charger("suggestions", null, []);
 for (const [id, liste] of Object.entries(await charger("vus", null, {})))
   vusParJoueur.set(id, liste);
 conversations = await charger("conversations", null, {});
