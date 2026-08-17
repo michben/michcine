@@ -1099,7 +1099,7 @@ if (["admin"].includes(me.role)) {
     $("btnAdminAccess").onclick = () => window.location.href = "/admin.html";
 }
 
-        const suggestionModal = $("suggestionModal");
+        
         const btnSuggestion = $("btnSuggestion");
         
         btnSuggestion.onclick = () => suggestionModal.classList.add("active");
@@ -3357,6 +3357,81 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
 
 </script>
 
+<script>
+// Suggestion Modal Safe Initialization
+document.addEventListener("DOMContentLoaded", () => {
+    const suggestionModal = document.getElementById("suggestionModal");
+    const btnSuggestion = document.getElementById("btnSuggestion");
+    const closeSuggestionBtn = document.getElementById("closeSuggestionBtn");
+    const btnSendSugg = document.getElementById("btnSendSugg");
+    
+    if (btnSuggestion && suggestionModal) {
+        btnSuggestion.onclick = (e) => {
+            e.preventDefault();
+            suggestionModal.classList.add("active");
+        };
+    }
+    if (closeSuggestionBtn && suggestionModal) {
+        closeSuggestionBtn.onclick = (e) => {
+            e.preventDefault();
+            suggestionModal.classList.remove("active");
+        };
+    }
+    if (suggestionModal) {
+        suggestionModal.onclick = (e) => {
+            if (e.target === suggestionModal) {
+                suggestionModal.classList.remove("active");
+            }
+        };
+    }
+    if (btnSendSugg) {
+        btnSendSugg.onclick = async (e) => {
+            e.preventDefault();
+            const titreInput = document.getElementById("suggTitre");
+            const commentInput = document.getElementById("suggComment");
+            const feedbackEl = document.getElementById("suggFeedback");
+            
+            const titre = titreInput ? titreInput.value.trim() : "";
+            const commentaire = commentInput ? commentInput.value.trim() : "";
+            
+            if (!titre) {
+                if (feedbackEl) {
+                    feedbackEl.textContent = "Veuillez entrer un titre de film.";
+                    feedbackEl.className = "feedback bad";
+                }
+                return;
+            }
+            
+            try {
+                const res = await fetch("/api/suggestions", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({ titre, commentaire })
+                });
+                if(res.ok) {
+                    if (feedbackEl) {
+                        feedbackEl.textContent = "Merci pour votre suggestion ! 🎉";
+                        feedbackEl.className = "feedback good";
+                    }
+                    if (titreInput) titreInput.value = "";
+                    if (commentInput) commentInput.value = "";
+                    setTimeout(() => suggestionModal.classList.remove("active"), 2000);
+                } else {
+                    if (feedbackEl) {
+                        feedbackEl.textContent = "Erreur lors de l'envoi.";
+                        feedbackEl.className = "feedback bad";
+                    }
+                }
+            } catch (err) {
+                if (feedbackEl) {
+                    feedbackEl.textContent = "Erreur réseau.";
+                    feedbackEl.className = "feedback bad";
+                }
+            }
+        };
+    }
+});
+</script>
 </body>
 
 </html>
