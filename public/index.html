@@ -532,11 +532,7 @@
         <button id="btnValiderCode">Rejoindre le jeu</button>
         <button id="btnCodeLogout" class="ghost">Autre compte</button>
       </div>
-      <p class="feedback" id="codeMsg">
-      <div style="margin-top:15px; text-align:center;">
-        <button class="ghost" id="btnToggleMode" style="font-size: 20px;">🧸 Mode Enfant : OFF</button>
-      </div>
-</p>
+      <p class="feedback" id="codeMsg"></p>
     </div>
   </section>
 
@@ -3298,3 +3294,30 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
 </body>
 
 </html>
+    <div class="card">
+      <p class="tag">Connexion</p>
+      
+      <!-- MODE ENFANT TOGGLE -->
+      <div style="margin-bottom:20px; text-align:center;">
+        <button class="ghost" id="btnToggleMode" style="width:100%; font-size: 16px;">🧸 Mode Enfant : OFF</button>
+      </div>
+
+      <div class="row" style="flex-direction:column; margin-bottom:20px;">
+        <a class="xbtn" href="/auth/x/login">𝕏 &nbsp;S'inscrire avec X</a>
+        <a class="xbtn ghostlink" href="/auth/x/login">𝕏 &nbsp;J'ai déjà un compte — me connecter</a>
+        <button class="ghost" onclick="show('manualLogin')">Connexion Identifiant</button>
+      </div>
+      
+      <p class="tag" style="margin:22px 0 10px">Ou avec une adresse email</p>
+      <label for="mail">Email</label>
+      <input id="mail" type="email" autocomplete="email" placeholder="vous@exemple.fr">
+      <label for="mdp" style="margin-top:12px">Mot de passe</label>
+      <input id="mdp" type="password" autocomplete="current-password" placeholder="8 caractères minimum">
+      <div id="captchaBoite" style="margin-top:14px"></div>
+      <div class="row">
+        <button id="btnMailConnexion">Se connecter</button>
+        <button id="btnMailInscription" class="ghost">Créer un compte</button>
+      </div>
+      <p class="feedback bad" id="mailError"></p>
+    </div>
+
