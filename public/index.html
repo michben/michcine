@@ -494,8 +494,22 @@
   </button>
   <button id="btnQuitGame" class="ghost hidden" style="position:absolute; top:20px; right:18px; font-size:22px; padding:4px 8px; z-index:50;" title="Quitter la partie">🏠</button>
 
-  <!-- PRÉSENTATION + CONNEXION -->
-    <div class="card" id="manualLoginCard">
+  
+  
+  <section id="landing">
+    <h1>MichBen <em>Ciné Quizz</em></h1>
+    <p class="baseline">Un synopsis s'affiche, vous devinez le film. Plus vous répondez vite et sans indice, plus vous marquez. Seul ou jusqu'à 16 joueurs.</p>
+    <div class="card">
+        <p class="tag">Connexion</p>
+        <button class="ghost" onclick="show('manualLogin')">Se connecter avec identifiant</button>
+        <div class="row" style="flex-direction:column; margin-top:20px;">
+            <a class="xbtn" href="/auth/x/login">𝕏 &nbsp;S'inscrire avec X</a>
+        </div>
+    </div>
+  </section>
+
+  <section id="manualLogin" class="hidden">
+    <div class="card">
       <p class="tag">Connexion Identifiant</p>
       <label for="manId">Identifiant</label>
       <input id="manId" placeholder="monid">
@@ -505,48 +519,10 @@
         <button id="btnManConnexion">Se connecter</button>
       </div>
       <p class="feedback bad" id="manError"></p>
-      <button class="ghost" id="btnManBack">Retour</button>
+      <button class="ghost" id="btnManBack" style="margin-top:10px">Retour</button>
     </div>
   </section>
-  <section id="landing">
-    <p class="baseline">Un synopsis s'affiche, vous devinez le film. Plus vous répondez vite et sans indice, plus vous marquez. Seul ou jusqu'à 16 joueurs.</p>
-    <span class="free">100 % gratuit</span>
 
-    <div class="card">
-      <p class="tag">Rejoindre la partie</p>
-      <div class="row" style="flex-direction:column">
-        <a class="xbtn" href="/auth/x/login">𝕏 &nbsp;S'inscrire avec X</a>
-        <a class="xbtn ghostlink" href="/auth/x/login">𝕏 &nbsp;J'ai déjà un compte — me connecter</a>
-      </div>
-      <p class="feedback bad" id="authError"></p>
-      <p class="note" id="diag"></p>
-
-      <p class="tag" style="margin:22px 0 10px">Ou avec une adresse email</p>
-      <label for="mail">Email</label>
-      <input id="mail" type="email" autocomplete="email" placeholder="vous@exemple.fr">
-      <label for="mdp" style="margin-top:12px">Mot de passe</label>
-      <input id="mdp" type="password" autocomplete="current-password" placeholder="8 caractères minimum">
-      <div id="captchaBoite" style="margin-top:14px"></div>
-      <div class="row">
-        <button id="btnMailConnexion">Se connecter</button>
-        <button id="btnMailInscription" class="ghost">Créer un compte</button>
-      </div>
-      <p class="feedback bad" id="mailError"></p>
-
-
-      <p class="note" style="margin-bottom:0">En vous inscrivant, vous acceptez les <a href="/regles.html" style="color:var(--beam)">règles et le code de bonne conduite</a>.</p>
-      <p class="note">Le compte X sert uniquement à identifier votre profil et votre classement. Aucun message ne sera publié en votre nom.</p>
-    </div>
-
-    <div class="card">
-      <p class="tag">Comment ça marche</p>
-      <ul class="how">
-        <li><b>1.</b> Un synopsis s'affiche, sans le titre.</li>
-        <li><b>2.</b> Achetez des indices si vous séchez : année, créateur, acteurs, affiche floutée.</li>
-        <li><b>3.</b> Répondez vite : le score fond avec le temps et le coût des indices.</li>
-      </ul>
-    </div>
-  </section>
 
   <!-- VALIDATION DE L'EMAIL -->
   <section id="validation" class="hidden">
@@ -1077,7 +1053,7 @@ let state = {code:null, mode:"ffa", isHost:false, hintCosts:{}, bought:{}, answe
 
 /** Chaque écran commence en haut : personne ne doit remonter à la main. */
 const show = id => {
-  ["landing","validation","parrainage","profile","board","exchange","friends","quetes","moderation","menu","lobby","waiting","round","between","over"]
+  ["landing","manualLogin","validation","parrainage","profile","board","exchange","friends","quetes","moderation","menu","lobby","waiting","round","between","over"]
     .forEach(s => $(s).classList.toggle("hidden", s !== id));
   window.scrollTo({top: 0, behavior: "instant"});
   
@@ -1103,6 +1079,7 @@ if (!window.tempsReelDispo) {
     b.title = "Indisponible : le temps réel est bloqué par votre navigateur.";
   });
   
+    $("btnManBack").onclick = () => show("landing");
     $("btnManBack").onclick = () => show("landing");
     $("btnManConnexion").onclick = async () => {
         const res = await fetch("/auth/manuel", {method:"POST", headers:{"Content-Type":"application/json"},
