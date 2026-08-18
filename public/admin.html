@@ -89,6 +89,7 @@
       <button id="tabSugg" aria-selected="false">Suggestions</button>
       <button id="tabCitations" aria-selected="false">Citations</button>
       <button id="tabRoue" aria-selected="false">Roue</button>
+      <button id="tabMusique" aria-selected="false">Musique</button>
     </div>
 
     <div id="paneMovies">
@@ -303,6 +304,31 @@
       <div class="card">
         <p class="tag">Derniers tirages</p>
         <div id="roueHistorique"></div>
+      </div>
+    </div>
+
+    <div id="paneMusique" class="hidden">
+      <div class="card">
+        <p class="tag">🎵 Fond musical des parties</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 8px;line-height:1.6">
+          Cette playlist tourne en boucle pendant que les joueurs sont en partie. Ajoutez soit un lien
+          direct vers un MP3 hébergé ailleurs, soit un fichier — gardez-le très léger (quelques Mo maximum,
+          compressé), l'upload est limité à environ 8 Mo par morceau.
+        </p>
+        <label for="musTitre">Titre du morceau</label>
+        <input id="musTitre" placeholder="Générique — thème principal">
+        <label for="musLien">Lien direct vers un MP3 (facultatif si vous envoyez un fichier)</label>
+        <input id="musLien" placeholder="https://…/mon-morceau.mp3">
+        <div class="row"><button id="btnMusAjouterLien">Ajouter ce lien</button></div>
+        <p class="msg" style="margin:14px 0 6px;color:var(--muted)">— ou —</p>
+        <label for="musFichier">Envoyer un fichier (MP3, OGG, WAV, M4A)</label>
+        <input id="musFichier" type="file" accept="audio/*">
+        <div class="row"><button id="btnMusAjouterFichier">Envoyer ce fichier</button></div>
+        <p class="msg" id="musFeedback"></p>
+      </div>
+      <div class="card">
+        <p class="tag" id="musCount">Playlist</p>
+        <div id="musListe"></div>
       </div>
     </div>
 
@@ -799,6 +825,7 @@ function tab(which){
   for (const [nom, onglet, volet] of [["movies","tabMovies","paneMovies"], ["sugg","tabSugg","paneSugg"],
                                       ["citations","tabCitations","paneCitations"],
                                       ["roue","tabRoue","paneRoue"],
+                                      ["musique","tabMusique","paneMusique"],
                                       ["users","tabUsers","paneUsers"],
                                       ["reports","tabReports","paneReports"],
                                       ["reglages","tabReglages","paneReglages"],
@@ -809,7 +836,8 @@ function tab(which){
   }
   if (which === "sugg") loadSuggestions();
   if (which === "citations") loadCitations();
-  if (which === "roue") loadRoue();
+  if (which === "roue"){ loadRoue(); loadVipDemandes(); }
+  if (which === "musique") loadMusique();
   if (which === "users") loadUsers();
   if (which === "reports"){ loadReports(); loadConversations(); }
   if (which === "reglages"){ etatSecurite(); chargerReglages(); }
@@ -820,6 +848,7 @@ $("tabMovies").onclick = () => tab("movies");
 $("tabSugg").onclick = () => tab("sugg");
 $("tabCitations").onclick = () => tab("citations");
 $("tabRoue").onclick = () => tab("roue");
+$("tabMusique").onclick = () => tab("musique");
 $("tabUsers").onclick = () => tab("users");
 $("tabReports").onclick = () => tab("reports");
 $("tabReglages").onclick = () => tab("reglages");
@@ -850,6 +879,11 @@ window.removeCustomSortie = async (id) => {
     loadSorties();
 };
 
+window.toggleKidsSortie = async (id) => {
+    await api("/api/admin/sorties/kids-toggle", { method: "POST", body: JSON.stringify({ id }) });
+    loadSorties();
+};
+
 async function loadSorties() {
   $("sortiesList").innerHTML = "<p class='msg'>Chargement des sorties TMDB...</p>";
   try {
@@ -868,7 +902,7 @@ async function loadSorties() {
       <div class="urow ${m.hidden ? 'banned' : ''}" style="align-items:flex-start">
         <img src="${m.poster || ''}" style="width:50px;height:75px;object-fit:cover;border-radius:4px;background:#333;margin-right:10px;">
         <div class="who" style="flex:1;">
-          <strong>${esc(m.title)} ${m.custom ? '<span class="chip" style="color:var(--teal);border-color:var(--teal);">Ajouté</span>' : ''} ${m.hidden ? '<span class="chip">Masqué</span>' : ''}</strong>
+          <strong>${esc(m.title)} ${m.custom ? '<span class="chip" style="color:var(--teal);border-color:var(--teal);">Ajouté</span>' : ''} ${m.hidden ? '<span class="chip">Masqué</span>' : ''} ${m.kidsOk ? '<span class="chip" style="color:#3ecf8e;border-color:#3ecf8e;">👶 Adapté enfants</span>' : ''}</strong>
           <small>⭐ ${m.vote ? m.vote.toFixed(1) : '?'} / 10</small>
           <div style="margin-top:4px;font-size:13px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">
             ${esc(m.overview || "Aucun synopsis disponible.")}
@@ -877,11 +911,12 @@ async function loadSorties() {
         <div style="display:flex; flex-direction:column; gap:5px;">
             <button class="ghost" onclick="importSortie(${i})">Pré-remplir</button>
             <button class="ghost" onclick="toggleHideSortie(${m.id}, ${m.hidden})">${m.hidden ? 'Afficher' : 'Masquer'}</button>
+            <button class="ghost" onclick="toggleKidsSortie(${m.id})">${m.kidsOk ? 'Retirer du mode enfant' : '👶 Adapté enfants'}</button>
             ${m.custom ? `<button class="danger" onclick="removeCustomSortie(${m.id})">Retirer</button>` : ''}
         </div>
       </div>
     `).join("");
-    
+
     window.lastSorties = data.movies;
   } catch (e) {
     $("sortiesList").innerHTML = "<p class='msg err'>Impossible de charger les sorties.</p>";
@@ -925,6 +960,11 @@ window.removeCustomNowPlaying = async (id) => {
     loadNowPlaying();
 };
 
+window.toggleKidsNowPlaying = async (id) => {
+    await api("/api/admin/nowplaying/kids-toggle", { method: "POST", body: JSON.stringify({ id }) });
+    loadNowPlaying();
+};
+
 async function loadNowPlaying() {
   $("nowPlayingListUI").innerHTML = "<p class='msg'>Chargement des films à l'affiche...</p>";
   try {
@@ -943,7 +983,7 @@ async function loadNowPlaying() {
       <div class="urow ${m.hidden ? 'banned' : ''}" style="align-items:flex-start">
         <img src="${m.poster || ''}" style="width:50px;height:75px;object-fit:cover;border-radius:4px;background:#333;margin-right:10px;">
         <div class="who" style="flex:1;">
-          <strong>${esc(m.title)} ${m.custom ? '<span class="chip" style="color:var(--teal);border-color:var(--teal);">Ajouté</span>' : ''} ${m.hidden ? '<span class="chip">Masqué</span>' : ''}</strong>
+          <strong>${esc(m.title)} ${m.custom ? '<span class="chip" style="color:var(--teal);border-color:var(--teal);">Ajouté</span>' : ''} ${m.hidden ? '<span class="chip">Masqué</span>' : ''} ${m.kidsOk ? '<span class="chip" style="color:#3ecf8e;border-color:#3ecf8e;">👶 Adapté enfants</span>' : ''}</strong>
           <small>⭐ ${m.vote ? m.vote.toFixed(1) : '?'} / 10</small>
           <div style="margin-top:4px;font-size:13px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">
             ${esc(m.overview || "Aucun synopsis disponible.")}
@@ -952,11 +992,12 @@ async function loadNowPlaying() {
         <div style="display:flex; flex-direction:column; gap:5px;">
             <button class="ghost" onclick="importNowPlaying(${i})">Pré-remplir</button>
             <button class="ghost" onclick="toggleHideNowPlaying(${m.id}, ${m.hidden})">${m.hidden ? 'Afficher' : 'Masquer'}</button>
+            <button class="ghost" onclick="toggleKidsNowPlaying(${m.id})">${m.kidsOk ? 'Retirer du mode enfant' : '👶 Adapté enfants'}</button>
             ${m.custom ? `<button class="danger" onclick="removeCustomNowPlaying(${m.id})">Retirer</button>` : ''}
         </div>
       </div>
     `).join("");
-    
+
     window.lastNowPlaying = data.movies;
   } catch (e) {
     $("nowPlayingListUI").innerHTML = "<p class='msg err'>Impossible de charger les films.</p>";
@@ -1326,6 +1367,102 @@ async function loadReports(){
         };
       });
     }
+
+    /* ---------- Musique d'ambiance ---------- */
+    async function loadMusique() {
+      $("musCount").textContent = "Playlist — chargement…";
+      const res = await api("/api/admin/musique");
+      if (!res.ok) { $("musCount").textContent = "Playlist — échec du chargement."; return; }
+      const liste = await res.json();
+      $("musCount").textContent = `Playlist (${liste.length} morceau${liste.length > 1 ? "x" : ""})`;
+
+      $("musListe").innerHTML = liste.length ? liste.map((m, i) => `
+        <div class="item">
+          <div>
+            <strong>${esc(m.titre)}</strong>
+            <small style="display:block">${m.type === "fichier" ? "📁 fichier envoyé" : "🔗 lien externe"} — ${esc(m.url)}</small>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="ghost" data-move="${esc(m.id)}" data-dir="haut" ${i === 0 ? "disabled" : ""}>▲</button>
+            <button class="ghost" data-move="${esc(m.id)}" data-dir="bas" ${i === liste.length - 1 ? "disabled" : ""}>▼</button>
+            <button class="ghost danger" data-del="${esc(m.id)}">Supprimer</button>
+          </div>
+        </div>
+      `).join("") : "<p class='msg'>Playlist vide — ajoutez un lien ou un fichier ci-dessus.</p>";
+
+      $("musListe").querySelectorAll("[data-del]").forEach((btn) => {
+        btn.onclick = async () => {
+          if (!confirm("Retirer ce morceau de la playlist ?")) return;
+          const res = await api(`/api/admin/musique/${encodeURIComponent(btn.dataset.del)}`, { method:"DELETE" });
+          if (res.ok) loadMusique(); else alert("Suppression impossible.");
+        };
+      });
+      $("musListe").querySelectorAll("[data-move]").forEach((btn) => {
+        btn.onclick = async () => {
+          const res = await api(`/api/admin/musique/${encodeURIComponent(btn.dataset.move)}/deplacer`, {
+            method:"POST", body: JSON.stringify({ direction: btn.dataset.dir }) });
+          if (res.ok) loadMusique();
+        };
+      });
+    }
+
+    $("btnMusAjouterLien").onclick = async () => {
+      const titre = $("musTitre").value.trim();
+      const url = $("musLien").value.trim();
+      if (!url) { $("musFeedback").textContent = "Indiquez un lien vers un MP3."; $("musFeedback").className = "msg err"; return; }
+      $("btnMusAjouterLien").disabled = true;
+      const res = await api("/api/admin/musique", { method:"POST", body: JSON.stringify({ titre, url }) });
+      $("btnMusAjouterLien").disabled = false;
+      if (res.ok) {
+        $("musTitre").value = ""; $("musLien").value = "";
+        $("musFeedback").textContent = "Lien ajouté à la playlist !";
+        $("musFeedback").className = "msg ok";
+        loadMusique();
+      } else {
+        $("musFeedback").textContent = "Lien invalide ou refusé.";
+        $("musFeedback").className = "msg err";
+      }
+    };
+
+    $("btnMusAjouterFichier").onclick = async () => {
+      const fichierInput = $("musFichier");
+      const fichier = fichierInput.files?.[0];
+      if (!fichier) { $("musFeedback").textContent = "Choisissez un fichier audio."; $("musFeedback").className = "msg err"; return; }
+      if (fichier.size > 8 * 1024 * 1024) {
+        $("musFeedback").textContent = "Fichier trop lourd (max ~8 Mo) — compressez-le davantage.";
+        $("musFeedback").className = "msg err";
+        return;
+      }
+      const titre = $("musTitre").value.trim();
+      const ext = (fichier.name.split(".").pop() || "mp3").toLowerCase();
+      $("btnMusAjouterFichier").disabled = true;
+      $("musFeedback").textContent = "Envoi en cours…";
+      $("musFeedback").className = "msg";
+      try {
+        const dataUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(fichier);
+        });
+        const res = await api("/api/admin/musique", { method:"POST",
+          body: JSON.stringify({ titre, fichier: dataUrl, ext }) });
+        if (res.ok) {
+          $("musTitre").value = ""; fichierInput.value = "";
+          $("musFeedback").textContent = "Fichier envoyé et ajouté à la playlist !";
+          $("musFeedback").className = "msg ok";
+          loadMusique();
+        } else {
+          const d = await res.json().catch(() => ({}));
+          $("musFeedback").textContent = d.error === "FICHIER_TROP_LOURD" ? "Fichier trop lourd, compressez-le davantage." : "Échec de l'envoi.";
+          $("musFeedback").className = "msg err";
+        }
+      } catch (e) {
+        $("musFeedback").textContent = "Échec de la lecture du fichier.";
+        $("musFeedback").className = "msg err";
+      }
+      $("btnMusAjouterFichier").disabled = false;
+    };
 
     $("btnRoueReappro").onclick = async () => {
       if (!confirm("Réapprovisionner la roue maintenant ? Le stock restant du jour sera remplacé par un stock complet.")) return;

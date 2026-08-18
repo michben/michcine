@@ -880,12 +880,12 @@ html.mode-enfant-actif .wrap{padding-top:48px}
   <!-- CHOIX DU MODE -->
   <section id="menu" class="hidden">
     <div id="teteAffiche" class="teteAffiche hidden">
-      <p class="tag" style="margin:0 0 8px">🟢 En ligne maintenant</p>
+      <p class="tag" style="margin:0 0 8px">🟢 Vos amis en ligne</p>
       <div id="listeTeteAffiche" class="listeTeteAffiche"></div>
     </div>
     <h2 id="hello">Bonjour</h2>
     <p class="wallet" id="walletMenu" style="cursor:pointer" title="Voir l'historique de vos tickets et points">🎟️ <b>0</b> crédits</p>
-    <p class="online" id="btnOnlineUsers" style="cursor:pointer" title="Voir les joueurs en ligne"><span class="dot on"></span><b id="onlineNb">—</b><span id="onlineCount">joueurs en ligne</span></p>
+    <p class="online" id="btnOnlineUsers" style="cursor:pointer" title="Voir vos amis en ligne"><span class="dot on"></span><b id="onlineNb">—</b><span id="onlineCount">amis en ligne</span></p>
     <div class="row" style="margin-bottom: 14px; gap: 10px;">
       <button id="btnUpcomingMovies" style="flex:1; padding: 10px 16px; background: var(--beam); color: #0A0C16; font-weight: bold; border: 0; border-radius: 999px; cursor: pointer;">🍿 Sorties Ciné</button>
       <button id="btnNowPlaying" style="flex:1; padding: 10px 16px; background: var(--teal); color: #0A0C16; font-weight: bold; border: 0; border-radius: 999px; cursor: pointer;">🎥 Actuellement au cinéma</button>
@@ -978,7 +978,9 @@ html.mode-enfant-actif .wrap{padding-top:48px}
         <button id="btnPause" class="ghost" style="flex:0 0 auto">⏸ Pause</button>
         <button id="btnSkip" class="ghost hidden">Passer à la question suivante</button>
         <button id="btnHistorique" class="ghost" style="flex:0 0 auto">🕘 Questions précédentes</button>
+        <button id="btnMusique" class="ghost" style="flex:0 0 auto" title="Couper/activer la musique de fond">🔊</button>
       </div>
+      <audio id="musiqueFond" preload="none"></audio>
       <ul class="players" id="roundPlayers"></ul>
     </div>
   </section>
@@ -1310,6 +1312,48 @@ function afficherHistoriqueQuestions(){
 $("btnHistorique").onclick = () => { afficherHistoriqueQuestions(); $("historiqueModal").classList.add("active"); };
 $("closeHistoriqueBtn").onclick = () => $("historiqueModal").classList.remove("active");
 $("historiqueModal").onclick = e => { if (e.target.id === "historiqueModal") $("historiqueModal").classList.remove("active"); };
+
+/* ---------- Musique d'ambiance : playlist en boucle pendant les parties ---------- */
+let playlisteMusique = [];
+let indexMusique = 0;
+let musiqueMutee = localStorage.getItem("michben_musique_mute") === "1";
+
+async function chargerPlaylisteMusique(){
+  playlisteMusique = await fetch("/api/musique").then(r => r.ok ? r.json() : []).catch(() => []);
+}
+chargerPlaylisteMusique();
+
+function majBoutonMusique(){
+  const btn = $("btnMusique");
+  if (!btn) return;
+  btn.textContent = musiqueMutee ? "🔇" : "🔊";
+  btn.title = musiqueMutee ? "Réactiver la musique de fond" : "Couper la musique de fond";
+}
+majBoutonMusique();
+
+function demarrerMusique(){
+  if (!playlisteMusique.length) return;
+  const audio = $("musiqueFond");
+  audio.muted = musiqueMutee;
+  if (indexMusique >= playlisteMusique.length) indexMusique = 0;
+  const piste = playlisteMusique[indexMusique];
+  if (audio.getAttribute("src") !== piste.url) audio.src = piste.url;
+  audio.play().catch(() => {});   // autoplay refusé silencieusement : le joueur pourra réactiver au bouton
+}
+function arreterMusique(){
+  const audio = $("musiqueFond");
+  audio.pause();
+}
+$("musiqueFond").addEventListener("ended", () => {
+  indexMusique = playlisteMusique.length ? (indexMusique + 1) % playlisteMusique.length : 0;
+  demarrerMusique();
+});
+$("btnMusique").onclick = () => {
+  musiqueMutee = !musiqueMutee;
+  localStorage.setItem("michben_musique_mute", musiqueMutee ? "1" : "0");
+  $("musiqueFond").muted = musiqueMutee;
+  majBoutonMusique();
+};
 
 /** Porte-monnaie : historique horodaté des tickets et points, avec leur provenance. */
 async function ouvrirPorteMonnaie(){
@@ -2017,6 +2061,7 @@ $("btnQuitterPause").onclick = () => {
   clearTimeout(state.suiteId);
   state.code = null;
   setChatVisible(false);
+  arreterMusique();
   show("menu");
 };
 socket.on("game:paused", ({enPause: actif, reste, par}) => afficherPause(actif, reste, par));
@@ -2420,7 +2465,7 @@ function afficherBilan(b){
 /* ---------- Présence ---------- */
 function majPresence(n){
   $("onlineNb").textContent = n;
-  $("onlineCount").textContent = n > 1 ? "joueurs en ligne" : "joueur en ligne";
+  $("onlineCount").textContent = n > 1 ? "amis en ligne" : "ami en ligne";
 }
 socket.on("presence", ({enLigne}) => { majPresence(enLigne); chargerTeteAffiche(); });
 fetch("/api/presence").then(r => r.json()).then(d => majPresence(d.enLigne)).catch(() => {});
@@ -2520,7 +2565,13 @@ const ETATS = {
 async function agirAmi(action, id){
   const res = await fetch(`/api/friends/${action}`, {method:"POST",
     headers:{"Content-Type":"application/json"}, body: JSON.stringify({id})});
-  return res.ok ? res.json() : null;
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok){
+    if (data.error === "MONDE_DIFFERENT")
+      alert("Un compte enfant et un compte adulte ne peuvent pas devenir amis.");
+    return null;
+  }
+  return data;
 }
 
 /** Fenêtre d'action, ouverte en cliquant un joueur en partie ou dans une liste. */
@@ -3269,6 +3320,7 @@ const quitterPartie = () => {
     state.code = null;
     setChatVisible(false);
   }
+  arreterMusique();
   show("menu");
 };
 $("banner").onclick = quitterPartie;
@@ -3402,7 +3454,7 @@ function renderChoicesSolo(liste){
 
 async function mancheSuivanteSolo(){
   const r = await solo("next");
-  if (!r) return show("menu");
+  if (!r) { arreterMusique(); return show("menu"); }
   if (!r.fini) return afficherManche(r);   // afficherManche remet les cœurs à jour
   if (r.codeObtenu)
     setTimeout(() => bandeauNotif(
@@ -3418,6 +3470,7 @@ async function mancheSuivanteSolo(){
     (r.coeursEpuises ? ` · ${r.manchesJouees} question${r.manchesJouees>1?"s":""} sur ${r.manchesTotal}` : "");
   $("finalRank").innerHTML = `<li>${me.avatar||"🎬"} ${esc(me.pseudo)}<b>${r.score} pts</b></li>`;
   $("finalTeams").classList.add("hidden");
+  arreterMusique();
   show("over");
 }
 
@@ -3435,6 +3488,7 @@ function ouvrirConfirmationMode(mode){
 $("btnConfirmModeAnnuler").onclick = () => $("confirmModeModal").classList.remove("active");
 $("confirmModeModal").onclick = e => { if (e.target.id === "confirmModeModal") $("confirmModeModal").classList.remove("active"); };
 $("btnConfirmModeValider").onclick = async () => {
+  demarrerMusique();   // dans le geste de clic, pour respecter les règles anti-autoplay des navigateurs
   $("confirmModeModal").classList.remove("active");
   if (modeAConfirmer) await lancerPartie(modeAConfirmer);
 };
@@ -3501,7 +3555,8 @@ $("btnJoin").onclick = () => {
       ROOM_FULL:"Ce salon est complet.",
       GAME_OVER:"Cette partie est terminée.",
       GAME_ALREADY_STARTED:"La partie a déjà commencé.",
-      ENFANT_MODE_ENFANT_UNIQUEMENT:"Un compte enfant ne peut rejoindre qu'un salon en mode enfant."}[res?.error] || "Impossible de rejoindre.");
+      ENFANT_MODE_ENFANT_UNIQUEMENT:"Un compte enfant ne peut rejoindre qu'un salon en mode enfant.",
+      ADULTE_SALON_ENFANT_INTERDIT:"Ce salon a été créé par un compte enfant : les comptes adultes ne peuvent pas le rejoindre."}[res?.error] || "Impossible de rejoindre.");
     $("joinError").textContent = "";
     state.code = res.code; state.mode = res.state.mode;
     setChatVisible(true);
@@ -3750,6 +3805,7 @@ socket.on("game:end", ({ranking, mode, teams, credits: solde, points: cagnotte, 
     $("teamA").textContent = teams.A; $("teamB").textContent = teams.B;
     board.classList.remove("hidden");
   } else board.classList.add("hidden");
+  arreterMusique();
   show("over");
 });
 
@@ -3778,7 +3834,7 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
     <div class="modal-overlay" id="onlineUsersModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>🟢 Joueurs en ligne</h2>
+                <h2>🟢 Amis en ligne</h2>
                 <button class="close-btn" id="closeOnlineUsersBtn">&times;</button>
             </div>
             <div class="modal-body" id="onlineUsersList" style="max-height: 60vh; overflow-y: auto;">
