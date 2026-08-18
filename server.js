@@ -763,6 +763,43 @@ app.post("/api/reports", (req, res) => {
   res.status(201).json({ ok: true });
 });
 
+/* ------------------------------------------------------------------ */
+/* Signets : chaque joueur (adulte ou enfant) peut mettre de côté un    */
+/* film à voir plus tard, proposé juste après la révélation de la      */
+/* réponse. Simple liste d'identifiants par joueur.                     */
+/* ------------------------------------------------------------------ */
+
+const SIGNETS_FILE = new URL("./signets.json", import.meta.url);
+let signets = {};   // userId -> [movieId, ...] (le plus récent en dernier)
+const saveSignets = () => sauver("signets", signets, SIGNETS_FILE);
+
+app.get("/api/signets", (req, res) => {
+    const user = exigeCompte(req, res);
+    if (!user) return;
+    const mesIds = signets[user.id] || [];
+    const films = mesIds
+        .map((id) => movies.find((m) => m.id === id))
+        .filter(Boolean)
+        .map((m) => ({ id: m.id, title: m.title, poster: m.poster, year: m.year }))
+        .reverse();   // le plus récemment ajouté en premier
+    res.json(films);
+});
+
+app.post("/api/signets/:movieId/toggle", (req, res) => {
+    const user = exigeCompte(req, res);
+    if (!user) return;
+    const movieId = Number(req.params.movieId);
+    if (!movies.find((m) => m.id === movieId)) return res.status(404).json({ error: "MOVIE_NOT_FOUND" });
+
+    const mesIds = signets[user.id] || (signets[user.id] = []);
+    const i = mesIds.indexOf(movieId);
+    let signet;
+    if (i === -1) { mesIds.push(movieId); signet = true; }
+    else { mesIds.splice(i, 1); signet = false; }
+    saveSignets();
+    res.json({ ok: true, signet });
+});
+
 app.get("/api/reports", requireModerateur, (_req, res) =>
   res.json(reports.slice().reverse())
 );
@@ -3123,6 +3160,8 @@ playlisteMusique = await charger("musique", MUSIQUE_FILE, []);
 if (!Array.isArray(playlisteMusique)) playlisteMusique = [];
 votesMusique = await charger("votesMusique", VOTES_MUSIQUE_FILE, {});
 if (!votesMusique || typeof votesMusique !== "object") votesMusique = {};
+signets = await charger("signets", SIGNETS_FILE, {});
+if (!signets || typeof signets !== "object") signets = {};
 aideConfig = await charger("aide", AIDE_FILE, aideConfig);
 if (!aideConfig || typeof aideConfig !== "object") aideConfig = { actif: false, titre: "Comment jouer ? 🎬🎵", message: "" };
 roue = await charger("roue", ROUE_FILE, null);
