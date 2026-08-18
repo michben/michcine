@@ -88,6 +88,7 @@
             <button id="tabNowPlaying" aria-selected="false">Au Cinéma</button>
       <button id="tabSugg" aria-selected="false">Suggestions</button>
       <button id="tabCitations" aria-selected="false">Citations</button>
+      <button id="tabRoue" aria-selected="false">Roue</button>
     </div>
 
     <div id="paneMovies">
@@ -274,6 +275,24 @@
       <div class="card">
         <p class="tag" id="citCount">Citations enregistrées</p>
         <div id="citList"></div>
+      </div>
+    </div>
+
+    <div id="paneRoue" class="hidden">
+      <div class="card">
+        <p class="tag" id="roueJourTag">🎡 Roue du jour</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 10px;line-height:1.6">
+          Un tour gratuit par joueur et par jour (renouvelé chaque jour à 18h, heure de Paris), puis
+          100 tickets par tour supplémentaire. Le stock est partagé entre tous les joueurs et se
+          réapprovisionne automatiquement dès qu'il est vide, ou à 18h de toute façon.
+        </p>
+        <div id="roueStockAdmin" style="margin-bottom:10px"></div>
+        <div class="row"><button id="btnRoueReappro" class="ghost">Réapprovisionner maintenant</button></div>
+        <p class="msg" id="roueAdminFeedback"></p>
+      </div>
+      <div class="card">
+        <p class="tag">Derniers tirages</p>
+        <div id="roueHistorique"></div>
       </div>
     </div>
 
@@ -769,6 +788,7 @@ async function remove(id){
 function tab(which){
   for (const [nom, onglet, volet] of [["movies","tabMovies","paneMovies"], ["sugg","tabSugg","paneSugg"],
                                       ["citations","tabCitations","paneCitations"],
+                                      ["roue","tabRoue","paneRoue"],
                                       ["users","tabUsers","paneUsers"],
                                       ["reports","tabReports","paneReports"],
                                       ["reglages","tabReglages","paneReglages"],
@@ -779,6 +799,7 @@ function tab(which){
   }
   if (which === "sugg") loadSuggestions();
   if (which === "citations") loadCitations();
+  if (which === "roue") loadRoue();
   if (which === "users") loadUsers();
   if (which === "reports"){ loadReports(); loadConversations(); }
   if (which === "reglages"){ etatSecurite(); chargerReglages(); }
@@ -788,6 +809,7 @@ function tab(which){
 $("tabMovies").onclick = () => tab("movies");
 $("tabSugg").onclick = () => tab("sugg");
 $("tabCitations").onclick = () => tab("citations");
+$("tabRoue").onclick = () => tab("roue");
 $("tabUsers").onclick = () => tab("users");
 $("tabReports").onclick = () => tab("reports");
 $("tabReglages").onclick = () => tab("reglages");
@@ -1235,6 +1257,45 @@ async function loadReports(){
       } else {
         $("citFeedback").textContent = "Échec de l'ajout.";
         $("citFeedback").className = "msg err";
+      }
+    };
+
+    /* ---------- Roue quotidienne ---------- */
+    async function loadRoue() {
+      $("roueJourTag").textContent = "🎡 Roue du jour — chargement…";
+      const res = await api("/api/admin/roue");
+      if (!res.ok) { $("roueJourTag").textContent = "🎡 Roue du jour — échec du chargement."; return; }
+      const d = await res.json();
+
+      $("roueJourTag").textContent = `🎡 Roue du jour ${d.jour} — ${d.lots.length} lot${d.lots.length>1?"s":""} restant${d.lots.length>1?"s":""}`;
+
+      const parLabel = new Map();
+      for (const l of d.lots) parLabel.set(l.label, (parLabel.get(l.label) || 0) + 1);
+      $("roueStockAdmin").innerHTML = parLabel.size
+        ? [...parLabel.entries()].map(([label, n]) =>
+            `<span class="chip" style="margin:0 6px 6px 0;display:inline-block">${esc(label)} × ${n}</span>`).join("")
+        : "<p class='msg'>Stock épuisé — sera réapprovisionné au prochain tour ou à 18h.</p>";
+
+      $("roueHistorique").innerHTML = d.historique.map(t => `
+        <div class="item">
+          <div><strong>${esc(t.pseudo)}</strong> — ${esc(t.lot)}${t.gratuit ? " <small>(tour gratuit)</small>" : ""}
+            <small style="display:block">${new Date(t.date).toLocaleString()}</small></div>
+        </div>
+      `).join("") || "<p class='msg'>Aucun tirage pour l'instant aujourd'hui.</p>";
+    }
+
+    $("btnRoueReappro").onclick = async () => {
+      if (!confirm("Réapprovisionner la roue maintenant ? Le stock restant du jour sera remplacé par un stock complet.")) return;
+      $("btnRoueReappro").disabled = true;
+      const res = await api("/api/admin/roue/reapprovisionner", { method:"POST" });
+      $("btnRoueReappro").disabled = false;
+      if (res.ok) {
+        $("roueAdminFeedback").textContent = "Roue réapprovisionnée !";
+        $("roueAdminFeedback").className = "msg ok";
+        loadRoue();
+      } else {
+        $("roueAdminFeedback").textContent = "Échec du réapprovisionnement.";
+        $("roueAdminFeedback").className = "msg err";
       }
     };
 
