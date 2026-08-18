@@ -612,6 +612,7 @@ html.mode-enfant-actif .wrap{padding-top:48px}
     <span id="musiqueVolLabel" class="tag" style="margin:0;min-width:34px;text-align:center">50%</span>
     <button id="btnMusiqueVolPlus" class="ghost" style="flex:0 0 auto;padding:10px 12px" title="Augmenter le volume">🔊➕</button>
   </div>
+  <p class="note hidden" id="radioMsg" style="margin:-4px 0 10px"></p>
   <audio id="musiqueFond" preload="none"></audio>
 
   <!-- PRÉSENTATION + CONNEXION -->
@@ -1325,6 +1326,10 @@ $("btnHistorique").onclick = () => { afficherHistoriqueQuestions(); $("historiqu
 $("closeHistoriqueBtn").onclick = () => $("historiqueModal").classList.remove("active");
 $("historiqueModal").onclick = e => { if (e.target.id === "historiqueModal") $("historiqueModal").classList.remove("active"); };
 
+/* Bouton d'aide "?" : masqué tant que l'administration ne l'a pas explicitement activé
+   (voir chargerAide(), défini plus bas une fois le bouton présent dans la page). */
+let aideActive = false;
+
 /* ---------- Radio d'ambiance : playlist en boucle, disponible depuis la page d'accueil et qui ---------- */
 /* continue de jouer sans interruption au fil de la navigation, jusqu'à ce que le joueur la mette en   */
 /* pause lui-même ou quitte le site. On se fie directement à l'état réel de <audio> (paused / play /    */
@@ -1336,10 +1341,23 @@ let musiqueVolume = (() => {
   return Number.isFinite(v) && v >= 0 && v <= 1 ? v : 0.5;
 })();
 
+let playlisteChargee = false;
 async function chargerPlaylisteMusique(){
   playlisteMusique = await fetch("/api/musique").then(r => r.ok ? r.json() : []).catch(() => []);
+  playlisteChargee = true;
 }
-chargerPlaylisteMusique();
+// Le premier clic sur ▶️ peut survenir avant la fin de ce chargement : demarrerMusique() l'attend,
+// mais seulement dans ce cas précis — pour ne pas casser la règle du "geste utilisateur" des navigateurs
+// une fois la playlist déjà en mémoire (le cas normal, dans l'immense majorité des clics).
+const playlistePromise = chargerPlaylisteMusique();
+
+/** Message discret sous la radio, pour expliquer pourquoi rien ne joue (playlist vide, lien cassé...). */
+function messageRadio(texte){
+  const p = $("radioMsg");
+  if (!p) return;
+  p.textContent = texte || "";
+  p.classList.toggle("hidden", !texte);
+}
 
 function majBoutonMusique(){
   const btn = $("btnMusique");
@@ -1360,14 +1378,24 @@ function majVolumeMusique(){
 }
 majVolumeMusique();
 
-function demarrerMusique(){
-  if (!playlisteMusique.length) return;
+async function demarrerMusique(){
+  if (!playlisteChargee) await playlistePromise;   // au tout premier clic seulement
+  if (!playlisteMusique.length){
+    messageRadio("Aucune piste dans la radio pour le moment — ajoutez-en depuis la console admin (onglet Musique).");
+    return;
+  }
   const audio = $("musiqueFond");
   audio.volume = musiqueVolume;
   if (indexMusique >= playlisteMusique.length) indexMusique = 0;
   const piste = playlisteMusique[indexMusique];
   if (audio.getAttribute("src") !== piste.url) audio.src = piste.url;
-  audio.play().catch(() => {});   // autoplay refusé silencieusement : le joueur lance au bouton ▶️
+  try {
+    await audio.play();
+    messageRadio("");
+  } catch {
+    // Refus d'autoplay (hors clic utilisateur) ou piste illisible : on informe plutôt que de rester muet sans explication.
+    messageRadio("Lecture impossible pour cette piste — vérifiez son lien ou son fichier depuis la console admin.");
+  }
 }
 $("musiqueFond").addEventListener("ended", () => {
   indexMusique = playlisteMusique.length ? (indexMusique + 1) % playlisteMusique.length : 0;
@@ -1495,9 +1523,9 @@ const show = id => {
   
   const inGame = ["round", "between", "lobby", "waiting"].includes(id);
   $("btnQuitGame").classList.toggle("hidden", !inGame);
-  // Le bouton d'aide "?" flotte en bas à gauche : pendant une partie, cette zone est déjà occupée
-  // par la rangée de boutons (Pause, Musique...), donc on le masque pour ne plus rien recouvrir.
-  $("helpBtn")?.classList.toggle("hidden", inGame);
+  // Le bouton d'aide "?" reste masqué tant que l'administration ne l'a pas activé (voir chargerAide()),
+  // et aussi pendant une partie pour ne jamais recouvrir la rangée de boutons du bas.
+  $("helpBtn")?.classList.toggle("hidden", inGame || !aideActive);
 };
 /** Photo du joueur si l'administration lui en a attribué une, émoji sinon. */
 const vignette = (j) => j?.photo
@@ -3945,32 +3973,16 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
         </div>
     </div>
 
-    <!-- BOUTON FLOTTANT ET MODALE D'AIDE -->
-    <div class="help-btn" id="helpBtn" title="Règles du jeu">?</div>
+    <!-- BOUTON FLOTTANT ET MODALE D'AIDE : masqué tant que l'administration ne l'a pas activé
+         depuis la console admin (onglet Réglages) — voir chargerAide() ci-dessous. -->
+    <div class="help-btn hidden" id="helpBtn" title="Règles du jeu">?</div>
     <div class="modal-overlay" id="rulesModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Comment jouer ? 🎬🎵</h2>
+                <h2 id="rulesTitre">Comment jouer ? 🎬🎵</h2>
                 <button class="close-btn" id="closeBtn">&times;</button>
             </div>
-            <div class="modal-body">
-                <p>Bienvenue ! Testez vos connaissances et défiez vos amis dans nos différents modes de jeu interactifs.</p>
-
-                <div class="mode-section cine">
-                    <h3>🍿 Mode Ciné Quiz</h3>
-                    <p>Prouvez que vous êtes incollable sur le 7ème art.</p>
-                    <ul>
-                        <li>Lisez attentivement la question affichée.</li>
-                        <li>Sélectionnez la bonne proposition avant la fin du chrono.</li>
-                        <li>Plus vous êtes rapide, plus vous marquez de points !</li>
-                    </ul>
-                </div>
-                <div class="teaser-section">
-                    <h3>🚀 L'aventure ne fait que commencer...</h3>
-                    <p>MichBen Ciné n'est que la <strong>toute première étape</strong>.</p>
-                    <p>Ce que vous voyez aujourd'hui est le point de départ d'une longue série de mini-jeux, d'expériences interactives et d'univers encore plus poussés qui arriveront très prochainement. Entraînez-vous bien, la suite s'annonce lourde !</p>
-                </div>
-            </div>
+            <div class="modal-body" id="rulesBody" style="white-space:pre-wrap"></div>
         </div>
     </div>
     <script>
@@ -3981,6 +3993,21 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
                 document.getElementById('rulesModal').classList.remove('active');
             }
         });
+
+        // Le message et son activation viennent entièrement de la console admin (onglet Réglages) :
+        // rien ne s'affiche tant que l'administration n'a pas explicitement publié un message.
+        (async function chargerAide(){
+            const cfg = await fetch('/api/aide').then(r => r.ok ? r.json() : { actif: false }).catch(() => ({ actif: false }));
+            aideActive = Boolean(cfg.actif);
+            if (aideActive){
+                document.getElementById('rulesTitre').textContent = cfg.titre || 'Comment jouer ? 🎬🎵';
+                document.getElementById('rulesBody').textContent = cfg.message || '';
+            }
+            // Reflète l'état dès maintenant (show() s'en charge ensuite à chaque changement d'écran) ;
+            // reste masqué si une partie est déjà en cours au moment où ce fetch se termine.
+            const enJeu = ["round","between","lobby","waiting"].some(s => !document.getElementById(s)?.classList.contains('hidden'));
+            document.getElementById('helpBtn').classList.toggle('hidden', !aideActive || enJeu);
+        })();
 
         // Le bouton d'aide "?" est en bas à gauche, tout comme la fenêtre de chat en plein écran sur mobile :
         // on le masque tant que le chat est ouvert pour qu'il ne recouvre plus le début du champ de message.

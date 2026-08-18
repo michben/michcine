@@ -433,6 +433,26 @@
         <p class="msg" id="favMsg"></p>
       </div>
 
+      <div class="card">
+        <p class="tag">Bouton d'aide « ? » pour les joueurs</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6">
+          Ce bouton est masqué par défaut. Rédigez le message ici — règles du jeu, annonce, ce que
+          vous voulez — puis cochez la case et enregistrez quand vous êtes prêt à le diffuser aux joueurs.
+          Vous pouvez le republier ou le remasquer à tout moment, sans jamais avoir besoin d'un nouveau fichier.</p>
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer;font-size:15px;color:var(--chalk);text-transform:none;letter-spacing:0">
+          <input type="checkbox" id="aideActif" style="width:auto">
+          Afficher le bouton « ? » aux joueurs
+        </label>
+        <label for="aideTitre">Titre de la fenêtre</label>
+        <input id="aideTitre" type="text" maxlength="120" placeholder="Comment jouer ? 🎬🎵">
+        <label for="aideMessage" style="margin-top:12px">Message</label>
+        <textarea id="aideMessage" rows="10" placeholder="Votre message aux joueurs..." style="width:100%;resize:vertical"></textarea>
+        <div class="row">
+          <button id="btnSaveAide">Enregistrer</button>
+        </div>
+        <p class="msg" id="aideMsg"></p>
+      </div>
+
       <div class="card" id="alerteMdp" style="border-color:rgba(228,88,110,.5)">
         <p class="tag" style="color:var(--ticket)">Sécurité</p>
         <p style="margin:0;line-height:1.6">Le mot de passe par défaut est encore actif. Toute personne
@@ -840,7 +860,7 @@ function tab(which){
   if (which === "musique") loadMusique();
   if (which === "users") loadUsers();
   if (which === "reports"){ loadReports(); loadConversations(); }
-  if (which === "reglages"){ etatSecurite(); chargerReglages(); }
+  if (which === "reglages"){ etatSecurite(); chargerReglages(); chargerAide(); }
   if (which === "sorties") loadSorties();
   if (which === "nowplaying") loadNowPlaying();
 }
@@ -1103,6 +1123,28 @@ $("btnResetReglages").onclick = async () => {
   chargerReglages();
   $("reglagesMsg").textContent = "Réglages remis à leurs valeurs d'origine.";
   $("reglagesMsg").className = "msg ok";
+};
+
+/* ---------- Bouton d'aide "?" : masqué par défaut, publié quand l'admin le décide ---------- */
+async function chargerAide(){
+  const res = await api("/api/admin/aide");
+  if (!res.ok) return;
+  const aide = await res.json();
+  $("aideActif").checked = Boolean(aide.actif);
+  $("aideTitre").value = aide.titre || "";
+  $("aideMessage").value = aide.message || "";
+}
+
+$("btnSaveAide").onclick = async () => {
+  const res = await api("/api/admin/aide", {method:"PUT", body: JSON.stringify({
+    actif: $("aideActif").checked,
+    titre: $("aideTitre").value,
+    message: $("aideMessage").value,
+  })});
+  $("aideMsg").textContent = res.ok
+    ? ($("aideActif").checked ? "Enregistré et diffusé : les joueurs voient le bouton « ? »." : "Enregistré, bouton masqué pour les joueurs.")
+    : "Enregistrement refusé.";
+  $("aideMsg").className = res.ok ? "msg ok" : "msg err";
 };
 
 /* ---------- Mot de passe d'administration ---------- */
