@@ -1377,6 +1377,50 @@ app.post("/api/admin/musique/:id/deplacer", requireAdmin, (req, res) => {
 });
 
 /* ------------------------------------------------------------------ */
+/* Bouton d'aide « ? » : masqué par défaut. L'administrateur rédige le */
+/* message (règles, annonce...) et choisit lui-même quand le publier   */
+/* aux joueurs, sans jamais dépendre d'un déploiement de fichiers.     */
+/* ------------------------------------------------------------------ */
+
+const AIDE_FILE = new URL("./aide.json", import.meta.url);
+let aideConfig = {
+    actif: false,
+    titre: "Comment jouer ? 🎬🎵",
+    message: `Bienvenue ! Testez vos connaissances et défiez vos amis dans nos différents modes de jeu interactifs.
+
+🍿 Mode Ciné Quiz
+Prouvez que vous êtes incollable sur le 7ème art.
+- Lisez attentivement la question affichée.
+- Sélectionnez la bonne proposition avant la fin du chrono.
+- Plus vous êtes rapide, plus vous marquez de points !
+
+🚀 L'aventure ne fait que commencer...
+MichBen Ciné n'est que la toute première étape. Ce que vous voyez aujourd'hui est le point de départ d'une longue série de mini-jeux, d'expériences interactives et d'univers encore plus poussés qui arriveront très prochainement. Entraînez-vous bien, la suite s'annonce lourde !`,
+};
+const saveAide = () => sauver("aide", aideConfig, AIDE_FILE);
+
+app.get("/api/aide", (req, res) => {
+    res.json(aideConfig.actif
+        ? { actif: true, titre: aideConfig.titre, message: aideConfig.message }
+        : { actif: false });
+});
+
+app.get("/api/admin/aide", requireAdmin, (req, res) => {
+    res.json(aideConfig);
+});
+
+app.put("/api/admin/aide", requireAdmin, (req, res) => {
+    const { actif, titre, message } = req.body || {};
+    aideConfig = {
+        actif: Boolean(actif),
+        titre: String(titre || "").trim().slice(0, 120) || "Comment jouer ? 🎬🎵",
+        message: String(message || "").slice(0, 8000),
+    };
+    saveAide();
+    res.json({ ok: true, aide: aideConfig });
+});
+
+/* ------------------------------------------------------------------ */
 /* Porte-monnaie : historique horodaté des transactions (tickets et    */
 /* points), avec la provenance de chaque mouvement.                    */
 /* ------------------------------------------------------------------ */
@@ -3044,6 +3088,8 @@ citations = await charger("citations", CITATIONS_FILE, CITATIONS_DEFAUT);
 if (!Array.isArray(citations) || !citations.length) citations = CITATIONS_DEFAUT;
 playlisteMusique = await charger("musique", MUSIQUE_FILE, []);
 if (!Array.isArray(playlisteMusique)) playlisteMusique = [];
+aideConfig = await charger("aide", AIDE_FILE, aideConfig);
+if (!aideConfig || typeof aideConfig !== "object") aideConfig = { actif: false, titre: "Comment jouer ? 🎬🎵", message: "" };
 roue = await charger("roue", ROUE_FILE, null);
 assurerRoueDuJour();
 gainsEnAttente = await charger("roueGains", GAINS_ROUE_FILE, {});
