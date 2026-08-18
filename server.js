@@ -1385,8 +1385,42 @@ app.post("/api/musique/:id/vote", (req, res) => {
     res.json({ ok: true, monAvis: votes[user.id] || null, ...comptageVotes(piste.id) });
 });
 
+// Pannes de lecture signalées par les joueurs (piste introuvable, format refusé, lien mort...) :
+// remonté dans l'admin avec la raison, pour repérer d'un coup d'œil les pistes à réparer ou retirer.
+const ERREURS_MUSIQUE_FILE = new URL("./erreursMusique.json", import.meta.url);
+let erreursMusique = {};   // trackId -> { count, message, derniereFois }
+const saveErreursMusique = () => sauver("erreursMusique", erreursMusique, ERREURS_MUSIQUE_FILE);
+const RAISONS_ERREUR_MUSIQUE = {
+    reseau: "Erreur réseau (fichier inaccessible)",
+    decodage: "Impossible de décoder le fichier (fichier corrompu)",
+    format: "Format audio non supporté par le navigateur",
+    introuvable: "Lien ou fichier introuvable (404)",
+    bloque: "Lecture bloquée par le navigateur",
+    inconnue: "Erreur de lecture inconnue",
+};
+
+app.post("/api/musique/:id/signaler-erreur", (req, res) => {
+    const piste = playlisteMusique.find((p) => p.id === req.params.id);
+    if (!piste) return res.status(404).json({ error: "INTROUVABLE" });
+    const raison = RAISONS_ERREUR_MUSIQUE[req.body?.raison] ? req.body.raison : "inconnue";
+
+    const e = erreursMusique[piste.id] || (erreursMusique[piste.id] = { count: 0, raison: "inconnue", derniereFois: null });
+    e.count += 1;
+    e.raison = raison;
+    e.derniereFois = new Date().toISOString();
+    saveErreursMusique();
+    res.json({ ok: true });
+});
+
 app.get("/api/admin/musique", requireAdmin, (req, res) => {
-    res.json(playlisteMusique.map((p) => ({ ...p, ...comptageVotes(p.id) })));
+    res.json(playlisteMusique.map((p) => {
+        const e = erreursMusique[p.id];
+        return {
+            ...p, ...comptageVotes(p.id),
+            erreur: e ? { count: e.count, message: RAISONS_ERREUR_MUSIQUE[e.raison] || RAISONS_ERREUR_MUSIQUE.inconnue,
+                          derniereFois: e.derniereFois } : null,
+        };
+    }));
 });
 
 app.post("/api/admin/musique", requireAdmin, (req, res) => {
@@ -1429,6 +1463,7 @@ app.delete("/api/admin/musique/:id", requireAdmin, (req, res) => {
     playlisteMusique = playlisteMusique.filter((p) => p.id !== req.params.id);
     saveMusique();
     if (votesMusique[piste.id]) { delete votesMusique[piste.id]; saveVotesMusique(); }
+    if (erreursMusique[piste.id]) { delete erreursMusique[piste.id]; saveErreursMusique(); }
     if (piste.type === "fichier") {
         const chemin = join(process.cwd(), "public", piste.url.replace(/^\//, ""));
         fs.unlink(chemin, () => {}); // silencieux : peu grave si le fichier est déjà absent
@@ -2514,6 +2549,24 @@ function diffuserSpectateursSolo(p, event, payload) {
   for (const socketId of p.spectateurs.keys()) io.to(socketId).emit(event, payload);
 }
 
+/**
+ * À l'inverse de diffuserSpectateurs() : prévient les JOUEURS (jamais les
+ * spectateurs eux-mêmes) de qui les regarde en ce moment, pour l'afficher
+ * dans un coin de l'écran. Simple liste de pseudos, mise à jour à chaque
+ * arrivée ou départ d'un spectateur.
+ */
+function diffuserListeSpectateurs(room) {
+  const noms = room.spectateurs ? [...room.spectateurs.values()].map((s) => s.pseudo).filter(Boolean) : [];
+  io.to(room.code).emit("spectateurs:liste", { noms });
+}
+
+/** Même chose pour une partie solo/classée : il n'y a qu'un seul joueur à prévenir. */
+function diffuserListeSpectateursSolo(userId, p) {
+  const noms = p.spectateurs ? [...p.spectateurs.values()].map((s) => s.pseudo).filter(Boolean) : [];
+  for (const [, s] of io.of("/").sockets)
+    if (s.data.user?.id === userId) s.emit("spectateurs:liste", { noms });
+}
+
 /** Un ami est-il en train de jouer, en salon comme en solo/classée ? */
 function joueurEnPartie(userId) {
   const room = salonDuJoueur(userId);
@@ -2967,7 +3020,7 @@ io.on("connection", (socket) => {
   });
 
   /** Réactions émoji pendant la partie, relayées à tout le salon. */
-  const EMOJIS = ["😂", "😀", "😮", "😡", "😭", "❤️", "👏", "🤔"];
+  const EMOJIS = ["👋", "❤️", "💯", "🩸", "😂", "😭"];
   let derniereReaction = 0;
 
   socket.on("reaction", ({ code, emoji }) => {
@@ -3012,8 +3065,9 @@ io.on("connection", (socket) => {
     const room = salonDuJoueur(amiId);
     if (room) {
       room.spectateurs = room.spectateurs || new Map();
-      room.spectateurs.set(socket.id, user.id);
+      room.spectateurs.set(socket.id, { id: user.id, pseudo: user.pseudo });
       socket.data.regarde = room.code;
+      diffuserListeSpectateurs(room);
 
       const film = room.currentMovie;
       const manche = room.status === "playing" && film ? {
@@ -3035,8 +3089,9 @@ io.on("connection", (socket) => {
 
     const fiche = fichePublique(amiId, user.id);
     p.spectateurs = p.spectateurs || new Map();
-    p.spectateurs.set(socket.id, user.id);
+    p.spectateurs.set(socket.id, { id: user.id, pseudo: user.pseudo });
     socket.data.regardeSolo = amiId;
+    diffuserListeSpectateursSolo(amiId, p);
 
     const manche = p.repondu ? null : vueManche(p);
     cb?.({
@@ -3061,12 +3116,14 @@ io.on("connection", (socket) => {
   function arreterRegarder(socket) {
     const code = socket.data.regarde;
     if (code) {
-      rooms.get(code)?.spectateurs?.delete(socket.id);
+      const room = rooms.get(code);
+      if (room?.spectateurs?.delete(socket.id)) diffuserListeSpectateurs(room);
       delete socket.data.regarde;
     }
     const soloId = socket.data.regardeSolo;
     if (soloId) {
-      parties.get(soloId)?.spectateurs?.delete(socket.id);
+      const p = parties.get(soloId);
+      if (p?.spectateurs?.delete(socket.id)) diffuserListeSpectateursSolo(soloId, p);
       delete socket.data.regardeSolo;
     }
   }
@@ -3160,6 +3217,8 @@ playlisteMusique = await charger("musique", MUSIQUE_FILE, []);
 if (!Array.isArray(playlisteMusique)) playlisteMusique = [];
 votesMusique = await charger("votesMusique", VOTES_MUSIQUE_FILE, {});
 if (!votesMusique || typeof votesMusique !== "object") votesMusique = {};
+erreursMusique = await charger("erreursMusique", ERREURS_MUSIQUE_FILE, {});
+if (!erreursMusique || typeof erreursMusique !== "object") erreursMusique = {};
 signets = await charger("signets", SIGNETS_FILE, {});
 if (!signets || typeof signets !== "object") signets = {};
 aideConfig = await charger("aide", AIDE_FILE, aideConfig);
