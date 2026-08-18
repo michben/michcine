@@ -953,6 +953,7 @@ html.mode-enfant-actif .wrap{padding-top:48px}
         <div class="row"><button class="ghost hidden" id="btnModeration">Modération</button>
       <button class="ghost hidden" id="btnAdminAccess" style="border-color:var(--beam); color:var(--beam)">⚙️ Administration</button>
       <button class="ghost" id="btnSuggestion" style="border-color:var(--teal); color:var(--teal)">💡 Suggérer un film</button>
+      <button class="ghost" id="btnFilmsSuggeres" style="border-color:var(--ticket); color:var(--ticket)">🎟️ Suggestions retenues</button>
     </div>
     <div class="card">
       <label for="joinCode">Rejoindre un salon existant</label>
@@ -1715,6 +1716,7 @@ function appliquerRole(){
   }
   appliquerModeEnfant();
   rafraichirSignets();
+  verifierSuggestionsAcceptees();
 }
 
 /** Chaque écran commence en haut : personne ne doit remonter à la main. */
@@ -1770,6 +1772,9 @@ if (!window.tempsReelDispo) {
   // le bouton reste cliquable : mieux vaut un message clair qu'un bouton mort
   $("btnJoin").title = "Le multijoueur exige la connexion temps réel.";
 }
+
+/** Suggestion actuellement proposée au repost (via la notif ou la vérification au chargement). */
+let suggestionARepost = null;
 
 // Bouton « Suggérer un film » : la fenêtre de suggestion (#suggestionModal)
 // est définie plus bas dans le document, avec les autres fenêtres modales.
@@ -1827,7 +1832,65 @@ document.addEventListener("DOMContentLoaded", () => {
         btn.disabled = false;
     }
   };
+
+  /* Films suggérés par des joueurs, acceptés par l'administration et publiés par leur auteur. */
+  $("btnFilmsSuggeres").onclick = async () => {
+    $("suggPubliqueModal").classList.add("active");
+    $("suggPubliqueList").innerHTML = "<p class='note' style='text-align:center'>Chargement…</p>";
+    const liste = await fetch("/api/suggestions/publiees").then(r => r.ok ? r.json() : []).catch(() => []);
+    $("suggPubliqueList").innerHTML = liste.length ? liste.map(s => `
+      <div class="histoItem">
+        <div class="info">
+          <b>${esc(s.titre)}</b>
+          <small>${s.commentaire ? esc(s.commentaire) : ""}</small>
+          <small style="opacity:.7">Suggéré par ${s.auteur ? esc(s.auteur) : "un joueur anonyme"}</small>
+        </div>
+      </div>`).join("") : "<p class='note' style='text-align:center'>Aucune suggestion retenue pour l'instant.</p>";
+  };
+  $("closeSuggPubliqueBtn").onclick = () => $("suggPubliqueModal").classList.remove("active");
+  $("closeSuggRepostBtn").onclick = () => $("suggRepostModal").classList.remove("active");
+  $("btnSuggRepost").onclick = async () => {
+    if (!suggestionARepost) return;
+    const btn = $("btnSuggRepost");
+    btn.disabled = true;
+    $("suggRepostFeedback").textContent = "Publication en cours…";
+    $("suggRepostFeedback").className = "feedback";
+    const res = await fetch(`/api/suggestions/${encodeURIComponent(suggestionARepost.id)}/publier`, {
+      method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ anonyme: $("suggRepostAnonyme").checked }),
+    }).then(r => r.ok ? r.json() : null).catch(() => null);
+    btn.disabled = false;
+    if (res?.ok){
+      $("suggRepostFeedback").textContent = "Publiée ! Merci pour votre idée 🎬";
+      $("suggRepostFeedback").className = "feedback good";
+      setTimeout(() => $("suggRepostModal").classList.remove("active"), 1800);
+    } else {
+      $("suggRepostFeedback").textContent = "Échec de la publication, réessayez.";
+      $("suggRepostFeedback").className = "feedback bad";
+    }
+  };
 });
+
+/* Fenêtre proposée à l'auteur d'une suggestion dès qu'elle est acceptée : il choisit
+   lui-même s'il veut la publier dans « Suggestions retenues », et sous son nom ou non.
+   Appelée depuis la notif temps réel ou depuis verifierSuggestionsAcceptees() ci-dessous. */
+function proposerRepost(s){
+  suggestionARepost = s;
+  $("suggRepostTexte").textContent =
+    `Votre suggestion « ${s.titre} » a été retenue par l'administration ! Voulez-vous la publier dans « Suggestions retenues », visible de tous les joueurs ?`;
+  $("suggRepostAnonyme").checked = false;
+  $("suggRepostFeedback").textContent = "";
+  $("suggRepostModal").classList.add("active");
+}
+
+/* Au cas où le joueur n'était pas connecté au moment où sa suggestion a été acceptée :
+   on vérifie ses suggestions à la connexion et on lui propose quand même le repost. */
+async function verifierSuggestionsAcceptees(){
+  if (!me) return;
+  const mesSuggestions = await fetch("/api/suggestions/mine").then(r => r.ok ? r.json() : []).catch(() => []);
+  const enAttenteDePublication = mesSuggestions.find(s => s.statut === "accepte" && !s.publie);
+  if (enAttenteDePublication) proposerRepost(enAttenteDePublication);
+}
 
 fetch("/api/config").then(r => r.json())
   .then(c => { $("tipLink").href = c.tipUrl; tauxTicket = c.pointsParTicket || tauxTicket; if (c.animationsAvancees !== false) document.body.classList.add("animations-actives"); })
@@ -3244,6 +3307,11 @@ socket.on("notif", (notif) => {
     bandeauNotif(`<span style="font-size:24px">👑</span><span><b>🎉 Votre code VIP est arrivé !</b>
       <small>Touchez pour le voir dans la roue du jour</small></span>`,
       () => { chargerRoue(); show("roue"); });
+
+  if (type === "suggestion_acceptee")
+    bandeauNotif(`<span style="font-size:24px">🎬</span><span><b>Votre suggestion a été retenue !</b>
+      <small>« ${esc(notif.titre || "")} » — touchez pour la publier</small></span>`,
+      () => proposerRepost({ id: notif.id, titre: notif.titre }));
 });
 
 /* ---------- Modération ---------- */
@@ -4249,6 +4317,38 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
                 <textarea id="suggComment" rows="3" placeholder="Pourquoi ce film serait bien ?"></textarea>
                 <div class="row"><button id="btnSendSugg">Envoyer la suggestion</button></div>
                 <p class="feedback" id="suggFeedback"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALE SUGGESTIONS RETENUES : les suggestions de joueurs acceptées par l'administration
+         et publiées par leur auteur, visibles de tous. -->
+    <div class="modal-overlay" id="suggPubliqueModal">
+        <div class="modal-content">
+            <div class="modal-header" style="border-bottom-color: var(--ticket);">
+                <h2>🎟️ Suggestions retenues</h2>
+                <button class="close-btn" id="closeSuggPubliqueBtn">&times;</button>
+            </div>
+            <div class="modal-body" id="suggPubliqueList" style="max-height: 60vh; overflow-y: auto;">
+                <p class="note" style="text-align:center">Chargement…</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALE REPOST : proposée au joueur quand sa suggestion vient d'être acceptée. -->
+    <div class="modal-overlay" id="suggRepostModal">
+        <div class="modal-content">
+            <div class="modal-header" style="border-bottom-color: var(--ticket);">
+                <h2>🎉 Suggestion retenue !</h2>
+                <button class="close-btn" id="closeSuggRepostBtn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="note" id="suggRepostTexte" style="margin-top:0"></p>
+                <label style="display:flex;align-items:center;gap:8px;margin:12px 0;cursor:pointer;font-size:15px;color:var(--chalk);text-transform:none;letter-spacing:0">
+                    <input type="checkbox" id="suggRepostAnonyme" style="width:auto"> Publier anonymement (sans mon pseudo)
+                </label>
+                <div class="row"><button id="btnSuggRepost">Publier dans les suggestions retenues</button></div>
+                <p class="feedback" id="suggRepostFeedback"></p>
             </div>
         </div>
     </div>

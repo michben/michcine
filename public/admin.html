@@ -1266,12 +1266,38 @@ async function loadReports(){
       if (!res.ok){ $("suggCount").textContent = "Suggestions des joueurs — échec du chargement."; return; }
       const list = (await res.json()).slice().sort((a, b) => new Date(b.date) - new Date(a.date));
       $("suggCount").textContent = `${list.length} suggestion${list.length>1?"s":""} de joueurs`;
+      const STATUT_LABEL = { accepte: "✅ Acceptée", refuse: "✖️ Refusée", attente: "⏳ En attente" };
       $("suggList").innerHTML = list.map(s => `
         <div class="item">
-            <div><strong>${esc(s.titre)}</strong><small>Par ${esc(s.auteur)} le ${new Date(s.date).toLocaleDateString()}</small></div>
-            <div style="font-size:13px; color:var(--muted)">${esc(s.commentaire)}</div>
+            <div>
+              <strong>${esc(s.titre)}</strong><small>Par ${esc(s.auteur)} le ${new Date(s.date).toLocaleDateString()}</small>
+              <div style="font-size:13px; color:var(--muted)">${esc(s.commentaire)}</div>
+              <small style="display:block;margin-top:4px">
+                ${STATUT_LABEL[s.statut] || STATUT_LABEL.attente}
+                ${s.publie ? ` · publiée ${s.anonyme ? "anonymement" : "sous son pseudo"}` : ""}
+              </small>
+            </div>
+            <div style="display:flex;gap:6px">
+              <button class="ghost" data-accept="${esc(s.id || "")}" ${!s.id || s.statut === "accepte" ? "disabled" : ""}>✅ Accepter</button>
+              <button class="ghost danger" data-refuse="${esc(s.id || "")}" ${!s.id || s.statut === "refuse" ? "disabled" : ""}>✖️ Refuser</button>
+            </div>
         </div>
       `).join("") || "<p class='msg'>Aucune suggestion pour l'instant.</p>";
+
+      $("suggList").querySelectorAll("[data-accept]").forEach((btn) => {
+        btn.onclick = async () => {
+          const res = await api(`/api/admin/suggestions/${encodeURIComponent(btn.dataset.accept)}/statut`,
+            { method:"POST", body: JSON.stringify({ statut: "accepte" }) });
+          if (res.ok) loadSuggestions(); else alert("Échec de l'acceptation.");
+        };
+      });
+      $("suggList").querySelectorAll("[data-refuse]").forEach((btn) => {
+        btn.onclick = async () => {
+          const res = await api(`/api/admin/suggestions/${encodeURIComponent(btn.dataset.refuse)}/statut`,
+            { method:"POST", body: JSON.stringify({ statut: "refuse" }) });
+          if (res.ok) loadSuggestions(); else alert("Échec du refus.");
+        };
+      });
     }
 
     /* ---------- Citations de cinéma ---------- */
@@ -1424,6 +1450,12 @@ async function loadReports(){
             <strong>${esc(m.titre)}</strong>
             <small style="display:block">${m.type === "fichier" ? "📁 fichier envoyé" : "🔗 lien externe"} — ${esc(m.url)}</small>
             <small style="display:block;margin-top:2px">👍 ${m.up || 0} &nbsp; 👎 ${m.down || 0}</small>
+            ${m.votants && m.votants.length ? `<details style="margin-top:4px">
+              <summary style="cursor:pointer;font-size:12px;color:var(--muted)">Voir qui a voté (${m.votants.length})</summary>
+              <div style="margin-top:4px">
+                ${m.votants.map(v => `<small style="display:block">${v.sens === "up" ? "👍" : "👎"} ${esc(v.pseudo)}</small>`).join("")}
+              </div>
+            </details>` : ""}
             ${m.erreur ? `<small style="display:block;margin-top:4px;color:#ff6b6b">
               ⚠️ Échec de lecture (×${m.erreur.count}) : ${esc(m.erreur.message)}
               ${m.erreur.derniereFois ? ` — dernière fois le ${new Date(m.erreur.derniereFois).toLocaleString()}` : ""}
