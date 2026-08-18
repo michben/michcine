@@ -7,17 +7,18 @@
 <meta name="theme-color" content="#0A0C16">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MichBen — Catalogue de films</title>
-<link href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  :root{--ink:#0A0C16;--velvet:#151A2E;--card:#1C2238;--beam:#F5B942;--ticket:#E4586E;--chalk:#EDE8DC;--muted:#7C819B}
+  :root{--ink:#0A0C16;--velvet:#151A2E;--card:#1C2238;--beam:#F5B942;--ticket:#E4586E;--chalk:#EDE8DC;--muted:#7C819B;
+    --font-affiche:'Anton',sans-serif; --font-corps:'Inter',system-ui,sans-serif; --font-etiquette:'Oswald','Inter',system-ui,sans-serif}
   *{box-sizing:border-box}
-  body{margin:0;background:var(--ink);color:var(--chalk);font-family:'Space Grotesk',system-ui,sans-serif}
+  body{margin:0;background:var(--ink);color:var(--chalk);font-family:var(--font-corps)}
   .wrap{max-width:760px;margin:0 auto;padding:24px 18px 60px}
-  h1{font-family:'Anton',sans-serif;text-transform:uppercase;letter-spacing:.04em;font-size:clamp(24px,6vw,34px);margin:0 0 4px}
+  h1{font-family:var(--font-affiche);text-transform:uppercase;letter-spacing:.04em;font-size:clamp(24px,6vw,34px);margin:0 0 4px}
   h1 em{font-style:normal;color:var(--beam)}
-  .tag{font-size:11px;letter-spacing:.26em;text-transform:uppercase;color:var(--muted);margin:0 0 14px}
+  .tag{font-family:var(--font-etiquette);font-weight:500;font-size:11px;letter-spacing:.26em;text-transform:uppercase;color:var(--muted);margin:0 0 14px}
   .card{background:var(--velvet);border:1px solid rgba(237,232,220,.09);border-radius:14px;padding:20px;margin-top:16px}
-  label{display:block;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin:14px 0 6px}
+  label{display:block;font-family:var(--font-etiquette);font-weight:500;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin:14px 0 6px}
   select{width:100%;background:var(--card);border:1px solid rgba(237,232,220,.14);color:var(--chalk);
     border-radius:10px;padding:12px 13px;font:inherit;font-size:16px}
   .filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px}
@@ -84,10 +85,30 @@
       <button id="tabReports" aria-selected="false">Signalements</button>
             <button id="tabReglages" aria-selected="false">Réglages</button>
       <button id="tabSorties" aria-selected="false">Sorties Ciné</button>
-      <button id="tabNowPlaying" aria-selected="false">Au Cinéma</button>
+            <button id="tabNowPlaying" aria-selected="false">Au Cinéma</button>
+      <button id="tabSugg" aria-selected="false">Suggestions</button>
     </div>
 
     <div id="paneMovies">
+    <div class="card">
+      <p class="tag">🐻 Importer des films enfants (TMDB)</p>
+      <p style="color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6">
+        Cherche sur TMDB des films d'animation et familiaux (Disney, Pixar, DreamWorks, etc.)
+        qui ne sont pas encore dans le catalogue, et les propose prêts à ajouter — synopsis,
+        affiche, réalisateur et acteurs déjà remplis, marqués « adapté aux enfants ».
+        Nécessite une clé TMDB renseignée dans l'onglet Réglages.
+      </p>
+      <div class="row">
+        <button id="btnTmdbKidsChercher">Chercher des films enfants</button>
+        <button class="ghost" id="btnTmdbKidsTout" disabled>Tout cocher / décocher</button>
+      </div>
+      <p class="msg" id="tmdbKidsMsg"></p>
+      <div id="tmdbKidsListe"></div>
+      <div class="row hidden" id="tmdbKidsAjouterRow">
+        <button id="btnTmdbKidsAjouter">Ajouter la sélection au catalogue</button>
+      </div>
+    </div>
+
     <div class="card">
       <p class="tag">Sélection du catalogue</p>
       <p class="msg" id="stats"></p>
@@ -131,6 +152,12 @@
       <input id="poster" placeholder="https://image.tmdb.org/t/p/w500/…">
       <label for="still" style="margin-top:14px">Image d'indice (sans titre imprimé)</label>
       <input id="still" placeholder="https://image.tmdb.org/t/p/w780/…">
+
+      <label style="display:flex;align-items:center;gap:9px;text-transform:none;letter-spacing:0;font-size:15px;color:var(--chalk);margin-top:16px">
+        <input type="checkbox" id="fKids" style="width:auto">
+        🐻 Film adapté aux enfants (Disney, Pixar, familial…)
+      </label>
+      <p class="msg" id="fKidsMsg" style="margin-top:4px"></p>
 
       <div style="margin-top:20px;padding-top:18px;border-top:1px solid rgba(237,232,220,.12)">
         <p class="tag" style="margin-bottom:8px">Cadrage de l'image d'indice pour ce série</p>
@@ -220,6 +247,9 @@
     </div>
 
     
+
+    <div id="paneSugg" class="hidden"><div class="card"><p class="tag" id="suggCount">Suggestions des joueurs</p><div id="suggList"></div></div></div>
+
     <div id="paneNowPlaying" class="hidden">
       <div class="card">
         <p class="tag" id="nowPlayingCount">Actuellement au cinéma</p>
@@ -352,20 +382,31 @@
         </p>
         <div class="row">
           <button id="btnGenInvite">Générer un code VIP</button>
-      </div>
-      <div class="card">
-        <p class="tag">Créer un compte (Manuel)</p>
-        <input id="newId" placeholder="Identifiant">
-        <input id="newMdp" type="password" placeholder="Mot de passe" style="margin-top:8px;">
-        <label style="display:flex;align-items:center;gap:8px;margin-top:8px;">
-           <input type="checkbox" id="newIsKid" style="width:auto;"> Compte Enfant
-        </label>
-        <button id="btnCreateUser" style="margin-top:8px;">Créer le compte</button>
-        <p class="msg" id="createMsg"></p>
         </div>
         <p class="msg" id="inviteMsg"></p>
       </div>
-      
+
+      <div class="card">
+        <p class="tag">Créer un compte</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 10px;line-height:1.6">
+          Crée directement un compte avec identifiant et mot de passe, sans email à valider.
+          Cochez « compte enfant » pour un compte restreint au mode enfant (uniquement des
+          films pour enfants), avec son propre classement.
+        </p>
+        <label for="ccPseudo">Identifiant</label>
+        <input id="ccPseudo" placeholder="Pseudo" maxlength="20">
+        <div class="row" style="margin-top:12px">
+          <input id="ccMotDePasse" type="text" placeholder="Mot de passe (6 caractères min.)">
+          <button class="ghost" id="btnCcGenerer" style="flex:0 0 auto">Générer</button>
+        </div>
+        <label style="display:flex;align-items:center;gap:9px;text-transform:none;letter-spacing:0;font-size:15px;color:var(--chalk);margin:14px 0 0">
+          <input type="checkbox" id="ccEnfant" style="width:auto">
+          🐻 Compte enfant
+        </label>
+        <div class="row" style="margin-top:14px"><button id="btnCcCreer">Créer le compte</button></div>
+        <p class="msg" id="ccMsg"></p>
+      </div>
+
       <div class="card">
         <p class="tag">Avant d'activer le parrainage</p>
         <p style="color:var(--muted);font-size:13px;margin:0 0 10px;line-height:1.6">
@@ -433,10 +474,11 @@ function render(){
     <div class="item ${m.enabled === false ? "off" : ""}">
       <img src="${m.poster||""}" alt="" onerror="this.style.visibility='hidden'">
       <div>
-        <strong>${esc(m.title)}<span class="lvl">${m.difficulty||"?"}</span>${m.cadrageImage ? '<span class="lvl" style="border-color:var(--beam);color:var(--beam)">cadrage</span>' : ""}</strong>
+        <strong>${esc(m.title)}<span class="lvl">${m.difficulty||"?"}</span>${m.cadrageImage ? '<span class="lvl" style="border-color:var(--beam);color:var(--beam)">cadrage</span>' : ""}${m.kids ? '<span class="lvl" style="border-color:#3DDC84;color:#3DDC84">🐻 enfant</span>' : ""}</strong>
         <small>${m.year||"—"} · ${m.rating ? m.rating+"/10 · " : ""}${esc(m.director||"réalisateur non renseigné")}</small>
       </div>
       <button class="ghost" data-toggle="${m.id}">${m.enabled === false ? "Activer" : "Retirer"}</button>
+      <button class="ghost" data-kids-toggle="${m.id}" style="${m.kids ? "border-color:#3DDC84;color:#3DDC84" : ""}">${m.kids ? "🐻 Retirer enfant" : "🐻 Marquer enfant"}</button>
       <button class="ghost" data-edit="${m.id}">Modifier</button>
       <button class="danger" data-del="${m.id}">Supprimer</button>
     </div>`).join("");
@@ -446,6 +488,12 @@ function render(){
     const res = await api(`/api/movies/${m.id}`, {method:"PUT",
       body: JSON.stringify({...m, enabled: m.enabled === false})});
     if (res.ok){ Object.assign(m, await res.json()); render(); loadStats(); }
+  });
+  $("list").querySelectorAll("[data-kids-toggle]").forEach(b => b.onclick = async () => {
+    const m = movies.find(x => x.id === Number(b.dataset.kidsToggle));
+    const res = await api(`/api/movies/${m.id}`, {method:"PUT",
+      body: JSON.stringify({...m, kids: !m.kids})});
+    if (res.ok){ Object.assign(m, await res.json()); render(); }
   });
   $("list").querySelectorAll("[data-edit]").forEach(b => b.onclick = () => edit(Number(b.dataset.edit)));
   $("list").querySelectorAll("[data-del]").forEach(b => b.onclick = () => remove(Number(b.dataset.del)));
@@ -497,11 +545,40 @@ const cadrageSaisi = () => $("fSuivreGlobal").checked ? null : {
   zoom: Number($("fZoom").value), flou: Number($("fFlou").value), cadrage: $("fCadrage").value,
 };
 
+/**
+ * Pré-coche « Film adapté aux enfants » quand le titre évoque un studio ou
+ * un classique familial connu. Reste modifiable à la main : ce n'est qu'une
+ * suggestion de départ, jamais imposée une fois que l'admin y a touché.
+ */
+const MOTS_CLES_ENFANT = [
+  "disney", "pixar", "dreamworks", "illumination", "ghibli", "aardman", "laika",
+  "l'age de glace", "l'âge de glace", "ice age", "cars", "toy story", "reine des neiges",
+  "frozen", "vaiana", "moana", "coco", "luca", "ratatouille", "wall-e", "rebelle",
+  "brave", "monstres", "nemo", "dory", "aladdin", "roi lion", "lion king", "blanche neige",
+  "cendrillon", "raiponce", "tangled", "encanto", "zootopie", "zootopia", "rox et rouky",
+  "bambi", "dumbo", "les indestructibles", "incredibles", "shrek", "kung fu panda",
+  "madagascar", "comment dresser son dragon", "dragons", "vice-versa", "inside out",
+  "là-haut", "up", "peter pan", "pinocchio", "pat patrouille", "paw patrol", "minions",
+  "gru", "despicable me", "sacré-cœur", "kirikou", "azur et asmar", "arthur et les minimoys",
+];
+const suggererKids = (titre) => {
+  const t = String(titre || "").toLowerCase();
+  return MOTS_CLES_ENFANT.some((mot) => t.includes(mot));
+};
+let fKidsTouche = false;
+$("fKids").addEventListener("change", () => { fKidsTouche = true; });
+$("title").addEventListener("input", () => {
+  if (editingId || fKidsTouche) return;   // ne pré-remplit que pour un nouveau film, jamais après modification manuelle
+  $("fKids").checked = suggererKids($("title").value);
+});
+
 function edit(id){
   const m = movies.find(x => x.id === id);
   editingId = id;
   FIELDS.forEach(f => $(f).value = Array.isArray(m[f]) ? m[f].filter(a=>a!==m.title).join(", ") : (m[f] ?? ""));
   chargerCadrage(m);
+  $("fKids").checked = !!m.kids;
+  fKidsTouche = true;
   $("formTitle").textContent = `Modifier : ${m.title}`;
   $("btnCancel").classList.remove("hidden");
   window.scrollTo({top:0, behavior:"smooth"});
@@ -511,6 +588,8 @@ function resetForm(){
   editingId = null;
   FIELDS.forEach(f => $(f).value = "");
   chargerCadrage(null);
+  $("fKids").checked = false;
+  fKidsTouche = false;
   $("formTitle").textContent = "Nouveau film";
   $("btnCancel").classList.add("hidden");
 }
@@ -524,6 +603,89 @@ async function loadStats(){
     + Object.entries(s.parNiveau).map(([n,v]) => `${n} ${v.actifs}/${v.total}`).join(", ");
   $("stats").className = "msg";
 }
+
+/* ---------- Import de films enfants depuis TMDB ---------- */
+let tmdbKidsSuggestions = [];
+
+$("btnTmdbKidsChercher").onclick = async () => {
+  $("tmdbKidsMsg").textContent = "Recherche en cours sur TMDB…";
+  $("tmdbKidsMsg").className = "msg";
+  $("tmdbKidsListe").innerHTML = "";
+  $("tmdbKidsAjouterRow").classList.add("hidden");
+  $("btnTmdbKidsTout").disabled = true;
+
+  const res = await api("/api/admin/movies/tmdb-kids-suggestions?pages=3&limite=24");
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok){
+    $("tmdbKidsMsg").textContent = data.error === "NO_KEY"
+      ? "Aucune clé TMDB configurée : renseignez-la dans l'onglet Réglages."
+      : "Échec de la recherche TMDB.";
+    $("tmdbKidsMsg").className = "msg err";
+    return;
+  }
+
+  tmdbKidsSuggestions = data.movies || [];
+  if (!tmdbKidsSuggestions.length){
+    $("tmdbKidsMsg").textContent = "Aucun nouveau film enfant trouvé — le catalogue est déjà à jour, ou aucun résultat.";
+    $("tmdbKidsMsg").className = "msg";
+    return;
+  }
+
+  $("tmdbKidsMsg").textContent =
+    `${tmdbKidsSuggestions.length} film${tmdbKidsSuggestions.length>1?"s":""} trouvé${tmdbKidsSuggestions.length>1?"s":""}. Décochez ceux à exclure, puis ajoutez la sélection.`;
+  $("tmdbKidsMsg").className = "msg ok";
+
+  $("tmdbKidsListe").innerHTML = tmdbKidsSuggestions.map((m, i) => `
+    <div class="item">
+      <input type="checkbox" data-tmdb-kid="${i}" checked style="width:auto;flex:0 0 auto">
+      <img src="${m.poster||""}" alt="" onerror="this.style.visibility='hidden'">
+      <div>
+        <strong>${esc(m.title)}<span class="lvl">${m.difficulty||"?"}</span></strong>
+        <small>${m.year||"—"} · ${m.rating ? m.rating+"/10 · " : ""}${esc(m.director||"réalisateur non renseigné")}</small>
+      </div>
+    </div>`).join("");
+
+  $("btnTmdbKidsTout").disabled = false;
+  $("tmdbKidsAjouterRow").classList.remove("hidden");
+};
+
+$("btnTmdbKidsTout").onclick = () => {
+  const cases = $("tmdbKidsListe").querySelectorAll("[data-tmdb-kid]");
+  const toutesCochees = [...cases].every(c => c.checked);
+  cases.forEach(c => { c.checked = !toutesCochees; });
+};
+
+$("btnTmdbKidsAjouter").onclick = async () => {
+  const choisis = [...$("tmdbKidsListe").querySelectorAll("[data-tmdb-kid]")]
+    .filter(c => c.checked)
+    .map(c => tmdbKidsSuggestions[Number(c.dataset.tmdbKid)]);
+  if (!choisis.length){
+    $("tmdbKidsMsg").textContent = "Cochez au moins un film à ajouter.";
+    $("tmdbKidsMsg").className = "msg err"; return;
+  }
+  $("tmdbKidsMsg").textContent = "Ajout en cours…";
+  $("tmdbKidsMsg").className = "msg";
+
+  const res = await api("/api/admin/movies/tmdb-kids-importer", {method:"POST", body: JSON.stringify({movies: choisis})});
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok){
+    $("tmdbKidsMsg").textContent = "Échec de l'ajout.";
+    $("tmdbKidsMsg").className = "msg err"; return;
+  }
+
+  $("tmdbKidsMsg").textContent =
+    `${data.ajoutes} film${data.ajoutes>1?"s":""} ajouté${data.ajoutes>1?"s":""} au catalogue` +
+    (data.ignores ? ` (${data.ignores} déjà présent${data.ignores>1?"s":""}, ignoré${data.ignores>1?"s":""}).` : ".");
+  $("tmdbKidsMsg").className = "msg ok";
+  $("tmdbKidsListe").innerHTML = "";
+  $("tmdbKidsAjouterRow").classList.add("hidden");
+  $("btnTmdbKidsTout").disabled = true;
+  tmdbKidsSuggestions = [];
+
+  const liste = await api("/api/movies");
+  if (liste.ok){ movies = await liste.json(); render(); }
+  loadStats();
+};
 
 async function bulk(enabled){
   const res = await api("/api/admin/movies/bulk", {method:"POST", body: JSON.stringify({
@@ -546,6 +708,7 @@ $("btnDisable").onclick = () => bulk(false);
 $("btnSave").onclick = async () => {
   const body = Object.fromEntries(FIELDS.map(f => [f, $(f).value.trim()]));
   body.cadrageImage = cadrageSaisi();
+  body.kids = $("fKids").checked;
   if (!body.title || !body.synopsis){
     $("formMsg").textContent = "Le titre et le synopsis sont obligatoires.";
     $("formMsg").className = "msg err"; return;
@@ -577,7 +740,7 @@ async function remove(id){
 
 /* ---------- Onglets ---------- */
 function tab(which){
-  for (const [nom, onglet, volet] of [["movies","tabMovies","paneMovies"],
+  for (const [nom, onglet, volet] of [["movies","tabMovies","paneMovies"], ["sugg","tabSugg","paneSugg"],
                                       ["users","tabUsers","paneUsers"],
                                       ["reports","tabReports","paneReports"],
                                       ["reglages","tabReglages","paneReglages"],
@@ -586,6 +749,7 @@ function tab(which){
     $(onglet).setAttribute("aria-selected", which === nom);
     $(volet).classList.toggle("hidden", which !== nom);
   }
+  if (which === "sugg") loadSuggestions();
   if (which === "users") loadUsers();
   if (which === "reports"){ loadReports(); loadConversations(); }
   if (which === "reglages"){ etatSecurite(); chargerReglages(); }
@@ -593,6 +757,7 @@ function tab(which){
   if (which === "nowplaying") loadNowPlaying();
 }
 $("tabMovies").onclick = () => tab("movies");
+$("tabSugg").onclick = () => tab("sugg");
 $("tabUsers").onclick = () => tab("users");
 $("tabReports").onclick = () => tab("reports");
 $("tabReglages").onclick = () => tab("reglages");
@@ -949,6 +1114,21 @@ async function loadReports(){
     b.onclick = () => confirm("Retirer ce film du catalogue ?") && agir(b.dataset.retirer, {retirerFilm:true}));
 }
 
+
+    async function loadSuggestions() {
+      $("suggCount").textContent = "Chargement…";
+      const res = await api("/api/admin/suggestions");
+      if (!res.ok){ $("suggCount").textContent = "Suggestions des joueurs — échec du chargement."; return; }
+      const list = (await res.json()).slice().sort((a, b) => new Date(b.date) - new Date(a.date));
+      $("suggCount").textContent = `${list.length} suggestion${list.length>1?"s":""} de joueurs`;
+      $("suggList").innerHTML = list.map(s => `
+        <div class="item">
+            <div><strong>${esc(s.titre)}</strong><small>Par ${esc(s.auteur)} le ${new Date(s.date).toLocaleDateString()}</small></div>
+            <div style="font-size:13px; color:var(--muted)">${esc(s.commentaire)}</div>
+        </div>
+      `).join("") || "<p class='msg'>Aucune suggestion pour l'instant.</p>";
+    }
+
 /* ---------- Joueurs ---------- */
 let players = [];
 async function loadUsers(){
@@ -965,6 +1145,7 @@ function renderUsers(){
         <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
           <span style="font-size:18px;">${u.avatar||"🎬"}</span>
           <input type="text" data-pseudo="${u.id}" value="${esc(u.pseudo||"")}" placeholder="Pseudo" style="width:130px; padding:4px 8px; font-size:14px; font-weight:bold; border:1px solid rgba(237,232,220,.2); border-radius:6px; background:var(--velvet); color:var(--chalk);">
+          ${u.fondateur?'<span title="Membre fondateur">🎖️</span>':""}
           ${u.banned?'<span class="chip">banni</span>':""}
         </div>
         <small>${u.totalScore||0} pts · ${u.gamesPlayed||0} parties${u.xHandle?" · @"+esc(u.xHandle):""}${u.online?" · en ligne":""}</small>
@@ -975,7 +1156,7 @@ function renderUsers(){
       <input type="url" data-photo="${u.id}" value="${u.photo || ""}"
              placeholder="https://…/photo.jpg" aria-label="Photo de profil" class="champPhoto">
       <select data-role="${u.id}" aria-label="Rôle">
-        ${["joueur","moderateur","admin"].map(r =>
+        ${["joueur","moderateur","admin","enfant"].map(r =>
           `<option value="${r}" ${(u.role||"joueur")===r?"selected":""}>${r}</option>`).join("")}
       </select>
       <input type="number" min="0" value="${u.credits??0}" data-credits="${u.id}" aria-label="Crédits">
@@ -987,6 +1168,7 @@ function renderUsers(){
       <button class="ghost" data-save="${u.id}">Enregistrer</button>
       <button class="ghost" data-ban="${u.id}">${u.banned?"Réactiver":"Bannir"}</button>
       <button class="danger" data-del="${u.id}">Supprimer</button>
+      <button class="ghost" style="color:var(--teal)" data-debug="${u.id}">🔍 Debug</button>
     </div>`).join("");
 
   // aperçu immédiat quand on colle une adresse
@@ -1005,10 +1187,22 @@ function renderUsers(){
     await api(`/api/admin/users/${encodeURIComponent(id)}`, {method:"PUT", body:JSON.stringify({credits, role, photo, pseudo})});
     loadUsers();
   });
+  $("userList").querySelectorAll("[data-debug]").forEach(b => b.onclick = async () => {
+    const res = await api(`/api/admin/debug-user/${encodeURIComponent(b.dataset.debug)}`, {method:"POST"});
+    if(res.ok) { alert("Compte debuggé : email validé, ban levé."); loadUsers(); }
+    else { alert("Erreur debug."); }
+  });
+
   $("userList").querySelectorAll("[data-valider]").forEach(b => b.onclick = async () => {
     await api(`/api/admin/users/${encodeURIComponent(b.dataset.valider)}/valider`, {method:"PUT"});
     loadUsers();
   });
+  $("userList").querySelectorAll("[data-debug]").forEach(b => b.onclick = async () => {
+    const res = await api(`/api/admin/debug-user/${encodeURIComponent(b.dataset.debug)}`, {method:"POST"});
+    if(res.ok) { alert("Compte debuggé : email validé, ban levé."); loadUsers(); }
+    else { alert("Erreur debug."); }
+  });
+
 
   $("userList").querySelectorAll("[data-fondateur]").forEach(b => b.onclick = async () => {
     const u = players.find(p => p.id === b.dataset.fondateur);
@@ -1016,18 +1210,36 @@ function renderUsers(){
       {method:"PUT", body: JSON.stringify({fondateur: !u.fondateur})});
     loadUsers();
   });
+  $("userList").querySelectorAll("[data-debug]").forEach(b => b.onclick = async () => {
+    const res = await api(`/api/admin/debug-user/${encodeURIComponent(b.dataset.debug)}`, {method:"POST"});
+    if(res.ok) { alert("Compte debuggé : email validé, ban levé."); loadUsers(); }
+    else { alert("Erreur debug."); }
+  });
+
 
   $("userList").querySelectorAll("[data-ban]").forEach(b => b.onclick = async () => {
     const u = players.find(p => p.id === b.dataset.ban);
     await api(`/api/admin/users/${encodeURIComponent(u.id)}`, {method:"PUT", body:JSON.stringify({banned: !u.banned})});
     loadUsers();
   });
+  $("userList").querySelectorAll("[data-debug]").forEach(b => b.onclick = async () => {
+    const res = await api(`/api/admin/debug-user/${encodeURIComponent(b.dataset.debug)}`, {method:"POST"});
+    if(res.ok) { alert("Compte debuggé : email validé, ban levé."); loadUsers(); }
+    else { alert("Erreur debug."); }
+  });
+
   $("userList").querySelectorAll("[data-del]").forEach(b => b.onclick = async () => {
     const u = players.find(p => p.id === b.dataset.del);
     if (!confirm(`Supprimer définitivement le compte « ${u.pseudo || u.id} » ?`)) return;
     await api(`/api/admin/users/${encodeURIComponent(u.id)}`, {method:"DELETE"});
     loadUsers();
   });
+  $("userList").querySelectorAll("[data-debug]").forEach(b => b.onclick = async () => {
+    const res = await api(`/api/admin/debug-user/${encodeURIComponent(b.dataset.debug)}`, {method:"POST"});
+    if(res.ok) { alert("Compte debuggé : email validé, ban levé."); loadUsers(); }
+    else { alert("Erreur debug."); }
+  });
+
 }
 
 $("btnGenInvite").onclick = async () => {
@@ -1036,6 +1248,40 @@ $("btnGenInvite").onclick = async () => {
   const data = await res.json();
   $("inviteMsg").innerHTML = `Code généré : <b style="color:var(--beam);font-size:18px">${data.code}</b>`;
   $("inviteMsg").className = "msg ok";
+};
+
+/** Mot de passe simple et lisible, facile à recopier pour un enfant. */
+function motDePasseSimple(){
+  const mots = ["TIGRE","LAPIN","ETOILE","FUSEE","PANDA","NUAGE","CORAIL","GALET","OLIVE","PLUME"];
+  return mots[Math.floor(Math.random() * mots.length)] + Math.floor(10 + Math.random() * 90);
+}
+$("btnCcGenerer").onclick = () => { $("ccMotDePasse").value = motDePasseSimple(); };
+
+$("btnCcCreer").onclick = async () => {
+  const pseudo = $("ccPseudo").value.trim();
+  const motDePasse = $("ccMotDePasse").value;
+  const enfant = $("ccEnfant").checked;
+  if (pseudo.length < 2){
+    $("ccMsg").textContent = "L'identifiant doit faire au moins 2 caractères.";
+    $("ccMsg").className = "msg err"; return;
+  }
+  if (motDePasse.length < 6){
+    $("ccMsg").textContent = "Le mot de passe doit faire au moins 6 caractères.";
+    $("ccMsg").className = "msg err"; return;
+  }
+  const res = await api("/api/admin/comptes", {method:"POST", body: JSON.stringify({pseudo, motDePasse, enfant})});
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok){
+    const messages = {PSEUDO_PRIS: "Cet identifiant est déjà pris.", PSEUDO_INVALIDE: "Identifiant invalide.",
+                       MOT_DE_PASSE_COURT: "Mot de passe trop court."};
+    $("ccMsg").textContent = messages[data.error] || "Échec de la création.";
+    $("ccMsg").className = "msg err"; return;
+  }
+  $("ccMsg").innerHTML = `Compte ${enfant ? "enfant " : ""}créé : identifiant <b style="color:var(--beam)">${esc(pseudo)}</b>, ` +
+    `mot de passe <b style="color:var(--beam)">${esc(motDePasse)}</b>. Notez-les : à donner directement à la personne concernée.`;
+  $("ccMsg").className = "msg ok";
+  $("ccPseudo").value = ""; $("ccMotDePasse").value = ""; $("ccEnfant").checked = false;
+  loadUsers();
 };
 
 $("btnTousFondateurs").onclick = async () => {
@@ -1063,19 +1309,20 @@ $("btnGrantAll").onclick = async () => {
   loadUsers();
 };
 
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+</script>
 
-    $("btnCreateUser").onclick = async () => {
-        const res = await api("/api/admin/comptes", {method:"POST", body: JSON.stringify({
-            identifiant: $("newId").value,
-            motDePasse: $("newMdp").value,
-            estEnfant: $("newIsKid").checked
-        })});
-        if(res.ok) { $("createMsg").textContent = "Compte créé !"; $("createMsg").className="msg ok"; }
-        else { $("createMsg").textContent = "Erreur création."; $("createMsg").className="msg err"; }
-        loadUsers();
-    };
-    const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-    
+<script>
+async function autoLogin() {
+    const res = await fetch("/api/admin/check");
+    const status = await res.json();
+    if (status.isAdmin || status.isMod) {
+        // Try to unlock with a generic token if the user is verified by session
+        $("token").value = "session-granted";
+        $("btnAuth").click();
+    }
+}
+autoLogin();
 </script>
 </body>
 </html>

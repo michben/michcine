@@ -7,23 +7,24 @@
 <meta name="theme-color" content="#0A0C16">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MichBen Ciné Quizz — devinez le film</title>
-<link href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
 <style>
-  :root{--ink:#0A0C16;--velvet:#151A2E;--card:#1C2238;--beam:#F5B942;--ticket:#E4586E;--teal:#4ECDC4;--chalk:#EDE8DC;--muted:#7C819B}
+  :root{--ink:#0A0C16;--velvet:#151A2E;--card:#1C2238;--beam:#F5B942;--ticket:#E4586E;--teal:#4ECDC4;--chalk:#EDE8DC;--muted:#7C819B;
+    --font-affiche:'Anton',sans-serif; --font-corps:'Inter',system-ui,sans-serif; --font-etiquette:'Oswald','Inter',system-ui,sans-serif; --font-code:'JetBrains Mono',monospace}
   *{box-sizing:border-box}
   body{margin:0;min-height:100vh;background:var(--ink);color:var(--chalk);
-    font-family:'Space Grotesk',system-ui,sans-serif;
+    font-family:var(--font-corps);
     background-image:radial-gradient(ellipse 80% 55% at 50% -10%, rgba(245,185,66,.16), transparent 70%)}
   .wrap{max-width:720px;margin:0 auto;padding:26px 18px 40px}
-  h1{font-family:'Anton',sans-serif;font-size:clamp(30px,8vw,52px);letter-spacing:.04em;text-transform:uppercase;margin:0;line-height:.92}
+  h1{font-family:var(--font-affiche);font-size:clamp(30px,8vw,52px);letter-spacing:.04em;text-transform:uppercase;margin:0;line-height:.92}
   h1 em{font-style:normal;color:var(--beam)}
-  h2{font-family:'Anton',sans-serif;text-transform:uppercase;letter-spacing:.03em;font-size:22px;margin:0 0 4px}
+  h2{font-family:var(--font-affiche);text-transform:uppercase;letter-spacing:.03em;font-size:22px;margin:0 0 4px}
   .baseline{color:var(--muted);font-size:16px;margin:10px 0 0;line-height:1.5;max-width:44ch}
-  .free{display:inline-block;margin-top:14px;font-size:11px;letter-spacing:.2em;text-transform:uppercase;
+  .free{display:inline-block;margin-top:14px;font-family:var(--font-etiquette);font-weight:500;font-size:11px;letter-spacing:.2em;text-transform:uppercase;
     color:var(--teal);border:1px solid var(--teal);border-radius:999px;padding:6px 14px}
   .card{background:var(--velvet);border:1px solid rgba(237,232,220,.09);border-radius:14px;padding:20px;margin-top:16px}
-  .tag{font-size:11px;letter-spacing:.26em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
-  label{display:block;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+  .tag{font-family:var(--font-etiquette);font-weight:500;font-size:11px;letter-spacing:.26em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+  label{display:block;font-family:var(--font-etiquette);font-weight:500;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
   input{width:100%;background:var(--card);border:1px solid rgba(237,232,220,.14);color:var(--chalk);border-radius:10px;padding:13px 14px;font:inherit;font-size:16px}
   input:focus-visible,button:focus-visible{outline:2px solid var(--beam);outline-offset:2px}
   #joinCode{font-family:'JetBrains Mono',monospace;letter-spacing:.5em;text-transform:uppercase;font-size:20px}
@@ -55,14 +56,34 @@
   .players{list-style:none;padding:0;margin:12px 0 0;display:flex;flex-wrap:wrap;gap:8px}
   /* Carte de profil : la photo est le premier élément vu, encadrée en grand. */
   #carteProfil{text-align:center;margin:4px 0 22px}
-  .barreNiveau{background:var(--card);border-radius:12px;padding:13px 15px;margin-top:14px}
-  .niveauTete{display:flex;align-items:center;gap:10px;margin-bottom:9px}
-  .pastilleNiveau{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;
+  .barreNiveau{position:relative;overflow:hidden;cursor:pointer;
+    background:linear-gradient(155deg,rgba(245,185,66,.16),rgba(228,88,110,.10) 55%,var(--card) 100%);
+    border:1px solid rgba(245,185,66,.35);border-radius:16px;padding:15px 17px;margin-top:14px;
+    box-shadow:0 8px 20px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.05);
+    transition:border-color .2s,transform .2s}
+  .barreNiveau:hover{border-color:var(--beam);transform:translateY(-1px)}
+  .barreNiveau::after{content:"";position:absolute;top:-60%;right:-20%;width:60%;height:220%;
+    background:radial-gradient(circle,rgba(245,185,66,.16),transparent 70%);pointer-events:none}
+  .niveauTete{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+  .pastilleNiveau{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;
     background:linear-gradient(140deg,var(--beam),var(--ticket));color:#161207;
-    font-family:'JetBrains Mono',monospace;font-weight:700;font-size:15px;flex:0 0 auto}
+    font-family:var(--font-code);font-weight:700;font-size:17px;flex:0 0 auto;
+    box-shadow:0 0 0 3px rgba(245,185,66,.2),0 4px 14px rgba(245,185,66,.4)}
+  body.animations-actives .pastilleNiveau{animation:pastillePulse 2.6s ease-in-out infinite}
+  @keyframes pastillePulse{
+    0%,100%{box-shadow:0 0 0 3px rgba(245,185,66,.2),0 4px 14px rgba(245,185,66,.4)}
+    50%{box-shadow:0 0 0 6px rgba(245,185,66,.1),0 4px 20px rgba(245,185,66,.6)}}
   .niveauTexte{flex:1;font-size:14px;color:var(--muted)}
-  .niveauTexte b{color:var(--chalk)}
-  .niveauXp{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted)}
+  .niveauTexte b{color:var(--beam);font-family:var(--font-affiche);font-size:19px;
+    letter-spacing:.02em;text-transform:uppercase;font-weight:400}
+  .niveauXp{font-family:var(--font-code);font-size:12px;color:var(--chalk);
+    background:rgba(0,0,0,.28);padding:4px 10px;border-radius:999px;white-space:nowrap}
+  .barreNiveau .jauge{height:9px;border-radius:99px;background:rgba(0,0,0,.32);
+    box-shadow:inset 0 1px 3px rgba(0,0,0,.5);margin:12px 0 2px}
+  .barreNiveau .jauge i{background:linear-gradient(90deg,var(--ticket),var(--beam),var(--teal));
+    background-size:200% 100%;box-shadow:0 0 10px rgba(245,185,66,.55);border-radius:99px}
+  body.animations-actives .barreNiveau .jauge i{animation:jaugeShimmer 2.2s linear infinite}
+  @keyframes jaugeShimmer{0%{background-position:0% 0}100%{background-position:200% 0}}
   .quete{display:flex;gap:12px;align-items:center;padding:14px 0;border-top:1px solid rgba(237,232,220,.1);flex-wrap:wrap}
   .quete .infos{flex:1;min-width:150px}
   .quete .infos b{display:block;font-size:15px}
@@ -71,13 +92,31 @@
   .quete .gain{font-size:13px;color:var(--beam);white-space:nowrap}
   .quete.finie .infos b{color:var(--teal)}
   .quete button{padding:9px 14px;font-size:14px}
-  .montee{position:fixed;left:50%;top:26%;transform:translateX(-50%);z-index:86;text-align:center;
-    pointer-events:none;animation:monteeNiveau 2.6s ease-out forwards}
+  .badgeFondateur{display:inline-block;font-size:.85em;filter:drop-shadow(0 0 2px rgba(255,196,0,.6))}
+  .montee{position:fixed;left:50%;top:18%;transform:translateX(-50%);z-index:86;text-align:center;
+    max-width:min(420px,88vw);pointer-events:none;animation:monteeNiveau 6s ease-out forwards}
   .montee b{display:block;font-family:'Anton',sans-serif;text-transform:uppercase;
     font-size:clamp(26px,7vw,40px);color:var(--beam);letter-spacing:.03em}
   @keyframes monteeNiveau{0%{opacity:0;transform:translateX(-50%) scale(.7)}
-    15%{opacity:1;transform:translateX(-50%) scale(1.1)}25%{transform:translateX(-50%) scale(1)}
-    100%{opacity:0;transform:translateX(-50%) translateY(-40px)}}
+    8%{opacity:1;transform:translateX(-50%) scale(1.1)}14%{transform:translateX(-50%) scale(1)}
+    88%{opacity:1;transform:translateX(-50%) translateY(0)}
+    100%{opacity:0;transform:translateX(-50%) translateY(-24px)}}
+  /* Petit carton façon pellicule de film : perforations en haut et en bas, coin doré. */
+  .citationCine{pointer-events:none;margin:14px auto 0;padding:14px 18px 12px;max-width:380px;
+    background:linear-gradient(180deg,rgba(20,16,10,.94),rgba(10,8,5,.94));
+    border:1px solid rgba(255,196,0,.35);border-radius:10px;
+    box-shadow:0 8px 28px rgba(0,0,0,.5);position:relative}
+  .citationCine::before,.citationCine::after{content:"";display:block;height:8px;margin:0 -18px 10px;
+    background-image:repeating-linear-gradient(90deg,var(--beam,#e9b64c) 0 8px,transparent 8px 16px);
+    background-size:16px 8px;opacity:.55}
+  .citationCine::after{margin:10px -18px 0}
+  .citationCine .texte{font-family:'Anton',sans-serif;letter-spacing:.01em;font-size:15px;
+    color:var(--chalk,#ede8dc);line-height:1.35;margin:0 0 8px;text-transform:none}
+  .citationCine .source{font-size:12px;color:var(--beam,#e9b64c);margin:0 0 6px;font-weight:600}
+  .citationCine .source .annee{color:var(--muted,#9a9284);font-weight:400}
+  .citationCine .anecdote{font-size:11.5px;color:var(--muted,#9a9284);margin:0;font-style:italic;line-height:1.4}
+  #citationNiveauPanel{padding:0 20px 14px}
+  #citationNiveauPanel .citationCine{margin:6px auto 0;max-width:none}
   .codeCadre{text-align:center;background:var(--card);border-radius:12px;padding:16px;margin-top:8px}
   .codeCadre .valeur{font-family:'JetBrains Mono',monospace;font-size:30px;letter-spacing:.32em;
     color:var(--beam);margin:6px 0 12px;user-select:all}
@@ -236,7 +275,7 @@
   .flyEmoji{position:fixed;z-index:55;pointer-events:none;font-size:34px;
     animation:monte 2.2s ease-out forwards}
   .flyEmoji small{display:block;font-size:11px;color:var(--muted);text-align:center;
-    font-family:'Space Grotesk',sans-serif}
+    font-family:'Inter',sans-serif}
   @keyframes monte{
     0%{opacity:0;transform:translateY(0) scale(.6)}
     12%{opacity:1;transform:translateY(-14px) scale(1.15)}
@@ -389,6 +428,18 @@
 /* --- LE BOUTON POINT D'INTERROGATION --- */
 .help-btn { position: fixed; bottom: 20px; left: 20px; width: 40px; height: 40px; background: rgba(28, 34, 56, 0.6); color: var(--muted); border: 1px solid rgba(237, 232, 220, 0.15); border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 20px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2); transition: all 0.3s ease; z-index: 1000; backdrop-filter: blur(4px); }
 .help-btn:hover { transform: scale(1.1); color: var(--chalk); border-color: var(--beam); background: rgba(28, 34, 56, 0.9); }
+
+/* --- MODE ENFANT --- */
+#btnKidMode{font-size:18px;line-height:1;padding:13px 16px}
+#btnKidMode[aria-pressed="true"]{background:#3DDC84;color:#0A2015;border-color:#3DDC84}
+#btnKidMode:disabled{cursor:not-allowed;opacity:.85}
+/* Halo vert tout autour de l'écran tant que le mode enfant est actif. */
+html.mode-enfant-actif{box-shadow:inset 0 0 0 5px #3DDC84, inset 0 0 34px 6px rgba(61,220,132,.55)}
+html.mode-enfant-actif body{min-height:100vh}
+.bandeauEnfant{position:fixed;top:0;left:0;right:0;z-index:1200;background:#3DDC84;color:#0A2015;
+  text-align:center;font-family:var(--font-etiquette);font-weight:600;font-size:12px;letter-spacing:.14em;
+  text-transform:uppercase;padding:6px 10px}
+html.mode-enfant-actif .wrap{padding-top:48px}
 /* --- LA FENÊTRE MODALE --- */
 .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.85); display: none; justify-content: center; align-items: center; z-index: 1001; opacity: 0; transition: opacity 0.3s ease; }
 .modal-overlay.active { display: flex; opacity: 1; }
@@ -398,7 +449,7 @@
 .modal-header h2 { margin: 0; font-size: 24px; color: #f5f5f5; font-family: 'Anton', sans-serif;}
 .close-btn { background: none; border: none; color: #888; font-size: 32px; line-height: 1; cursor: pointer; transition: color 0.2s; }
 .close-btn:hover { color: #e50914; }
-.modal-body { padding: 25px; line-height: 1.6; font-family: 'Space Grotesk', sans-serif; text-align: left; }
+.modal-body { padding: 25px; line-height: 1.6; font-family: 'Inter', sans-serif; text-align: left; }
 .mode-section { background-color: #222; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; border-left: 5px solid #1db954; text-align: left; }
 .mode-section.cine { border-left-color: #e50914; }
 .mode-section h3 { margin-top: 0; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; color: white;}
@@ -487,6 +538,7 @@
 
 </head>
 <body>
+<div class="bandeauEnfant hidden" id="bandeauEnfant">🐻 Mode enfant activé — uniquement des films pour enfants</div>
 <div class="wrap">
 
   <button id="banner" title="Revenir à l'accueil">
@@ -495,24 +547,12 @@
   <button id="btnQuitGame" class="ghost hidden" style="position:absolute; top:20px; right:18px; font-size:22px; padding:4px 8px; z-index:50;" title="Quitter la partie">🏠</button>
 
   <!-- PRÉSENTATION + CONNEXION -->
-    <div class="card hidden" id="manualLoginCard">
-      <p class="tag">Connexion Identifiant</p>
-      <label for="manId">Identifiant</label>
-      <input id="manId" placeholder="monid">
-      <label for="manMdp" style="margin-top:12px">Mot de passe</label>
-      <input id="manMdp" type="password" placeholder="••••">
-      <div class="row">
-        <button id="btnManConnexion">Se connecter</button>
-      </div>
-      <p class="feedback bad" id="manError"></p>
-    </div>
   <section id="landing">
     <p class="baseline">Un synopsis s'affiche, vous devinez le film. Plus vous répondez vite et sans indice, plus vous marquez. Seul ou jusqu'à 16 joueurs.</p>
     <span class="free">100 % gratuit</span>
 
     <div class="card">
       <p class="tag">Rejoindre la partie</p>
-        <button class="ghost" onclick="$('manualLoginCard').classList.remove('hidden'); $('landing').classList.add('hidden');">Connexion Identifiant</button>
       <div class="row" style="flex-direction:column">
         <a class="xbtn" href="/auth/x/login">𝕏 &nbsp;S'inscrire avec X</a>
         <a class="xbtn ghostlink" href="/auth/x/login">𝕏 &nbsp;J'ai déjà un compte — me connecter</a>
@@ -532,6 +572,17 @@
       </div>
       <p class="feedback bad" id="mailError"></p>
 
+      <p class="tag" style="margin:22px 0 10px">🐻 Compte enfant</p>
+      <p class="note" style="margin-top:0">Identifiant et mot de passe remis par un adulte — ces comptes créés depuis
+        l'administration ne jouent qu'en mode enfant.</p>
+      <label for="ccIdentifiant">Identifiant</label>
+      <input id="ccIdentifiant" autocomplete="username" placeholder="Pseudo donné par un adulte">
+      <label for="ccMdp" style="margin-top:12px">Mot de passe</label>
+      <input id="ccMdp" type="password" autocomplete="current-password">
+      <div class="row">
+        <button id="btnCcConnexion">Se connecter</button>
+      </div>
+      <p class="feedback bad" id="ccError"></p>
 
       <p class="note" style="margin-bottom:0">En vous inscrivant, vous acceptez les <a href="/regles.html" style="color:var(--beam)">règles et le code de bonne conduite</a>.</p>
       <p class="note">Le compte X sert uniquement à identifier votre profil et votre classement. Aucun message ne sera publié en votre nom.</p>
@@ -703,6 +754,7 @@
       <div class="tabsAmis" id="tabsClassement">
         <button data-c="saison" aria-pressed="true">Saison en cours</button>
         <button data-c="global" aria-pressed="false">Classement global</button>
+        <button data-c="enfant" aria-pressed="false">🐻 Enfants</button>
       </div>
 
       <div id="seauBloc" style="text-align:center;margin-top:16px">
@@ -742,7 +794,7 @@
     <div class="barreNiveau" id="barreNiveau">
       <div class="niveauTete">
         <span class="pastilleNiveau" id="niveauNum">0</span>
-        <span class="niveauTexte">Niveau <b id="niveauLabel">0</b></span>
+        <span class="niveauTexte">🏅 Niveau <b id="niveauLabel">0</b></span>
         <span class="niveauXp" id="niveauXp"></span>
       </div>
       <div class="jauge"><i id="niveauJauge" style="width:0%"></i></div>
@@ -763,9 +815,13 @@
       <button class="ghost" id="btnBoard">Classement</button>
       <button class="ghost" id="btnQuetes">Quêtes <span id="badgeQuetes" class="pastille hidden">0</span></button>
       <button class="ghost" id="btnFriends">Amis <span id="badgeAmis" class="pastille hidden">0</span></button>
+      <button class="ghost" id="btnKidMode" aria-pressed="false" title="Mode enfant : uniquement des films pour enfants">🐻</button>
       <button class="ghost" id="btnProfile">Profil</button>
     </div>
-    <div class="row"><button class="ghost hidden" id="btnModeration">Modération</button></div>
+        <div class="row"><button class="ghost hidden" id="btnModeration">Modération</button>
+      <button class="ghost hidden" id="btnAdminAccess" style="border-color:var(--beam); color:var(--beam)">⚙️ Administration</button>
+      <button class="ghost" id="btnSuggestion" style="border-color:var(--teal); color:var(--teal)">💡 Suggérer un film</button>
+    </div>
     <div class="card">
       <label for="joinCode">Rejoindre un salon existant</label>
       <input id="joinCode" maxlength="4" placeholder="ABCD" autocomplete="off">
@@ -859,6 +915,25 @@
       </div>
       <p class="feedback" id="reportMsg"></p>
       <p class="note" id="nextNote">Enchaînement automatique dans quelques secondes.</p>
+    </div>
+  </section>
+
+  <!-- REGARDER EN DIRECT -->
+  <section id="regarder" class="hidden">
+    <div class="card">
+      <p class="tag">👁️ En direct — <span id="regarderPseudo"></span></p>
+      <p class="note" id="regarderRound" style="margin-top:0"></p>
+      <p class="synopsis" id="regarderSynopsis"></p>
+      <div class="choices" id="regarderChoices"></div>
+      <div class="revelation hidden" id="regarderRevelation">
+        <img id="regarderPoster" class="afficheRevelee hidden" alt="">
+        <p class="reveal" id="regarderReponse"></p>
+        <p class="note" id="regarderAnnee" style="margin-top:2px"></p>
+      </div>
+      <p class="tag" style="margin-top:18px">Scores en direct</p>
+      <ol class="rank" id="regarderScores"></ol>
+      <p class="note" id="regarderEtat"></p>
+      <div class="row"><button class="ghost" id="btnRegarderQuitter">Arrêter de regarder</button></div>
     </div>
   </section>
 
@@ -1072,11 +1147,50 @@ function setCredits(n){
   if (typeof n === "number") credits = n;
   document.querySelectorAll(".wallet b").forEach(el => el.textContent = credits);
 }
-let state = {code:null, mode:"ffa", isHost:false, hintCosts:{}, bought:{}, answered:false, timerId:null, freeHintsRemaining: 0, allHintsFree: false, coeursMax: 3};
+let state = {code:null, mode:"ffa", isHost:false, hintCosts:{}, bought:{}, answered:false, timerId:null, freeHintsRemaining: 0, allHintsFree: false, coeursMax: 3, kidMode:false};
+
+/* ---------- Mode enfant ---------- */
+/** Applique l'état du mode enfant à l'écran : halo vert, bouton, bandeau. */
+function appliquerModeEnfant(){
+  document.documentElement.classList.toggle("mode-enfant-actif", state.kidMode);
+  $("bandeauEnfant").classList.toggle("hidden", !state.kidMode);
+  $("btnKidMode").setAttribute("aria-pressed", String(state.kidMode));
+  // un compte enfant ne peut jamais désactiver le mode enfant
+  const verrouille = me && me.role === "enfant";
+  $("btnKidMode").disabled = verrouille;
+  $("btnKidMode").title = verrouille
+    ? "Mode enfant activé en permanence pour ce compte."
+    : (state.kidMode ? "Désactiver le mode enfant" : "Mode enfant : uniquement des films pour enfants");
+}
+$("btnKidMode").onclick = () => {
+  if (me && me.role === "enfant") return;   // verrouillé
+  state.kidMode = !state.kidMode;
+  try { localStorage.setItem("kidMode", state.kidMode ? "1" : "0"); } catch {}
+  appliquerModeEnfant();
+};
+try { state.kidMode = localStorage.getItem("kidMode") === "1"; } catch {}
+// appliquerModeEnfant() n'est appelé qu'après connexion (voir appliquerRole) :
+// avant, `me` n'existe pas encore et le bouton est de toute façon masqué.
+
+/** Applique les conséquences du rôle du compte connecté : bouton admin, mode enfant forcé. */
+function appliquerRole(){
+  if (!me) return;
+  $("btnAdminAccess").classList.toggle("hidden", me.role !== "admin");
+  if (me.role === "admin") $("btnAdminAccess").onclick = () => window.location.href = "/admin.html";
+  if (me.role === "enfant") {
+    state.kidMode = true;
+    try { localStorage.setItem("kidMode", "1"); } catch {}
+    // un compte enfant n'apparaît que dans le classement enfant : c'est celui qu'on lui montre par défaut
+    typeClassement = "enfant";
+    $("tabsClassement").querySelectorAll("[data-c]").forEach(x =>
+      x.setAttribute("aria-pressed", String(x.dataset.c === "enfant")));
+  }
+  appliquerModeEnfant();
+}
 
 /** Chaque écran commence en haut : personne ne doit remonter à la main. */
 const show = id => {
-  ["landing","validation","parrainage","profile","board","exchange","friends","quetes","moderation","menu","lobby","waiting","round","between","over"]
+  ["landing","validation","parrainage","profile","board","exchange","friends","quetes","moderation","menu","lobby","waiting","round","between","over","regarder"]
     .forEach(s => $(s).classList.toggle("hidden", s !== id));
   window.scrollTo({top: 0, behavior: "instant"});
   
@@ -1087,6 +1201,10 @@ const show = id => {
 const vignette = (j) => j?.photo
   ? `<img class="pfp" src="${esc(j.photo)}" alt="" onerror="this.remove()">`
   : (j?.avatar || "🎬");
+
+/** Petit insigne pour reconnaître au premier coup d'œil les membres fondateurs. */
+const insigneFondateur = (j) => j?.fondateur
+  ? `<span class="badgeFondateur" title="Membre fondateur">🎖️</span>` : "";
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
@@ -1101,20 +1219,61 @@ if (!window.tempsReelDispo) {
     b.disabled = true; b.style.opacity = .4;
     b.title = "Indisponible : le temps réel est bloqué par votre navigateur.";
   });
-  
-    $("btnManConnexion").onclick = async () => {
-        const res = await fetch("/auth/manuel", {method:"POST", headers:{"Content-Type":"application/json"},
-            body: JSON.stringify({identifiant: $("manId").value, motDePasse: $("manMdp").value})});
-        const data = await res.json().catch(() => ({}));
-        if(!res.ok) return $("manError").textContent = "Identifiants invalides.";
-        me = data;
-        socket.disconnect().connect();
-        $("hello").textContent = `Bonjour ${me.pseudo}`;
-        show("menu");
-    };
-    // le bouton reste cliquable : mieux vaut un message clair qu'un bouton mort
+  // le bouton reste cliquable : mieux vaut un message clair qu'un bouton mort
   $("btnJoin").title = "Le multijoueur exige la connexion temps réel.";
 }
+
+// Bouton « Suggérer un film » : doit fonctionner que le temps réel soit
+// disponible ou non (auparavant câblé par erreur dans le bloc ci-dessus,
+// qui ne s'exécute que lorsque le temps réel est bloqué).
+const suggestionModal = $("suggestionModal");
+const btnSuggestion = $("btnSuggestion");
+
+btnSuggestion.onclick = () => suggestionModal.classList.add("active");
+$("closeSuggestionBtn").onclick = () => suggestionModal.classList.remove("active");
+
+$("btnSendSugg").onclick = async () => {
+    const titre = $("suggTitre").value.trim();
+    const commentaire = $("suggComment").value.trim();
+    if(!titre){
+        $("suggFeedback").textContent = "Indiquez au moins un titre de film.";
+        $("suggFeedback").className = "feedback bad";
+        return;
+    }
+
+    const btn = $("btnSendSugg");
+    btn.disabled = true;
+    $("suggFeedback").textContent = "Envoi en cours…";
+    $("suggFeedback").className = "feedback";
+
+    try {
+        const res = await fetch("/api/suggestions", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ titre, commentaire })
+        });
+
+        if(res.ok) {
+            $("suggFeedback").textContent = "Merci pour votre suggestion !";
+            $("suggFeedback").className = "feedback good";
+            $("suggTitre").value = ""; $("suggComment").value = "";
+            setTimeout(() => suggestionModal.classList.remove("active"), 2000);
+        } else if (res.status === 401) {
+            $("suggFeedback").textContent = "Vous devez être connecté pour suggérer un film.";
+            $("suggFeedback").className = "feedback bad";
+        } else {
+            let msg = "Erreur lors de l'envoi, réessayez.";
+            try { const d = await res.json(); if (d?.error) msg = `Erreur : ${d.error}`; } catch {}
+            $("suggFeedback").textContent = msg;
+            $("suggFeedback").className = "feedback bad";
+        }
+    } catch (e) {
+        $("suggFeedback").textContent = "Connexion impossible, vérifiez votre réseau.";
+        $("suggFeedback").className = "feedback bad";
+    } finally {
+        btn.disabled = false;
+    }
+};
 
 fetch("/api/config").then(r => r.json())
   .then(c => { $("tipLink").href = c.tipUrl; tauxTicket = c.pointsParTicket || tauxTicket; if (c.animationsAvancees !== false) document.body.classList.add("animations-actives"); })
@@ -1140,6 +1299,7 @@ async function loadSession(){
     $("hello").innerHTML = `Bonjour ${esc(me.pseudo)}` +
       (["moderateur","admin"].includes(me.role) ? `<span class="badge-role">${esc(me.role)}</span>` : "");
     $("btnModeration").classList.toggle("hidden", !["moderateur","admin"].includes(me.role));
+    appliquerRole();
     show("menu");
   } catch (e) {
     $("diag").textContent = `Contact du serveur impossible : ${e.message}`;
@@ -1257,11 +1417,39 @@ async function authMail(chemin){
   if (!me.pseudoChosen) return firstVisit();
   $("hello").textContent = `Bonjour ${me.pseudo}`;
   majBadgeAmis();
+  appliquerRole();
   show("menu");
 }
 $("btnMailConnexion").onclick = () => authMail("connexion");
 $("btnMailInscription").onclick = () => authMail("inscription");
 $("mdp").addEventListener("keydown", e => { if (e.key === "Enter") authMail("connexion"); });
+
+/* ---------- Connexion des comptes créés par l'administration (compte enfant) ---------- */
+async function authEnfant(){
+  const pseudo = $("ccIdentifiant").value.trim(), motDePasse = $("ccMdp").value;
+  if (!pseudo || !motDePasse) return ($("ccError").textContent = "Renseignez l'identifiant et le mot de passe.");
+
+  const res = await fetch("/auth/enfant/connexion", {method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({pseudo, motDePasse})});
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return ($("ccError").textContent = MESSAGES_MAIL[data.error] || "Identifiant ou mot de passe incorrect.");
+
+  me = data;
+  $("ccMdp").value = "";
+  $("ccError").textContent = "";
+  setCredits(me.credits ?? 0);
+  setPoints(me.points ?? 0);
+
+  if (window.tempsReelDispo) socket.disconnect().connect();
+  if (!me.pseudoChosen) return firstVisit();
+  $("hello").textContent = `Bonjour ${me.pseudo}`;
+  majBadgeAmis();
+  appliquerRole();
+  show("menu");
+}
+$("btnCcConnexion").onclick = authEnfant;
+$("ccMdp").addEventListener("keydown", e => { if (e.key === "Enter") authEnfant(); });
 
 
 
@@ -1645,6 +1833,54 @@ socket.on("invite:recue", ({code, mode, de, avatar, joueurs}) => {
 /* ---------- Niveaux et quêtes ---------- */
 let mesQuetes = [];
 
+/**
+ * Citations de grand cinéma, une par niveau franchi. Chaque niveau tombe
+ * toujours sur la même réplique (numéro de niveau modulo la taille de la
+ * liste) : le joueur redécouvre tout le stock au fil de sa progression.
+ */
+const CITATIONS_CINEMA = [
+  { texte:"Je vais lui faire une offre qu'il ne pourra pas refuser.", film:"Le Parrain", annee:1972, source:"Vito Corleone (Marlon Brando)", anecdote:"Brando avait glissé du coton dans ses joues pour se donner le physique bouledogue du parrain." },
+  { texte:"Que la Force soit avec toi.", film:"Star Wars", annee:1977, source:"Han Solo (Harrison Ford)", anecdote:"George Lucas a écrit près de quatre versions du scénario avant de trouver le ton de la saga." },
+  { texte:"Nobody's perfect.", film:"Certains l'aiment chaud", annee:1959, source:"Osgood (Joe E. Brown)", anecdote:"Cette dernière réplique du film est régulièrement classée parmi les meilleures fins de l'histoire du cinéma." },
+  { texte:"Ce fut un plaisir, Sam.", film:"Casablanca", annee:1942, source:"Rick Blaine (Humphrey Bogart)", anecdote:"Le scénario était encore réécrit pendant le tournage : personne ne savait comment le film finirait." },
+  { texte:"La vie, c'est comme une boîte de chocolats : on ne sait jamais sur quoi on va tomber.", film:"Forrest Gump", annee:1994, source:"Forrest Gump (Tom Hanks)", anecdote:"Tom Hanks a reçu l'Oscar du meilleur acteur pour ce rôle, un an après celui de Philadelphia." },
+  { texte:"Houston, on a un problème.", film:"Apollo 13", annee:1995, source:"Jim Lovell (Tom Hanks)", anecdote:"La véritable phrase radio de 1970 était en fait au passé : « Houston, we've had a problem. »" },
+  { texte:"Hasta la vista, baby.", film:"Terminator 2", annee:1991, source:"Le Terminator (Arnold Schwarzenegger)", anecdote:"Arnold Schwarzenegger a appris la réplique phonétiquement avant de comprendre ce qu'elle signifiait vraiment." },
+  { texte:"Aujourd'hui est peut-être un bon jour pour mourir.", film:"Le Roi Lion", annee:1994, source:"Mufasa (voix de James Earl Jones)", anecdote:"James Earl Jones prêtait déjà sa voix à Dark Vador : Mufasa était un clin d'œil assumé des studios Disney." },
+  { texte:"Avec de grands pouvoirs viennent de grandes responsabilités.", film:"Spider-Man", annee:2002, source:"Oncle Ben (Cliff Robertson)", anecdote:"Cette morale existait déjà dans le tout premier comic Spider-Man de 1962, sous une formulation légèrement différente." },
+  { texte:"Il n'y a pas de problème qu'on ne puisse résoudre en équipe.", film:"Les Indestructibles", annee:2004, source:"Mr Indestructible", anecdote:"Brad Bird a animé le film pour qu'il ressemble à un James Bond des années 60 revisité en famille." },
+  { texte:"Un jour, mon prince viendra.", film:"Blanche-Neige et les Sept Nains", annee:1937, source:"Blanche-Neige", anecdote:"Premier long métrage d'animation entièrement en couleurs produit par un studio américain." },
+  { texte:"Je suis le roi du monde !", film:"Titanic", annee:1997, source:"Jack Dawson (Leonardo DiCaprio)", anecdote:"La réplique était en réalité improvisée par DiCaprio pendant les essais caméra." },
+  { texte:"Dans la vie, il y a les mangeurs de pierre et les mangeurs de graines.", film:"Les Tontons flingueurs", annee:1963, source:"Fernand Naudin (Lino Ventura)", anecdote:"Les dialogues de Michel Audiard sont si célèbres qu'ils sont encore cités quotidiennement en France." },
+  { texte:"C'est un métier, ça, moussaillon ?", film:"L'Aile ou la Cuisse", annee:1976, source:"Charles Duchemin (Louis de Funès)", anecdote:"Louis de Funès a insisté pour tourner lui-même certaines cascades comiques du film." },
+  { texte:"Bienvenue chez les Ch'tis, ça vaut le déplacement.", film:"Bienvenue chez les Ch'tis", annee:2008, source:"Antoine Bailleul (Dany Boon)", anecdote:"Le film reste, encore aujourd'hui, l'un des plus gros succès du cinéma français en salles." },
+  { texte:"L'amour ne se commande pas.", film:"Le Fabuleux Destin d'Amélie Poulain", annee:2001, source:"Amélie Poulain (Audrey Tautou)", anecdote:"Jean-Pierre Jeunet a fait retoucher numériquement Paris pour effacer toute trace de saleté ou de graffiti." },
+  { texte:"Ici, c'est chacun pour sa gueule.", film:"La Haine", annee:1995, source:"Vinz (Vincent Cassel)", anecdote:"Le film a été tourné en noir et blanc pour accentuer le contraste social et l'urgence du propos." },
+  { texte:"Faut pas rêver, faut vivre.", film:"Le Grand Bleu", annee:1988, source:"Jacques Mayol (Jean-Marc Barr)", anecdote:"Luc Besson a dédié le film à son ami Jacques Mayol, véritable champion d'apnée qui a inspiré l'histoire." },
+  { texte:"Tu me parles ?", film:"Taxi Driver", annee:1976, source:"Travis Bickle (Robert De Niro)", anecdote:"Cette réplique culte a été entièrement improvisée par Robert De Niro devant la caméra." },
+  { texte:"Dis bonjour à mon petit ami.", film:"Scarface", annee:1983, source:"Tony Montana (Al Pacino)", anecdote:"Al Pacino a tourné la scène finale du film pendant près de deux semaines, un record pour l'époque." },
+  { texte:"Que la fête commence.", film:"Kaamelott", annee:2005, source:"Le Roi Arthur (Alexandre Astier)", anecdote:"Alexandre Astier a écrit, réalisé et interprété la quasi-totalité de la série à lui seul." },
+  { texte:"Je suis ton père.", film:"Star Wars : L'Empire contre-attaque", annee:1980, source:"Dark Vador (voix de James Earl Jones)", anecdote:"Même Mark Hamill, qui joue Luke Skywalker, ignorait ce twist avant le tournage de la scène." },
+  { texte:"On se retrouvera, si le destin le veut, sur le bateau de la vie.", film:"Intouchables", annee:2011, source:"Driss (Omar Sy)", anecdote:"L'histoire est inspirée de la véritable amitié entre Philippe Pozzo di Borgo et Abdel Sellou." },
+  { texte:"Toute grande histoire commence par une petite étincelle.", film:"Ratatouille", annee:2007, source:"Auguste Gusteau", anecdote:"Les animateurs de Pixar ont suivi un vrai cours de cuisine française pour rendre les scènes crédibles." },
+];
+
+/** Renvoie toujours la même citation pour un niveau donné : niveau 1 → la première, etc. */
+function citationPourNiveau(n){
+  const i = Math.max(0, (Number(n) || 1) - 1) % CITATIONS_CINEMA.length;
+  return CITATIONS_CINEMA[i];
+}
+
+/** Bloc HTML d'une citation, réutilisé pour l'annonce de niveau et la carte de progression. */
+function citationHTML(n){
+  const c = citationPourNiveau(n);
+  return `<div class="citationCine">
+    <p class="texte">« ${esc(c.texte)} »</p>
+    <p class="source">${esc(c.film)} <span class="annee">(${c.annee})</span> — ${esc(c.source)}</p>
+    <p class="anecdote">🎞️ ${esc(c.anecdote)}</p>
+  </div>`;
+}
+
 function majNiveau(n){
   if (!n) return;
   $("niveauNum").textContent = n.niveau;
@@ -1653,15 +1889,22 @@ function majNiveau(n){
   $("niveauJauge").style.width = `${Math.min(100, n.reste / n.requis * 100)}%`;
 }
 
-/** Annonce visuelle d'une montée de niveau. */
+/** Annonce visuelle d'une montée de niveau, avec une citation de cinéma en prime. */
 function annoncerNiveau(niveau){
   const el = document.createElement("div");
   el.className = "montee";
-  el.innerHTML = `<b>Niveau ${niveau}</b><span class="note">Bravo !</span>`;
+  el.innerHTML = `<b>Niveau ${niveau}</b><span class="note">Bravo !</span>${citationHTML(niveau)}`;
   document.body.append(el);
-  setTimeout(() => el.remove(), 2700);
+  setTimeout(() => el.remove(), 6000);
   if (typeof confettis === "function") confettis();
 }
+
+/** Affiche, dans la carte de progression, la citation associée à un niveau déjà franchi. */
+window.voirCitationNiveau = function(n){
+  const panneau = $("citationNiveauPanel");
+  panneau.classList.remove("hidden");
+  panneau.innerHTML = `<p class="tag" style="margin:0 0 6px">Niveau ${n}</p>${citationHTML(n)}`;
+};
 
 async function chargerQuetes(){
   const d = await fetch("/api/quetes").then(r => r.json()).catch(() => null);
@@ -1841,7 +2084,7 @@ async function ouvrirJoueur(id, pseudo, avatar, photoJoueur){
   $("popPhoto").innerHTML = f.photo
     ? `<div class="cadreFiche"><img src="${esc(f.photo)}" alt=""></div>`
     : `<div class="cadreFiche emoji">${f.avatar || "🎬"}</div>`;
-  $("popNom").textContent = f.pseudo;
+  $("popNom").innerHTML = `${esc(f.pseudo)} ${insigneFondateur(f)}`;
   $("popRole").innerHTML =
     `<span class="dot ${f.online ? "on" : ""}" style="display:inline-block;margin-right:6px"></span>` +
     (f.online ? "En ligne" : "Hors ligne") +
@@ -1857,11 +2100,19 @@ async function ouvrirJoueur(id, pseudo, avatar, photoJoueur){
       <b>${rang(f.rangGlobal)} · ${rang(f.rangSaison)}</b></div>`;
 
   const relation = f.relation;
-  $("popEtat").textContent = ETATS[relation] || "";
-  $("popActions").innerHTML = (ACTIONS_AMI[relation] || []).map(([a, libelle]) =>
+  $("popEtat").textContent = f.enPartie
+    ? `${ETATS[relation] || ""} En train de jouer${MODE_NAMES[f.modeSalon] ? ` (${MODE_NAMES[f.modeSalon]})` : ""}.`.trim()
+    : (ETATS[relation] || "");
+  const regarderBtn = f.enPartie
+    ? `<button data-act="regarder" style="background:#3DDC84;color:#0A2015">👁️ Regarder en direct</button>` : "";
+  $("popActions").innerHTML = regarderBtn + (ACTIONS_AMI[relation] || []).map(([a, libelle]) =>
     `<button class="${a === "bloquer" ? "ghost danger" : ""}" data-act="${a}">${libelle}</button>`).join("");
 
   $("popActions").querySelectorAll("[data-act]").forEach(b => b.onclick = async () => {
+    if (b.dataset.act === "regarder"){
+      $("popJoueur").classList.add("hidden");
+      return regarderAmi(id, f.pseudo);
+    }
     if (b.dataset.act === "message"){
       $("popJoueur").classList.add("hidden");
       return ouvrirConversation(id, f.pseudo, f.avatar, f.photo);
@@ -1895,7 +2146,8 @@ function ligneJoueur(j, boutons){
     <span class="dot ${j.online ? "on" : ""}"></span>
     <span class="nom" data-fiche="${esc(j.id)}" data-pseudo="${esc(j.pseudo)}"
       data-avatar="${j.avatar||"🎬"}" data-photo="${esc(j.photo||"")}"
-      style="cursor:pointer">${vignette(j)} ${esc(j.pseudo)}</span>
+      style="cursor:pointer">${vignette(j)} ${esc(j.pseudo)} ${insigneFondateur(j)}</span>
+    ${j.enPartie ? `<span class="pastille" style="background:#3DDC84;color:#0A2015" title="En train de jouer">🔴 en direct</span>` : ""}
     <div style="display:flex; gap:6px; flex-wrap:wrap;">
     ${boutons.map(([a, l]) =>
       `<button class="ghost" data-act="${a}" data-id="${esc(j.id)}" title="${a}" style="padding:6px 10px; font-size:15px;">${l}</button>`).join("")}
@@ -1965,6 +2217,83 @@ async function chercher(){
 $("btnChercher").onclick = chercher;
 $("quiChercher").addEventListener("keydown", e => { if (e.key === "Enter") chercher(); });
 
+/* ---------- Regarder la partie d'un ami en direct ---------- */
+let regardeAmi = null;   // {id, pseudo} de l'ami actuellement suivi, ou null
+
+function regarderAmi(amiId, pseudo){
+  if (!window.tempsReelDispo){
+    alert("Le direct nécessite la connexion temps réel, bloquée par votre navigateur.");
+    return;
+  }
+  socket.emit("room:regarder", {amiId}, res => {
+    if (!res?.ok){
+      const msgs = {
+        PAS_AMI: "Vous devez être amis pour regarder sa partie.",
+        PARTIE_INTROUVABLE: "Cette partie est déjà terminée.",
+      };
+      alert(msgs[res?.error] || "Impossible de regarder cette partie pour le moment.");
+      return;
+    }
+    regardeAmi = {id: amiId, pseudo};
+    $("regarderPseudo").textContent = pseudo;
+    $("regarderRevelation").classList.add("hidden");
+    $("regarderEtat").textContent = "";
+    renderScoresRegardes(res.state?.players || []);
+    if (res.manche) afficherMancheRegardee(res.manche);
+    else {
+      $("regarderRound").textContent = "";
+      $("regarderSynopsis").textContent = "En attente du lancement de la manche…";
+      $("regarderChoices").innerHTML = "";
+    }
+    show("regarder");
+  });
+}
+
+function quitterRegarder(){
+  socket.emit("room:arreterRegarder");
+  regardeAmi = null;
+  show("menu");
+}
+$("btnRegarderQuitter").onclick = quitterRegarder;
+
+function afficherMancheRegardee(m){
+  $("regarderRound").textContent = `Manche ${m.roundIndex + 1} / ${m.total}`;
+  $("regarderSynopsis").textContent = m.synopsis;
+  $("regarderChoices").innerHTML = (m.choices || [])
+    .map(c => `<button disabled>${esc(c.title)}</button>`).join("");
+  $("regarderRevelation").classList.add("hidden");
+}
+
+function renderScoresRegardes(joueurs){
+  const classes = [...joueurs].sort((a, b) => b.score - a.score);
+  $("regarderScores").innerHTML = classes.map(p =>
+    `<li>${vignette(p)} ${esc(p.pseudo)}<b>${p.score} pts</b></li>`).join("");
+}
+
+// Ces trois événements ne sont émis par le serveur qu'aux spectateurs :
+// ils ne peuvent jamais interférer avec l'écran de jeu d'une partie jouée.
+socket.on("regarder:manche", (m) => { if (regardeAmi) afficherMancheRegardee(m); });
+
+socket.on("regarder:fin", (r) => {
+  if (!regardeAmi) return;
+  $("regarderRevelation").classList.remove("hidden");
+  $("regarderReponse").textContent = r.answer || "";
+  $("regarderAnnee").textContent = r.year ? `Sorti en ${r.year}` : "";
+  const img = $("regarderPoster");
+  if (r.poster){ img.src = r.poster; img.alt = `Affiche de ${r.answer}`; img.classList.remove("hidden"); }
+  else img.classList.add("hidden");
+  renderScoresRegardes(r.scores || []);
+});
+
+socket.on("regarder:termine", (r) => {
+  if (!regardeAmi) return;
+  $("regarderEtat").textContent = r?.abandon
+    ? "La partie s'est arrêtée : plus aucun joueur n'est connecté."
+    : "Partie terminée.";
+  if (r?.scores || r?.ranking) renderScoresRegardes(r.ranking || r.scores || []);
+  regardeAmi = null;
+});
+
 /** Crée un salon depuis l'écran Amis, sans repasser par le menu. */
 let modeAmis = "duel";
 $("modeAmis").querySelectorAll("[data-m]").forEach(b => b.onclick = () => {
@@ -1978,8 +2307,9 @@ $("btnSalonAmis").onclick = () => {
     $("amisMsg").className = "feedback good";
     return chargerAmis();
   }
-  socket.emit("room:create", {mode: modeAmis}, res => {
-    if (!res?.ok) return ($("amisMsg").textContent = "Création impossible.");
+  socket.emit("room:create", {mode: modeAmis, kids: state.kidMode}, res => {
+    if (!res?.ok) return ($("amisMsg").textContent =
+      res?.error === "NO_MOVIES_KIDS" ? "Aucun film enfant disponible pour le moment." : "Création impossible.");
     state.code = res.code; state.mode = modeAmis; state.hostId = res.state.hostId;
     setChatVisible(true);
     $("amisMsg").textContent = `Salon ${res.code} créé. Invitez vos amis en ligne ci-dessous.`;
@@ -2179,7 +2509,7 @@ $("btnBoard").onclick = async () => {
     `<li data-joueur="${esc(u.id || "")}" data-pseudo="${esc(u.pseudo)}"
        data-avatar="${u.avatar||"🎬"}" data-photo="${esc(u.photo||"")}"
        style="cursor:pointer" title="Voir la fiche de ${esc(u.pseudo)}">
-      <span class="dot ${u.online ? "on" : ""}"></span>${vignette(u)} ${esc(u.pseudo)}` +
+      <span class="dot ${u.online ? "on" : ""}"></span>${vignette(u)} ${esc(u.pseudo)} ${insigneFondateur(u)}` +
     (u.role && u.role !== "joueur" ? `<span class="badge-role">${esc(u.role)}</span>` : "") +
     `<b>${u.totalScore} pts</b></li>`).join("");
 
@@ -2187,12 +2517,16 @@ $("btnBoard").onclick = async () => {
   $("globalRank").querySelectorAll("[data-joueur]").forEach(li => li.onclick = () =>
     ouvrirJoueur(li.dataset.joueur, li.dataset.pseudo, li.dataset.avatar, li.dataset.photo || null));
   $("boardEmpty").textContent = list.length
-    ? (typeClassement === "saison"
-        ? `${list.length} joueur${list.length>1?"s":""} en lice cette saison.`
-        : `${list.length} joueur${list.length>1?"s":""} · total cumulé depuis l'inscription.`)
-    : (typeClassement === "saison"
-        ? "Personne n'a encore joué de partie classée cette saison. À vous l'honneur."
-        : "Aucune partie terminée pour l'instant.");
+    ? (typeClassement === "global"
+        ? `${list.length} joueur${list.length>1?"s":""} · total cumulé depuis l'inscription.`
+        : typeClassement === "enfant"
+        ? `${list.length} joueur${list.length>1?"s":""} au classement enfant.`
+        : `${list.length} joueur${list.length>1?"s":""} en lice cette saison.`)
+    : (typeClassement === "global"
+        ? "Aucune partie terminée pour l'instant."
+        : typeClassement === "enfant"
+        ? "Aucun compte enfant n'a encore joué. À vous l'honneur."
+        : "Personne n'a encore joué de partie classée cette saison. À vous l'honneur.");
 };
 $("btnBoardBack").onclick = () => show("menu");
 
@@ -2605,12 +2939,14 @@ document.querySelectorAll(".mode").forEach(btn => btn.onclick = async () => {
 
   if (SANS_RESEAU.includes(mode)){
     const res = await fetch("/api/solo/start", {method:"POST",
-      headers:{"Content-Type":"application/json"}, body: JSON.stringify({mode})});
+      headers:{"Content-Type":"application/json"}, body: JSON.stringify({mode, kids: state.kidMode})});
     const m = res.ok ? await res.json() : null;
     if (!m){
       const err = await res.json().catch(() => ({}));
       $("joinError").textContent = err.error === "PLUS_DE_PARTIES"
         ? `Seau vide : vos ${err.partiesMax} parties classées du jour sont utilisées. Il se remplit dans ${Math.ceil((err.prochaineRecharge||0) / 3600000)} h.`
+        : err.error === "NO_MOVIES_KIDS"
+        ? "Aucun film enfant disponible pour le moment."
         : "Aucun film disponible pour ce niveau.";
       return;
     }
@@ -2622,9 +2958,10 @@ document.querySelectorAll(".mode").forEach(btn => btn.onclick = async () => {
   if (!window.tempsReelDispo)
     return ($("joinError").textContent = "Le multijoueur exige la connexion temps réel, bloquée par votre navigateur.");
 
-  socket.emit("room:create", {mode}, res => {
+  socket.emit("room:create", {mode, kids: state.kidMode}, res => {
     if (!res?.ok) return ($("joinError").textContent =
-      "Aucun film disponible pour ce niveau — choisissez-en un autre.");
+      res?.error === "NO_MOVIES_KIDS" ? "Aucun film enfant disponible pour le moment."
+      : "Aucun film disponible pour ce niveau — choisissez-en un autre.");
     state.code = res.code; state.mode = mode;
     setChatVisible(true);
     if (mode === "solo" || mode === "ranked") return; // démarre tout seul
@@ -2658,7 +2995,8 @@ $("btnJoin").onclick = () => {
       ROOM_NOT_FOUND:"Aucun salon avec ce code. Vérifiez les 4 lettres.",
       ROOM_FULL:"Ce salon est complet.",
       GAME_OVER:"Cette partie est terminée.",
-      GAME_ALREADY_STARTED:"La partie a déjà commencé."}[res?.error] || "Impossible de rejoindre.");
+      GAME_ALREADY_STARTED:"La partie a déjà commencé.",
+      ENFANT_MODE_ENFANT_UNIQUEMENT:"Un compte enfant ne peut rejoindre qu'un salon en mode enfant."}[res?.error] || "Impossible de rejoindre.");
     $("joinError").textContent = "";
     state.code = res.code; state.mode = res.state.mode;
     setChatVisible(true);
@@ -2681,7 +3019,7 @@ function renderLobby(s){
   $("lobbyPlayers").innerHTML = s.players.map(p =>
     `<li class="${p.team||""} ${p.online === false ? "off" : ""}" data-joueur="${esc(p.userId||"")}" data-pseudo="${esc(p.pseudo)}"
        data-avatar="${p.avatar||"🎬"}" data-photo="${p.photo||""}" style="cursor:pointer; ${p.online === false ? "opacity:0.5;" : ""}" title="${p.online === false ? "Déconnecté" : "Voir ce joueur"}">
-       <span class="dot ${p.online !== false ? "on" : ""}"></span>${vignette(p)} ${esc(p.pseudo)}</li>`).join("");
+       <span class="dot ${p.online !== false ? "on" : ""}"></span>${vignette(p)} ${esc(p.pseudo)} ${insigneFondateur(p)}</li>`).join("");
   $("lobbyPlayers").querySelectorAll("[data-joueur]").forEach(li => li.onclick = () =>
     ouvrirJoueur(li.dataset.joueur, li.dataset.pseudo, li.dataset.avatar, li.dataset.photo || null));
   $("teamPicker").classList.toggle("hidden", s.mode !== "teams");
@@ -2969,6 +3307,25 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
     </div>
 
     
+    
+    <!-- MODALE SUGGESTION -->
+    <div class="modal-overlay" id="suggestionModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>💡 Suggérer un film</h2>
+                <button class="close-btn" id="closeSuggestionBtn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <label for="suggTitre">Titre du film</label>
+                <input id="suggTitre" placeholder="Titre du film...">
+                <label for="suggComment" style="margin-top:10px">Commentaire (facultatif)</label>
+                <textarea id="suggComment" rows="3" placeholder="Pourquoi ce film serait bien ?"></textarea>
+                <div class="row"><button id="btnSendSugg">Envoyer la suggestion</button></div>
+                <p class="feedback" id="suggFeedback"></p>
+            </div>
+        </div>
+    </div>
+
     <!-- MODALE PROGRESSION -->
     <div class="modal-overlay" id="progressionModal">
         <div class="modal-content" style="max-height: 85vh; display: flex; flex-direction: column;">
@@ -2983,6 +3340,8 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
                 <div id="progressionMap" class="progression-map">
                     <p class='note' style='text-align:center; margin-top:20px;'>Génération de la carte...</p>
                 </div>
+                <p class="note" style="text-align:center;margin:6px 0 0">🎬 Cliquez sur un niveau franchi pour revoir sa citation de cinéma.</p>
+                <div id="citationNiveauPanel" class="hidden"></div>
             </div>
         </div>
     </div>
@@ -3283,9 +3642,11 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
                     }
                     if (isFog && !isBonus) content = "☁️";
                     
-                    const clickAttr = claimable ? `onclick="claimBonus(${i})"` : "";
+                    const clickAttr = claimable
+                        ? `onclick="claimBonus(${i})"`
+                        : (isDone || isCurrent) ? `onclick="voirCitationNiveau(${i})" style="cursor:pointer"` : "";
                     const line = i > 1 ? `<div class="progression-line ${isDone || isCurrent ? 'done' : ''}"></div>` : "";
-                    
+
                     html += `
                     <div style="display:flex; flex-direction:column; align-items:center;">
                         ${line}
@@ -3294,15 +3655,18 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
                         </div>
                     </div>`;
                 }
-                
+
                 document.getElementById("progressionMap").innerHTML = html;
-                
+
                 // Animate scrolling to the current level
                 setTimeout(() => {
                     const el = document.getElementById(`step-${currentLevel}`);
                     if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
                 }, 150);
-                
+
+                // La citation du niveau en cours s'affiche par défaut.
+                if (currentLevel >= 1 && typeof voirCitationNiveau === "function") voirCitationNiveau(currentLevel);
+
             } catch(e) {
                 document.getElementById("progressionMap").innerHTML = "<p class='note' style='color:var(--ticket)'>Erreur de chargement de la carte.</p>";
             }
