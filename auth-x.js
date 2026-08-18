@@ -127,6 +127,27 @@ export function marquerRoueGratuiteUtilisee(userId, jour) {
   saveUsers();
 }
 
+const MAX_TIRS_PAYANTS_ROUE = 10;
+
+/** Nombre de tours payants déjà effectués aujourd'hui (remis à zéro à chaque nouvelle journée de roue). */
+export function roueTirsPayantsAujourdhui(userId, jour) {
+  const u = users[userId];
+  if (!u) return 0;
+  return u.roueJourPayant === jour ? (u.roueTirsPayants || 0) : 0;
+}
+/** Reste-t-il un tour payant disponible aujourd'hui (max 10/jour) ? */
+export function roueTirPayantDisponible(userId, jour) {
+  return roueTirsPayantsAujourdhui(userId, jour) < MAX_TIRS_PAYANTS_ROUE;
+}
+export function marquerTirPayantRoueUtilise(userId, jour) {
+  const u = users[userId];
+  if (!u) return;
+  if (u.roueJourPayant !== jour) { u.roueJourPayant = jour; u.roueTirsPayants = 0; }
+  u.roueTirsPayants = (u.roueTirsPayants || 0) + 1;
+  saveUsers();
+}
+export const ROUE_MAX_TIRS_PAYANTS = MAX_TIRS_PAYANTS_ROUE;
+
 /** Présence : un joueur peut avoir plusieurs onglets, on compte les connexions. */
 export function marquerEnLigne(userId) {
   connectes.set(userId, (connectes.get(userId) || 0) + 1);

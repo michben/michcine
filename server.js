@@ -30,7 +30,8 @@ import { mountAuth, userFromCookie, addRankedPoints,
          verifierCode, rattacherParrain, infoParrainage, verifierCodeParrain,
          parrainageManquant, parrainageObligatoire, genererCodeAdmin,
          creerCompteAdmin, sansMotDePasse,
-         genererCodeParrainGagne, roueGratuiteDisponible, marquerRoueGratuiteUtilisee } from "./auth-x.js";
+         genererCodeParrainGagne, roueGratuiteDisponible, marquerRoueGratuiteUtilisee,
+         roueTirPayantDisponible, marquerTirPayantRoueUtilise, ROUE_MAX_TIRS_PAYANTS } from "./auth-x.js";
 
 const app = express();
 app.use(express.json({ limit: '10mb' })); // Limite augmentée pour l'upload d'images
@@ -234,6 +235,40 @@ const CITATIONS_DEFAUT = [
 const ROUE_FILE = new URL("./roue.json", import.meta.url);
 let roue = null;   // { jour, lots: [...restants], historique: [...derniers tirages] }
 const saveRoue = () => sauver("roue", roue, ROUE_FILE);
+
+/* Gain tiré mais pas encore réclamé par le joueur (un seul à la fois, en attente du bouton « Réclamer »). */
+const GAINS_ROUE_FILE = new URL("./roue-gains.json", import.meta.url);
+let gainsEnAttente = {};   // userId -> { type, label, valeur?, gratuit, date }
+const saveGainsRoue = () => sauver("roueGains", gainsEnAttente, GAINS_ROUE_FILE);
+
+/* File des demandes de code VIP : le joueur réclame, l'administrateur génère et envoie manuellement. */
+const DEMANDES_VIP_FILE = new URL("./roue-vip.json", import.meta.url);
+let demandesVip = [];   // { id, userId, pseudo, avatar, photo, date, statut: "attente"|"envoye", code, envoyeLe }
+const saveDemandesVip = () => sauver("roueVip", demandesVip, DEMANDES_VIP_FILE);
+
+/** Emoji représentatif d'un lot, pour l'afficher dans la liste des lots de la roue. */
+function emojiLot(l) {
+  if (l.type === "vip") return "👑";
+  if ((l.valeur || 0) >= 500) return "💎";
+  if ((l.valeur || 0) >= 100) return "⭐";
+  return "🎁";
+}
+
+/** Catalogue complet des lots de la roue (toujours les mêmes catégories), avec le stock restant de chacune. */
+function catalogueRoue(lots) {
+  const categories = [];
+  const vus = new Set();
+  for (const l of stockRoueDefaut()) {
+    const cle = `${l.type}:${l.valeur || "vip"}`;
+    if (vus.has(cle)) continue;
+    vus.add(cle);
+    categories.push({ type: l.type, label: l.label, valeur: l.valeur || null, emoji: emojiLot(l) });
+  }
+  return categories.map((c) => ({
+    ...c,
+    restants: lots.filter((l) => l.type === c.type && (l.valeur || null) === c.valeur).length,
+  }));
+}
 
 /** Stock d'un plein réapprovisionnement : beaucoup de petits lots, peu de gros. */
 function stockRoueDefaut() {
@@ -595,8 +630,13 @@ app.post("/api/admin/comptes", requireAdmin, (req, res) => {
 });
 
 app.put("/api/admin/users/:id", requireAdmin, (req, res) => {
+  const avantCredits = getCredits(req.params.id), avantPoints = getPoints(req.params.id);
   const user = adminUpdateUser(req.params.id, req.body);
   if (!user) return res.status(404).json({ error: "NOT_FOUND" });
+  const deltaCredits = getCredits(req.params.id) - avantCredits;
+  const deltaPoints = getPoints(req.params.id) - avantPoints;
+  if (deltaCredits) enregistrerTransaction(req.params.id, deltaCredits, "credits", "Ajustement par l'administrateur");
+  if (deltaPoints) enregistrerTransaction(req.params.id, deltaPoints, "points", "Ajustement par l'administrateur");
   res.json(user);
 });
 
@@ -848,7 +888,9 @@ function demarrerManche(p) {
   p.paidHints = [];
   p.repondu = false;
   p.pauseA = null;
-  return vueManche(p);
+  const vue = vueManche(p);
+  diffuserSpectateursSolo(p, "regarder:manche", vue);
+  return vue;
 }
 
 app.post("/api/solo/start", (req, res) => {
@@ -920,6 +962,8 @@ app.post("/api/solo/hint", (req, res) => {
   if (!isFree) {
     if (!spendCredits(user.id, CONFIG.HINT_CREDITS[type]))
       return res.status(400).json({ error: "NO_CREDITS" });
+    enregistrerTransaction(user.id, -CONFIG.HINT_CREDITS[type], "credits",
+      `Indice « ${REGLAGES.indices?.[type]?.libelle || type} »`);
     p.paidHints.push(type);
   } else {
     if (!p.allHintsFree) p.freeHintsRemaining--;
@@ -955,6 +999,12 @@ app.post("/api/solo/answer", (req, res) => {
     p.coeurs = Math.max(0, p.coeurs - 1);
   }
 
+  diffuserSpectateursSolo(p, "regarder:fin", {
+    answer: film.title, poster: film.poster, year: film.year,
+    scores: [{ pseudo: user.pseudo, avatar: user.avatar, photo: user.photo, score: p.score }],
+    mode: p.mode,
+  });
+
   res.json({
     ok: true, correct: juste, points, movieId: film.id,
     answer: film.title, poster: film.poster, year: film.year, total: p.score,
@@ -979,6 +1029,9 @@ app.post("/api/solo/next", (req, res) => {
   if (!fini) return res.json({ ok: true, ...demarrerManche(p) });
 
   // fin de partie : on crédite une seule fois, puis on oublie la partie
+  diffuserSpectateursSolo(p, "regarder:termine", {
+    ranking: [{ pseudo: user.pseudo, avatar: user.avatar, photo: user.photo, score: p.score }],
+  });
   parties.delete(user.id);
   if (p.mode === "ranked") {
     addRankedPoints(user.id, p.score);
@@ -986,6 +1039,8 @@ app.post("/api/solo/next", (req, res) => {
   }
   grantPoints(user.id, p.score);
   grantCredits(user.id, REGLAGES.creditsParPartie);
+  if (p.score) enregistrerTransaction(user.id, p.score, "points", "Partie terminée");
+  if (REGLAGES.creditsParPartie) enregistrerTransaction(user.id, REGLAGES.creditsParPartie, "credits", "Partie terminée");
   // bilan : expérience, quêtes avancées, niveau atteint
   const bonnes = p.bonnes || 0;
   const xpGagnee = REGLAGES.xpParPartie + bonnes * REGLAGES.xpParBonneReponse;
@@ -1163,6 +1218,7 @@ app.post("/api/progression/claim", (req, res) => {
     
     const reward = getBonusReward(lvl);
     grantCredits(user.id, reward.credits);
+    if (reward.credits) enregistrerTransaction(user.id, reward.credits, "credits", `Bonus du niveau ${lvl}`);
     const nv = ajouterXp(user.id, reward.xp, { base: REGLAGES.xpBase, croissance: REGLAGES.xpCroissance, plafond: REGLAGES.niveauMax });
     
     res.json({ ok: true, reward, credits: getCredits(user.id), niveau: nv });
@@ -1244,21 +1300,58 @@ app.delete("/api/admin/citations/:id", requireAdmin, (req, res) => {
     res.json({ ok: true });
 });
 
+/* ------------------------------------------------------------------ */
+/* Porte-monnaie : historique horodaté des transactions (tickets et    */
+/* points), avec la provenance de chaque mouvement.                    */
+/* ------------------------------------------------------------------ */
+
+const WALLET_FILE = new URL("./wallet.json", import.meta.url);
+let walletHistorique = {};   // userId -> [{date, montant, devise, motif}], le plus récent en dernier
+const saveWallet = () => sauver("wallet", walletHistorique, WALLET_FILE);
+
+/** Ajoute une ligne au porte-monnaie d'un joueur. montant > 0 = crédit, < 0 = débit. */
+function enregistrerTransaction(userId, montant, devise, motif) {
+  if (!userId || !montant) return;
+  const liste = walletHistorique[userId] || (walletHistorique[userId] = []);
+  liste.push({ date: new Date().toISOString(), montant, devise, motif });
+  if (liste.length > 80) liste.splice(0, liste.length - 80);
+  saveWallet();
+}
+
+app.get("/api/wallet/historique", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (!user) return;
+  const transactions = (walletHistorique[user.id] || []).slice(-40).reverse();
+  res.json({ transactions, credits: getCredits(user.id), points: getPoints(user.id) });
+});
+
 /* ---------- roue quotidienne ---------- */
 
 const COUT_TOUR_ROUE = 100;
+
+/** La dernière demande de code VIP d'un joueur (attente ou déjà envoyée), la plus récente en premier. */
+function demandeVipDuJoueur(userId) {
+  const mine = demandesVip.filter((d) => d.userId === userId);
+  return mine.length ? mine[mine.length - 1] : null;
+}
 
 app.get("/api/roue", (req, res) => {
     const user = exigeCompte(req, res);
     if (!user) return;
     assurerRoueDuJour();
+    const demande = demandeVipDuJoueur(user.id);
     res.json({
         jour: roue.jour,
         lotsRestants: roue.lots.length,
+        catalogue: catalogueRoue(roue.lots),
         gratuitDisponible: roueGratuiteDisponible(user.id, roue.jour),
+        tirPayantDisponible: roueTirPayantDisponible(user.id, roue.jour),
+        tirsPayantsMax: ROUE_MAX_TIRS_PAYANTS,
         coutTour: COUT_TOUR_ROUE,
         credits: getCredits(user.id),
         derniersTirages: roue.historique.slice(-8).reverse(),
+        gainEnAttente: gainsEnAttente[user.id] || null,
+        demandeVip: demande ? { statut: demande.statut, code: demande.statut === "envoye" ? demande.code : null } : null,
     });
 });
 
@@ -1267,16 +1360,24 @@ app.post("/api/roue/tourner", (req, res) => {
     if (!user) return;
     assurerRoueDuJour();
 
+    if (gainsEnAttente[user.id]) return res.status(409).json({ error: "GAIN_EN_ATTENTE" });
+
     const gratuit = roueGratuiteDisponible(user.id, roue.jour);
     if (!gratuit) {
+        if (!roueTirPayantDisponible(user.id, roue.jour))
+            return res.status(429).json({ error: "LIMITE_TIRS_PAYANTS", max: ROUE_MAX_TIRS_PAYANTS });
         const ok = spendCredits(user.id, COUT_TOUR_ROUE);
         if (!ok) return res.status(400).json({ error: "CREDITS_INSUFFISANTS" });
+        enregistrerTransaction(user.id, -COUT_TOUR_ROUE, "credits", "Tour de roue");
     }
 
     if (roue.lots.length === 0) {
         // Filet de sécurité : assurerRoueDuJour() vient tout juste de réapprovisionner,
         // ce cas ne devrait jamais se produire — on rembourse par précaution.
-        if (!gratuit) grantCredits(user.id, COUT_TOUR_ROUE);
+        if (!gratuit) {
+            grantCredits(user.id, COUT_TOUR_ROUE);
+            enregistrerTransaction(user.id, COUT_TOUR_ROUE, "credits", "Remboursement — roue vide");
+        }
         return res.status(409).json({ error: "ROUE_VIDE" });
     }
 
@@ -1284,16 +1385,14 @@ app.post("/api/roue/tourner", (req, res) => {
     const [lot] = roue.lots.splice(index, 1);
 
     const resultat = { type: lot.type, label: lot.label };
-    if (lot.type === "credits") {
-        grantCredits(user.id, lot.valeur);
-        resultat.valeur = lot.valeur;
-    } else if (lot.type === "vip") {
-        resultat.code = genererCodeParrainGagne(user.id);
-    }
+    if (lot.type === "credits") resultat.valeur = lot.valeur;
 
-    roue.historique.push({ pseudo: user.pseudo, lot: lot.label, gratuit, date: new Date().toISOString() });
-    if (roue.historique.length > 200) roue.historique = roue.historique.slice(-200);
+    // Le gain n'est pas crédité tout de suite : le joueur doit le réclamer via un bouton.
+    gainsEnAttente[user.id] = { ...resultat, gratuit, date: new Date().toISOString() };
+    saveGainsRoue();
+
     if (gratuit) marquerRoueGratuiteUtilisee(user.id, roue.jour);
+    else marquerTirPayantRoueUtilise(user.id, roue.jour);
     saveRoue();
 
     // Le stock vient peut-être de s'épuiser : on prépare déjà la suite pour le joueur suivant.
@@ -1306,11 +1405,43 @@ app.post("/api/roue/tourner", (req, res) => {
     });
 });
 
+app.post("/api/roue/reclamer", (req, res) => {
+    const user = exigeCompte(req, res);
+    if (!user) return;
+
+    const gain = gainsEnAttente[user.id];
+    if (!gain) return res.status(400).json({ error: "AUCUN_GAIN" });
+
+    delete gainsEnAttente[user.id];
+    saveGainsRoue();
+
+    roue.historique.push({ pseudo: user.pseudo, lot: gain.label, gratuit: gain.gratuit, date: new Date().toISOString() });
+    if (roue.historique.length > 200) roue.historique = roue.historique.slice(-200);
+    saveRoue();
+
+    if (gain.type === "credits") {
+        grantCredits(user.id, gain.valeur);
+        enregistrerTransaction(user.id, gain.valeur, "credits", gain.gratuit ? "Roue du jour (tour gratuit)" : "Roue du jour");
+        return res.json({ ok: true, type: "credits", valeur: gain.valeur, credits: getCredits(user.id) });
+    }
+
+    // Code VIP : pas de génération automatique — une demande part vers l'administrateur.
+    const demande = {
+        id: demandesVip.length ? Math.max(...demandesVip.map((d) => d.id)) + 1 : 1,
+        userId: user.id, pseudo: user.pseudo, avatar: user.avatar, photo: user.photo || null,
+        date: new Date().toISOString(), statut: "attente", code: null, envoyeLe: null,
+    };
+    demandesVip.push(demande);
+    saveDemandesVip();
+    res.json({ ok: true, type: "vip", enAttente: true });
+});
+
 app.get("/api/admin/roue", requireAdmin, (req, res) => {
     assurerRoueDuJour();
     res.json({
         jour: roue.jour,
         lots: roue.lots,
+        catalogue: catalogueRoue(roue.lots),
         historique: roue.historique.slice(-50).reverse(),
     });
 });
@@ -1319,6 +1450,24 @@ app.post("/api/admin/roue/reapprovisionner", requireAdmin, (req, res) => {
     roue = { jour: journeeRoue(), lots: melangerLots(stockRoueDefaut()), historique: roue?.historique || [] };
     saveRoue();
     res.json({ ok: true, lotsRestants: roue.lots.length });
+});
+
+app.get("/api/admin/roue/vip", requireAdmin, (req, res) => {
+    res.json({ demandes: [...demandesVip].reverse().slice(0, 100) });
+});
+
+app.post("/api/admin/roue/vip/:id/envoyer", requireAdmin, (req, res) => {
+    const demande = demandesVip.find((d) => d.id === Number(req.params.id));
+    if (!demande) return res.status(404).json({ error: "INTROUVABLE" });
+    if (demande.statut === "envoye") return res.json({ ok: true, dejaEnvoye: true, code: demande.code });
+
+    demande.code = genererCodeParrainGagne(demande.userId);
+    demande.statut = "envoye";
+    demande.envoyeLe = new Date().toISOString();
+    saveDemandesVip();
+
+    notifier(demande.userId, { type: "vip_code", de: "L'administrateur", avatar: "👑", code: demande.code });
+    res.json({ ok: true, code: demande.code });
 });
 
 /* ---------- amis ---------- */
@@ -1338,10 +1487,7 @@ app.get("/api/friends", (req, res) => {
   const data = relations(user.id);
   // Indique quels amis sont en train de jouer, pour proposer de les regarder en direct.
   if (Array.isArray(data.amis)) {
-    data.amis = data.amis.map((a) => {
-      const room = salonDuJoueur(a.id);
-      return { ...a, enPartie: Boolean(room), modeSalon: room ? room.mode : null };
-    });
+    data.amis = data.amis.map((a) => ({ ...a, ...joueurEnPartie(a.id) }));
   }
   res.json(data);
 });
@@ -1356,8 +1502,7 @@ app.get("/api/players/search", (req, res) => {
       // ici aussi (et pas seulement depuis l'onglet Amis) : sinon le bouton
       // n'apparaît jamais si on retrouve son ami via la recherche.
       if (relation !== "ami") return { ...j, relation };
-      const room = salonDuJoueur(j.id);
-      return { ...j, relation, enPartie: Boolean(room), modeSalon: room ? room.mode : null };
+      return { ...j, relation, ...joueurEnPartie(j.id) };
     });
   res.json(trouves);
 });
@@ -1369,9 +1514,7 @@ app.get("/api/players/:id/fiche", (req, res) => {
   if (!fiche) return res.status(404).json({ error: "INTROUVABLE" });
   // Ne proposer « regarder en direct » qu'entre amis, et seulement si une partie est en cours.
   if (fiche.relation === "ami") {
-    const room = salonDuJoueur(fiche.id);
-    fiche.enPartie = Boolean(room);
-    fiche.modeSalon = room ? room.mode : null;
+    Object.assign(fiche, joueurEnPartie(fiche.id));
   }
   res.json(fiche);
 });
@@ -1468,6 +1611,7 @@ app.post("/api/quetes/:cle/reclamer", (req, res) => {
   p.reclamees.push(cle);
   saveProgression();
   grantCredits(user.id, quete.tickets);
+  if (quete.tickets) enregistrerTransaction(user.id, quete.tickets, "credits", `Quête « ${quete.titre} »`);
   const niveau = ajouterXp(user.id, quete.xp, reglagesNiveau());
 
   res.json({ ok: true, tickets: quete.tickets, xp: quete.xp,
@@ -1760,6 +1904,25 @@ app.get("/api/config", (_req, res) => res.json({
  */
 const donsRecents = new Map();   // userId -> [{ montant, at }]
 
+/** Total déjà donné par ce joueur sur les dernières 24h, et ce qu'il lui reste. */
+function statutDonsJour(userId) {
+  const limite = Date.now() - 24 * 60 * 60 * 1000;
+  const recents = (donsRecents.get(userId) || []).filter((d) => d.at > limite);
+  const dejaDonne = recents.reduce((t, d) => t + d.montant, 0);
+  return {
+    max: REGLAGES.transfertMax,
+    plafondJour: REGLAGES.transfertParJour,
+    dejaDonne,
+    restant: Math.max(0, REGLAGES.transfertParJour - dejaDonne),
+  };
+}
+
+app.get("/api/points/dons-statut", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (!user) return;
+  res.json(statutDonsJour(user.id));
+});
+
 app.post("/api/points/donner", (req, res) => {
   const user = exigeCompte(req, res);
   if (!user) return;
@@ -1772,23 +1935,26 @@ app.post("/api/points/donner", (req, res) => {
   if (statutRelation(user.id, cible) !== "ami")
     return res.status(403).json({ error: "PAS_AMI" });
 
-  const limite = Date.now() - 24 * 60 * 60 * 1000;
-  const recents = (donsRecents.get(user.id) || []).filter((d) => d.at > limite);
-  const dejaDonne = recents.reduce((t, d) => t + d.montant, 0);
+  const { dejaDonne, restant } = statutDonsJour(user.id);
   if (dejaDonne + montant > REGLAGES.transfertParJour)
-    return res.status(400).json({ error: "PLAFOND_JOUR",
-                                  restant: Math.max(0, REGLAGES.transfertParJour - dejaDonne) });
+    return res.status(400).json({ error: "PLAFOND_JOUR", restant });
 
   if (getPoints(user.id) < montant) return res.status(400).json({ error: "SOLDE_INSUFFISANT" });
 
   retirerPoints(user.id, montant);
   grantPointsDon(cible, montant);
+  const limite = Date.now() - 24 * 60 * 60 * 1000;
+  const recents = (donsRecents.get(user.id) || []).filter((d) => d.at > limite);
   donsRecents.set(user.id, [...recents, { montant, at: Date.now() }]);
+
+  const cibleFiche = fichePublique(cible, user.id);
+  enregistrerTransaction(user.id, -montant, "points", `Don envoyé à ${cibleFiche?.pseudo || "un ami"}`);
+  enregistrerTransaction(cible, montant, "points", `Don reçu de ${user.pseudo}`);
 
   notifier(cible, { type: "don", de: user.pseudo, avatar: user.avatar,
                     photo: user.photo || null, montant });
 
-  res.json({ ok: true, points: getPoints(user.id), montant });
+  res.json({ ok: true, points: getPoints(user.id), montant, restant: statutDonsJour(user.id).restant });
 });
 
 /** Espace échange : points gagnés → tickets bonus. */
@@ -1798,6 +1964,8 @@ app.post("/api/exchange", (req, res) => {
 
   const result = exchangePoints(user.id, req.body.points, CONFIG.POINTS_PAR_TICKET);
   if (result.error) return res.status(400).json(result);
+  if (result.consommes) enregistrerTransaction(user.id, -result.consommes, "points", "Échange contre des tickets");
+  if (result.tickets) enregistrerTransaction(user.id, result.tickets, "credits", "Échange de points");
   res.json(result);
 });
 
@@ -1991,8 +2159,11 @@ function masquerReponse(synopsis, film) {
 }
 
 /** Motif du titre : un tiret par lettre, espaces et ponctuation conservés. */
+/** Indice « Nombre de lettres » : le masque du titre, plus le chiffre exact. */
 function titlePattern(title) {
-  return [...title].map((c) => (/[\p{L}\p{N}]/u.test(c) ? "–" : c)).join("");
+  const masque = [...title].map((c) => (/[\p{L}\p{N}]/u.test(c) ? "–" : c)).join("");
+  const nbLettres = [...title].filter((c) => /[\p{L}\p{N}]/u.test(c)).length;
+  return `${masque}  (${nbLettres} lettre${nbLettres > 1 ? "s" : ""})`;
 }
 
 /**
@@ -2095,6 +2266,21 @@ function diffuserSpectateurs(room, event, payload) {
   for (const socketId of room.spectateurs.keys()) io.to(socketId).emit(event, payload);
 }
 
+/** Même mécanisme que diffuserSpectateurs(), mais pour une partie solo/classée (sans salon). */
+function diffuserSpectateursSolo(p, event, payload) {
+  if (!p.spectateurs || !p.spectateurs.size) return;
+  for (const socketId of p.spectateurs.keys()) io.to(socketId).emit(event, payload);
+}
+
+/** Un ami est-il en train de jouer, en salon comme en solo/classée ? */
+function joueurEnPartie(userId) {
+  const room = salonDuJoueur(userId);
+  if (room) return { enPartie: true, modeSalon: room.mode };
+  const p = parties.get(userId);
+  if (p) return { enPartie: true, modeSalon: p.mode };
+  return { enPartie: false, modeSalon: null };
+}
+
 /* ------------------------------------------------------------------ */
 /* Boucle de jeu                                                       */
 /* ------------------------------------------------------------------ */
@@ -2187,6 +2373,8 @@ function endGame(room) {
     if (room.mode === "ranked") addRankedPoints(p.userId, p.score); // classement permanent
     grantPoints(p.userId, p.score);                                  // cagnotte échangeable
     grantCredits(p.userId, REGLAGES.creditsParPartie);
+    if (p.score) enregistrerTransaction(p.userId, p.score, "points", "Partie terminée");
+    if (REGLAGES.creditsParPartie) enregistrerTransaction(p.userId, REGLAGES.creditsParPartie, "credits", "Partie terminée");
 
     const vainqueur = ranking[0]?.id === p.id;
     const xp = REGLAGES.xpParPartie + (vainqueur ? REGLAGES.xpParVictoire : 0);
@@ -2369,6 +2557,8 @@ io.on("connection", (socket) => {
     if (!isFree) {
       if (!spendCredits(player.userId, CONFIG.HINT_CREDITS[type]))
         return cb?.({ ok: false, error: "NO_CREDITS" });
+      enregistrerTransaction(player.userId, -CONFIG.HINT_CREDITS[type], "credits",
+        `Indice « ${REGLAGES.indices?.[type]?.libelle || type} »`);
       player.paidHints.push(type);
     } else {
       if (!player.allHintsFree) player.freeHintsRemaining--;
@@ -2552,26 +2742,53 @@ io.on("connection", (socket) => {
   socket.on("room:regarder", ({ amiId }, cb) => {
     if (!amiId || statutRelation(user.id, amiId) !== "ami")
       return cb?.({ ok: false, error: "PAS_AMI" });
-    const room = salonDuJoueur(amiId);
-    if (!room) return cb?.({ ok: false, error: "PARTIE_INTROUVABLE" });
 
     arreterRegarder(socket);   // ne regarde qu'une seule partie à la fois
-    room.spectateurs = room.spectateurs || new Map();
-    room.spectateurs.set(socket.id, user.id);
-    socket.data.regarde = room.code;
 
-    const film = room.currentMovie;
-    const manche = room.status === "playing" && film ? {
-      roundIndex: room.roundIndex,
-      total: room.playlist.length,
-      synopsis: masquerReponse(film.synopsis, film),
-      duration: CONFIG.ROUND_DURATION_MS,
-      choices: room.choices,
-      posterStyle: styleAffiche(film),
-      vitesseSynopsis: REGLAGES.vitesseSynopsis,
-    } : null;
+    const room = salonDuJoueur(amiId);
+    if (room) {
+      room.spectateurs = room.spectateurs || new Map();
+      room.spectateurs.set(socket.id, user.id);
+      socket.data.regarde = room.code;
 
-    cb?.({ ok: true, code: room.code, state: publicState(room), manche });
+      const film = room.currentMovie;
+      const manche = room.status === "playing" && film ? {
+        roundIndex: room.roundIndex,
+        total: room.playlist.length,
+        synopsis: masquerReponse(film.synopsis, film),
+        duration: CONFIG.ROUND_DURATION_MS,
+        choices: room.choices,
+        posterStyle: styleAffiche(film),
+        vitesseSynopsis: REGLAGES.vitesseSynopsis,
+      } : null;
+
+      return cb?.({ ok: true, code: room.code, state: publicState(room), manche });
+    }
+
+    // Repli : la partie de l'ami n'est pas un salon multijoueur, c'est peut-être une partie solo/classée.
+    const p = parties.get(amiId);
+    if (!p) return cb?.({ ok: false, error: "PARTIE_INTROUVABLE" });
+
+    const fiche = fichePublique(amiId, user.id);
+    p.spectateurs = p.spectateurs || new Map();
+    p.spectateurs.set(socket.id, user.id);
+    socket.data.regardeSolo = amiId;
+
+    const manche = p.repondu ? null : vueManche(p);
+    cb?.({
+      ok: true,
+      solo: true,
+      mode: p.mode,
+      state: {
+        players: [{
+          pseudo: fiche?.pseudo || "Joueur",
+          avatar: fiche?.avatar || null,
+          photo: fiche?.photo || null,
+          score: p.score || 0,
+        }],
+      },
+      manche,
+    });
   });
 
   socket.on("room:arreterRegarder", () => arreterRegarder(socket));
@@ -2579,10 +2796,15 @@ io.on("connection", (socket) => {
   /** Quitte le suivi en direct d'une partie, sans affecter les joueurs. */
   function arreterRegarder(socket) {
     const code = socket.data.regarde;
-    if (!code) return;
-    const room = rooms.get(code);
-    room?.spectateurs?.delete(socket.id);
-    delete socket.data.regarde;
+    if (code) {
+      rooms.get(code)?.spectateurs?.delete(socket.id);
+      delete socket.data.regarde;
+    }
+    const soloId = socket.data.regardeSolo;
+    if (soloId) {
+      parties.get(soloId)?.spectateurs?.delete(socket.id);
+      delete socket.data.regardeSolo;
+    }
   }
 
   socket.on("room:leave", () => { leaveAllRooms(socket); arreterRegarder(socket); });
@@ -2670,6 +2892,12 @@ citations = await charger("citations", CITATIONS_FILE, CITATIONS_DEFAUT);
 if (!Array.isArray(citations) || !citations.length) citations = CITATIONS_DEFAUT;
 roue = await charger("roue", ROUE_FILE, null);
 assurerRoueDuJour();
+gainsEnAttente = await charger("roueGains", GAINS_ROUE_FILE, {});
+if (!gainsEnAttente || typeof gainsEnAttente !== "object") gainsEnAttente = {};
+demandesVip = await charger("roueVip", DEMANDES_VIP_FILE, []);
+if (!Array.isArray(demandesVip)) demandesVip = [];
+walletHistorique = await charger("wallet", WALLET_FILE, {});
+if (!walletHistorique || typeof walletHistorique !== "object") walletHistorique = {};
 REGLAGES = { ...structuredClone(REGLAGES_DEFAUT), ...(await charger("reglages", null, {})) };
 if (!empreinteAdmin)
   console.warn("⚠️  Mot de passe d'administration par défaut : changez-le depuis /admin.html");
