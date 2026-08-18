@@ -1,1 +1,1119 @@
-<h1>Admin</h1>
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<link rel="icon" href="/api/favicon">
+<link rel="apple-touch-icon" href="/api/favicon">
+<meta name="theme-color" content="#0A0C16">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MichBen — Catalogue de films</title>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{--ink:#0A0C16;--velvet:#151A2E;--card:#1C2238;--beam:#F5B942;--ticket:#E4586E;--chalk:#EDE8DC;--muted:#7C819B}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--ink);color:var(--chalk);font-family:'Space Grotesk',system-ui,sans-serif}
+  .wrap{max-width:760px;margin:0 auto;padding:24px 18px 60px}
+  h1{font-family:'Anton',sans-serif;text-transform:uppercase;letter-spacing:.04em;font-size:clamp(24px,6vw,34px);margin:0 0 4px}
+  h1 em{font-style:normal;color:var(--beam)}
+  .tag{font-size:11px;letter-spacing:.26em;text-transform:uppercase;color:var(--muted);margin:0 0 14px}
+  .card{background:var(--velvet);border:1px solid rgba(237,232,220,.09);border-radius:14px;padding:20px;margin-top:16px}
+  label{display:block;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin:14px 0 6px}
+  select{width:100%;background:var(--card);border:1px solid rgba(237,232,220,.14);color:var(--chalk);
+    border-radius:10px;padding:12px 13px;font:inherit;font-size:16px}
+  .filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+  .filters button{flex:1 1 auto;background:transparent;color:var(--muted);border:1px solid rgba(237,232,220,.16);
+    font-weight:500;font-size:13px;padding:9px 10px}
+  .filters button[aria-pressed="true"]{background:var(--beam);color:#161207;font-weight:700;border-color:var(--beam)}
+  .item.off{opacity:.4}
+  .lvl{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);
+    border:1px solid rgba(237,232,220,.2);border-radius:999px;padding:2px 8px;margin-left:6px}
+  input[type="range"]{width:100%;accent-color:var(--beam);padding:0}
+  input[type="checkbox"]{accent-color:var(--beam);width:20px;height:20px}
+  input,textarea{width:100%;background:var(--card);border:1px solid rgba(237,232,220,.14);color:var(--chalk);
+    border-radius:10px;padding:12px 13px;font:inherit;font-size:16px;resize:vertical}
+  input:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px solid var(--beam);outline-offset:2px}
+  button{font:inherit;font-weight:700;border:0;border-radius:10px;padding:12px 16px;cursor:pointer;background:var(--beam);color:#161207}
+  button.ghost{background:transparent;color:var(--chalk);border:1px solid rgba(237,232,220,.22)}
+  button.danger{background:transparent;color:var(--ticket);border:1px solid rgba(228,88,110,.5)}
+  .row{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
+  @media(max-width:520px){.grid{grid-template-columns:1fr}}
+  .item{display:flex;gap:14px;align-items:center;padding:14px 0;border-top:1px solid rgba(237,232,220,.1)}
+  .item img{width:44px;height:66px;object-fit:cover;border-radius:6px;background:var(--card);flex:0 0 auto}
+  .item div{flex:1;min-width:0}
+  .item strong{display:block}
+  .item small{color:var(--muted)}
+  .msg{margin-top:12px;font-size:14px;min-height:20px}
+  .msg.ok{color:var(--beam)}.msg.err{color:var(--ticket)}
+  .hidden{display:none !important}
+  .tabs{display:flex;gap:8px;margin-top:18px}
+  .tabs button{flex:1;background:transparent;color:var(--muted);border:1px solid rgba(237,232,220,.16);font-weight:500}
+  .tabs button[aria-selected="true"]{background:var(--beam);color:#161207;border-color:var(--beam);font-weight:700}
+  .urow{display:flex;gap:10px;align-items:center;padding:14px 0;border-top:1px solid rgba(237,232,220,.1);flex-wrap:wrap}
+  .urow .who{flex:1;min-width:140px}
+  .urow .who strong{display:block}
+  .urow .who small{color:var(--muted)}
+  .urow select{width:auto;padding:8px 10px;font-size:14px}
+  .pfp{width:44px;height:44px;border-radius:50%;object-fit:cover;flex:0 0 auto;
+    background:var(--card);border:1px solid rgba(237,232,220,.16)}
+  .pfp.vide{background:var(--card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%237C819B'%3E%3Cpath d='M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-5 0-9 2.5-9 5.5V22h18v-2.5c0-3-4-5.5-9-5.5z'/%3E%3C/svg%3E") center/22px no-repeat}
+  .champPhoto{flex:1 1 180px;min-width:140px;font-size:13px;padding:8px 10px}
+  .urow input{width:80px;padding:8px 10px;font-size:15px;text-align:center}
+  .urow button{padding:9px 12px;font-size:14px}
+  .urow.banned{opacity:.5}
+  .chip{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ticket);
+    border:1px solid rgba(228,88,110,.5);border-radius:999px;padding:3px 9px;margin-left:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Catalogue <em>MichBen</em></h1>
+  <p class="tag">Ajouter, modifier et supprimer les films du quiz</p>
+
+  <section id="auth" class="card">
+    <label for="token">Clé d'administration</label>
+    <input id="token" type="password" placeholder="michben-admin" autocomplete="current-password">
+    <div class="row"><button id="btnAuth">Ouvrir le catalogue</button></div>
+    <p class="msg err" id="authMsg"></p>
+  </section>
+
+  <section id="app" class="hidden">
+    <div class="tabs">
+      <button id="tabMovies" aria-selected="true">Films</button>
+      <button id="tabUsers" aria-selected="false">Joueurs</button>
+      <button id="tabReports" aria-selected="false">Signalements</button>
+            <button id="tabReglages" aria-selected="false">Réglages</button>
+      <button id="tabSorties" aria-selected="false">Sorties Ciné</button>
+            <button id="tabNowPlaying" aria-selected="false">Au Cinéma</button>
+      <button id="tabSugg" aria-selected="false">Suggestions</button>
+    </div>
+
+    <div id="paneMovies">
+    <div class="card">
+      <p class="tag">Sélection du catalogue</p>
+      <p class="msg" id="stats"></p>
+      <div class="grid">
+        <div>
+          <label for="bulkLevel">Niveau concerné</label>
+          <select id="bulkLevel">
+            <option value="tous">Tous les niveaux</option>
+            <option value="facile">Facile</option>
+            <option value="moyen">Moyen</option>
+            <option value="difficile">Difficile</option>
+          </select>
+        </div>
+        <div>
+          <label for="bulkRating">Note minimale (sur 10)</label>
+          <input id="bulkRating" inputmode="decimal" placeholder="6.5">
+        </div>
+      </div>
+      <div class="row">
+        <button id="btnEnable">Activer la sélection</button>
+        <button id="btnDisable" class="ghost">Désactiver</button>
+      </div>
+      <p class="msg" id="bulkMsg"></p>
+    </div>
+
+    <div class="card">
+      <p class="tag" id="formTitle">Nouveau film</p>
+      <label for="title">Titre</label>
+      <input id="title" placeholder="Le Parrain">
+      <label for="synopsis">Synopsis (sans citer le titre)</label>
+      <textarea id="synopsis" rows="4" placeholder="Le patriarche vieillissant d'une dynastie du crime…"></textarea>
+      <label for="acceptedAnswers">Réponses également acceptées (séparées par des virgules)</label>
+      <input id="acceptedAnswers" placeholder="the godfather, parrain">
+      <div class="grid">
+        <div><label for="year">Année</label><input id="year" inputmode="numeric" placeholder="1972"></div>
+        <div><label for="director">Réalisateur</label><input id="director" placeholder="Francis Ford Coppola"></div>
+      </div>
+      <label for="actors">Acteurs principaux</label>
+      <input id="actors" placeholder="Marlon Brando, Al Pacino">
+      <label for="poster">URL de l'affiche</label>
+      <input id="poster" placeholder="https://image.tmdb.org/t/p/w500/…">
+      <label for="still" style="margin-top:14px">Image d'indice (sans titre imprimé)</label>
+      <input id="still" placeholder="https://image.tmdb.org/t/p/w780/…">
+
+      <div style="margin-top:20px;padding-top:18px;border-top:1px solid rgba(237,232,220,.12)">
+        <p class="tag" style="margin-bottom:8px">Cadrage de l'image d'indice pour ce série</p>
+        <label style="display:flex;align-items:center;gap:9px;text-transform:none;letter-spacing:0;font-size:15px;color:var(--chalk);margin-bottom:12px">
+          <input type="checkbox" id="fSuivreGlobal" checked style="width:auto">
+          Utiliser le réglage général
+        </label>
+
+        <div id="fCadrageBloc" class="hidden">
+          <div class="grid">
+            <div>
+              <label for="fZoom">Zoom : <b id="fZoomVal">160</b> %</label>
+              <input id="fZoom" type="range" min="100" max="400" step="10" value="160">
+            </div>
+            <div>
+              <label for="fFlou">Flou : <b id="fFlouVal">0</b></label>
+              <input id="fFlou" type="range" min="0" max="30" step="1" value="0">
+            </div>
+          </div>
+          <label for="fCadrage" style="margin-top:10px">Zone conservée</label>
+          <select id="fCadrage">
+            <option value="center">Centre</option>
+            <option value="top">Haut</option>
+            <option value="bottom">Bas</option>
+            <option value="left">Gauche</option>
+            <option value="right">Droite</option>
+          </select>
+        </div>
+
+        <p class="tag" style="margin:16px 0 8px">Ce que verra le joueur</p>
+        <div style="width:280px;aspect-ratio:16/9;overflow:hidden;border-radius:10px;background:var(--card)">
+          <img id="fApercu" alt="" style="width:100%;height:100%;object-fit:cover;display:block">
+        </div>
+        <p class="msg" id="fApercuMsg" style="margin-top:8px"></p>
+      </div>
+      <div class="row">
+        <button id="btnSave">Enregistrer</button>
+        <button id="btnCancel" class="ghost hidden">Annuler la modification</button>
+      </div>
+      <p class="msg" id="formMsg"></p>
+    </div>
+
+    <div class="card">
+      <p class="tag" id="countLabel">Films au catalogue</p>
+      <div class="filters" id="filters">
+        <button data-f="tous" aria-pressed="true">Tous</button>
+        <button data-f="facile" aria-pressed="false">Facile</button>
+        <button data-f="moyen" aria-pressed="false">Moyen</button>
+        <button data-f="difficile" aria-pressed="false">Difficile</button>
+        <button data-f="off" aria-pressed="false">Désactivés</button>
+      </div>
+      <div id="list"></div>
+    </div>
+    </div>
+
+    <div id="paneReports" class="hidden">
+      <div class="card">
+        <p class="tag" id="reportCount">Signalements de films</p>
+        <div id="reportList"></div>
+      </div>
+
+      <div class="card">
+        <p class="tag" id="convCount">Conversations signalées</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 8px;line-height:1.6">
+          Messages privés signalés par un joueur. Consultables uniquement en cas de
+          signalement — jamais autrement.</p>
+        <div id="convList"></div>
+      </div>
+    </div>
+
+    
+    <div id="paneSorties" class="hidden">
+      <div class="card">
+        <p class="tag" id="sortiesCount">Sorties Ciné de la Semaine</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 8px;line-height:1.6">
+          Gérez les films affichés aux joueurs pour cette semaine. Ajoutez manuellement un film avec son lien TMDB pour forcer son affichage.
+        </p>
+        <div class="row" style="margin-bottom: 16px;">
+          <input type="text" id="tmdbUrlInput" placeholder="Ex: https://www.themoviedb.org/movie/12345-..." style="flex:1;">
+          <button id="btnAddCustomSortie">Ajouter via TMDB</button>
+        </div>
+        <div class="row">
+          <button id="btnLoadSorties">Rafraîchir les sorties</button>
+        </div>
+        <div id="sortiesList" style="margin-top: 16px;"></div>
+      </div>
+    </div>
+
+    
+
+    <div id="paneSugg" class="hidden"><div class="card"><p class="tag">Suggestions des joueurs</p><div id="suggList"></div></div></div>
+
+    <div id="paneNowPlaying" class="hidden">
+      <div class="card">
+        <p class="tag" id="nowPlayingCount">Actuellement au cinéma</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 8px;line-height:1.6">
+          Gérez les films affichés aux joueurs pour la sélection "Actuellement au cinéma". Ajoutez manuellement un film avec son lien TMDB pour forcer son affichage.
+        </p>
+        <div class="row" style="margin-bottom: 16px;">
+          <input type="text" id="tmdbUrlInputNow" placeholder="Ex: https://www.themoviedb.org/movie/12345-..." style="flex:1;">
+          <button id="btnAddCustomNowPlaying">Ajouter via TMDB</button>
+        </div>
+        <div class="row">
+          <button id="btnLoadNowPlaying">Rafraîchir la liste</button>
+        </div>
+        <div id="nowPlayingListUI" style="margin-top: 16px;"></div>
+      </div>
+    </div>
+
+    <div id="paneReglages" class="hidden">
+      <div class="card">
+        <p class="tag">Indices proposés aux joueurs</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 6px;line-height:1.6">
+          Décochez un indice pour le retirer du jeu. Les points sont retranchés du score de
+          la manche, les tickets débités du compte du joueur.</p>
+        <div id="listeIndices"></div>
+      </div>
+
+      <div class="card">
+        <p class="tag">Cadrage de l'image d'indice</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6">
+          Un zoom supérieur à 100 % rogne les bords : le titre imprimé et les visages en gros
+          plan disparaissent souvent, ce qui rend l'indice utile sans livrer la réponse.</p>
+        <div class="grid">
+          <div>
+            <label for="rZoom">Zoom : <b id="rZoomVal">160</b> %</label>
+            <input id="rZoom" type="range" min="100" max="400" step="10">
+          </div>
+          <div>
+            <label for="rFlou">Flou : <b id="rFlouVal">0</b></label>
+            <input id="rFlou" type="range" min="0" max="30" step="1">
+          </div>
+        </div>
+        <label for="rCadrage" style="margin-top:12px">Zone conservée</label>
+        <select id="rCadrage">
+          <option value="center">Centre</option>
+          <option value="top">Haut</option>
+          <option value="bottom">Bas</option>
+          <option value="left">Gauche</option>
+          <option value="right">Droite</option>
+        </select>
+        <p class="tag" style="margin:18px 0 8px">Aperçu</p>
+        <div id="apercuCadre" style="width:260px;aspect-ratio:16/9;overflow:hidden;border-radius:10px;background:var(--card)">
+          <img id="apercuImg" alt="" style="width:100%;height:100%;object-fit:cover;display:block">
+        </div>
+      </div>
+
+      <div class="card">
+        <p class="tag">Rythme et économie</p>
+        <div class="grid">
+          <div><label for="rDuree">Durée d'une manche (secondes)</label><input id="rDuree" type="number" min="10" max="300"></div>
+          <div><label for="rBase">Points maximum par manche</label><input id="rBase" type="number" min="100" max="10000"></div>
+          <div><label for="rDepart">Tickets offerts à l'inscription</label><input id="rDepart" type="number" min="0" max="1000"></div>
+          <div><label for="rPartie">Tickets gagnés par partie</label><input id="rPartie" type="number" min="0" max="100"></div>
+          <div><label for="rTaux">Points pour 1 ticket (échange)</label><input id="rTaux" type="number" min="10" max="100000"></div>
+          <div style="grid-column: 1 / -1;"><label for="rTmdbKey">Clé API TMDB (Pour les prochaines sorties cinéma)</label><input id="rTmdbKey" type="text" placeholder="Entrez votre clé API TheMovieDB"></div>
+          <div><label for="rGrace">Délai après la 1re bonne réponse (s)</label><input id="rGrace" type="number" min="0" max="120"></div>
+          <div>
+            <label for="rVitesse">Dévoilement du synopsis (ms) — 0 pour désactiver</label>
+            <input id="rVitesse" type="number" min="0" max="10000" step="100">
+          </div>
+          <div><label for="rParties">Parties classées par 24 h (seau)</label><input id="rParties" type="number" min="1" max="100"></div>
+          <div><label for="rDonMax">Don maximum par opération</label><input id="rDonMax" type="number" min="0" max="100000"></div>
+          <div><label for="rDonJour">Plafond de dons par 24 h</label><input id="rDonJour" type="number" min="0" max="500000"></div>
+          <div><label for="rCoeurs">Cœurs par partie (erreurs tolérées)</label><input id="rCoeurs" type="number" min="1" max="10"></div>
+          <div><label for="rNivMax">Niveau maximum</label><input id="rNivMax" type="number" min="10" max="1000"></div>
+          <div><label for="rXpBase">Expérience du premier niveau</label><input id="rXpBase" type="number" min="10" max="10000"></div>
+          <div><label for="rXpCroiss">Croissance par niveau (1.04 = +4 %)</label><input id="rXpCroiss" type="number" min="1.01" max="2" step="0.01"></div>
+          <div><label for="rXpPartie">Expérience par partie</label><input id="rXpPartie" type="number" min="0" max="1000"></div>
+          <div><label for="rXpBonne">Expérience par bonne réponse</label><input id="rXpBonne" type="number" min="0" max="500"></div>
+          <div><label for="rXpVict">Bonus de victoire (multijoueur)</label><input id="rXpVict" type="number" min="0" max="1000"></div>
+        </div>
+        <div class="row">
+          <button id="btnSaveReglages">Enregistrer les réglages</button>
+          <button id="btnResetReglages" class="ghost">Valeurs par défaut</button>
+        </div>
+        <p class="msg" id="reglagesMsg"></p>
+      </div>
+
+      <div class="card">
+        <p class="tag">Apparence du site</p>
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer;font-size:15px;color:var(--chalk);text-transform:none;letter-spacing:0">
+          <input type="checkbox" id="rAnimAvancees" style="width:auto">
+          Activer les effets visuels (Animations boutons au survol/toucher)
+        </label>
+        <label for="favInput">Changer le Favicon (l'icône de l'onglet)</label>
+        <input type="file" id="favInput" accept=".png, .svg, .ico, .jpg, .jpeg" style="background: transparent; border: none; padding: 0;">
+        <div class="row">
+          <button id="btnUploadFavicon">Uploader le favicon</button>
+        </div>
+        <p class="msg" id="favMsg"></p>
+      </div>
+
+      <div class="card" id="alerteMdp" style="border-color:rgba(228,88,110,.5)">
+        <p class="tag" style="color:var(--ticket)">Sécurité</p>
+        <p style="margin:0;line-height:1.6">Le mot de passe par défaut est encore actif. Toute personne
+        connaissant l'adresse de cette page peut modifier votre catalogue et les comptes de vos joueurs.
+        Changez-le maintenant.</p>
+      </div>
+
+      <div class="card">
+        <p class="tag">Changer le mot de passe d'administration</p>
+        <label for="mdpActuel">Mot de passe actuel</label>
+        <input id="mdpActuel" type="password" autocomplete="current-password">
+        <label for="mdpNouveau" style="margin-top:14px">Nouveau mot de passe</label>
+        <input id="mdpNouveau" type="password" autocomplete="new-password" placeholder="12 caractères ou plus">
+        <label for="mdpConfirme" style="margin-top:14px">Confirmer</label>
+        <input id="mdpConfirme" type="password" autocomplete="new-password">
+        <div class="row"><button id="btnChangerMdp">Enregistrer le nouveau mot de passe</button></div>
+        <p class="msg" id="mdpMsg"></p>
+        <p style="color:var(--muted);font-size:13px;line-height:1.6;margin-top:14px">
+          Le mot de passe est conservé en base sous forme d'empreinte, jamais en clair.
+          Il survit aux redéploiements. Notez-le : il n'existe aucun moyen de le retrouver.</p>
+      </div>
+    </div>
+
+    <div id="paneUsers" class="hidden">
+            <div class="card">
+        <p class="tag">Générateur de code d'entrée VIP</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 10px;line-height:1.6">
+          Générez un code d'invitation illimité à distribuer pour contourner le blocage d'inscription.
+        </p>
+        <div class="row">
+          <button id="btnGenInvite">Générer un code VIP</button>
+        </div>
+        <p class="msg" id="inviteMsg"></p>
+      </div>
+      
+      <div class="card">
+        <p class="tag">Avant d'activer le parrainage</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 10px;line-height:1.6">
+          Marquez vos joueurs actuels comme fondateurs : sans cela, ils ne pourront plus
+          entrer dans le jeu une fois le parrainage exigé, faute de code.</p>
+        <div class="row">
+          <button id="btnTousFondateurs">Marquer tous les joueurs actuels</button>
+        </div>
+        <p class="msg" id="fondMsg"></p>
+      </div>
+
+      <div class="card">
+        <p class="tag">Crédits pour tous</p>
+        <div class="row">
+          <input id="grantAmount" inputmode="numeric" placeholder="10" style="max-width:120px">
+          <button id="btnGrantAll">Offrir à tous les joueurs</button>
+        </div>
+        <p class="msg" id="grantMsg"></p>
+      </div>
+      <div class="card">
+        <p class="tag" id="userCount">Joueurs</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 6px;line-height:1.6">
+          La photo de profil se colle sous forme d'adresse https. Elle s'impose au joueur,
+          qui ne peut ni la changer ni la retirer. Videz le champ pour revenir à l'émoji.</p>
+        <div id="userList"></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const FIELDS = ["title","synopsis","acceptedAnswers","year","director","actors","poster","still"];
+let token = "", movies = [], editingId = null;
+
+const api = (path, options = {}) => fetch(path, {
+  ...options,
+  headers: {"Content-Type":"application/json", "x-admin-token": token, ...(options.headers||{})}
+});
+
+$("btnAuth").onclick = async () => {
+  token = $("token").value.trim();
+  const res = await api("/api/movies");
+  if (!res.ok) return ($("authMsg").textContent = "Clé refusée.");
+  movies = await res.json();
+  $("auth").classList.add("hidden"); $("app").classList.remove("hidden");
+  render(); loadStats(); chargerReglages();
+};
+$("token").addEventListener("keydown", e => { if (e.key === "Enter") $("btnAuth").click(); });
+
+let filtre = "tous";
+$("filters").querySelectorAll("[data-f]").forEach(b => b.onclick = () => {
+  filtre = b.dataset.f;
+  $("filters").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  render();
+});
+
+function render(){
+  const vus = movies.filter(m =>
+    filtre === "tous" ? true : filtre === "off" ? m.enabled === false : m.difficulty === filtre);
+  const actifs = movies.filter(m => m.enabled !== false).length;
+  $("countLabel").textContent =
+    `${vus.length} affiché${vus.length>1?"s":""} · ${actifs} actifs sur ${movies.length}`;
+  $("list").innerHTML = vus.map(m => `
+    <div class="item ${m.enabled === false ? "off" : ""}">
+      <img src="${m.poster||""}" alt="" onerror="this.style.visibility='hidden'">
+      <div>
+        <strong>${esc(m.title)}<span class="lvl">${m.difficulty||"?"}</span>${m.cadrageImage ? '<span class="lvl" style="border-color:var(--beam);color:var(--beam)">cadrage</span>' : ""}</strong>
+        <small>${m.year||"—"} · ${m.rating ? m.rating+"/10 · " : ""}${esc(m.director||"réalisateur non renseigné")}</small>
+      </div>
+      <button class="ghost" data-toggle="${m.id}">${m.enabled === false ? "Activer" : "Retirer"}</button>
+      <button class="ghost" data-edit="${m.id}">Modifier</button>
+      <button class="danger" data-del="${m.id}">Supprimer</button>
+    </div>`).join("");
+
+  $("list").querySelectorAll("[data-toggle]").forEach(b => b.onclick = async () => {
+    const m = movies.find(x => x.id === Number(b.dataset.toggle));
+    const res = await api(`/api/movies/${m.id}`, {method:"PUT",
+      body: JSON.stringify({...m, enabled: m.enabled === false})});
+    if (res.ok){ Object.assign(m, await res.json()); render(); loadStats(); }
+  });
+  $("list").querySelectorAll("[data-edit]").forEach(b => b.onclick = () => edit(Number(b.dataset.edit)));
+  $("list").querySelectorAll("[data-del]").forEach(b => b.onclick = () => remove(Number(b.dataset.del)));
+}
+
+/* ---------- Cadrage propre à un série ---------- */
+function majApercuFilm(){
+  const url = $("still").value.trim() || $("poster").value.trim();
+  const img = $("fApercu");
+  img.src = url;
+  $("fApercuMsg").textContent = url ? "" : "Renseignez une image pour voir l'aperçu.";
+  $("fApercuMsg").className = "msg";
+
+  const global = $("fSuivreGlobal").checked;
+  $("fCadrageBloc").classList.toggle("hidden", global);
+
+  const source = global && reglages
+    ? reglages.indices.poster
+    : { zoom: $("fZoom").value, flou: $("fFlou").value, cadrage: $("fCadrage").value };
+
+  img.style.transform = `scale(${Number(source.zoom) / 100})`;
+  img.style.objectPosition = source.cadrage;
+  img.style.filter = Number(source.flou) ? `blur(${Number(source.flou) / 10}px)` : "";
+
+  if (global) $("fApercuMsg").textContent =
+    "Réglage général appliqué. Décochez pour ajuster ce série en particulier.";
+}
+
+for (const id of ["fSuivreGlobal","fZoom","fFlou","fCadrage","still","poster"])
+  $(id).addEventListener("input", () => {
+    $("fZoomVal").textContent = $("fZoom").value;
+    $("fFlouVal").textContent = $("fFlou").value;
+    majApercuFilm();
+  });
+
+/** Le formulaire lit et écrit le cadrage du série en cours d'édition. */
+function chargerCadrage(m){
+  const c = m?.cadrageImage;
+  $("fSuivreGlobal").checked = !c;
+  $("fZoom").value = c?.zoom ?? 160;
+  $("fFlou").value = c?.flou ?? 0;
+  $("fCadrage").value = c?.cadrage ?? "center";
+  $("fZoomVal").textContent = $("fZoom").value;
+  $("fFlouVal").textContent = $("fFlou").value;
+  majApercuFilm();
+}
+
+const cadrageSaisi = () => $("fSuivreGlobal").checked ? null : {
+  zoom: Number($("fZoom").value), flou: Number($("fFlou").value), cadrage: $("fCadrage").value,
+};
+
+function edit(id){
+  const m = movies.find(x => x.id === id);
+  editingId = id;
+  FIELDS.forEach(f => $(f).value = Array.isArray(m[f]) ? m[f].filter(a=>a!==m.title).join(", ") : (m[f] ?? ""));
+  chargerCadrage(m);
+  $("formTitle").textContent = `Modifier : ${m.title}`;
+  $("btnCancel").classList.remove("hidden");
+  window.scrollTo({top:0, behavior:"smooth"});
+}
+
+function resetForm(){
+  editingId = null;
+  FIELDS.forEach(f => $(f).value = "");
+  chargerCadrage(null);
+  $("formTitle").textContent = "Nouveau film";
+  $("btnCancel").classList.add("hidden");
+}
+$("btnCancel").onclick = resetForm;
+
+async function loadStats(){
+  const res = await api("/api/admin/stats");
+  if (!res.ok) return;
+  const s = await res.json();
+  $("stats").textContent = `${s.actifs} films actifs sur ${s.total} — `
+    + Object.entries(s.parNiveau).map(([n,v]) => `${n} ${v.actifs}/${v.total}`).join(", ");
+  $("stats").className = "msg";
+}
+
+async function bulk(enabled){
+  const res = await api("/api/admin/movies/bulk", {method:"POST", body: JSON.stringify({
+    difficulty: $("bulkLevel").value,
+    minRating: $("bulkRating").value || 0,
+    enabled,
+  })});
+  const data = await res.json();
+  $("bulkMsg").textContent = res.ok
+    ? `${data.touched} séries ${enabled ? "activés" : "désactivés"} — ${data.actifs} actifs au total.`
+    : "Échec.";
+  $("bulkMsg").className = res.ok ? "msg ok" : "msg err";
+  const liste = await api("/api/movies");
+  if (liste.ok){ movies = await liste.json(); render(); }
+  loadStats();
+}
+$("btnEnable").onclick = () => bulk(true);
+$("btnDisable").onclick = () => bulk(false);
+
+$("btnSave").onclick = async () => {
+  const body = Object.fromEntries(FIELDS.map(f => [f, $(f).value.trim()]));
+  body.cadrageImage = cadrageSaisi();
+  if (!body.title || !body.synopsis){
+    $("formMsg").textContent = "Le titre et le synopsis sont obligatoires.";
+    $("formMsg").className = "msg err"; return;
+  }
+  const res = editingId
+    ? await api(`/api/movies/${editingId}`, {method:"PUT", body:JSON.stringify(body)})
+    : await api("/api/movies", {method:"POST", body:JSON.stringify(body)});
+  if (!res.ok){
+    $("formMsg").textContent = "Enregistrement refusé par le serveur.";
+    $("formMsg").className = "msg err"; return;
+  }
+  const saved = await res.json();
+  if (editingId) movies = movies.map(m => m.id === editingId ? saved : m);
+  else movies.push(saved);
+  $("formMsg").textContent = `${saved.title} enregistré.`;
+  $("formMsg").className = "msg ok";
+  resetForm(); render();
+};
+
+async function remove(id){
+  const m = movies.find(x => x.id === id);
+  if (!confirm(`Supprimer « ${m.title} » du catalogue ?`)) return;
+  const res = await api(`/api/movies/${id}`, {method:"DELETE"});
+  if (!res.ok) return;
+  movies = movies.filter(x => x.id !== id);
+  if (editingId === id) resetForm();
+  render();
+}
+
+/* ---------- Onglets ---------- */
+function tab(which){
+  for (const [nom, onglet, volet] of [["movies","tabMovies","paneMovies"], ["sugg","tabSugg","paneSugg"],
+                                      ["users","tabUsers","paneUsers"],
+                                      ["reports","tabReports","paneReports"],
+                                      ["reglages","tabReglages","paneReglages"],
+                                      ["sorties","tabSorties","paneSorties"],
+                                      ["nowplaying","tabNowPlaying","paneNowPlaying"]]) {
+    $(onglet).setAttribute("aria-selected", which === nom);
+    $(volet).classList.toggle("hidden", which !== nom);
+  }
+  if (which === "users") loadUsers();
+  if (which === "reports"){ loadReports(); loadConversations(); }
+  if (which === "reglages"){ etatSecurite(); chargerReglages(); }
+  if (which === "sorties") loadSorties();
+  if (which === "nowplaying") loadNowPlaying();
+}
+$("tabMovies").onclick = () => tab("movies");
+$("tabUsers").onclick = () => tab("users");
+$("tabReports").onclick = () => tab("reports");
+$("tabReglages").onclick = () => tab("reglages");
+$("tabSorties").onclick = () => tab("sorties");
+$("tabNowPlaying").onclick = () => tab("nowplaying");
+
+
+$("btnLoadSorties").onclick = loadSorties;
+
+$("btnAddCustomSortie").onclick = async () => {
+    const url = $("tmdbUrlInput").value.trim();
+    const match = url.match(/movie\/(\d+)/);
+    if (!match) return alert("Lien TMDB invalide. Utilisez un lien comme https://www.themoviedb.org/movie/12345");
+    const id = Number(match[1]);
+    await api("/api/admin/sorties/custom", { method: "POST", body: JSON.stringify({ id }) });
+    $("tmdbUrlInput").value = "";
+    loadSorties();
+};
+
+window.toggleHideSortie = async (id, currentlyHidden) => {
+    const endpoint = currentlyHidden ? "/api/admin/sorties/unhide" : "/api/admin/sorties/hide";
+    await api(endpoint, { method: "POST", body: JSON.stringify({ id }) });
+    loadSorties();
+};
+
+window.removeCustomSortie = async (id) => {
+    await api("/api/admin/sorties/remove-custom", { method: "POST", body: JSON.stringify({ id }) });
+    loadSorties();
+};
+
+async function loadSorties() {
+  $("sortiesList").innerHTML = "<p class='msg'>Chargement des sorties TMDB...</p>";
+  try {
+    const res = await api("/api/movies/upcoming");
+    const data = await res.json();
+    if (data.error && data.error === "NO_KEY") {
+      $("sortiesList").innerHTML = "<p class='msg err'>Erreur: La clé API TMDB n'est pas configurée dans les Réglages.</p>";
+      return;
+    }
+    if (!data.movies || data.movies.length === 0) {
+      $("sortiesList").innerHTML = "<p class='msg'>Aucune sortie trouvée.</p>";
+      return;
+    }
+    
+    $("sortiesList").innerHTML = data.movies.map((m, i) => `
+      <div class="urow ${m.hidden ? 'banned' : ''}" style="align-items:flex-start">
+        <img src="${m.poster || ''}" style="width:50px;height:75px;object-fit:cover;border-radius:4px;background:#333;margin-right:10px;">
+        <div class="who" style="flex:1;">
+          <strong>${esc(m.title)} ${m.custom ? '<span class="chip" style="color:var(--teal);border-color:var(--teal);">Ajouté</span>' : ''} ${m.hidden ? '<span class="chip">Masqué</span>' : ''}</strong>
+          <small>⭐ ${m.vote ? m.vote.toFixed(1) : '?'} / 10</small>
+          <div style="margin-top:4px;font-size:13px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">
+            ${esc(m.overview || "Aucun synopsis disponible.")}
+          </div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:5px;">
+            <button class="ghost" onclick="importSortie(${i})">Pré-remplir</button>
+            <button class="ghost" onclick="toggleHideSortie(${m.id}, ${m.hidden})">${m.hidden ? 'Afficher' : 'Masquer'}</button>
+            ${m.custom ? `<button class="danger" onclick="removeCustomSortie(${m.id})">Retirer</button>` : ''}
+        </div>
+      </div>
+    `).join("");
+    
+    window.lastSorties = data.movies;
+  } catch (e) {
+    $("sortiesList").innerHTML = "<p class='msg err'>Impossible de charger les sorties.</p>";
+  }
+}
+
+window.importSortie = function(idx) {
+  const m = window.lastSorties[idx];
+  $("tabMovies").click();
+  resetForm();
+  $("title").value = m.title || "";
+  $("synopsis").value = m.overview || "";
+  $("poster").value = m.poster || "";
+  $("still").value = m.poster || "";
+  $("year").value = new Date().getFullYear();
+  $("formTitle").textContent = "Nouveau film (Importé depuis Sorties Ciné)";
+  window.scrollTo({top:0, behavior:"smooth"});
+};
+
+
+$("btnLoadNowPlaying").onclick = loadNowPlaying;
+
+$("btnAddCustomNowPlaying").onclick = async () => {
+    const url = $("tmdbUrlInputNow").value.trim();
+    const match = url.match(/movie\/(\d+)/);
+    if (!match) return alert("Lien TMDB invalide. Utilisez un lien comme https://www.themoviedb.org/movie/12345");
+    const id = Number(match[1]);
+    await api("/api/admin/nowplaying/custom", { method: "POST", body: JSON.stringify({ id }) });
+    $("tmdbUrlInputNow").value = "";
+    loadNowPlaying();
+};
+
+window.toggleHideNowPlaying = async (id, currentlyHidden) => {
+    const endpoint = currentlyHidden ? "/api/admin/nowplaying/unhide" : "/api/admin/nowplaying/hide";
+    await api(endpoint, { method: "POST", body: JSON.stringify({ id }) });
+    loadNowPlaying();
+};
+
+window.removeCustomNowPlaying = async (id) => {
+    await api("/api/admin/nowplaying/remove-custom", { method: "POST", body: JSON.stringify({ id }) });
+    loadNowPlaying();
+};
+
+async function loadNowPlaying() {
+  $("nowPlayingListUI").innerHTML = "<p class='msg'>Chargement des films à l'affiche...</p>";
+  try {
+    const res = await api("/api/movies/now_playing");
+    const data = await res.json();
+    if (data.error && data.error === "NO_KEY") {
+      $("nowPlayingListUI").innerHTML = "<p class='msg err'>Erreur: La clé API TMDB n'est pas configurée dans les Réglages.</p>";
+      return;
+    }
+    if (!data.movies || data.movies.length === 0) {
+      $("nowPlayingListUI").innerHTML = "<p class='msg'>Aucun film trouvé.</p>";
+      return;
+    }
+    
+    $("nowPlayingListUI").innerHTML = data.movies.map((m, i) => `
+      <div class="urow ${m.hidden ? 'banned' : ''}" style="align-items:flex-start">
+        <img src="${m.poster || ''}" style="width:50px;height:75px;object-fit:cover;border-radius:4px;background:#333;margin-right:10px;">
+        <div class="who" style="flex:1;">
+          <strong>${esc(m.title)} ${m.custom ? '<span class="chip" style="color:var(--teal);border-color:var(--teal);">Ajouté</span>' : ''} ${m.hidden ? '<span class="chip">Masqué</span>' : ''}</strong>
+          <small>⭐ ${m.vote ? m.vote.toFixed(1) : '?'} / 10</small>
+          <div style="margin-top:4px;font-size:13px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">
+            ${esc(m.overview || "Aucun synopsis disponible.")}
+          </div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:5px;">
+            <button class="ghost" onclick="importNowPlaying(${i})">Pré-remplir</button>
+            <button class="ghost" onclick="toggleHideNowPlaying(${m.id}, ${m.hidden})">${m.hidden ? 'Afficher' : 'Masquer'}</button>
+            ${m.custom ? `<button class="danger" onclick="removeCustomNowPlaying(${m.id})">Retirer</button>` : ''}
+        </div>
+      </div>
+    `).join("");
+    
+    window.lastNowPlaying = data.movies;
+  } catch (e) {
+    $("nowPlayingListUI").innerHTML = "<p class='msg err'>Impossible de charger les films.</p>";
+  }
+}
+
+window.importNowPlaying = function(idx) {
+  const m = window.lastNowPlaying[idx];
+  $("tabMovies").click();
+  resetForm();
+  $("title").value = m.title || "";
+  $("synopsis").value = m.overview || "";
+  $("poster").value = m.poster || "";
+  $("still").value = m.poster || "";
+  $("year").value = new Date().getFullYear();
+  $("formTitle").textContent = "Nouveau film (Importé depuis Au Cinéma)";
+  window.scrollTo({top:0, behavior:"smooth"});
+};
+
+/* ---------- Réglages du jeu ---------- */
+let reglages = null;
+
+const CHAMPS = { rTmdbKey:"tmdbApiKey", rDuree:"roundDuration", rBase:"basePoints", rDepart:"creditsDepart",
+                 rPartie:"creditsParPartie", rTaux:"pointsParTicket", rGrace:"graceApresPremier",
+                 rVitesse:"vitesseSynopsis", rParties:"partiesClasseesParJour",
+                 rDonMax:"transfertMax", rDonJour:"transfertParJour", rCoeurs:"coeurs",
+                 rNivMax:"niveauMax", rXpBase:"xpBase", rXpCroiss:"xpCroissance",
+                 rXpPartie:"xpParPartie", rXpBonne:"xpParBonneReponse", rXpVict:"xpParVictoire" };
+
+async function chargerReglages(){
+  const res = await api("/api/admin/reglages");
+  if (!res.ok) return;
+  reglages = await res.json();
+  for (const [champ, cle] of Object.entries(CHAMPS)) $(champ).value = reglages[cle];
+
+  const p = reglages.indices.poster;
+  $("rZoom").value = p.zoom; $("rZoomVal").textContent = p.zoom;
+  $("rFlou").value = p.flou; $("rFlouVal").textContent = p.flou;
+  $("rCadrage").value = p.cadrage;
+  majApercu();
+  $("rAnimAvancees").checked = reglages.animationsAvancees !== false;
+
+  $("listeIndices").innerHTML = Object.entries(reglages.indices).map(([cle, v]) => `
+    <div class="urow">
+      <div class="who">
+        <label style="display:flex;align-items:center;gap:8px;margin:0;text-transform:none;letter-spacing:0;font-size:15px;color:var(--chalk)">
+          <input type="checkbox" data-actif="${cle}" ${v.actif ? "checked" : ""} style="width:auto">
+          <input type="text" data-libelle="${cle}" value="${esc(v.libelle)}" style="flex:1;min-width:120px">
+        </label>
+      </div>
+      <input type="number" min="0" max="5000" data-points="${cle}" value="${v.points}" aria-label="Points" title="Points retranchés">
+      <input type="number" min="0" max="50" data-tickets="${cle}" value="${v.tickets}" aria-label="Tickets" title="Tickets débités">
+    </div>`).join("");
+}
+
+/** Aperçu du recadrage, avec une affiche réelle du catalogue. */
+function majApercu(){
+  const avecImage = movies.find(m => m.still || m.poster);
+  $("apercuImg").src = avecImage ? (avecImage.still || avecImage.poster) : "";
+  $("apercuImg").style.transform = `scale(${$("rZoom").value / 100})`;
+  $("apercuImg").style.objectPosition = $("rCadrage").value;
+  const f = Number($("rFlou").value);
+  $("apercuImg").style.filter = f ? `blur(${f / 10}px)` : "";
+}
+for (const id of ["rZoom","rFlou","rCadrage"])
+  $(id).addEventListener("input", () => {
+    $("rZoomVal").textContent = $("rZoom").value;
+    $("rFlouVal").textContent = $("rFlou").value;
+    majApercu();
+  });
+
+$("btnSaveReglages").onclick = async () => {
+  const corps = { indices: {} };
+  for (const [champ, cle] of Object.entries(CHAMPS)) {
+    if (cle === "tmdbApiKey") corps[cle] = $(champ).value.trim();
+    else corps[cle] = Number($(champ).value);
+  }
+
+  for (const cle of Object.keys(reglages.indices)) {
+    corps.indices[cle] = {
+      actif:   $("listeIndices").querySelector(`[data-actif="${cle}"]`).checked,
+      libelle: $("listeIndices").querySelector(`[data-libelle="${cle}"]`).value,
+      points:  Number($("listeIndices").querySelector(`[data-points="${cle}"]`).value),
+      tickets: Number($("listeIndices").querySelector(`[data-tickets="${cle}"]`).value),
+    };
+  }
+  corps.animationsAvancees = $("rAnimAvancees").checked;
+  Object.assign(corps.indices.poster, {
+    zoom: Number($("rZoom").value), flou: Number($("rFlou").value), cadrage: $("rCadrage").value,
+  });
+
+  const res = await api("/api/admin/reglages", {method:"PUT", body: JSON.stringify(corps)});
+  $("reglagesMsg").textContent = res.ok
+    ? "Réglages enregistrés. Ils s'appliquent dès la prochaine manche."
+    : "Enregistrement refusé.";
+  $("reglagesMsg").className = res.ok ? "msg ok" : "msg err";
+  if (res.ok) chargerReglages();
+};
+
+$("btnResetReglages").onclick = async () => {
+  if (!confirm("Rétablir tous les réglages par défaut ?")) return;
+  await api("/api/admin/reglages/defaut", {method:"POST"});
+  chargerReglages();
+  $("reglagesMsg").textContent = "Réglages remis à leurs valeurs d'origine.";
+  $("reglagesMsg").className = "msg ok";
+};
+
+/* ---------- Mot de passe d'administration ---------- */
+async function etatSecurite(){
+  const res = await api("/api/admin/etat");
+  if (!res.ok) return;
+  const { motDePasseParDefaut } = await res.json();
+  $("alerteMdp").classList.toggle("hidden", !motDePasseParDefaut);
+}
+
+$("btnChangerMdp").onclick = async () => {
+  const actuel = $("mdpActuel").value, nouveau = $("mdpNouveau").value, confirme = $("mdpConfirme").value;
+  const dire = (texte, ok) => { $("mdpMsg").textContent = texte; $("mdpMsg").className = ok ? "msg ok" : "msg err"; };
+
+  if (actuel !== token) return dire("Le mot de passe actuel est incorrect.", false);
+  if (nouveau.length < 8) return dire("Le nouveau mot de passe doit faire au moins 8 caractères.", false);
+  if (nouveau !== confirme) return dire("Les deux saisies ne correspondent pas.", false);
+
+  const res = await api("/api/admin/password", {method:"POST", body: JSON.stringify({nouveau})});
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok){
+    const messages = { TROP_COURT: "Mot de passe trop court.",
+                       TROP_EVIDENT: "Ce mot de passe est celui par défaut, choisissez-en un autre." };
+    return dire(messages[data.error] || "Changement refusé.", false);
+  }
+
+  token = nouveau;   // les requêtes suivantes utilisent le nouveau mot de passe
+  $("mdpActuel").value = $("mdpNouveau").value = $("mdpConfirme").value = "";
+  dire("Mot de passe changé. Notez-le : il est irrécupérable.", true);
+  etatSecurite();
+};
+
+/* ---------- Conversations signalées ---------- */
+$("btnUploadFavicon").onclick = () => {
+  const file = $("favInput").files[0];
+  if (!file) {
+    $("favMsg").textContent = "Veuillez sélectionner un fichier.";
+    $("favMsg").className = "msg err";
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    $("favMsg").textContent = "Upload en cours...";
+    $("favMsg").className = "msg";
+    const res = await api("/api/admin/favicon", { method: "POST", body: JSON.stringify({ image: e.target.result, ext: file.name.split('.').pop() }) });
+    if (res.ok) {
+      $("favMsg").textContent = "Favicon mis à jour ! Rechargez la page (Ctrl+F5) pour voir le résultat.";
+      $("favMsg").className = "msg ok";
+    } else {
+      $("favMsg").textContent = "Erreur lors de l'upload.";
+      $("favMsg").className = "msg err";
+    }
+  };
+  reader.readAsDataURL(file);
+};
+
+async function loadConversations(){
+  const res = await api("/api/admin/conversations");
+  if (!res.ok) return;
+  const liste = await res.json();
+  $("convCount").textContent = liste.length
+    ? `${liste.length} conversation${liste.length>1?"s":""} signalée${liste.length>1?"s":""}`
+    : "Conversations signalées";
+
+  $("convList").innerHTML = liste.length ? liste.map(c => `
+    <div class="urow" style="align-items:flex-start">
+      <div class="who">
+        <strong>Signalée par ${esc(c.signale.par)}</strong>
+        <small>${esc(c.signale.motif || "sans motif")}</small>
+        <div style="margin-top:8px;max-height:160px;overflow-y:auto;font-size:13px;line-height:1.6">
+          ${c.messages.map(m => `<div style="color:var(--muted)">— ${esc(m.texte)}</div>`).join("")}
+        </div>
+      </div>
+      <button class="ghost" data-conv="${esc(c.cle)}">Classer</button>
+    </div>`).join("") : "<p class='msg'>Aucune conversation signalée.</p>";
+
+  $("convList").querySelectorAll("[data-conv]").forEach(b => b.onclick = async () => {
+    await api(`/api/admin/conversations/${encodeURIComponent(b.dataset.conv)}/traiter`, {method:"POST"});
+    loadConversations();
+  });
+}
+
+/* ---------- Signalements ---------- */
+let motifs = {};
+async function loadReports(){
+  if (!Object.keys(motifs).length)
+    motifs = await fetch("/api/reports/motifs").then(r => r.json()).catch(() => ({}));
+  const res = await api("/api/reports");
+  if (!res.ok) return;
+  const liste = await res.json();
+  const ouverts = liste.filter(r => r.statut === "ouvert").length;
+  $("reportCount").textContent = `${liste.length} signalement${liste.length>1?"s":""} · ${ouverts} en attente`;
+  $("reportList").innerHTML = liste.map(r => `
+    <div class="urow ${r.statut === "traite" ? "banned" : ""}">
+      <div class="who">
+        <strong>${esc(r.titre)}</strong>
+        <small>${esc(motifs[r.motif]||r.motif)}${r.commentaire ? " — "+esc(r.commentaire) : ""}</small>
+        <small>par ${esc(r.auteur)}${r.traitePar ? " · traité par "+esc(r.traitePar) : ""}</small>
+      </div>
+      ${r.statut === "traite" ? '<span class="chip">traité</span>' :
+        `<button class="ghost" data-clore="${r.id}">Classer</button>
+         <button class="danger" data-retirer="${r.id}">Retirer le film</button>`}
+    </div>`).join("") || "";
+
+  const agir = async (id, corps) => {
+    await api(`/api/reports/${id}`, {method:"PUT", body: JSON.stringify(corps)});
+    loadReports();
+  };
+  $("reportList").querySelectorAll("[data-clore]").forEach(b =>
+    b.onclick = () => agir(b.dataset.clore, {statut:"traite"}));
+  $("reportList").querySelectorAll("[data-retirer]").forEach(b =>
+    b.onclick = () => confirm("Retirer ce film du catalogue ?") && agir(b.dataset.retirer, {retirerFilm:true}));
+}
+
+
+    async function loadSuggestions() {
+      const res = await api("/api/admin/suggestions");
+      const list = await res.json();
+      $("suggList").innerHTML = list.map(s => `
+        <div class="item">
+            <div><strong>${esc(s.titre)}</strong><small>Par ${esc(s.auteur)} le ${new Date(s.date).toLocaleDateString()}</small></div>
+            <div style="font-size:13px; color:var(--muted)">${esc(s.commentaire)}</div>
+        </div>
+      `).join("");
+    }
+
+/* ---------- Joueurs ---------- */
+let players = [];
+async function loadUsers(){
+  const res = await api("/api/admin/users");
+  if (!res.ok) return;
+  players = await res.json();
+  renderUsers();
+}
+function renderUsers(){
+  $("userCount").textContent = `${players.length} joueur${players.length>1?"s":""} inscrit${players.length>1?"s":""}`;
+  $("userList").innerHTML = players.map(u => `
+    <div class="urow ${u.banned?"banned":""}">
+      <div class="who">
+        <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+          <span style="font-size:18px;">${u.avatar||"🎬"}</span>
+          <input type="text" data-pseudo="${u.id}" value="${esc(u.pseudo||"")}" placeholder="Pseudo" style="width:130px; padding:4px 8px; font-size:14px; font-weight:bold; border:1px solid rgba(237,232,220,.2); border-radius:6px; background:var(--velvet); color:var(--chalk);">
+          ${u.banned?'<span class="chip">banni</span>':""}
+        </div>
+        <small>${u.totalScore||0} pts · ${u.gamesPlayed||0} parties${u.xHandle?" · @"+esc(u.xHandle):""}${u.online?" · en ligne":""}</small>
+        <small>niveau ${u.niveau || 0}${u.codeParrain ? " · code "+esc(u.codeParrain) : ""}${u.fondateur ? " · fondateur" : ""}${u.email && !u.emailVerifie ? " · email à valider" : ""}</small>
+      </div>
+      <img src="${u.photo || ""}" alt="" class="pfp ${u.photo ? "" : "vide"}"
+           onerror="this.classList.add('vide')" title="${u.photo ? "Photo attribuée" : "Aucune photo"}">
+      <input type="url" data-photo="${u.id}" value="${u.photo || ""}"
+             placeholder="https://…/photo.jpg" aria-label="Photo de profil" class="champPhoto">
+      <select data-role="${u.id}" aria-label="Rôle">
+        ${["joueur","moderateur","admin"].map(r =>
+          `<option value="${r}" ${(u.role||"joueur")===r?"selected":""}>${r}</option>`).join("")}
+      </select>
+      <input type="number" min="0" value="${u.credits??0}" data-credits="${u.id}" aria-label="Crédits">
+      ${u.email && !u.emailVerifie
+        ? `<button class="ghost" data-valider="${u.id}" title="Valider l'adresse sans envoi de code">✉ Valider</button>`
+        : ""}
+      <button class="ghost" data-fondateur="${u.id}" title="Dispense de code d'invitation">
+        ${u.fondateur ? "★ Fondateur" : "☆ Fondateur"}</button>
+      <button class="ghost" data-save="${u.id}">Enregistrer</button>
+      <button class="ghost" data-ban="${u.id}">${u.banned?"Réactiver":"Bannir"}</button>
+      <button class="danger" data-del="${u.id}">Supprimer</button>
+      <button class="ghost" style="color:var(--teal)" data-debug="${u.id}">🔍 Debug</button>
+    </div>`).join("");
+
+  // aperçu immédiat quand on colle une adresse
+  $("userList").querySelectorAll("[data-photo]").forEach(champ => champ.oninput = () => {
+    const img = champ.previousElementSibling;
+    img.src = champ.value.trim();
+    img.classList.toggle("vide", !champ.value.trim());
+  });
+
+  $("userList").querySelectorAll("[data-save]").forEach(b => b.onclick = async () => {
+    const id = b.dataset.save;
+    const credits = Number($("userList").querySelector(`[data-credits="${CSS.escape(id)}"]`).value);
+    const role = $("userList").querySelector(`[data-role="${CSS.escape(id)}"]`).value;
+    const photo = $("userList").querySelector(`[data-photo="${CSS.escape(id)}"]`).value.trim();
+    const pseudo = $("userList").querySelector(`[data-pseudo="${CSS.escape(id)}"]`).value.trim();
+    await api(`/api/admin/users/${encodeURIComponent(id)}`, {method:"PUT", body:JSON.stringify({credits, role, photo, pseudo})});
+    loadUsers();
+  });
+  $("userList").querySelectorAll("[data-debug]").forEach(b => b.onclick = async () => {
+    const res = await api(`/api/admin/debug-user/${encodeURIComponent(b.dataset.debug)}`, {method:"POST"});
+    if(res.ok) { alert("Compte debuggé : email validé, ban levé."); loadUsers(); }
+    else { alert("Erreur debug."); }
+  });
+
+  $("userList").querySelectorAll("[data-valider]").forEach(b => b.onclick = async () => {
+    await api(`/api/admin/users/${encodeURIComponent(b.dataset.valider)}/valider`, {method:"PUT"});
+    loadUsers();
+  });
+  $("userList").querySelectorAll("[data-debug]").forEach(b => b.onclick = async () => {
+    const res = await api(`/api/admin/debug-user/${encodeURIComponent(b.dataset.debug)}`, {method:"POST"});
+    if(res.ok) { alert("Compte debuggé : email validé, ban levé."); loadUsers(); }
+    else { alert("Erreur debug."); }
+  });
+
+
+  $("userList").querySelectorAll("[data-fondateur]").forEach(b => b.onclick = async () => {
+    const u = players.find(p => p.id === b.dataset.fondateur);
+    await api(`/api/admin/users/${encodeURIComponent(u.id)}/fondateur`,
+      {method:"PUT", body: JSON.stringify({fondateur: !u.fondateur})});
+    loadUsers();
+  });
+  $("userList").querySelectorAll("[data-debug]").forEach(b => b.onclick = async () => {
+    const res = await api(`/api/admin/debug-user/${encodeURIComponent(b.dataset.debug)}`, {method:"POST"});
+    if(res.ok) { alert("Compte debuggé : email validé, ban levé."); loadUsers(); }
+    else { alert("Erreur debug."); }
+  });
+
+
+  $("userList").querySelectorAll("[data-ban]").forEach(b => b.onclick = async () => {
+    const u = players.find(p => p.id === b.dataset.ban);
+    await api(`/api/admin/users/${encodeURIComponent(u.id)}`, {method:"PUT", body:JSON.stringify({banned: !u.banned})});
+    loadUsers();
+  });
+  $("userList").querySelectorAll("[data-debug]").forEach(b => b.onclick = async () => {
+    const res = await api(`/api/admin/debug-user/${encodeURIComponent(b.dataset.debug)}`, {method:"POST"});
+    if(res.ok) { alert("Compte debuggé : email validé, ban levé."); loadUsers(); }
+    else { alert("Erreur debug."); }
+  });
+
+  $("userList").querySelectorAll("[data-del]").forEach(b => b.onclick = async () => {
+    const u = players.find(p => p.id === b.dataset.del);
+    if (!confirm(`Supprimer définitivement le compte « ${u.pseudo || u.id} » ?`)) return;
+    await api(`/api/admin/users/${encodeURIComponent(u.id)}`, {method:"DELETE"});
+    loadUsers();
+  });
+  $("userList").querySelectorAll("[data-debug]").forEach(b => b.onclick = async () => {
+    const res = await api(`/api/admin/debug-user/${encodeURIComponent(b.dataset.debug)}`, {method:"POST"});
+    if(res.ok) { alert("Compte debuggé : email validé, ban levé."); loadUsers(); }
+    else { alert("Erreur debug."); }
+  });
+
+}
+
+$("btnGenInvite").onclick = async () => {
+  const res = await api("/api/admin/invite", {method:"POST"});
+  if (!res.ok) return $("inviteMsg").textContent = "Erreur de génération.";
+  const data = await res.json();
+  $("inviteMsg").innerHTML = `Code généré : <b style="color:var(--beam);font-size:18px">${data.code}</b>`;
+  $("inviteMsg").className = "msg ok";
+};
+
+$("btnTousFondateurs").onclick = async () => {
+  if (!confirm(`Marquer les ${players.length} joueurs actuels comme fondateurs ?`)) return;
+  let faits = 0;
+  for (const u of players){
+    if (u.fondateur) continue;
+    const res = await api(`/api/admin/users/${encodeURIComponent(u.id)}/fondateur`,
+      {method:"PUT", body: JSON.stringify({fondateur: true})});
+    if (res.ok) faits++;
+  }
+  $("fondMsg").textContent = `${faits} joueur${faits>1?"s":""} marqué${faits>1?"s":""} fondateur${faits>1?"s":""}.`;
+  $("fondMsg").className = "msg ok";
+  loadUsers();
+};
+
+$("btnGrantAll").onclick = async () => {
+  const amount = Number($("grantAmount").value);
+  if (!amount) return ($("grantMsg").textContent = "Indiquez un nombre de crédits.", $("grantMsg").className = "msg err");
+  if (!confirm(`Offrir ${amount} crédits à tous les joueurs ?`)) return;
+  const res = await api("/api/admin/grant-all", {method:"POST", body:JSON.stringify({amount})});
+  const data = await res.json();
+  $("grantMsg").textContent = res.ok ? `${amount} crédits offerts à ${data.users} joueurs.` : "Échec.";
+  $("grantMsg").className = res.ok ? "msg ok" : "msg err";
+  loadUsers();
+};
+
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+</script>
+
+<script>
+async function autoLogin() {
+    const res = await fetch("/api/admin/check");
+    const status = await res.json();
+    if (status.isAdmin || status.isMod) {
+        // Try to unlock with a generic token if the user is verified by session
+        $("token").value = "session-granted";
+        $("btnAuth").click();
+    }
+}
+autoLogin();
+</script>
+</body>
+</html>
