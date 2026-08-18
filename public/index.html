@@ -1,150 +1,83 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-<meta charset="utf-z8">
-<link rel="icon" href="/api/favicon">
-<link rel="apple-touch-icon" href="/api/favicon">
-<meta name="theme-color" content="#0A0C16">
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MichBen Ciné Quizz — devinez le film</title>
-<link href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
+<title>MichBen Ciné Quizz</title>
 <style>
-  :root{--ink:#0A0C16;--velvet:#151A2E;--card:#1C2238;--beam:#F5B942;--ticket:#E4586E;--teal:#4ECDC4;--chalk:#EDE8DC;--muted:#7C819B}
-  *{box-sizing:border-box}
-  body{margin:0;min-height:100vh;background:var(--ink);color:var(--chalk);
-    font-family:'Space Grotesk',system-ui,sans-serif;
-    background-image:radial-gradient(ellipse 80% 55% at 50% -10%, rgba(245,185,66,.16), transparent 70%)}
-  .wrap{max-width:720px;margin:0 auto;padding:26px 18px 40px}
-  h1{font-family:'Anton',sans-serif;font-size:clamp(30px,8vw,52px);letter-spacing:.04em;text-transform:uppercase;margin:0;line-height:.92}
-  h1 em{font-style:normal;color:var(--beam)}
-  h2{font-family:'Anton',sans-serif;text-transform:uppercase;letter-spacing:.03em;font-size:22px;margin:0 0 4px}
-  .baseline{color:var(--muted);font-size:16px;margin:10px 0 0;line-height:1.5;max-width:44ch}
-  .free{display:inline-block;margin-top:14px;font-size:11px;letter-spacing:.2em;text-transform:uppercase;
-    color:var(--teal);border:1px solid var(--teal);border-radius:999px;padding:6px 14px}
-  .card{background:var(--velvet);border:1px solid rgba(237,232,220,.09);border-radius:14px;padding:20px;margin-top:16px}
-  .tag{font-size:11px;letter-spacing:.26em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
-  label{display:block;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
-  input{width:100%;background:var(--card);border:1px solid rgba(237,232,220,.14);color:var(--chalk);border-radius:10px;padding:13px 14px;font:inherit;font-size:16px}
-  input:focus-visible,button:focus-visible{outline:2px solid var(--beam);outline-offset:2px}
-  button{font:inherit;font-weight:700;border:0;border-radius:10px;padding:13px 18px;cursor:pointer;background:var(--beam);color:#161207}
-  button.ghost{background:transparent;color:var(--chalk);border:1px solid rgba(237,232,220,.22)}
-  button.danger{color:var(--ticket);border-color:rgba(228,88,110,.45)}
-  .row{display:flex;gap:10px;margin-top:14px}.row>*{flex:1}
-  .hidden{display:none !important}
-  .wallet{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--muted);background:var(--card);border-radius:999px;padding:7px 14px;margin-top:10px}
-  .wallet b{color:var(--beam);font-family:'JetBrains Mono',monospace;font-size:15px}
-  .online{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--muted);margin-top:10px}
-  .online b{color:#3DDC84;font-family:'JetBrains Mono',monospace;font-size:16px}
-  .dot{width:8px;height:8px;border-radius:50%;background:#3DDC84;display:inline-block}
+  :root { --ink:#0A0C16; --velvet:#151A2E; --beam:#F5B942; --chalk:#EDE8DC; }
+  body { margin:0; background:var(--ink); color:var(--chalk); font-family:sans-serif; }
+  .hidden { display:none!important }
+  .wrap { max-width:720px; margin:0 auto; padding:20px }
+  .card { background:var(--velvet); padding:20px; border-radius:12px; margin-top:20px }
+  .navbar { display:flex; justify-content:space-around; background:var(--velvet); padding:15px; margin-top:20px; border-radius:12px; }
+  .navbar button { background:transparent; color:var(--chalk); border:0; font-size:24px; cursor:pointer; }
+  input { width:100%; padding:10px; margin:5px 0; border-radius:8px; border:1px solid #333; }
+  button { padding:10px 20px; border-radius:8px; background:var(--beam); cursor:pointer; border:0; }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <button id="banner" style="background:none;border:0;cursor:pointer;padding:0;text-align:left">
-    <h1>MichBen <em>Ciné Quizz</em></h1>
-  </button>
+  <h1>MichBen Ciné Quizz</h1>
 
-  <!-- ACCUEIL -->
+  <!-- Landing Section -->
   <section id="landing">
-    <p class="baseline">Un synopsis s'affiche, vous devinez le film. Plus vous répondez vite, plus vous marquez.</p>
     <div class="card">
-      <p class="tag">Connexion</p>
-      <div class="row" style="flex-direction:column">
-        <a class="xbtn" href="/auth/x/login" style="display:block;text-align:center;text-decoration:none;font-weight:700;font-size:16px;background:var(--chalk);color:#0A0C16;border-radius:10px;padding:14px 18px;">𝕏 &nbsp;Se connecter avec X</a>
-      </div>
-      <p class="tag" style="margin:22px 0 10px">Ou avec une adresse email</p>
-      <label for="mail">Email</label>
-      <input id="mail" type="email" placeholder="vous@exemple.fr">
-      <label for="mdp" style="margin-top:12px">Mot de passe</label>
-      <input id="mdp" type="password" placeholder="8 caractères minimum">
-      <div class="row">
-        <button id="btnMailConnexion">Se connecter</button>
-      </div>
-      <p class="feedback bad" id="mailError" style="color:var(--ticket);margin-top:10px;"></p>
+      <button id="btnToggleModeLanding" style="width:100%; margin-bottom:10px;">🧸 Basculer Mode Enfant</button>
+      <label>Email</label>
+      <input id="mail" type="email">
+      <label>Mot de passe</label>
+      <input id="mdp" type="password">
+      <button id="btnConnexion">Se connecter</button>
     </div>
   </section>
 
-  <!-- MENU PRINCIPAL -->
+  <!-- Menu Section -->
   <section id="menu" class="hidden">
-    <h2 id="hello">Bonjour</h2>
-    <p class="wallet">🎟️ <b id="creditsCount">0</b> crédits</p>
-    <p class="online"><span class="dot"></span><b id="onlineNb">1</b> joueur en ligne</p>
-
-    <!-- BARRE DE NAVIGATION AVEC LE BOUTON OURSON EXACTEMENT ENTRE AMIS ET PROFIL -->
-    <div class="row" style="margin: 20px 0;">
-      <button class="ghost" id="btnFriends" style="flex:1;">👥 Amis</button>
-      <!-- BOUTON OURSON (MODE ENFANT) -->
-      <button class="ghost" id="btnToggleMode" title="Basculer Mode Enfant / Adulte" style="flex:0 0 auto; border-color:var(--teal); color:var(--teal); font-size:22px; padding:10px 16px;">🧸</button>
-      <button class="ghost" id="btnProfile" style="flex:1;">👤 Profil</button>
-    </div>
-
     <div class="card">
-      <p class="tag">Mode de jeu</p>
-      <button style="width:100%;margin-bottom:10px;">🎬 Solo</button>
-      <button style="width:100%;background:var(--teal);color:#0A0C16;" id="btnAdminAccess" class="hidden">⚙️ Administration</button>
+      <h2 id="hello">Bonjour</h2>
+      <div class="navbar">
+        <button id="btnHome">🏠</button>
+        <button id="btnFriends">👥</button>
+        <button id="btnToggleModeMenu">🧸</button>
+        <button id="btnProfile">👤</button>
+      </div>
     </div>
   </section>
 </div>
 
 <script>
-const show = (id) => {
-  ["landing", "menu"].forEach(s => {
-    const el = document.getElementById(s);
-    if (el) el.classList.toggle("hidden", s !== id);
-  });
-  window.scrollTo({top: 0, behavior: "instant"});
-};
-
-// Vérification session basique
-fetch("/api/me").then(r => {
-  if (r.ok) {
-    r.json().then(u => {
-      document.getElementById("hello").textContent = `Bonjour ${u.pseudo || 'Cinéphile'}`;
-      if (u.role === "admin" || u.role === "moderateur") {
-        document.getElementById("btnAdminAccess").classList.remove("hidden");
-        document.getElementById("btnAdminAccess").onclick = () => location.href = "/admin.html";
-      }
-      show("menu");
-    });
-  } else {
-    show("landing");
-  }
-}).catch(() => show("landing"));
-
-// Connexion Email Simulation
-document.getElementById("btnMailConnexion").onclick = async () => {
-  const email = document.getElementById("mail").value.trim();
-  const motDePasse = document.getElementById("mdp").value;
-  if (!email || !motDePasse) {
-    document.getElementById("mailError").textContent = "Renseignez l'email et le mot de passe.";
-    return;
-  }
-  const res = await fetch("/auth/email/connexion", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({ email, motDePasse })
-  });
-  if (res.ok) {
-    location.reload();
-  } else {
-    document.getElementById("mailError").textContent = "Identifiants invalides.";
-  }
-};
-
-// Bouton Ourson (Mode Enfant / Adulte)
-let modeEnfant = localStorage.getItem("michben_mode") === "kid";
-const btnBear = document.getElementById("btnToggleMode");
-if (btnBear) {
-  btnBear.style.background = modeEnfant ? "var(--teal)" : "transparent";
-  btnBear.style.color = modeEnfant ? "#161207" : "var(--chalk)";
-  btnBear.onclick = () => {
-    modeEnfant = !modeEnfant;
-    localStorage.setItem("michben_mode", modeEnfant ? "kid" : "adult");
-    btnBear.style.background = modeEnfant ? "var(--teal)" : "transparent";
-    btnBear.style.color = modeEnfant ? "#161207" : "var(--chalk)";
-    alert(modeEnfant ? "🧸 Mode Enfant activé !" : "👤 Mode Adulte activé !");
-  };
+function show(id) {
+  document.getElementById("landing").classList.toggle("hidden", id !== "landing");
+  document.getElementById("menu").classList.toggle("hidden", id !== "menu");
 }
+
+function updateModeButton(mode) {
+  const isKid = mode === "kid";
+  const text = isKid ? "🧸 Mode Enfant : ACTIVÉ" : "🧸 Mode Enfant : DÉSACTIVÉ";
+  document.getElementById("btnToggleModeLanding").textContent = text;
+  document.getElementById("btnToggleModeMenu").textContent = "🧸";
+}
+
+document.getElementById("btnToggleModeLanding").onclick = () => {
+  const newMode = localStorage.getItem("michben_mode") === "kid" ? "adult" : "kid";
+  localStorage.setItem("michben_mode", newMode);
+  updateModeButton(newMode);
+};
+
+document.getElementById("btnToggleModeMenu").onclick = () => {
+  const newMode = localStorage.getItem("michben_mode") === "kid" ? "adult" : "kid";
+  localStorage.setItem("michben_mode", newMode);
+  alert("Mode passé en " + newMode);
+};
+
+document.getElementById("btnConnexion").onclick = () => {
+  // Simple simulation of login
+  document.getElementById("hello").textContent = "Bonjour Joueur";
+  show("menu");
+};
+
+updateModeButton(localStorage.getItem("michben_mode"));
 </script>
 </body>
 </html>
