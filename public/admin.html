@@ -1423,6 +1423,7 @@ async function loadReports(){
           <div>
             <strong>${esc(m.titre)}</strong>
             <small style="display:block">${m.type === "fichier" ? "📁 fichier envoyé" : "🔗 lien externe"} — ${esc(m.url)}</small>
+            <small style="display:block;margin-top:2px">👍 ${m.up || 0} &nbsp; 👎 ${m.down || 0}</small>
           </div>
           <div style="display:flex;gap:6px">
             <button class="ghost" data-move="${esc(m.id)}" data-dir="haut" ${i === 0 ? "disabled" : ""}>▲</button>

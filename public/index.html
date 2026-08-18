@@ -38,6 +38,8 @@
   .radioBar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:10px 0}
   .radioBar #musiqueVolLabel{font-size:12px}
   #btnMusique[aria-pressed="true"]{background:#3DDC84;color:#0A2015;border-color:#3DDC84}
+  #btnRadioLike[aria-pressed="true"]{background:#3DDC84;color:#0A2015;border-color:#3DDC84}
+  #btnRadioDislike[aria-pressed="true"]{background:var(--ticket);color:#fff;border-color:var(--ticket)}
   .hidden{display:none !important}
   .avatars{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:4px}
   .avatars button{background:var(--card);border:1px solid transparent;font-size:22px;padding:8px 10px;line-height:1}
@@ -606,11 +608,15 @@ html.mode-enfant-actif .wrap{padding-top:48px}
   <button id="btnQuitGame" class="ghost hidden" style="position:absolute; top:20px; right:18px; font-size:22px; padding:4px 8px; z-index:50;" title="Quitter la partie">🏠</button>
 
   <!-- RADIO D'AMBIANCE : disponible dès la page d'accueil, continue de jouer jusqu'à la sortie du site. -->
-  <div class="radioBar">
+  <div class="radioBar" id="radioBar">
     <button id="btnMusique" class="ghost" style="flex:0 0 auto" title="Lancer la radio">📻 Lancer la radio</button>
+    <button id="btnMusiqueSuivant" class="ghost hidden" style="flex:0 0 auto;padding:10px 12px" title="Passer à la piste suivante">⏭️</button>
     <button id="btnMusiqueVolMoins" class="ghost" style="flex:0 0 auto;padding:10px 12px" title="Diminuer le volume">🔉➖</button>
     <span id="musiqueVolLabel" class="tag" style="margin:0;min-width:34px;text-align:center">50%</span>
     <button id="btnMusiqueVolPlus" class="ghost" style="flex:0 0 auto;padding:10px 12px" title="Augmenter le volume">🔊➕</button>
+    <span id="radioAvisTexte" class="tag hidden" style="margin:0">Tu aimes ce que tu entends ?</span>
+    <button id="btnRadioLike" class="ghost hidden" style="flex:0 0 auto;padding:10px 12px" title="J'aime cette musique">👍</button>
+    <button id="btnRadioDislike" class="ghost hidden" style="flex:0 0 auto;padding:10px 12px" title="Je n'aime pas cette musique">👎</button>
   </div>
   <p class="note hidden" id="radioMsg" style="margin:-4px 0 10px"></p>
   <audio id="musiqueFond" preload="none"></audio>
@@ -979,6 +985,9 @@ html.mode-enfant-actif .wrap{padding-top:48px}
         <label class="autoLecture">
           <input type="checkbox" id="lectureAuto"> Lecture automatique
         </label>
+        <button id="btnLectureVolMoins" class="ghost" style="flex:0 0 auto;padding:8px 10px" title="Diminuer le volume de la voix">🔉➖</button>
+        <span id="lectureVolLabel" class="tag" style="margin:0;min-width:34px;text-align:center;font-size:12px">100%</span>
+        <button id="btnLectureVolPlus" class="ghost" style="flex:0 0 auto;padding:8px 10px" title="Augmenter le volume de la voix">🔊➕</button>
       </div>
       <p class="indiceLecture hidden" id="indiceLecture">Touchez le texte pour tout afficher</p>
       <p class="pattern hidden" id="pattern"></p>
@@ -1341,10 +1350,43 @@ let musiqueVolume = (() => {
   return Number.isFinite(v) && v >= 0 && v <= 1 ? v : 0.5;
 })();
 
+// Reprise après rafraîchissement de la page : on retient la piste et la position, pour que la radio
+// reparte pile où elle s'était arrêtée plutôt que de tout recommencer depuis le début.
+const RADIO_ETAT_KEY = "michben_musique_etat";
+let etatRadioInitial = null;
+try { etatRadioInitial = JSON.parse(localStorage.getItem(RADIO_ETAT_KEY) || "null"); } catch {}
+
+function sauverEtatRadio(){
+  const piste = playlisteMusique[indexMusique];
+  const audio = $("musiqueFond");
+  if (!piste || !audio) return;
+  try {
+    localStorage.setItem(RADIO_ETAT_KEY, JSON.stringify({
+      trackId: piste.id,
+      position: audio.currentTime || 0,
+      enLecture: !audio.paused,
+    }));
+  } catch {}
+}
+setInterval(sauverEtatRadio, 4000);
+window.addEventListener("pagehide", sauverEtatRadio);
+
+/** Relance automatiquement la radio après un rafraîchissement si elle jouait avant, sauf pour un compte enfant. */
+function tenterRepriseRadio(){
+  if (me && me.role === "enfant") return;
+  if (!etatRadioInitial?.enLecture) return;
+  demarrerMusique();
+}
+
 let playlisteChargee = false;
 async function chargerPlaylisteMusique(){
   playlisteMusique = await fetch("/api/musique").then(r => r.ok ? r.json() : []).catch(() => []);
   playlisteChargee = true;
+  if (etatRadioInitial && playlisteMusique.length){
+    const i = playlisteMusique.findIndex(p => p.id === etatRadioInitial.trackId);
+    if (i >= 0) indexMusique = i;
+  }
+  majBoutonsAvis();
 }
 // Le premier clic sur ▶️ peut survenir avant la fin de ce chargement : demarrerMusique() l'attend,
 // mais seulement dans ce cas précis — pour ne pas casser la règle du "geste utilisateur" des navigateurs
@@ -1378,6 +1420,42 @@ function majVolumeMusique(){
 }
 majVolumeMusique();
 
+/** Affiche/masque et met en surbrillance les pouces (et le bouton suivant) selon la piste en cours. */
+function majBoutonsAvis(){
+  const likeBtn = $("btnRadioLike"), dislikeBtn = $("btnRadioDislike"), texte = $("radioAvisTexte");
+  if (!likeBtn || !dislikeBtn) return;
+  const piste = playlisteMusique[indexMusique];
+  likeBtn.classList.toggle("hidden", !piste);
+  dislikeBtn.classList.toggle("hidden", !piste);
+  texte?.classList.toggle("hidden", !piste);
+  $("btnMusiqueSuivant")?.classList.toggle("hidden", !piste);
+  likeBtn.setAttribute("aria-pressed", String(piste?.monAvis === "up"));
+  dislikeBtn.setAttribute("aria-pressed", String(piste?.monAvis === "down"));
+}
+majBoutonsAvis();
+
+// Avance à la piste suivante de la playlist — volontairement à sens unique, pas de retour en arrière.
+$("btnMusiqueSuivant").onclick = () => {
+  if (!playlisteMusique.length) return;
+  indexMusique = (indexMusique + 1) % playlisteMusique.length;
+  demarrerMusique();
+};
+
+/** Envoie (ou retire, en cliquant deux fois sur le même pouce) l'avis du joueur sur la piste en cours. */
+async function voterMusique(sens){
+  const piste = playlisteMusique[indexMusique];
+  if (!piste) return;
+  if (!me){ alert("Connectez-vous pour donner votre avis sur la musique."); return; }
+  const res = await fetch(`/api/musique/${encodeURIComponent(piste.id)}/vote`, {
+    method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ sens }),
+  }).then(r => r.ok ? r.json() : null).catch(() => null);
+  if (!res) return;
+  piste.monAvis = res.monAvis;
+  majBoutonsAvis();
+}
+$("btnRadioLike").onclick = () => voterMusique("up");
+$("btnRadioDislike").onclick = () => voterMusique("down");
+
 async function demarrerMusique(){
   if (!playlisteChargee) await playlistePromise;   // au tout premier clic seulement
   if (!playlisteMusique.length){
@@ -1388,13 +1466,23 @@ async function demarrerMusique(){
   audio.volume = musiqueVolume;
   if (indexMusique >= playlisteMusique.length) indexMusique = 0;
   const piste = playlisteMusique[indexMusique];
-  if (audio.getAttribute("src") !== piste.url) audio.src = piste.url;
+  if (audio.getAttribute("src") !== piste.url){
+    audio.src = piste.url;
+    // Reprend la position exacte laissée avant un rafraîchissement, mais seulement pour cette même piste.
+    if (etatRadioInitial && etatRadioInitial.trackId === piste.id){
+      const position = etatRadioInitial.position || 0;
+      audio.addEventListener("loadedmetadata", () => { audio.currentTime = position; }, { once: true });
+    }
+  }
+  majBoutonsAvis();
   try {
     await audio.play();
     messageRadio("");
-  } catch {
-    // Refus d'autoplay (hors clic utilisateur) ou piste illisible : on informe plutôt que de rester muet sans explication.
-    messageRadio("Lecture impossible pour cette piste — vérifiez son lien ou son fichier depuis la console admin.");
+  } catch (err) {
+    if (err?.name === "NotAllowedError")
+      messageRadio("Votre navigateur a bloqué la reprise automatique — cliquez sur ▶️ pour reprendre la radio.");
+    else
+      messageRadio("Lecture impossible pour cette piste — vérifiez son lien ou son fichier depuis la console admin.");
   }
 }
 $("musiqueFond").addEventListener("ended", () => {
@@ -1403,6 +1491,8 @@ $("musiqueFond").addEventListener("ended", () => {
 });
 $("musiqueFond").addEventListener("play", majBoutonMusique);
 $("musiqueFond").addEventListener("pause", majBoutonMusique);
+$("musiqueFond").addEventListener("play", sauverEtatRadio);
+$("musiqueFond").addEventListener("pause", sauverEtatRadio);
 $("btnMusique").onclick = () => {
   const audio = $("musiqueFond");
   if (audio.paused) demarrerMusique();
@@ -1502,8 +1592,9 @@ function appliquerRole(){
   if (!me) return;
   $("btnAdminAccess").classList.toggle("hidden", me.role !== "admin");
   if (me.role === "admin") $("btnAdminAccess").onclick = () => window.location.href = "/admin.html";
-  // Un compte enfant ne doit jamais voir de bouton de don d'argent.
+  // Un compte enfant ne doit jamais voir de bouton de don d'argent, ni la radio.
   $("tipLink").classList.toggle("hidden", me.role === "enfant");
+  $("radioBar")?.classList.toggle("hidden", me.role === "enfant");
   if (me.role === "enfant") {
     state.kidMode = true;
     try { localStorage.setItem("kidMode", "1"); } catch {}
@@ -1511,6 +1602,9 @@ function appliquerRole(){
     typeClassement = "enfant";
     $("tabsClassement").querySelectorAll("[data-c]").forEach(x =>
       x.setAttribute("aria-pressed", String(x.dataset.c === "enfant")));
+    // La radio ne doit jamais tourner pour un compte enfant, même si elle avait été lancée avant connexion.
+    $("radioMsg")?.classList.add("hidden");
+    $("musiqueFond")?.pause();
   }
   appliquerModeEnfant();
 }
@@ -1641,6 +1735,10 @@ async function loadSession(){
   } catch (e) {
     $("diag").textContent = `Contact du serveur impossible : ${e.message}`;
     show("landing");
+  } finally {
+    // On attend de connaître le rôle du compte (le cas échéant) avant de tenter de reprendre la radio,
+    // pour ne jamais risquer de la faire démarrer, même une fraction de seconde, sur un compte enfant.
+    tenterRepriseRadio();
   }
 }
 if (new URLSearchParams(location.search).get("erreur"))
@@ -1942,6 +2040,25 @@ function texteLisible(synopsis){
 
 const synthese = window.speechSynthesis;
 let voixFr = null;
+let lectureVolume = (() => {
+  const v = parseFloat(localStorage.getItem("michben_lecture_volume"));
+  return Number.isFinite(v) && v >= 0 && v <= 1 ? v : 1;
+})();
+function majVolumeLecture(){
+  const lbl = $("lectureVolLabel");
+  if (lbl) lbl.textContent = Math.round(lectureVolume * 100) + "%";
+}
+majVolumeLecture();
+$("btnLectureVolMoins").onclick = () => {
+  lectureVolume = Math.max(0, Math.round((lectureVolume - 0.1) * 10) / 10);
+  localStorage.setItem("michben_lecture_volume", String(lectureVolume));
+  majVolumeLecture();
+};
+$("btnLectureVolPlus").onclick = () => {
+  lectureVolume = Math.min(1, Math.round((lectureVolume + 0.1) * 10) / 10);
+  localStorage.setItem("michben_lecture_volume", String(lectureVolume));
+  majVolumeLecture();
+};
 
 function choisirVoix(){
   if (!synthese) return;
@@ -1969,6 +2086,7 @@ function lireSynopsis(texte){
   phrase.lang = "fr-FR";
   if (voixFr) phrase.voice = voixFr;
   phrase.rate = 0.98;
+  phrase.volume = lectureVolume;
   phrase.onend = arreterLecture;
   phrase.onerror = arreterLecture;
 
@@ -3513,7 +3631,7 @@ function renderChoicesSolo(liste){
       $("nextNote").textContent = "Enchaînement automatique dans quelques secondes.";
       show("between");
       clearTimeout(state.suiteId);
-      state.suiteId = setTimeout(mancheSuivanteSolo, 4200);
+      state.suiteId = setTimeout(mancheSuivanteSolo, 8400);   // doublé : laisse plus de temps pour voir la réponse
     }, r.correct ? 900 : 700);
   });
 }
@@ -3778,7 +3896,7 @@ function runBeam(duration){
         solo("answer", {choiceId: -1}).then(r => {
           if (r) $("guessFeedback").textContent = `Temps écoulé — c'était ${r.answer}.`;
           $("guessFeedback").className = "feedback bad";
-          setTimeout(mancheSuivanteSolo, 2200);
+          setTimeout(mancheSuivanteSolo, 4400);   // doublé : laisse plus de temps pour voir la réponse
         });
       }
     }
