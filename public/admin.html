@@ -248,7 +248,7 @@
 
     
 
-    <div id="paneSugg" class="hidden"><div class="card"><p class="tag">Suggestions des joueurs</p><div id="suggList"></div></div></div>
+    <div id="paneSugg" class="hidden"><div class="card"><p class="tag" id="suggCount">Suggestions des joueurs</p><div id="suggList"></div></div></div>
 
     <div id="paneNowPlaying" class="hidden">
       <div class="card">
@@ -749,6 +749,7 @@ function tab(which){
     $(onglet).setAttribute("aria-selected", which === nom);
     $(volet).classList.toggle("hidden", which !== nom);
   }
+  if (which === "sugg") loadSuggestions();
   if (which === "users") loadUsers();
   if (which === "reports"){ loadReports(); loadConversations(); }
   if (which === "reglages"){ etatSecurite(); chargerReglages(); }
@@ -756,6 +757,7 @@ function tab(which){
   if (which === "nowplaying") loadNowPlaying();
 }
 $("tabMovies").onclick = () => tab("movies");
+$("tabSugg").onclick = () => tab("sugg");
 $("tabUsers").onclick = () => tab("users");
 $("tabReports").onclick = () => tab("reports");
 $("tabReglages").onclick = () => tab("reglages");
@@ -1114,14 +1116,17 @@ async function loadReports(){
 
 
     async function loadSuggestions() {
+      $("suggCount").textContent = "Chargement…";
       const res = await api("/api/admin/suggestions");
-      const list = await res.json();
+      if (!res.ok){ $("suggCount").textContent = "Suggestions des joueurs — échec du chargement."; return; }
+      const list = (await res.json()).slice().sort((a, b) => new Date(b.date) - new Date(a.date));
+      $("suggCount").textContent = `${list.length} suggestion${list.length>1?"s":""} de joueurs`;
       $("suggList").innerHTML = list.map(s => `
         <div class="item">
             <div><strong>${esc(s.titre)}</strong><small>Par ${esc(s.auteur)} le ${new Date(s.date).toLocaleDateString()}</small></div>
             <div style="font-size:13px; color:var(--muted)">${esc(s.commentaire)}</div>
         </div>
-      `).join("");
+      `).join("") || "<p class='msg'>Aucune suggestion pour l'instant.</p>";
     }
 
 /* ---------- Joueurs ---------- */

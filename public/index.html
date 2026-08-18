@@ -900,6 +900,25 @@ html.mode-enfant-actif .wrap{padding-top:48px}
     </div>
   </section>
 
+  <!-- REGARDER EN DIRECT -->
+  <section id="regarder" class="hidden">
+    <div class="card">
+      <p class="tag">👁️ En direct — <span id="regarderPseudo"></span></p>
+      <p class="note" id="regarderRound" style="margin-top:0"></p>
+      <p class="synopsis" id="regarderSynopsis"></p>
+      <div class="choices" id="regarderChoices"></div>
+      <div class="revelation hidden" id="regarderRevelation">
+        <img id="regarderPoster" class="afficheRevelee hidden" alt="">
+        <p class="reveal" id="regarderReponse"></p>
+        <p class="note" id="regarderAnnee" style="margin-top:2px"></p>
+      </div>
+      <p class="tag" style="margin-top:18px">Scores en direct</p>
+      <ol class="rank" id="regarderScores"></ol>
+      <p class="note" id="regarderEtat"></p>
+      <div class="row"><button class="ghost" id="btnRegarderQuitter">Arrêter de regarder</button></div>
+    </div>
+  </section>
+
   <!-- FIN -->
   <section id="over" class="hidden">
     <div class="card">
@@ -1153,7 +1172,7 @@ function appliquerRole(){
 
 /** Chaque écran commence en haut : personne ne doit remonter à la main. */
 const show = id => {
-  ["landing","validation","parrainage","profile","board","exchange","friends","quetes","moderation","menu","lobby","waiting","round","between","over"]
+  ["landing","validation","parrainage","profile","board","exchange","friends","quetes","moderation","menu","lobby","waiting","round","between","over","regarder"]
     .forEach(s => $(s).classList.toggle("hidden", s !== id));
   window.scrollTo({top: 0, behavior: "instant"});
   
@@ -1979,11 +1998,19 @@ async function ouvrirJoueur(id, pseudo, avatar, photoJoueur){
       <b>${rang(f.rangGlobal)} · ${rang(f.rangSaison)}</b></div>`;
 
   const relation = f.relation;
-  $("popEtat").textContent = ETATS[relation] || "";
-  $("popActions").innerHTML = (ACTIONS_AMI[relation] || []).map(([a, libelle]) =>
+  $("popEtat").textContent = f.enPartie
+    ? `${ETATS[relation] || ""} En train de jouer${MODE_NAMES[f.modeSalon] ? ` (${MODE_NAMES[f.modeSalon]})` : ""}.`.trim()
+    : (ETATS[relation] || "");
+  const regarderBtn = f.enPartie
+    ? `<button data-act="regarder" style="background:#3DDC84;color:#0A2015">👁️ Regarder en direct</button>` : "";
+  $("popActions").innerHTML = regarderBtn + (ACTIONS_AMI[relation] || []).map(([a, libelle]) =>
     `<button class="${a === "bloquer" ? "ghost danger" : ""}" data-act="${a}">${libelle}</button>`).join("");
 
   $("popActions").querySelectorAll("[data-act]").forEach(b => b.onclick = async () => {
+    if (b.dataset.act === "regarder"){
+      $("popJoueur").classList.add("hidden");
+      return regarderAmi(id, f.pseudo);
+    }
     if (b.dataset.act === "message"){
       $("popJoueur").classList.add("hidden");
       return ouvrirConversation(id, f.pseudo, f.avatar, f.photo);
@@ -2018,6 +2045,7 @@ function ligneJoueur(j, boutons){
     <span class="nom" data-fiche="${esc(j.id)}" data-pseudo="${esc(j.pseudo)}"
       data-avatar="${j.avatar||"🎬"}" data-photo="${esc(j.photo||"")}"
       style="cursor:pointer">${vignette(j)} ${esc(j.pseudo)}</span>
+    ${j.enPartie ? `<span class="pastille" style="background:#3DDC84;color:#0A2015" title="En train de jouer">🔴 en direct</span>` : ""}
     <div style="display:flex; gap:6px; flex-wrap:wrap;">
     ${boutons.map(([a, l]) =>
       `<button class="ghost" data-act="${a}" data-id="${esc(j.id)}" title="${a}" style="padding:6px 10px; font-size:15px;">${l}</button>`).join("")}
@@ -2086,6 +2114,83 @@ async function chercher(){
 }
 $("btnChercher").onclick = chercher;
 $("quiChercher").addEventListener("keydown", e => { if (e.key === "Enter") chercher(); });
+
+/* ---------- Regarder la partie d'un ami en direct ---------- */
+let regardeAmi = null;   // {id, pseudo} de l'ami actuellement suivi, ou null
+
+function regarderAmi(amiId, pseudo){
+  if (!window.tempsReelDispo){
+    alert("Le direct nécessite la connexion temps réel, bloquée par votre navigateur.");
+    return;
+  }
+  socket.emit("room:regarder", {amiId}, res => {
+    if (!res?.ok){
+      const msgs = {
+        PAS_AMI: "Vous devez être amis pour regarder sa partie.",
+        PARTIE_INTROUVABLE: "Cette partie est déjà terminée.",
+      };
+      alert(msgs[res?.error] || "Impossible de regarder cette partie pour le moment.");
+      return;
+    }
+    regardeAmi = {id: amiId, pseudo};
+    $("regarderPseudo").textContent = pseudo;
+    $("regarderRevelation").classList.add("hidden");
+    $("regarderEtat").textContent = "";
+    renderScoresRegardes(res.state?.players || []);
+    if (res.manche) afficherMancheRegardee(res.manche);
+    else {
+      $("regarderRound").textContent = "";
+      $("regarderSynopsis").textContent = "En attente du lancement de la manche…";
+      $("regarderChoices").innerHTML = "";
+    }
+    show("regarder");
+  });
+}
+
+function quitterRegarder(){
+  socket.emit("room:arreterRegarder");
+  regardeAmi = null;
+  show("menu");
+}
+$("btnRegarderQuitter").onclick = quitterRegarder;
+
+function afficherMancheRegardee(m){
+  $("regarderRound").textContent = `Manche ${m.roundIndex + 1} / ${m.total}`;
+  $("regarderSynopsis").textContent = m.synopsis;
+  $("regarderChoices").innerHTML = (m.choices || [])
+    .map(c => `<button disabled>${esc(c.title)}</button>`).join("");
+  $("regarderRevelation").classList.add("hidden");
+}
+
+function renderScoresRegardes(joueurs){
+  const classes = [...joueurs].sort((a, b) => b.score - a.score);
+  $("regarderScores").innerHTML = classes.map(p =>
+    `<li>${vignette(p)} ${esc(p.pseudo)}<b>${p.score} pts</b></li>`).join("");
+}
+
+// Ces trois événements ne sont émis par le serveur qu'aux spectateurs :
+// ils ne peuvent jamais interférer avec l'écran de jeu d'une partie jouée.
+socket.on("regarder:manche", (m) => { if (regardeAmi) afficherMancheRegardee(m); });
+
+socket.on("regarder:fin", (r) => {
+  if (!regardeAmi) return;
+  $("regarderRevelation").classList.remove("hidden");
+  $("regarderReponse").textContent = r.answer || "";
+  $("regarderAnnee").textContent = r.year ? `Sorti en ${r.year}` : "";
+  const img = $("regarderPoster");
+  if (r.poster){ img.src = r.poster; img.alt = `Affiche de ${r.answer}`; img.classList.remove("hidden"); }
+  else img.classList.add("hidden");
+  renderScoresRegardes(r.scores || []);
+});
+
+socket.on("regarder:termine", (r) => {
+  if (!regardeAmi) return;
+  $("regarderEtat").textContent = r?.abandon
+    ? "La partie s'est arrêtée : plus aucun joueur n'est connecté."
+    : "Partie terminée.";
+  if (r?.scores || r?.ranking) renderScoresRegardes(r.ranking || r.scores || []);
+  regardeAmi = null;
+});
 
 /** Crée un salon depuis l'écran Amis, sans repasser par le menu. */
 let modeAmis = "duel";
