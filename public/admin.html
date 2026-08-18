@@ -90,6 +90,7 @@
       <button id="tabCitations" aria-selected="false">Citations</button>
       <button id="tabRoue" aria-selected="false">Roue</button>
       <button id="tabMusique" aria-selected="false">Musique</button>
+      <button id="tabClassement" aria-selected="false">Partie classée</button>
     </div>
 
     <div id="paneMovies">
@@ -329,6 +330,26 @@
       <div class="card">
         <p class="tag" id="musCount">Playlist</p>
         <div id="musListe"></div>
+      </div>
+    </div>
+
+    <div id="paneClassement" class="hidden">
+      <div class="card">
+        <p class="tag" id="classementSaisonTag">📈 Saison classée en cours</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 10px;line-height:1.6">
+          Les parties classées comptent pour le classement de la saison. Le plafond de parties
+          par joueur et par jour se règle dans l'onglet Réglages ; des parties bonus peuvent aussi
+          être gagnées par les joueurs à la roue du jour (lot « partie classée bonus »).
+        </p>
+        <div id="classementSaisonInfo" class="teamboard" style="margin:0"></div>
+      </div>
+      <div class="card">
+        <p class="tag">🏆 Classement de la saison en cours</p>
+        <div id="classementTop"></div>
+      </div>
+      <div class="card">
+        <p class="tag">🥇 Palmarès des saisons précédentes</p>
+        <div id="classementPalmares"></div>
       </div>
     </div>
 
@@ -846,6 +867,7 @@ function tab(which){
                                       ["citations","tabCitations","paneCitations"],
                                       ["roue","tabRoue","paneRoue"],
                                       ["musique","tabMusique","paneMusique"],
+                                      ["classement","tabClassement","paneClassement"],
                                       ["users","tabUsers","paneUsers"],
                                       ["reports","tabReports","paneReports"],
                                       ["reglages","tabReglages","paneReglages"],
@@ -858,6 +880,7 @@ function tab(which){
   if (which === "citations") loadCitations();
   if (which === "roue"){ loadRoue(); loadVipDemandes(); }
   if (which === "musique") loadMusique();
+  if (which === "classement") loadClassement();
   if (which === "users") loadUsers();
   if (which === "reports"){ loadReports(); loadConversations(); }
   if (which === "reglages"){ etatSecurite(); chargerReglages(); chargerAide(); }
@@ -869,6 +892,7 @@ $("tabSugg").onclick = () => tab("sugg");
 $("tabCitations").onclick = () => tab("citations");
 $("tabRoue").onclick = () => tab("roue");
 $("tabMusique").onclick = () => tab("musique");
+$("tabClassement").onclick = () => tab("classement");
 $("tabUsers").onclick = () => tab("users");
 $("tabReports").onclick = () => tab("reports");
 $("tabReglages").onclick = () => tab("reglages");
@@ -1542,6 +1566,45 @@ async function loadReports(){
       }
       $("btnMusAjouterFichier").disabled = false;
     };
+
+    /* ---------- Partie classée ---------- */
+    async function loadClassement() {
+      $("classementSaisonTag").textContent = "📈 Saison classée en cours — chargement…";
+      const [resSaison, resTop] = await Promise.all([
+        api("/api/saison"), api("/api/leaderboard?type=saison"),
+      ]);
+      if (!resSaison.ok) { $("classementSaisonTag").textContent = "📈 Saison classée — échec du chargement."; return; }
+      const s = await resSaison.json();
+
+      $("classementSaisonTag").textContent = `📈 Saison n°${s.numero} — se termine le ${new Date(s.fin).toLocaleDateString()}`;
+      $("classementSaisonInfo").innerHTML = `
+        <div class="item"><div>Jours restants avant la fin de la saison</div><div><strong>${s.joursRestants}</strong></div></div>
+        <div class="item"><div>Parties classées par jour et par joueur</div><div><strong>${s.partiesMax}</strong></div></div>`;
+
+      const top = resTop.ok ? await resTop.json() : [];
+      $("classementTop").innerHTML = top.length ? top.map((j) => `
+        <div class="item">
+          <div><strong>#${j.rank} — ${esc(j.pseudo)}</strong>
+            <small style="display:block">Niveau ${j.niveau} · ${j.gamesPlayed} partie${j.gamesPlayed > 1 ? "s" : ""} classée${j.gamesPlayed > 1 ? "s" : ""}</small>
+          </div>
+          <div><strong>${j.totalScore} pts</strong></div>
+        </div>
+      `).join("") : "<p class='msg'>Aucun score enregistré pour cette saison pour l'instant.</p>";
+
+      $("classementPalmares").innerHTML = (s.palmares || []).length
+        ? s.palmares.map((p) => `
+          <div class="item">
+            <div>
+              <strong>Saison n°${p.numero}</strong>
+              <small style="display:block">Terminée le ${new Date(p.fin).toLocaleDateString()}</small>
+              <small style="display:block;margin-top:4px">
+                ${(p.podium || []).slice(0, 3).map((j) => `#${j.rank} ${esc(j.pseudo)} (${j.totalScore} pts)`).join(" · ") || "Aucun podium enregistré."}
+              </small>
+            </div>
+          </div>
+        `).join("")
+        : "<p class='msg'>Aucune saison terminée pour l'instant.</p>";
+    }
 
     $("btnRoueReappro").onclick = async () => {
       if (!confirm("Réapprovisionner la roue maintenant ? Le stock restant du jour sera remplacé par un stock complet.")) return;

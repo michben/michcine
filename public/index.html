@@ -2185,10 +2185,15 @@ async function majBadgeMessages(){
 /* ---------- Don de points ---------- */
 async function offrirPoints(id, pseudo){
   const statut = await fetch("/api/points/dons-statut").then(r => r.ok ? r.json() : null).catch(() => null);
+  // Le plafond par envoi grandit avec le niveau du joueur (jusqu'à 10 fois celui du premier palier) :
+  // on l'affiche pour que la progression du niveau soit visible, pas seulement subie côté serveur.
+  const bilanPalier = statut
+    ? `\nMaximum par envoi : ${statut.max} points (palier ${statut.palier}/${statut.paliersMax}, niveau ${statut.niveau}).`
+    : "";
   const bilanJour = statut
     ? `\nAujourd'hui : ${statut.dejaDonne}/${statut.plafondJour} points déjà offerts — il vous reste ${statut.restant} à offrir.`
     : "";
-  const saisie = prompt(`Combien de points offrir à ${pseudo} ?\n\nVotre cagnotte : ${points} points.${bilanJour}`);
+  const saisie = prompt(`Combien de points offrir à ${pseudo} ?\n\nVotre cagnotte : ${points} points.${bilanPalier}${bilanJour}`);
   if (saisie === null) return;
   const montant = Math.floor(Number(saisie));
   if (!montant || montant <= 0) return;
@@ -2619,7 +2624,7 @@ const ROUE_SEGMENTS = [
   { cle:"100", label:"100 🎟️", couleur:"#5b3f1a" },
   { cle:"50",  label:"50 🎟️",  couleur:"#3a2c14" },
   { cle:"500", label:"500 🎟️", couleur:"#8a5a1f" },
-  { cle:"50",  label:"50 🎟️",  couleur:"#3a2c14" },
+  { cle:"ranked:1", label:"📈 Classée", couleur:"#1f6b5b" },
   { cle:"100", label:"100 🎟️", couleur:"#5b3f1a" },
   { cle:"50",  label:"50 🎟️",  couleur:"#3a2c14" },
   { cle:"vip", label:"👑 VIP",  couleur:"#e9b64c" },
@@ -2689,7 +2694,9 @@ function afficherGainEnAttente(gain){
   $("roueResultatTitre").textContent = `🎉 Bravo, vous avez gagné : ${gain.label} !`;
   $("roueResultatDetail").textContent = gain.type === "credits"
     ? `Cliquez sur « Réclamer » pour ajouter ${gain.valeur} 🎟️ à votre compte.`
-    : "Réclamez votre gain : un code de parrainage vous sera envoyé par l'administrateur.";
+    : gain.type === "ranked"
+      ? `Cliquez sur « Réclamer » pour ajouter ${gain.valeur} partie${gain.valeur>1?"s":""} classée${gain.valeur>1?"s":""} bonus à votre quota.`
+      : "Réclamez votre gain : un code de parrainage vous sera envoyé par l'administrateur.";
   $("btnRoueReclamer").classList.remove("hidden");
   $("btnRoueReclamer").disabled = false;
   $("btnRoueReclamer").textContent = "🎁 Réclamer mon gain";
@@ -2749,7 +2756,9 @@ $("btnTournerRoue").onclick = async () => {
     return;
   }
   const d = await res.json();
-  const cle = d.resultat.type === "vip" ? "vip" : String(d.resultat.valeur);
+  const cle = d.resultat.type === "vip" ? "vip"
+    : d.resultat.type === "ranked" ? `ranked:${d.resultat.valeur}`
+    : String(d.resultat.valeur);
   const candidats = ROUE_SEGMENTS.map((s, i) => s.cle === cle ? i : -1).filter(i => i >= 0);
   const cibleIndex = candidats.length ? candidats[Math.floor(Math.random() * candidats.length)] : 0;
 
@@ -2786,6 +2795,9 @@ $("btnRoueReclamer").onclick = async () => {
     $("roueResultatTitre").textContent = `🎉 Bravo ! +${d.valeur} 🎟️`;
     $("roueResultatDetail").textContent = "Vos tickets ont été ajoutés à votre compte.";
     setCredits(d.credits);
+  } else if (d.type === "ranked"){
+    $("roueResultatTitre").textContent = `🎉 Bravo ! +${d.valeur} partie${d.valeur>1?"s":""} classée${d.valeur>1?"s":""}`;
+    $("roueResultatDetail").textContent = "Ajoutée(s) à votre quota — rendez-vous en Partie classée pour en profiter !";
   } else if (d.type === "vip"){
     $("roueResultatTitre").textContent = "🎉 Bravo pour ce code VIP !";
     $("roueResultatDetail").textContent = "Votre demande a été envoyée à l'administrateur — vous recevrez votre code très bientôt.";
