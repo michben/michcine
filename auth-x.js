@@ -589,7 +589,7 @@ export function mountAuth(app) {
 
   app.get("/api/captcha", (_req, res) => res.json({ siteKey: process.env.TURNSTILE_SITE_KEY || null }));
 
-  app.post("/auth/ email/connexion", (req, res) => {
+  app.post("/auth/email/connexion", (req, res) => {
     const r = connecterEmail(req.body.email, req.body.motDePasse);
     if (r.error) return res.status(401).json(r);
     createSession(res, r.user);
