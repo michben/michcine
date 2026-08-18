@@ -128,6 +128,9 @@
   .codeCadre{text-align:center;background:var(--card);border-radius:12px;padding:16px;margin-top:8px}
   .codeCadre .valeur{font-family:'JetBrains Mono',monospace;font-size:30px;letter-spacing:.32em;
     color:var(--beam);margin:6px 0 12px;user-select:all}
+  .chip{display:inline-flex;align-items:center;gap:6px;background:var(--card);border:1px solid rgba(255,255,255,.08);
+    border-radius:999px;padding:6px 12px;font-size:13px;color:var(--chalk)}
+  .chip b{color:var(--beam)}
   /* Roue quotidienne : disque tournant avec pointeur fixe au sommet. */
   .roueZone{position:relative;width:min(280px,80vw);height:min(280px,80vw);margin:18px auto 0}
   .roueFleche{position:absolute;top:-6px;left:50%;transform:translateX(-50%);z-index:2;
@@ -489,6 +492,20 @@ html.mode-enfant-actif .wrap{padding-top:48px}
   .bday-item .info { flex: 1; }
   .bday-item .info b { display: block; color: var(--chalk); font-size: 16px; margin-bottom: 2px;}
   .bday-item .info small { color: var(--muted); font-size: 13px; line-height: 1.3; display: block;}
+  /* Historique des questions déjà posées dans la partie en cours. */
+  .histoItem{display:flex;gap:12px;margin-bottom:12px;padding:10px;background:var(--card);
+    border-radius:8px;align-items:flex-start;border-left:4px solid var(--beam)}
+  .histoItem img{width:52px;height:76px;object-fit:cover;border-radius:4px;flex:0 0 auto;background:#000}
+  .histoItem .info{flex:1;min-width:0}
+  .histoItem .info b{display:block;color:var(--chalk);font-size:15px;margin-bottom:2px}
+  .histoItem .info small{color:var(--muted);font-size:12.5px;line-height:1.35;display:block}
+  /* Décompte 3-2-1 avant le lancement d'une partie. */
+  .compteARebours{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;
+    background:rgba(10,8,5,.88);pointer-events:none}
+  .compteARebours span{font-family:'Anton',sans-serif;color:var(--beam);text-transform:uppercase;
+    letter-spacing:.03em;font-size:clamp(48px,16vw,110px);text-shadow:0 6px 24px rgba(0,0,0,.6);
+    animation:compteAPop .7s ease-out}
+  @keyframes compteAPop{0%{opacity:0;transform:scale(.5)}30%{opacity:1;transform:scale(1.15)}100%{opacity:1;transform:scale(1)}}
 
   .progression-map { display: flex; flex-direction: column-reverse; align-items: center; padding: 20px 0; overflow-y: auto; overflow-x: hidden; height: 100%; padding-bottom: 50vh; }
   .progression-line { width: 6px; height: 26px; background: var(--card); transition: background 0.3s; }
@@ -774,19 +791,31 @@ html.mode-enfant-actif .wrap{padding-top:48px}
 
       <p class="note" id="roueStock" style="text-align:center;margin:14px 0 0"></p>
 
+      <div id="roueCatalogue" style="margin-top:12px"></div>
+
       <div id="roueResultat" class="hidden">
         <p class="tag" style="margin:14px 0 4px" id="roueResultatTitre"></p>
         <p class="note" id="roueResultatDetail" style="margin:0"></p>
-        <div class="codeCadre hidden" id="roueCodeCadre" style="margin-top:10px">
-          <small style="color:var(--muted);font-size:12px;letter-spacing:.2em;text-transform:uppercase">Votre code de parrainage</small>
-          <p class="valeur" id="roueCodeValeur"></p>
-          <button class="ghost" id="btnRoueCopierCode">Copier le code</button>
+        <div class="row" style="margin-top:10px">
+          <button id="btnRoueReclamer" class="hidden">🎁 Réclamer mon gain</button>
         </div>
+      </div>
+
+      <div id="roueDemandeVip" class="codeCadre hidden" style="margin-top:14px">
+        <small style="color:var(--muted);font-size:12px;letter-spacing:.2em;text-transform:uppercase">Code VIP</small>
+        <p class="valeur" id="roueDemandeVipTexte"></p>
+        <button class="ghost hidden" id="btnRoueDemandeVipCopier">Copier le code</button>
       </div>
 
       <div class="row" style="margin-top:16px">
         <button id="btnTournerRoue">Tourner</button>
       </div>
+
+      <div id="roueGagnants" style="margin-top:18px">
+        <p class="tag" style="margin:0 0 6px">🏆 Derniers gagnants</p>
+        <ul class="note" id="roueGagnantsListe" style="list-style:none;padding:0;margin:0"></ul>
+      </div>
+
       <div class="row"><button class="ghost" id="btnRoueBack">Retour à l'accueil</button></div>
     </div>
   </section>
@@ -837,7 +866,7 @@ html.mode-enfant-actif .wrap{padding-top:48px}
   <!-- CHOIX DU MODE -->
   <section id="menu" class="hidden">
     <h2 id="hello">Bonjour</h2>
-    <p class="wallet" id="walletMenu">🎟️ <b>0</b> crédits</p>
+    <p class="wallet" id="walletMenu" style="cursor:pointer" title="Voir l'historique de vos tickets et points">🎟️ <b>0</b> crédits</p>
     <p class="online" id="btnOnlineUsers" style="cursor:pointer" title="Voir les joueurs en ligne"><span class="dot on"></span><b id="onlineNb">—</b><span id="onlineCount">joueurs en ligne</span></p>
     <div class="row" style="margin-bottom: 14px; gap: 10px;">
       <button id="btnUpcomingMovies" style="flex:1; padding: 10px 16px; background: var(--beam); color: #0A0C16; font-weight: bold; border: 0; border-radius: 999px; cursor: pointer;">🍿 Sorties Ciné</button>
@@ -930,10 +959,58 @@ html.mode-enfant-actif .wrap{padding-top:48px}
       <div class="row">
         <button id="btnPause" class="ghost" style="flex:0 0 auto">⏸ Pause</button>
         <button id="btnSkip" class="ghost hidden">Passer à la question suivante</button>
+        <button id="btnHistorique" class="ghost" style="flex:0 0 auto">🕘 Questions précédentes</button>
       </div>
       <ul class="players" id="roundPlayers"></ul>
     </div>
   </section>
+
+  <!-- MODALE : QUESTIONS ET RÉPONSES PRÉCÉDENTES DE LA PARTIE -->
+  <div class="modal-overlay" id="historiqueModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>🕘 Questions précédentes</h2>
+        <button class="close-btn" id="closeHistoriqueBtn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="historiqueListe"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODALE : PORTE-MONNAIE (historique des transactions) -->
+  <div class="modal-overlay" id="walletModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>💰 Porte-monnaie</h2>
+        <button class="close-btn" id="closeWalletBtn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="teamboard" style="margin:0 0 14px">
+          <div class="a">Points en cagnotte<b id="walletPoints">0</b></div>
+          <div class="b">Tickets bonus<b id="walletCredits">0</b></div>
+        </div>
+        <p class="note" style="margin:0 0 10px">Historique de vos derniers mouvements, du plus récent au plus ancien.</p>
+        <div id="walletListe"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODALE : CONFIRMATION AVANT DE LANCER UNE PARTIE -->
+  <div class="modal-overlay" id="confirmModeModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>🎬 C'est parti ?</h2>
+      </div>
+      <div class="modal-body">
+        <p class="note" id="confirmModeTexte" style="margin-top:0"></p>
+        <div class="row">
+          <button id="btnConfirmModeValider">Commencer la partie</button>
+          <button class="ghost" id="btnConfirmModeAnnuler">Annuler</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- ARRIVÉE EN COURS DE PARTIE -->
   <section id="waiting" class="hidden">
@@ -1174,6 +1251,9 @@ const MODE_NAMES = {solo:"Solo", duel:"Duel", ffa:"Chacun pour soi", teams:"En �
  * Révélation de fin de manche : l'affiche et le titre en grand, quel qu'ait
  * été le résultat. Voir le film reste la récompense, même après un échec.
  */
+/** Historique des questions déjà posées dans la partie en cours (remis à zéro à chaque lancement). */
+let historiqueQuestions = [];
+
 function revelation(titre, affiche, annee, trouve){
   $("verdictTag").textContent = trouve === true ? "Bien joué" : trouve === false ? "Raté" : "La réponse était";
   $("verdictTag").className = `tag ${trouve === true ? "juste" : trouve === false ? "rate" : ""}`;
@@ -1186,6 +1266,74 @@ function revelation(titre, affiche, annee, trouve){
     img.alt = `Affiche de ${titre}`;
     img.classList.remove("hidden");
   } else img.classList.add("hidden");
+
+  // Garde une trace de la question pour le bouton « Questions précédentes ».
+  historiqueQuestions.push({
+    titre: titre || "", affiche: affiche || "", annee: annee || null,
+    synopsis: $("synopsis")?.textContent || "",
+    label: $("roundLabel")?.textContent || "",
+  });
+  if (historiqueQuestions.length > 50) historiqueQuestions.shift();
+}
+
+function afficherHistoriqueQuestions(){
+  $("historiqueListe").innerHTML = historiqueQuestions.length
+    ? [...historiqueQuestions].reverse().map(h => `
+        <div class="histoItem">
+          ${h.affiche ? `<img src="${esc(h.affiche)}" alt="" onerror="this.remove()">` : ""}
+          <div class="info">
+            <small>${esc(h.label)}</small>
+            <b>${esc(h.titre)}${h.annee ? ` (${h.annee})` : ""}</b>
+            <small>${esc((h.synopsis||"").slice(0,160))}${(h.synopsis||"").length>160?"…":""}</small>
+          </div>
+        </div>`).join("")
+    : "<p class='note'>Aucune question précédente pour l'instant dans cette partie.</p>";
+}
+$("btnHistorique").onclick = () => { afficherHistoriqueQuestions(); $("historiqueModal").classList.add("active"); };
+$("closeHistoriqueBtn").onclick = () => $("historiqueModal").classList.remove("active");
+$("historiqueModal").onclick = e => { if (e.target.id === "historiqueModal") $("historiqueModal").classList.remove("active"); };
+
+/** Porte-monnaie : historique horodaté des tickets et points, avec leur provenance. */
+async function ouvrirPorteMonnaie(){
+  $("walletModal").classList.add("active");
+  $("walletListe").innerHTML = "<p class='note'>Chargement…</p>";
+  const d = await fetch("/api/wallet/historique").then(r => r.ok ? r.json() : null).catch(() => null);
+  if (!d){
+    $("walletListe").innerHTML = "<p class='note'>Impossible de charger l'historique pour le moment.</p>";
+    return;
+  }
+  $("walletPoints").textContent = d.points;
+  $("walletCredits").textContent = d.credits;
+  $("walletListe").innerHTML = d.transactions.length
+    ? d.transactions.map(t => {
+        const positif = t.montant > 0;
+        const icone = t.devise === "credits" ? "🎟️" : "✨";
+        const heure = new Date(t.date).toLocaleString("fr-FR", {day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit"});
+        return `<div class="histoItem" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0">
+          <span>${icone} ${esc(t.motif || "Mouvement")}<small style="display:block;color:var(--muted)">${heure}</small></span>
+          <b style="color:${positif ? "#3ecf8e" : "#e0555a"};white-space:nowrap">${positif ? "+" : ""}${t.montant}</b>
+        </div>`;
+      }).join("")
+    : "<p class='note'>Aucun mouvement pour l'instant.</p>";
+}
+$("walletMenu").onclick = ouvrirPorteMonnaie;
+$("closeWalletBtn").onclick = () => $("walletModal").classList.remove("active");
+$("walletModal").onclick = e => { if (e.target.id === "walletModal") $("walletModal").classList.remove("active"); };
+
+/** Petit décompte « 3, 2, 1, c'est parti ! » avant le début d'une partie. */
+function compteARebours(callback){
+  const overlay = document.createElement("div");
+  overlay.className = "compteARebours";
+  document.body.append(overlay);
+  const etapes = ["3","2","1","C'est parti !"];
+  let i = 0;
+  const suivant = () => {
+    overlay.innerHTML = `<span>${etapes[i]}</span>`;
+    i++;
+    if (i < etapes.length) setTimeout(suivant, 650);
+    else setTimeout(() => { overlay.remove(); callback(); }, 650);
+  };
+  suivant();
 }
 
 /** Le chat est disponible dès qu'on est dans un salon, quel que soit
@@ -1356,6 +1504,7 @@ async function loadSession(){
     if (!me.pseudoChosen) return firstVisit();
     majBadgeAmis();
     chargerQuetes(); // Met à jour le niveau au chargement
+    verifierTicketRoue(); // Prévient si un tour gratuit de la roue n'a pas encore été utilisé
     $("hello").innerHTML = `Bonjour ${esc(me.pseudo)}` +
       (["moderateur","admin"].includes(me.role) ? `<span class="badge-role">${esc(me.role)}</span>` : "");
     $("btnModeration").classList.toggle("hidden", !["moderateur","admin"].includes(me.role));
@@ -1622,7 +1771,11 @@ async function majBadgeMessages(){
 
 /* ---------- Don de points ---------- */
 async function offrirPoints(id, pseudo){
-  const saisie = prompt(`Combien de points offrir à ${pseudo} ?\n\nVotre cagnotte : ${points} points.`);
+  const statut = await fetch("/api/points/dons-statut").then(r => r.ok ? r.json() : null).catch(() => null);
+  const bilanJour = statut
+    ? `\nAujourd'hui : ${statut.dejaDonne}/${statut.plafondJour} points déjà offerts — il vous reste ${statut.restant} à offrir.`
+    : "";
+  const saisie = prompt(`Combien de points offrir à ${pseudo} ?\n\nVotre cagnotte : ${points} points.${bilanJour}`);
   if (saisie === null) return;
   const montant = Math.floor(Number(saisie));
   if (!montant || montant <= 0) return;
@@ -1632,7 +1785,7 @@ async function offrirPoints(id, pseudo){
   const data = await res.json().catch(() => ({}));
   if (!res.ok){
     const messages = {
-      SOLDE_INSUFFISANT: "Votre cagnotte ne suffit pas.",
+      SOLDE_INSUFFISANT: `Votre cagnotte ne suffit pas (vous avez ${points} points). Les points se gagnent en jouant des parties — ce ne sont pas les mêmes que vos tickets 🎟️.`,
       TROP_ELEVE: `Maximum ${data.max} points en une fois.`,
       PLAFOND_JOUR: `Plafond quotidien atteint. Il vous reste ${data.restant} points à offrir aujourd'hui.`,
       PAS_AMI: "Vous ne pouvez offrir des points qu'à vos amis.",
@@ -1641,7 +1794,7 @@ async function offrirPoints(id, pseudo){
   }
   setPoints(data.points);
   bandeauNotif(`<span style="font-size:24px">🎁</span><span><b>${montant} points envoyés</b>
-    <small>à ${esc(pseudo)}</small></span>`);
+    <small>à ${esc(pseudo)} · il vous reste ${data.restant} points à offrir aujourd'hui</small></span>`);
 }
 
 /* ---------- Lecture à voix haute ---------- */
@@ -2055,21 +2208,80 @@ function dessinerRoue(){
 }
 dessinerRoue();
 
+/** Un gain tiré mais pas encore réclamé (persiste si le joueur quitte l'écran avant de cliquer). */
+let gainRoueEnAttente = null;
+
+function afficherLotsCatalogue(catalogue){
+  if (!Array.isArray(catalogue) || !catalogue.length){ $("roueCatalogue").innerHTML = ""; return; }
+  $("roueCatalogue").innerHTML = `
+    <p class="note" style="text-align:center;margin:0 0 6px;color:var(--muted)">Lots disponibles aujourd'hui</p>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center">
+      ${catalogue.map(c => `
+        <span class="chip" style="opacity:${c.restants ? 1 : .45}">
+          ${c.emoji} ${esc(c.label)} <b>${c.restants}</b>
+        </span>`).join("")}
+    </div>`;
+}
+
+function afficherGagnantsRoue(liste){
+  $("roueGagnantsListe").innerHTML = (liste || []).length
+    ? liste.map(t => `<li style="padding:4px 0">🏆 <b>${esc(t.pseudo)}</b> — ${esc(t.lot)}
+        <small style="color:var(--muted)">${new Date(t.date).toLocaleDateString("fr-FR", {day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit"})}</small></li>`).join("")
+    : `<li style="color:var(--muted)">Personne n'a encore réclamé de lot aujourd'hui — soyez le premier !</li>`;
+}
+
+function afficherDemandeVip(demande){
+  if (!demande){ $("roueDemandeVip").classList.add("hidden"); return; }
+  $("roueDemandeVip").classList.remove("hidden");
+  if (demande.statut === "envoye"){
+    $("roueDemandeVipTexte").textContent = demande.code;
+    $("btnRoueDemandeVipCopier").classList.remove("hidden");
+  } else {
+    $("roueDemandeVipTexte").textContent = "Demande envoyée, en attente de traitement…";
+    $("btnRoueDemandeVipCopier").classList.add("hidden");
+  }
+}
+
+/** Affiche un gain (fraîchement tiré ou retrouvé au rechargement) avec son bouton « Réclamer ». */
+function afficherGainEnAttente(gain){
+  gainRoueEnAttente = gain;
+  if (!gain){ $("roueResultat").classList.add("hidden"); return; }
+  $("roueResultatTitre").textContent = `🎉 Bravo, vous avez gagné : ${gain.label} !`;
+  $("roueResultatDetail").textContent = gain.type === "credits"
+    ? `Cliquez sur « Réclamer » pour ajouter ${gain.valeur} 🎟️ à votre compte.`
+    : "Réclamez votre gain : un code de parrainage vous sera envoyé par l'administrateur.";
+  $("btnRoueReclamer").classList.remove("hidden");
+  $("btnRoueReclamer").disabled = false;
+  $("btnRoueReclamer").textContent = "🎁 Réclamer mon gain";
+  $("roueResultat").classList.remove("hidden");
+}
+
 async function chargerRoue(){
-  $("roueResultat").classList.add("hidden");
   const d = await fetch("/api/roue").then(r => r.ok ? r.json() : null).catch(() => null);
   if (!d){
     $("roueInfo").textContent = "Impossible de charger la roue pour le moment.";
     $("btnTournerRoue").disabled = true;
     return;
   }
+  afficherLotsCatalogue(d.catalogue);
+  afficherGagnantsRoue(d.derniersTirages);
+  afficherDemandeVip(d.demandeVip);
+
+  if (d.gainEnAttente) afficherGainEnAttente(d.gainEnAttente);
+  else if (!roueEnCours) { $("roueResultat").classList.add("hidden"); gainRoueEnAttente = null; }
+
   const dispo = d.gratuitDisponible;
-  $("roueInfo").innerHTML = dispo
-    ? `Votre tour <b style="color:var(--teal)">gratuit</b> du jour vous attend !`
-    : `Tour gratuit déjà utilisé aujourd'hui. Prochain tour : <b style="color:var(--beam)">${d.coutTour} 🎟️</b> (vous avez ${d.credits} 🎟️).`;
+  $("roueInfo").innerHTML = d.gainEnAttente
+    ? `Réclamez votre gain ci-dessous avant de tourner à nouveau.`
+    : dispo
+      ? `Votre tour <b style="color:var(--teal)">gratuit</b> du jour vous attend !`
+      : d.tirPayantDisponible
+        ? `Tour gratuit déjà utilisé aujourd'hui. Prochain tour : <b style="color:var(--beam)">${d.coutTour} 🎟️</b> (vous avez ${d.credits} 🎟️).`
+        : `Vous avez atteint la limite de ${d.tirsPayantsMax} tours payants aujourd'hui — rendez-vous à la prochaine roue, à 18h !`;
   $("roueStock").textContent = `${d.lotsRestants} lot${d.lotsRestants>1?"s":""} restant${d.lotsRestants>1?"s":""} dans la roue d'aujourd'hui — réapprovisionnée chaque jour à 18h.`;
   $("btnTournerRoue").textContent = dispo ? "Tourner (gratuit)" : `Tourner (${d.coutTour} 🎟️)`;
-  $("btnTournerRoue").disabled = d.lotsRestants === 0 || (!dispo && d.credits < d.coutTour);
+  $("btnTournerRoue").disabled = Boolean(d.gainEnAttente) || d.lotsRestants === 0
+    || (!dispo && (!d.tirPayantDisponible || d.credits < d.coutTour));
 }
 
 $("btnRoue").onclick = () => { chargerRoue(); show("roue"); };
@@ -2089,8 +2301,9 @@ $("btnTournerRoue").onclick = async () => {
   }
   if (!res.ok){
     const d = await res.json().catch(() => ({}));
-    $("roueInfo").textContent = d.error === "CREDITS_INSUFFISANTS"
-      ? "Pas assez de tickets pour ce tour."
+    $("roueInfo").textContent = d.error === "CREDITS_INSUFFISANTS" ? "Pas assez de tickets pour ce tour."
+      : d.error === "LIMITE_TIRS_PAYANTS" ? `Limite de ${d.max} tours payants par jour atteinte.`
+      : d.error === "GAIN_EN_ATTENTE" ? "Réclamez d'abord votre gain précédent."
       : "Impossible de tourner la roue pour le moment.";
     roueEnCours = false; $("btnTournerRoue").disabled = false;
     return;
@@ -2110,27 +2323,55 @@ $("btnTournerRoue").onclick = async () => {
 
   setTimeout(() => {
     roueEnCours = false;
-    if (typeof confettis === "function" && d.resultat.type === "vip") confettis();
-    $("roueResultatTitre").textContent = `🎉 Vous avez gagné : ${d.resultat.label} !`;
-    $("roueCodeCadre").classList.add("hidden");
-    if (d.resultat.type === "credits"){
-      $("roueResultatDetail").textContent = `+${d.resultat.valeur} 🎟️ crédités sur votre compte.`;
-    } else if (d.resultat.type === "vip"){
-      $("roueResultatDetail").textContent = "Vous pouvez maintenant parrainer quelqu'un sans avoir à jouer 25 parties.";
-      $("roueCodeCadre").classList.remove("hidden");
-      $("roueCodeValeur").textContent = d.resultat.code || "—";
-    }
-    $("roueResultat").classList.remove("hidden");
+    // Une victoire, ça se fête : confettis à chaque gain, quel qu'il soit.
+    if (typeof confettis === "function") confettis();
+    afficherGainEnAttente(d.resultat);
     setCredits(d.credits);
     chargerRoue();
   }, 4300);
 };
 
-$("btnRoueCopierCode").onclick = () => {
-  navigator.clipboard?.writeText($("roueCodeValeur").textContent);
-  $("btnRoueCopierCode").textContent = "Copié ✓";
-  setTimeout(() => $("btnRoueCopierCode").textContent = "Copier le code", 2000);
+$("btnRoueReclamer").onclick = async () => {
+  if (!gainRoueEnAttente) return;
+  $("btnRoueReclamer").disabled = true;
+  const res = await fetch("/api/roue/reclamer", { method:"POST" }).catch(() => null);
+  if (!res || !res.ok){
+    $("btnRoueReclamer").disabled = false;
+    $("roueResultatDetail").textContent = "Impossible de réclamer votre gain pour le moment, réessayez.";
+    return;
+  }
+  const d = await res.json();
+  $("btnRoueReclamer").classList.add("hidden");
+  if (d.type === "credits"){
+    $("roueResultatTitre").textContent = `🎉 Bravo ! +${d.valeur} 🎟️`;
+    $("roueResultatDetail").textContent = "Vos tickets ont été ajoutés à votre compte.";
+    setCredits(d.credits);
+  } else if (d.type === "vip"){
+    $("roueResultatTitre").textContent = "🎉 Bravo pour ce code VIP !";
+    $("roueResultatDetail").textContent = "Votre demande a été envoyée à l'administrateur — vous recevrez votre code très bientôt.";
+  }
+  gainRoueEnAttente = null;
+  chargerRoue();
 };
+
+$("btnRoueDemandeVipCopier").onclick = () => {
+  navigator.clipboard?.writeText($("roueDemandeVipTexte").textContent);
+  $("btnRoueDemandeVipCopier").textContent = "Copié ✓";
+  setTimeout(() => $("btnRoueDemandeVipCopier").textContent = "Copier le code", 2000);
+};
+
+/** Avertit le joueur, dès sa connexion, qu'un tour gratuit non utilisé l'attend à la roue. */
+async function verifierTicketRoue(){
+  try {
+    const d = await fetch("/api/roue", { credentials:"same-origin" }).then(r => r.ok ? r.json() : null);
+    if (!d || !d.gratuitDisponible) return;
+    if (localStorage.getItem("michben_roue_notif") === d.jour) return;
+    localStorage.setItem("michben_roue_notif", d.jour);
+    bandeauNotif(`<span style="font-size:24px">🎡</span><span><b>Votre tour gratuit est prêt !</b>
+      <small>Un lancer offert vous attend à la roue du jour</small></span>`,
+      () => { chargerRoue(); show("roue"); });
+  } catch {}
+}
 
 /** Bilan affiché à la fin de chaque partie. */
 function afficherBilan(b){
@@ -2393,6 +2634,12 @@ async function chargerAmis(){
   brancher();
 }
 
+// Rafraîchit la liste d'amis pendant qu'elle est à l'écran, pour que le bouton
+// « 👁️ en direct » apparaisse dès qu'un ami lance une partie, sans devoir rouvrir l'onglet.
+setInterval(() => {
+  if (ongletAmis === "amis" && !$("friends").classList.contains("hidden")) chargerAmis();
+}, 12000);
+
 async function chercher(){
   const q = $("quiChercher").value.trim();
   if (q.length < 2) return ($("amisVide").textContent = "Entrez au moins 2 lettres.");
@@ -2586,6 +2833,11 @@ socket.on("notif", (notif) => {
     bandeauNotif(`${image}<span><b>${esc(de)}</b> a accepté votre demande
       <small>Vous êtes désormais amis</small></span>`,
       () => $("btnFriends").click());
+
+  if (type === "vip_code")
+    bandeauNotif(`<span style="font-size:24px">👑</span><span><b>🎉 Votre code VIP est arrivé !</b>
+      <small>Touchez pour le voir dans la roue du jour</small></span>`,
+      () => { chargerRoue(); show("roue"); });
 });
 
 /* ---------- Modération ---------- */
@@ -3124,8 +3376,26 @@ async function mancheSuivanteSolo(){
   show("over");
 }
 
-document.querySelectorAll(".mode").forEach(btn => btn.onclick = async () => {
-  const mode = btn.dataset.mode;
+// Un clic sur un mode ne lance plus la partie directement : on demande
+// confirmation d'abord, quel que soit le mode choisi.
+let modeAConfirmer = null;
+document.querySelectorAll(".mode").forEach(btn => btn.onclick = () => ouvrirConfirmationMode(btn.dataset.mode));
+
+function ouvrirConfirmationMode(mode){
+  modeAConfirmer = mode;
+  $("confirmModeTexte").innerHTML =
+    `Vous allez commencer une partie en <b style="color:var(--beam)">${esc(MODE_NAMES[mode] || mode)}</b>.`;
+  $("confirmModeModal").classList.add("active");
+}
+$("btnConfirmModeAnnuler").onclick = () => $("confirmModeModal").classList.remove("active");
+$("confirmModeModal").onclick = e => { if (e.target.id === "confirmModeModal") $("confirmModeModal").classList.remove("active"); };
+$("btnConfirmModeValider").onclick = async () => {
+  $("confirmModeModal").classList.remove("active");
+  if (modeAConfirmer) await lancerPartie(modeAConfirmer);
+};
+
+async function lancerPartie(mode){
+  historiqueQuestions = [];   // nouvelle partie : on repart d'un historique vierge
 
   if (SANS_RESEAU.includes(mode)){
     const res = await fetch("/api/solo/start", {method:"POST",
@@ -3142,7 +3412,7 @@ document.querySelectorAll(".mode").forEach(btn => btn.onclick = async () => {
     }
     state.mode = mode; state.code = null;
     setChatVisible(false);
-    return afficherManche(m);
+    return compteARebours(() => afficherManche(m));
   }
 
   if (!window.tempsReelDispo)
@@ -3157,7 +3427,7 @@ document.querySelectorAll(".mode").forEach(btn => btn.onclick = async () => {
     if (mode === "solo" || mode === "ranked") return; // démarre tout seul
     renderLobby(res.state); show("lobby");
   });
-});
+}
 
 $("joinCode").addEventListener("input", e => e.target.value = e.target.value.toUpperCase().replace(/[^A-Z]/g,""));
 $("joinCode").addEventListener("keydown", e => { if (e.key === "Enter") $("btnJoin").click(); });
@@ -3243,12 +3513,14 @@ socket.on("round:start", ({roundIndex,total,synopsis,duration,hintCosts,hintCred
   if (hintLabels) Object.assign(HINT_LABELS, hintLabels);
   state.hintCosts = hintCosts; state.bought = {}; state.answered = false;
   $("roundLabel").textContent = `Manche ${roundIndex+1} sur ${total}`;
-  derouler(synopsis);
   $("hintPoster").classList.add("hidden");
   $("pattern").classList.add("hidden");
   $("roundPlayers").innerHTML = "";
   $("guessFeedback").textContent=""; $("guessFeedback").className="feedback";
-  renderHints(); runBeam(duration); show("round");
+  renderHints();
+  const demarrerManche = () => { derouler(synopsis); runBeam(duration); show("round"); };
+  // Le décompte 3-2-1 n'accueille que le tout début de la partie, pas chaque manche.
+  if (roundIndex === 0) compteARebours(demarrerManche); else demarrerManche();
 });
 
 socket.on("player:round_info", (info) => {

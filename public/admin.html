@@ -283,12 +283,22 @@
         <p class="tag" id="roueJourTag">🎡 Roue du jour</p>
         <p style="color:var(--muted);font-size:13px;margin:0 0 10px;line-height:1.6">
           Un tour gratuit par joueur et par jour (renouvelé chaque jour à 18h, heure de Paris), puis
-          100 tickets par tour supplémentaire. Le stock est partagé entre tous les joueurs et se
-          réapprovisionne automatiquement dès qu'il est vide, ou à 18h de toute façon.
+          100 tickets par tour supplémentaire, plafonné à 10 tours payants par joueur et par jour.
+          Le stock est partagé entre tous les joueurs et se réapprovisionne automatiquement dès
+          qu'il est vide, ou à 18h de toute façon. Un gain doit être réclamé par le joueur avant
+          d'être crédité ; les codes VIP ne sont jamais générés automatiquement.
         </p>
         <div id="roueStockAdmin" style="margin-bottom:10px"></div>
         <div class="row"><button id="btnRoueReappro" class="ghost">Réapprovisionner maintenant</button></div>
         <p class="msg" id="roueAdminFeedback"></p>
+      </div>
+      <div class="card">
+        <p class="tag" id="roueVipTag">🎁 Demandes de code VIP en attente</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 10px;line-height:1.6">
+          Un joueur qui réclame un lot « Code VIP » à la roue apparaît ici. Générez et envoyez-lui
+          son code de parrainage sans condition de 25 parties jouées.
+        </p>
+        <div id="roueVipListe"></div>
       </div>
       <div class="card">
         <p class="tag">Derniers tirages</p>
@@ -1269,11 +1279,10 @@ async function loadReports(){
 
       $("roueJourTag").textContent = `🎡 Roue du jour ${d.jour} — ${d.lots.length} lot${d.lots.length>1?"s":""} restant${d.lots.length>1?"s":""}`;
 
-      const parLabel = new Map();
-      for (const l of d.lots) parLabel.set(l.label, (parLabel.get(l.label) || 0) + 1);
-      $("roueStockAdmin").innerHTML = parLabel.size
-        ? [...parLabel.entries()].map(([label, n]) =>
-            `<span class="chip" style="margin:0 6px 6px 0;display:inline-block">${esc(label)} × ${n}</span>`).join("")
+      $("roueStockAdmin").innerHTML = (d.catalogue || []).length
+        ? d.catalogue.map((c) =>
+            `<span class="chip" style="margin:0 6px 6px 0;display:inline-block;opacity:${c.restants ? 1 : .5}">
+              ${c.emoji} ${esc(c.label)} × ${c.restants}</span>`).join("")
         : "<p class='msg'>Stock épuisé — sera réapprovisionné au prochain tour ou à 18h.</p>";
 
       $("roueHistorique").innerHTML = d.historique.map(t => `
@@ -1282,6 +1291,40 @@ async function loadReports(){
             <small style="display:block">${new Date(t.date).toLocaleString()}</small></div>
         </div>
       `).join("") || "<p class='msg'>Aucun tirage pour l'instant aujourd'hui.</p>";
+    }
+
+    async function loadVipDemandes() {
+      $("roueVipTag").textContent = "🎁 Demandes de code VIP en attente — chargement…";
+      const res = await api("/api/admin/roue/vip");
+      if (!res.ok) { $("roueVipTag").textContent = "🎁 Demandes de code VIP — échec du chargement."; return; }
+      const d = await res.json();
+      const enAttente = d.demandes.filter((x) => x.statut === "attente");
+      $("roueVipTag").textContent = `🎁 Demandes de code VIP en attente (${enAttente.length})`;
+
+      $("roueVipListe").innerHTML = d.demandes.length ? d.demandes.map((x) => `
+        <div class="item">
+          <div>
+            <strong>${esc(x.pseudo)}</strong>
+            <small style="display:block">${new Date(x.date).toLocaleString()}</small>
+            ${x.statut === "envoye"
+              ? `<small style="display:block;color:var(--ok,#3ecf8e)">Envoyé : ${esc(x.code)}</small>`
+              : ""}
+          </div>
+          ${x.statut === "attente"
+            ? `<button class="ghost" data-vip="${x.id}">Générer et envoyer</button>`
+            : `<span class="chip">Envoyé ✓</span>`}
+        </div>
+      `).join("") : "<p class='msg'>Aucune demande de code VIP pour l'instant.</p>";
+
+      $("roueVipListe").querySelectorAll("[data-vip]").forEach((btn) => {
+        btn.onclick = async () => {
+          if (!confirm("Générer un code VIP (parrainage sans les 25 parties requises) et l'envoyer à ce joueur ?")) return;
+          btn.disabled = true;
+          const res = await api(`/api/admin/roue/vip/${btn.dataset.vip}/envoyer`, { method:"POST" });
+          if (res.ok) loadVipDemandes();
+          else { btn.disabled = false; alert("Échec de l'envoi du code."); }
+        };
+      });
     }
 
     $("btnRoueReappro").onclick = async () => {
