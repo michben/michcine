@@ -29,7 +29,8 @@ import { mountAuth, userFromCookie, addRankedPoints,
          retirerPoints, grantPointsDon, ajouterXp, infoNiveau, validerManuellement,
          verifierCode, rattacherParrain, infoParrainage, verifierCodeParrain,
          parrainageManquant, parrainageObligatoire, genererCodeAdmin,
-         creerCompteAdmin, sansMotDePasse } from "./auth-x.js";
+         creerCompteAdmin, sansMotDePasse,
+         genererCodeParrainGagne, roueGratuiteDisponible, marquerRoueGratuiteUtilisee } from "./auth-x.js";
 
 const app = express();
 app.use(express.json({ limit: '10mb' })); // Limite augmentée pour l'upload d'images
@@ -220,6 +221,70 @@ const CITATIONS_DEFAUT = [
   { id:23, texte:"On se retrouvera, si le destin le veut, sur le bateau de la vie.", film:"Intouchables", annee:2011, source:"Driss (Omar Sy)", anecdote:"L'histoire est inspirée de la véritable amitié entre Philippe Pozzo di Borgo et Abdel Sellou." },
   { id:24, texte:"Toute grande histoire commence par une petite étincelle.", film:"Ratatouille", annee:2007, source:"Auguste Gusteau", anecdote:"Les animateurs de Pixar ont suivi un vrai cours de cuisine française pour rendre les scènes crédibles." },
 ];
+
+/* ------------------------------------------------------------------ */
+/* Roue quotidienne : un tour gratuit par jour, puis 100 crédits/tour   */
+/*                                                                      */
+/* La roue tient un stock partagé de lots pour la journée, consommé au  */
+/* fur et à mesure par TOUS les joueurs. Elle se réapprovisionne soit   */
+/* dès qu'elle est vide, soit automatiquement chaque jour à 18h,        */
+/* heure de Paris (nouvelle « journée de roue »).                       */
+/* ------------------------------------------------------------------ */
+
+const ROUE_FILE = new URL("./roue.json", import.meta.url);
+let roue = null;   // { jour, lots: [...restants], historique: [...derniers tirages] }
+const saveRoue = () => sauver("roue", roue, ROUE_FILE);
+
+/** Stock d'un plein réapprovisionnement : beaucoup de petits lots, peu de gros. */
+function stockRoueDefaut() {
+  const lots = [];
+  lots.push({ type: "vip", label: "Code VIP — parrainage offert" });
+  for (let i = 0; i < 3; i++) lots.push({ type: "credits", label: "500 tickets", valeur: 500 });
+  for (let i = 0; i < 5; i++) lots.push({ type: "credits", label: "100 tickets", valeur: 100 });
+  for (let i = 0; i < 10; i++) lots.push({ type: "credits", label: "50 tickets", valeur: 50 });
+  // Un identifiant unique par lot pour pouvoir le retirer précisément du stock.
+  return lots.map((l, i) => ({ ...l, id: i + 1 }));
+}
+
+function melangerLots(lots) {
+  const t = [...lots];
+  for (let i = t.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [t[i], t[j]] = [t[j], t[i]];
+  }
+  return t;
+}
+
+/** « Journée de roue » : la date change à 18h précises, heure de Paris. */
+function journeeRoue(date = new Date()) {
+  const fmt = new Intl.DateTimeFormat("fr-CA", {
+    timeZone: "Europe/Paris", year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", hour12: false,
+  });
+  const parts = Object.fromEntries(fmt.formatToParts(date).map((p) => [p.type, p.value]));
+  let y = Number(parts.year), m = Number(parts.month), d = Number(parts.day);
+  const h = Number(parts.hour === "24" ? "0" : parts.hour);
+  if (h < 18) {
+    // Avant 18h : on est encore dans la journée de roue entamée la veille à 18h.
+    const veille = new Date(Date.UTC(y, m - 1, d));
+    veille.setUTCDate(veille.getUTCDate() - 1);
+    y = veille.getUTCFullYear(); m = veille.getUTCMonth() + 1; d = veille.getUTCDate();
+  }
+  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+/** Garantit une roue à jour : nouvelle journée, ou stock épuisé. */
+function assurerRoueDuJour() {
+  const jour = journeeRoue();
+  if (!roue || roue.jour !== jour || !Array.isArray(roue.lots) || roue.lots.length === 0) {
+    roue = {
+      jour,
+      lots: melangerLots(stockRoueDefaut()),
+      historique: (roue?.jour === jour && Array.isArray(roue.historique)) ? roue.historique : [],
+    };
+    saveRoue();
+  }
+}
 
 const MOTIFS = {
   spoiler: "Le synopsis révèle le titre",
@@ -1177,6 +1242,83 @@ app.delete("/api/admin/citations/:id", requireAdmin, (req, res) => {
     if (citations.length === avant) return res.status(404).json({ error: "INTROUVABLE" });
     saveCitations();
     res.json({ ok: true });
+});
+
+/* ---------- roue quotidienne ---------- */
+
+const COUT_TOUR_ROUE = 100;
+
+app.get("/api/roue", (req, res) => {
+    const user = exigeCompte(req, res);
+    if (!user) return;
+    assurerRoueDuJour();
+    res.json({
+        jour: roue.jour,
+        lotsRestants: roue.lots.length,
+        gratuitDisponible: roueGratuiteDisponible(user.id, roue.jour),
+        coutTour: COUT_TOUR_ROUE,
+        credits: getCredits(user.id),
+        derniersTirages: roue.historique.slice(-8).reverse(),
+    });
+});
+
+app.post("/api/roue/tourner", (req, res) => {
+    const user = exigeCompte(req, res);
+    if (!user) return;
+    assurerRoueDuJour();
+
+    const gratuit = roueGratuiteDisponible(user.id, roue.jour);
+    if (!gratuit) {
+        const ok = spendCredits(user.id, COUT_TOUR_ROUE);
+        if (!ok) return res.status(400).json({ error: "CREDITS_INSUFFISANTS" });
+    }
+
+    if (roue.lots.length === 0) {
+        // Filet de sécurité : assurerRoueDuJour() vient tout juste de réapprovisionner,
+        // ce cas ne devrait jamais se produire — on rembourse par précaution.
+        if (!gratuit) grantCredits(user.id, COUT_TOUR_ROUE);
+        return res.status(409).json({ error: "ROUE_VIDE" });
+    }
+
+    const index = Math.floor(Math.random() * roue.lots.length);
+    const [lot] = roue.lots.splice(index, 1);
+
+    const resultat = { type: lot.type, label: lot.label };
+    if (lot.type === "credits") {
+        grantCredits(user.id, lot.valeur);
+        resultat.valeur = lot.valeur;
+    } else if (lot.type === "vip") {
+        resultat.code = genererCodeParrainGagne(user.id);
+    }
+
+    roue.historique.push({ pseudo: user.pseudo, lot: lot.label, gratuit, date: new Date().toISOString() });
+    if (roue.historique.length > 200) roue.historique = roue.historique.slice(-200);
+    if (gratuit) marquerRoueGratuiteUtilisee(user.id, roue.jour);
+    saveRoue();
+
+    // Le stock vient peut-être de s'épuiser : on prépare déjà la suite pour le joueur suivant.
+    assurerRoueDuJour();
+
+    res.json({
+        ok: true, gratuit, resultat,
+        credits: getCredits(user.id),
+        lotsRestants: roue.lots.length,
+    });
+});
+
+app.get("/api/admin/roue", requireAdmin, (req, res) => {
+    assurerRoueDuJour();
+    res.json({
+        jour: roue.jour,
+        lots: roue.lots,
+        historique: roue.historique.slice(-50).reverse(),
+    });
+});
+
+app.post("/api/admin/roue/reapprovisionner", requireAdmin, (req, res) => {
+    roue = { jour: journeeRoue(), lots: melangerLots(stockRoueDefaut()), historique: roue?.historique || [] };
+    saveRoue();
+    res.json({ ok: true, lotsRestants: roue.lots.length });
 });
 
 /* ---------- amis ---------- */
@@ -2526,6 +2668,8 @@ conversations = await charger("conversations", null, {});
 suggestions = await charger("suggestions", SUGGESTIONS_FILE, []);
 citations = await charger("citations", CITATIONS_FILE, CITATIONS_DEFAUT);
 if (!Array.isArray(citations) || !citations.length) citations = CITATIONS_DEFAUT;
+roue = await charger("roue", ROUE_FILE, null);
+assurerRoueDuJour();
 REGLAGES = { ...structuredClone(REGLAGES_DEFAUT), ...(await charger("reglages", null, {})) };
 if (!empreinteAdmin)
   console.warn("⚠️  Mot de passe d'administration par défaut : changez-le depuis /admin.html");

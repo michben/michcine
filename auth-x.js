@@ -115,6 +115,18 @@ export function grantCredits(userId, amount) {
   saveUsers();
 }
 
+/** La roue quotidienne : un tour gratuit par « journée de roue » (18h à 18h). */
+export function roueGratuiteDisponible(userId, jour) {
+  const u = users[userId];
+  return Boolean(u) && u.derniereRoueGratuite !== jour;
+}
+export function marquerRoueGratuiteUtilisee(userId, jour) {
+  const u = users[userId];
+  if (!u) return;
+  u.derniereRoueGratuite = jour;
+  saveUsers();
+}
+
 /** Présence : un joueur peut avoir plusieurs onglets, on compte les connexions. */
 export function marquerEnLigne(userId) {
   connectes.set(userId, (connectes.get(userId) || 0) + 1);
@@ -411,6 +423,25 @@ export function verifierCodeParrain(userId) {
   if ((u.partiesGlobales || 0) < PARTIES_POUR_CODE) return null;
   u.codeParrain = genererCodeParrain();
   u.usagesMax = u.parrainId ? USAGES_FILLEUL : USAGES_PAR_CODE;
+  saveUsers();
+  return u.codeParrain;
+}
+
+/**
+ * Lot « Code VIP » de la roue quotidienne : donne au gagnant la capacité de
+ * parrainer sans avoir atteint le seuil de parties habituel. S'il a déjà un
+ * code, le lot ajoute simplement des invitations supplémentaires plutôt que
+ * de le remplacer.
+ */
+export function genererCodeParrainGagne(userId) {
+  const u = users[userId];
+  if (!u) return null;
+  if (!u.codeParrain) {
+    u.codeParrain = genererCodeParrain();
+    u.usagesMax = u.parrainId ? USAGES_FILLEUL : USAGES_PAR_CODE;
+  } else {
+    u.usagesMax = (u.usagesMax ?? USAGES_PAR_CODE) + USAGES_PAR_CODE;
+  }
   saveUsers();
   return u.codeParrain;
 }
