@@ -1312,12 +1312,44 @@ const MUSIQUE_DIR = join(process.cwd(), "public", "musique");
 const MUSIQUE_EXT_AUTORISEES = ["mp3", "mpeg", "ogg", "wav", "m4a"];
 const MUSIQUE_MAX_BASE64 = 8 * 1024 * 1024; // ~8 Mo encodés : les fichiers doivent rester très légers
 
+// Avis des joueurs sur chaque piste (pouce vers le haut / vers le bas), remonté dans l'admin.
+// Un vote par joueur et par piste : trackId -> { userId: "up" | "down" }. Revoter change ou retire l'avis.
+const VOTES_MUSIQUE_FILE = new URL("./votesMusique.json", import.meta.url);
+let votesMusique = {};
+const saveVotesMusique = () => sauver("votesMusique", votesMusique, VOTES_MUSIQUE_FILE);
+function comptageVotes(trackId) {
+    const v = votesMusique[trackId] || {};
+    let up = 0, down = 0;
+    for (const sens of Object.values(v)) sens === "up" ? up++ : down++;
+    return { up, down };
+}
+
 app.get("/api/musique", (req, res) => {
-    res.json(playlisteMusique.map(({ id, titre, url }) => ({ id, titre, url })));
+    const user = userFromCookie(req.headers.cookie);
+    res.json(playlisteMusique.map(({ id, titre, url }) => ({
+        id, titre, url,
+        monAvis: user ? (votesMusique[id]?.[user.id] || null) : null,
+    })));
+});
+
+app.post("/api/musique/:id/vote", (req, res) => {
+    const user = exigeCompte(req, res);
+    if (!user) return;
+    const piste = playlisteMusique.find((p) => p.id === req.params.id);
+    if (!piste) return res.status(404).json({ error: "INTROUVABLE" });
+    const sens = req.body?.sens;
+    if (!["up", "down"].includes(sens)) return res.status(400).json({ error: "AVIS_INVALIDE" });
+
+    const votes = votesMusique[piste.id] || (votesMusique[piste.id] = {});
+    votes[user.id] = votes[user.id] === sens ? undefined : sens;   // revoter pareil = retirer son avis
+    if (votes[user.id] === undefined) delete votes[user.id];
+    saveVotesMusique();
+
+    res.json({ ok: true, monAvis: votes[user.id] || null, ...comptageVotes(piste.id) });
 });
 
 app.get("/api/admin/musique", requireAdmin, (req, res) => {
-    res.json(playlisteMusique);
+    res.json(playlisteMusique.map((p) => ({ ...p, ...comptageVotes(p.id) })));
 });
 
 app.post("/api/admin/musique", requireAdmin, (req, res) => {
@@ -1359,6 +1391,7 @@ app.delete("/api/admin/musique/:id", requireAdmin, (req, res) => {
     if (!piste) return res.status(404).json({ error: "INTROUVABLE" });
     playlisteMusique = playlisteMusique.filter((p) => p.id !== req.params.id);
     saveMusique();
+    if (votesMusique[piste.id]) { delete votesMusique[piste.id]; saveVotesMusique(); }
     if (piste.type === "fichier") {
         const chemin = join(process.cwd(), "public", piste.url.replace(/^\//, ""));
         fs.unlink(chemin, () => {}); // silencieux : peu grave si le fichier est déjà absent
@@ -2534,7 +2567,7 @@ function endRound(room) {
   });
   room.roundIndex++;
   room.status = "intermission";
-  room.nextTimer = setTimeout(() => startRound(room), 6000);
+  room.nextTimer = setTimeout(() => startRound(room), 12000);   // doublé : laisse plus de temps pour voir la réponse
 }
 
 function endGame(room) {
@@ -3088,6 +3121,8 @@ citations = await charger("citations", CITATIONS_FILE, CITATIONS_DEFAUT);
 if (!Array.isArray(citations) || !citations.length) citations = CITATIONS_DEFAUT;
 playlisteMusique = await charger("musique", MUSIQUE_FILE, []);
 if (!Array.isArray(playlisteMusique)) playlisteMusique = [];
+votesMusique = await charger("votesMusique", VOTES_MUSIQUE_FILE, {});
+if (!votesMusique || typeof votesMusique !== "object") votesMusique = {};
 aideConfig = await charger("aide", AIDE_FILE, aideConfig);
 if (!aideConfig || typeof aideConfig !== "object") aideConfig = { actif: false, titre: "Comment jouer ? 🎬🎵", message: "" };
 roue = await charger("roue", ROUE_FILE, null);
