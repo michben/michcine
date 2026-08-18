@@ -703,6 +703,8 @@ export const nombreEnLigne = () => connectes.size;
 
 export const getCredits = (userId) => users[userId]?.credits ?? 0;
 export const getPoints = (userId) => users[userId]?.points ?? 0;
+/** Pseudo d'un joueur à partir de son id, ou null s'il n'existe plus — usage admin uniquement. */
+export const pseudoDe = (userId) => users[userId]?.pseudo || null;
 
 /** Retire des points de la cagnotte (don à un ami). */
 export function retirerPoints(userId, montant) {

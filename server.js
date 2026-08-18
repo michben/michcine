@@ -25,7 +25,7 @@ import { mountAuth, userFromCookie, addRankedPoints,
          estModerateur, estEnfant, definirRole, ROLES, chargerUtilisateurs,
          relations, demanderAmi, accepterAmi, retirerAmi, bloquer,
          chercherJoueurs, statutRelation, estBloque, emailAValider,
-         leaderboard, reinitialiserClassement, definirPhoto, fichePublique,
+         leaderboard, reinitialiserClassement, definirPhoto, fichePublique, pseudoDe,
          retirerPoints, grantPointsDon, ajouterXp, infoNiveau, validerManuellement,
          verifierCode, rattacherParrain, infoParrainage, verifierCodeParrain,
          parrainageManquant, parrainageObligatoire, genererCodeAdmin,
@@ -1275,10 +1275,16 @@ app.post("/api/suggestions", (req, res) => {
     // semblait ne "rien faire" côté joueur.
     try {
         suggestions.push({
+            id: crypto.randomUUID(),
+            auteurId: user.id,
             auteur: user.pseudo,
             titre: String(titre).trim(),
             commentaire: commentaire ? String(commentaire).trim() : "",
-            date: new Date().toISOString()
+            date: new Date().toISOString(),
+            statut: "attente",   // "attente" | "accepte" | "refuse"
+            publie: false,       // l'auteur a choisi de la publier dans « Suggestions retenues »
+            anonyme: false,
+            publieLe: null,
         });
         saveSuggestions();
         res.json({ ok: true });
@@ -1290,6 +1296,53 @@ app.post("/api/suggestions", (req, res) => {
 
 app.get("/api/admin/suggestions", requireAdmin, (req, res) => {
     res.json(suggestions);
+});
+
+/** L'administration accepte ou refuse une suggestion. Si acceptée, l'auteur en est prévenu. */
+app.post("/api/admin/suggestions/:id/statut", requireAdmin, (req, res) => {
+    const s = suggestions.find((x) => x.id === req.params.id);
+    if (!s) return res.status(404).json({ error: "INTROUVABLE" });
+    const statut = req.body?.statut;
+    if (!["attente", "accepte", "refuse"].includes(statut)) return res.status(400).json({ error: "STATUT_INVALIDE" });
+    s.statut = statut;
+    saveSuggestions();
+    if (statut === "accepte" && s.auteurId) {
+        notifier(s.auteurId, { type: "suggestion_acceptee", titre: s.titre, id: s.id });
+    }
+    res.json({ ok: true });
+});
+
+/** Les suggestions du joueur connecté, pour lui proposer le repost s'il a manqué la notif. */
+app.get("/api/suggestions/mine", (req, res) => {
+    const user = exigeCompte(req, res);
+    if (!user) return;
+    res.json(suggestions.filter((s) => s.auteurId === user.id));
+});
+
+/** L'auteur choisit de publier (ou non) sa suggestion acceptée, sous son nom ou anonymement. */
+app.post("/api/suggestions/:id/publier", (req, res) => {
+    const user = exigeCompte(req, res);
+    if (!user) return;
+    const s = suggestions.find((x) => x.id === req.params.id && x.auteurId === user.id);
+    if (!s) return res.status(404).json({ error: "INTROUVABLE" });
+    if (s.statut !== "accepte") return res.status(400).json({ error: "PAS_ACCEPTEE" });
+    s.publie = true;
+    s.anonyme = Boolean(req.body?.anonyme);
+    s.publieLe = new Date().toISOString();
+    saveSuggestions();
+    res.json({ ok: true });
+});
+
+/** Vitrine publique : les suggestions de joueurs acceptées ET publiées par leur auteur. */
+app.get("/api/suggestions/publiees", (req, res) => {
+    const liste = suggestions
+        .filter((s) => s.statut === "accepte" && s.publie)
+        .sort((a, b) => new Date(b.publieLe || 0) - new Date(a.publieLe || 0))
+        .map((s) => ({
+            id: s.id, titre: s.titre, commentaire: s.commentaire,
+            auteur: s.anonyme ? null : s.auteur,
+        }));
+    res.json(liste);
 });
 
 /* ---------- citations de cinéma (gérées depuis l'administration) ---------- */
@@ -1415,8 +1468,13 @@ app.post("/api/musique/:id/signaler-erreur", (req, res) => {
 app.get("/api/admin/musique", requireAdmin, (req, res) => {
     res.json(playlisteMusique.map((p) => {
         const e = erreursMusique[p.id];
+        const votes = votesMusique[p.id] || {};
+        // Qui a voté quoi, pour l'admin uniquement — jamais exposé côté joueur (voir /api/musique).
+        const votants = Object.entries(votes).map(([userId, sens]) => ({
+            pseudo: pseudoDe(userId) || "Compte supprimé", sens,
+        }));
         return {
-            ...p, ...comptageVotes(p.id),
+            ...p, ...comptageVotes(p.id), votants,
             erreur: e ? { count: e.count, message: RAISONS_ERREUR_MUSIQUE[e.raison] || RAISONS_ERREUR_MUSIQUE.inconnue,
                           derniereFois: e.derniereFois } : null,
         };
@@ -3211,6 +3269,21 @@ conversations = await charger("conversations", null, {});
   nowPlayingConfig = await charger("nowPlayingConfig", NOWPLAYING_FILE, { hidden: [], custom: [], kidsOk: [] });
   if (!Array.isArray(nowPlayingConfig.kidsOk)) nowPlayingConfig.kidsOk = [];
 suggestions = await charger("suggestions", SUGGESTIONS_FILE, []);
+if (!Array.isArray(suggestions)) suggestions = [];
+// Ancien format sans id/statut : on complète pour que les suggestions déjà en base
+// restent utilisables avec le circuit d'acceptation/publication.
+{
+    let suggestionsAMigrer = false;
+    for (const s of suggestions) {
+        if (!s.id) { s.id = crypto.randomUUID(); suggestionsAMigrer = true; }
+        if (s.statut === undefined) { s.statut = "attente"; suggestionsAMigrer = true; }
+        if (s.publie === undefined) { s.publie = false; suggestionsAMigrer = true; }
+        if (s.anonyme === undefined) { s.anonyme = false; suggestionsAMigrer = true; }
+        if (s.auteurId === undefined) { s.auteurId = null; suggestionsAMigrer = true; }
+        if (s.publieLe === undefined) { s.publieLe = null; suggestionsAMigrer = true; }
+    }
+    if (suggestionsAMigrer) saveSuggestions();
+}
 citations = await charger("citations", CITATIONS_FILE, CITATIONS_DEFAUT);
 if (!Array.isArray(citations) || !citations.length) citations = CITATIONS_DEFAUT;
 playlisteMusique = await charger("musique", MUSIQUE_FILE, []);
