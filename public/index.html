@@ -5,39 +5,39 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MichBen Ciné Quizz</title>
 <style>
-  :root{--ink:#0A0C16;--velvet:#151A2E;--beam:#F5B942;--chalk:#EDE8DC}
-  body{margin:0;background:var(--ink);color:var(--chalk);font-family:sans-serif;}
-  .hidden{display:none!important}
-  .wrap{max-width:720px;margin:0 auto;padding:20px}
-  .card{background:var(--velvet);padding:20px;border-radius:12px;margin-top:20px}
-  .navbar{display:flex;justify-content:space-between;padding:15px;background:var(--velvet);margin-top:20px;border-radius:12px}
+  :root { --ink:#0A0C16; --velvet:#151A2E; --beam:#F5B942; --chalk:#EDE8DC; }
+  body { margin:0; background:var(--ink); color:var(--chalk); font-family:sans-serif; }
+  .hidden { display:none!important }
+  .wrap { max-width:720px; margin:0 auto; padding:20px }
+  .card { background:var(--velvet); padding:20px; border-radius:12px; margin-top:20px }
+  .navbar { display:flex; justify-content:space-around; background:var(--velvet); padding:15px; margin-top:20px; border-radius:12px; }
+  .navbar button { background:transparent; color:var(--chalk); border:0; font-size:24px; cursor:pointer; }
+  input { width:100%; padding:10px; margin:5px 0; border-radius:8px; border:1px solid #333; }
+  button { padding:10px 20px; border-radius:8px; background:var(--beam); cursor:pointer; border:0; }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1 id="mainTitle">MichBen Ciné Quizz</h1>
+  <h1>MichBen Ciné Quizz</h1>
 
-  <!-- ÉCRAN ACCUEIL (masqué si connecté) -->
+  <!-- Landing Section -->
   <section id="landing">
     <div class="card">
-      <h2>Connexion</h2>
-      <a href="/auth/x/login">Se connecter avec X</a>
-      <hr>
+      <button id="btnToggleModeLanding" style="width:100%; margin-bottom:10px;">🧸 Basculer Mode Enfant</button>
       <label>Email</label>
       <input id="mail" type="email">
       <label>Mot de passe</label>
       <input id="mdp" type="password">
-      <button id="btnMailConnexion">Se connecter</button>
-      <button id="btnToggleMode" style="margin-top:20px">🧸 Mode Enfant</button>
+      <button id="btnConnexion">Se connecter</button>
     </div>
   </section>
 
-  <!-- MENU PRINCIPAL (masqué si non connecté) -->
+  <!-- Menu Section -->
   <section id="menu" class="hidden">
     <div class="card">
       <h2 id="hello">Bonjour</h2>
       <div class="navbar">
-        <button onclick="show('menu')">🏠</button>
+        <button id="btnHome">🏠</button>
         <button id="btnFriends">👥</button>
         <button id="btnToggleModeMenu">🧸</button>
         <button id="btnProfile">👤</button>
@@ -47,35 +47,37 @@
 </div>
 
 <script>
-const sections = ["landing", "menu"];
 function show(id) {
-  sections.forEach(s => {
-    const el = document.getElementById(s);
-    if (el) el.classList.toggle("hidden", s !== id);
-  });
+  document.getElementById("landing").classList.toggle("hidden", id !== "landing");
+  document.getElementById("menu").classList.toggle("hidden", id !== "menu");
 }
 
-// Vérifier session
-fetch("/api/me").then(r => {
-  if (r.ok) {
-    r.json().then(u => {
-      document.getElementById("hello").textContent = "Bonjour " + u.pseudo;
-      show("menu");
-    });
-  } else {
-    show("landing");
-  }
-});
+function updateModeButton(mode) {
+  const isKid = mode === "kid";
+  const text = isKid ? "🧸 Mode Enfant : ACTIVÉ" : "🧸 Mode Enfant : DÉSACTIVÉ";
+  document.getElementById("btnToggleModeLanding").textContent = text;
+  document.getElementById("btnToggleModeMenu").textContent = "🧸";
+}
 
-// Logique Mode Enfant
-const toggleMode = () => {
-  const isKid = localStorage.getItem("michben_mode") === "kid";
-  const newMode = isKid ? "adult" : "kid";
+document.getElementById("btnToggleModeLanding").onclick = () => {
+  const newMode = localStorage.getItem("michben_mode") === "kid" ? "adult" : "kid";
   localStorage.setItem("michben_mode", newMode);
-  alert("Mode passé en : " + newMode);
+  updateModeButton(newMode);
 };
-document.getElementById("btnToggleMode").onclick = toggleMode;
-document.getElementById("btnToggleModeMenu").onclick = toggleMode;
+
+document.getElementById("btnToggleModeMenu").onclick = () => {
+  const newMode = localStorage.getItem("michben_mode") === "kid" ? "adult" : "kid";
+  localStorage.setItem("michben_mode", newMode);
+  alert("Mode passé en " + newMode);
+};
+
+document.getElementById("btnConnexion").onclick = () => {
+  // Simple simulation of login
+  document.getElementById("hello").textContent = "Bonjour Joueur";
+  show("menu");
+};
+
+updateModeButton(localStorage.getItem("michben_mode"));
 </script>
 </body>
 </html>
