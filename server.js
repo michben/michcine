@@ -341,6 +341,121 @@ app.post("/api/admin/movies/reimport", requireAdmin, async (_req, res) => {
   }
 });
 
+/* ------------------------------------------------------------------ */
+/* Import de films enfants depuis TMDB (Animation / Famille)           */
+/* ------------------------------------------------------------------ */
+const GENRE_ANIMATION_TMDB = 16, GENRE_FAMILLE_TMDB = 10751;
+
+/** Retire le titre du synopsis : sinon la réponse est offerte. */
+function scrubTitreTmdb(synopsis, title) {
+  const t = String(title || "");
+  const echappe = t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (!echappe) return String(synopsis || "").trim();
+  return String(synopsis || "").replace(new RegExp(echappe, "gi"), "…").replace(/\s+/g, " ").trim();
+}
+
+/** Variantes acceptées en réponse (VF, VO, titre sans sous-titre). */
+function buildAnswersTmdb(fr, original) {
+  const set = new Set([fr, original].filter(Boolean));
+  for (const t of [fr, original]) {
+    if (!t) continue;
+    if (t.includes(":")) set.add(t.split(":")[0]);
+    if (t.includes(" - ")) set.add(t.split(" - ")[0]);
+  }
+  return [...set].map((t) => t.trim()).filter(Boolean);
+}
+
+/**
+ * Cherche sur TMDB des films d'animation / familiaux absents du catalogue,
+ * pour alimenter le mode enfant sans avoir à lancer de script en ligne de
+ * commande. Ne modifie rien : l'administration choisit ensuite lesquels
+ * ajouter via /tmdb-kids-importer.
+ */
+app.get("/api/admin/movies/tmdb-kids-suggestions", requireAdmin, async (req, res) => {
+  const tmdbKey = REGLAGES.tmdbApiKey;
+  if (!tmdbKey) return res.status(400).json({ error: "NO_KEY" });
+
+  const pages = Math.min(5, Math.max(1, Number(req.query.pages) || 2));
+  const limite = Math.min(40, Math.max(1, Number(req.query.limite) || 24));
+
+  const idsConnus = new Set(movies.filter((m) => m.tmdbId).map((m) => m.tmdbId));
+  const titresConnus = new Set(movies.map((m) => String(m.title || "").trim().toLowerCase()));
+
+  try {
+    const candidats = [];
+    for (let page = 1; page <= pages && candidats.length < limite * 2; page++) {
+      const url = `https://api.themoviedb.org/3/discover/movie?api_key=${tmdbKey}&language=fr-FR&region=FR` +
+        `&sort_by=popularity.desc&include_adult=false&with_genres=${GENRE_ANIMATION_TMDB},${GENRE_FAMILLE_TMDB}` +
+        `&vote_count.gte=150&page=${page}`;
+      const r = await fetch(url);
+      if (!r.ok) break;
+      const data = await r.json();
+      for (const m of data.results || []) {
+        if (idsConnus.has(m.id)) continue;
+        if (titresConnus.has(String(m.title || "").trim().toLowerCase())) continue;
+        if (!m.overview || !m.poster_path) continue;
+        candidats.push(m);
+      }
+    }
+
+    const retenus = [];
+    for (const brut of candidats.slice(0, limite)) {
+      try {
+        const dRes = await fetch(
+          `https://api.themoviedb.org/3/movie/${brut.id}?api_key=${tmdbKey}&language=fr-FR&append_to_response=credits`
+        );
+        if (!dRes.ok) continue;
+        const d = await dRes.json();
+        if (!d.overview || !d.poster_path) continue;
+        retenus.push({
+          tmdbId: d.id,
+          title: d.title,
+          acceptedAnswers: buildAnswersTmdb(d.title, d.original_title),
+          synopsis: scrubTitreTmdb(d.overview, d.title),
+          year: Number((d.release_date || "").slice(0, 4)) || null,
+          director: (d.credits?.crew || []).find((c) => c.job === "Director")?.name || "",
+          actors: (d.credits?.cast || []).slice(0, 3).map((c) => c.name).join(", "),
+          poster: `https://image.tmdb.org/t/p/w500${d.poster_path}`,
+          still: d.backdrop_path ? `https://image.tmdb.org/t/p/w780${d.backdrop_path}` : "",
+          rating: Math.round((d.vote_average || 0) * 10) / 10,
+          votes: d.vote_count || 0,
+          difficulty: niveauDepuisVotes(d.vote_count || 0),
+          kids: true,
+        });
+      } catch { /* un film en erreur n'empêche pas les autres */ }
+    }
+    res.json({ movies: retenus });
+  } catch (err) {
+    console.error("Erreur suggestions TMDB enfants:", err);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+});
+
+/** Ajoute au catalogue les films choisis par l'administration parmi les suggestions TMDB. */
+app.post("/api/admin/movies/tmdb-kids-importer", requireAdmin, (req, res) => {
+  const proposes = Array.isArray(req.body.movies) ? req.body.movies : [];
+  const titresConnus = new Set(movies.map((m) => String(m.title || "").trim().toLowerCase()));
+  const idsConnus = new Set(movies.filter((m) => m.tmdbId).map((m) => m.tmdbId));
+
+  let ajoutes = 0, ignores = 0;
+  for (const brut of proposes) {
+    const titreNorm = String(brut.title || "").trim().toLowerCase();
+    if (!titreNorm || titresConnus.has(titreNorm) || (brut.tmdbId && idsConnus.has(Number(brut.tmdbId)))) {
+      ignores++; continue;
+    }
+    const film = sanitizeMovie({ ...brut, kids: true });
+    if (!film.title || !film.synopsis) { ignores++; continue; }
+    film.tmdbId = Number(brut.tmdbId) || null;
+    film.id = Math.max(0, ...movies.map((m) => m.id)) + 1;
+    movies.push(film);
+    titresConnus.add(titreNorm);
+    if (film.tmdbId) idsConnus.add(film.tmdbId);
+    ajoutes++;
+  }
+  saveMovies();
+  res.json({ ajoutes, ignores, total: movies.length });
+});
+
 app.post("/api/admin/invite", requireAdmin, (req, res) => {
   const code = genererCodeAdmin();
   res.json({ code });
@@ -451,6 +566,8 @@ function sanitizeMovie(body) {
     enabled: body.enabled !== false,
     // Film adapté aux enfants (Disney, Pixar, familial…) : sert au mode enfant.
     kids: body.kids === true || body.kids === "true",
+    // Identifiant TMDB d'origine, pour éviter les doublons lors d'un futur import.
+    tmdbId: Number(body.tmdbId) || null,
   };
 }
 

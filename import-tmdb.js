@@ -15,8 +15,15 @@
  *   MIN_YEAR=1970     année la plus ancienne
  *   MAX_ANIMATION=20  nombre maximum de films d'animation
  *   MAX_TITLE_LEN=22  longueur maximale du titre
+ *
+ * NOTE — mode enfant : pour ajouter facilement des films Disney / Pixar /
+ * familiaux sans relancer ce script (qui remplace tout le catalogue),
+ * utilisez plutôt le bouton « 🐻 Importer des films enfants (TMDB) » dans
+ * l'onglet Films de l'administration — il ne fait qu'ajouter, sans rien
+ * écraser. Ce script reste utile pour reconstituer le catalogue complet ;
+ * il marque désormais aussi chaque film d'animation/familial avec
+ * `kids: true`, le champ que le mode enfant utilise pour filtrer.
  */
-
 import { writeFileSync, existsSync, copyFileSync } from "fs";
 
 const API_KEY = process.env.TMDB_API_KEY;
@@ -31,13 +38,12 @@ const MIN_YEAR = Number(process.env.MIN_YEAR || 1970);
 const MAX_ANIMATION = Number(process.env.MAX_ANIMATION || 20);
 const MAX_TITLE_LEN = Number(process.env.MAX_TITLE_LEN || 22);
 const MAX_TITLE_WORDS = Number(process.env.MAX_TITLE_WORDS || 4);
-
 const GENRE_ANIMATION = 16;
+const GENRE_FAMILLE = 10751;   // avec Animation, sert à repérer les films adaptés aux enfants
 
 /* ------------------------------------------------------------------ */
 /* Accès à l'API                                                       */
 /* ------------------------------------------------------------------ */
-
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function api(path, params = {}) {
@@ -45,7 +51,6 @@ async function api(path, params = {}) {
   url.searchParams.set("api_key", API_KEY);
   url.searchParams.set("language", "fr-FR");
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
-
   for (let essai = 1; essai <= 3; essai++) {
     const res = await fetch(url);
     if (res.ok) return res.json();
@@ -95,7 +100,6 @@ const niveau = (votes) => (votes >= 8000 ? "facile" : votes >= 2500 ? "moyen" : 
 /* ------------------------------------------------------------------ */
 /* Collecte                                                            */
 /* ------------------------------------------------------------------ */
-
 const vus = new Set();       // ids TMDB déjà examinés
 const sagas = new Map();     // id de collection -> film retenu
 const rejets = { suite: 0, titre: 0, animation: 0, saga: 0, sansSynopsis: 0 };
@@ -104,7 +108,6 @@ let animations = 0;
 async function collecte(label, params, cible, vf) {
   console.log(`\n${label} — objectif ${cible}`);
   const retenus = [];
-
   for (let page = 1; retenus.length < cible && page <= 60; page++) {
     let lot;
     try { lot = await api("/discover/movie", { ...params, page }); }
@@ -130,6 +133,10 @@ async function collecte(label, params, cible, vf) {
       const estAnime = (d.genres || []).some((g) => g.id === GENRE_ANIMATION);
       if (estAnime && animations >= MAX_ANIMATION) { rejets.animation++; continue; }
 
+      // Films adaptés aux enfants : animation ou famille — c'est ce champ que
+      // le mode enfant du jeu utilise pour filtrer le catalogue.
+      const estEnfant = (d.genres || []).some((g) => [GENRE_ANIMATION, GENRE_FAMILLE].includes(g.id));
+
       const film = {
         tmdbId: d.id,
         title: d.title,
@@ -144,8 +151,10 @@ async function collecte(label, params, cible, vf) {
         votes: d.vote_count || 0,
         difficulty: niveau(d.vote_count || 0),
         animation: estAnime,
-        // les films d'animation et familiaux alimentent la catégorie Enfants
-        categorie: (d.genres || []).some((g) => [16, 10751].includes(g.id)) ? "kid" : "tous",
+        // le mode enfant du site filtre sur ce booléen
+        kids: estEnfant,
+        // conservé pour information / anciens usages du script
+        categorie: estEnfant ? "kid" : "tous",
         vf,
         enabled: true,
       };
@@ -167,7 +176,6 @@ async function collecte(label, params, cible, vf) {
       if (retenus.length % 25 === 0) console.log(`  ${retenus.length}…`);
     }
   }
-
   console.log(`${label} : ${retenus.length} films retenus.`);
   return retenus;
 }
@@ -175,7 +183,6 @@ async function collecte(label, params, cible, vf) {
 /* ------------------------------------------------------------------ */
 /* Exécution                                                           */
 /* ------------------------------------------------------------------ */
-
 const commun = {
   "primary_release_date.gte": `${MIN_YEAR}-01-01`,
   include_adult: "false",
@@ -207,16 +214,13 @@ writeFileSync("movies.json", JSON.stringify(movies, null, 2));
 /* ------------------------------------------------------------------ */
 /* Rapport                                                             */
 /* ------------------------------------------------------------------ */
-
 const compte = (f) => movies.filter(f).length;
-
 console.log(`\n${movies.length} films écrits dans movies.json`);
 console.log(`  français : ${compte((m) => m.vf)} · internationaux : ${compte((m) => !m.vf)}`);
 console.log(`  animation : ${compte((m) => m.animation)} (plafond ${MAX_ANIMATION})`);
-console.log(`  catégorie Enfants : ${compte((m) => m.categorie === "kid")}`);
+console.log(`  mode enfant (kids) : ${compte((m) => m.kids)}`);
 for (const n of ["facile", "moyen", "difficile"])
   console.log(`  ${n} : ${compte((m) => m.difficulty === n)}`);
-
 console.log(`\nÉcartés : ${rejets.suite} suites, ${rejets.saga} doublons de saga, ` +
             `${rejets.titre} titres inadaptés, ${rejets.animation} animations au-delà du quota, ` +
             `${rejets.sansSynopsis} sans synopsis français.`);
