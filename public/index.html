@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-<meta charset="utf-8">
+<meta charset="utf-z8">
 <link rel="icon" href="/api/favicon">
 <link rel="apple-touch-icon" href="/api/favicon">
 <meta name="theme-color" content="#0A0C16">
@@ -19,10 +19,13 @@
   h1 em{font-style:normal;color:var(--beam)}
   h2{font-family:'Anton',sans-serif;text-transform:uppercase;letter-spacing:.03em;font-size:22px;margin:0 0 4px}
   .baseline{color:var(--muted);font-size:16px;margin:10px 0 0;line-height:1.5;max-width:44ch}
+  .free{display:inline-block;margin-top:14px;font-size:11px;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--teal);border:1px solid var(--teal);border-radius:999px;padding:6px 14px}
   .card{background:var(--velvet);border:1px solid rgba(237,232,220,.09);border-radius:14px;padding:20px;margin-top:16px}
   .tag{font-size:11px;letter-spacing:.26em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
   label{display:block;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
   input{width:100%;background:var(--card);border:1px solid rgba(237,232,220,.14);color:var(--chalk);border-radius:10px;padding:13px 14px;font:inherit;font-size:16px}
+  input:focus-visible,button:focus-visible{outline:2px solid var(--beam);outline-offset:2px}
   button{font:inherit;font-weight:700;border:0;border-radius:10px;padding:13px 18px;cursor:pointer;background:var(--beam);color:#161207}
   button.ghost{background:transparent;color:var(--chalk);border:1px solid rgba(237,232,220,.22)}
   button.danger{color:var(--ticket);border-color:rgba(228,88,110,.45)}
@@ -67,17 +70,17 @@
     <p class="wallet">🎟️ <b id="creditsCount">0</b> crédits</p>
     <p class="online"><span class="dot"></span><b id="onlineNb">1</b> joueur en ligne</p>
 
-    <!-- BARRE DE NAVIGATION : AMIS, OURSON (MODE ENFANT), PROFIL -->
+    <!-- BARRE DE NAVIGATION AVEC LE BOUTON OURSON EXACTEMENT ENTRE AMIS ET PROFIL -->
     <div class="row" style="margin: 20px 0;">
       <button class="ghost" id="btnFriends" style="flex:1;">👥 Amis</button>
-      <!-- LE BOUTON OURSON EXACTEMENT ENTRE AMIS ET PROFIL -->
+      <!-- BOUTON OURSON (MODE ENFANT) -->
       <button class="ghost" id="btnToggleMode" title="Basculer Mode Enfant / Adulte" style="flex:0 0 auto; border-color:var(--teal); color:var(--teal); font-size:22px; padding:10px 16px;">🧸</button>
       <button class="ghost" id="btnProfile" style="flex:1;">👤 Profil</button>
     </div>
 
     <div class="card">
       <p class="tag">Mode de jeu</p>
-      <button style="width:100%;margin-bottom:10px;" id="btnSolo">🎬 Solo</button>
+      <button style="width:100%;margin-bottom:10px;">🎬 Solo</button>
       <button style="width:100%;background:var(--teal);color:#0A0C16;" id="btnAdminAccess" class="hidden">⚙️ Administration</button>
     </div>
   </section>
@@ -92,7 +95,7 @@ const show = (id) => {
   window.scrollTo({top: 0, behavior: "instant"});
 };
 
-// Vérification de session
+// Vérification session basique
 fetch("/api/me").then(r => {
   if (r.ok) {
     r.json().then(u => {
@@ -108,7 +111,7 @@ fetch("/api/me").then(r => {
   }
 }).catch(() => show("landing"));
 
-// Connexion Email
+// Connexion Email Simulation
 document.getElementById("btnMailConnexion").onclick = async () => {
   const email = document.getElementById("mail").value.trim();
   const motDePasse = document.getElementById("mdp").value;
@@ -128,7 +131,7 @@ document.getElementById("btnMailConnexion").onclick = async () => {
   }
 };
 
-// Gestion du Mode Enfant (Ourson 🧸)
+// Bouton Ourson (Mode Enfant / Adulte)
 let modeEnfant = localStorage.getItem("michben_mode") === "kid";
 const btnBear = document.getElementById("btnToggleMode");
 if (btnBear) {
@@ -139,24 +142,9 @@ if (btnBear) {
     localStorage.setItem("michben_mode", modeEnfant ? "kid" : "adult");
     btnBear.style.background = modeEnfant ? "var(--teal)" : "transparent";
     btnBear.style.color = modeEnfant ? "#161207" : "var(--chalk)";
-    alert(modeEnfant ? "🧸 Mode Enfant activé ! (Films adaptés)" : "👤 Mode Adulte activé !");
+    alert(modeEnfant ? "🧸 Mode Enfant activé !" : "👤 Mode Adulte activé !");
   };
 }
-
-// Lancement Solo avec prise en compte du mode enfant
-document.getElementById("btnSolo").onclick = async () => {
-  const categorie = localStorage.getItem("michben_mode") === "kid" ? "kid" : "tous";
-  const res = await fetch("/api/solo/start", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({ mode: "solo", categorie })
-  });
-  if (res.ok) {
-    alert("Partie solo lancée en mode " + categorie + " !");
-  } else {
-    alert("Erreur au lancement de la partie.");
-  }
-};
 </script>
 </body>
 </html>
