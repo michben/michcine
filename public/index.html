@@ -955,6 +955,11 @@ html.mode-enfant-actif .wrap{padding-top:48px}
       <button class="ghost" id="btnSuggestion" style="border-color:var(--teal); color:var(--teal)">💡 Suggérer un film</button>
       <button class="ghost" id="btnFilmsSuggeres" style="border-color:var(--ticket); color:var(--ticket)">🎟️ Suggestions retenues</button>
     </div>
+    <div class="row">
+      <button class="ghost hidden" id="btnSuggARepost" style="border-color:var(--beam); color:var(--beam)">
+        🎉 Suggestion retenue à publier <span id="badgeSuggARepost" class="pastille hidden">0</span>
+      </button>
+    </div>
     <div class="card">
       <label for="joinCode">Rejoindre un salon existant</label>
       <input id="joinCode" maxlength="4" placeholder="ABCD" autocomplete="off">
@@ -1746,6 +1751,9 @@ const show = id => {
   $("helpBtn")?.classList.toggle("hidden", inGame || !aideActive);
   enPartieActuellement = inGame;
   majSpectateursCorner();
+  // On revérifie discrètement (sans popup) à chaque passage par le menu si une suggestion
+  // vient d'être acceptée, pour que le bouton/pastille reste à jour même sans se reconnecter.
+  if (id === "menu") rafraichirSuggestionsARepost();
 };
 /** Photo du joueur si l'administration lui en a attribué une, émoji sinon. */
 const vignette = (j) => j?.photo
@@ -1849,6 +1857,9 @@ document.addEventListener("DOMContentLoaded", () => {
   };
   $("closeSuggPubliqueBtn").onclick = () => $("suggPubliqueModal").classList.remove("active");
   $("closeSuggRepostBtn").onclick = () => $("suggRepostModal").classList.remove("active");
+  $("btnSuggARepost").onclick = () => {
+    if (suggestionsARepostListe.length) proposerRepost(suggestionsARepostListe[0]);
+  };
   $("btnSuggRepost").onclick = async () => {
     if (!suggestionARepost) return;
     const btn = $("btnSuggRepost");
@@ -1863,17 +1874,29 @@ document.addEventListener("DOMContentLoaded", () => {
     if (res?.ok){
       $("suggRepostFeedback").textContent = "Publiée ! Merci pour votre idée 🎬";
       $("suggRepostFeedback").className = "feedback good";
+      rafraichirSuggestionsARepost();
       setTimeout(() => $("suggRepostModal").classList.remove("active"), 1800);
     } else {
       $("suggRepostFeedback").textContent = "Échec de la publication, réessayez.";
       $("suggRepostFeedback").className = "feedback bad";
     }
   };
+  $("btnSuggRepostDecliner").onclick = async () => {
+    if (!suggestionARepost) return;
+    const btn = $("btnSuggRepostDecliner");
+    btn.disabled = true;
+    await fetch(`/api/suggestions/${encodeURIComponent(suggestionARepost.id)}/decliner`, { method: "POST" }).catch(() => {});
+    btn.disabled = false;
+    $("suggRepostModal").classList.remove("active");
+    suggestionARepost = null;
+    rafraichirSuggestionsARepost();
+  };
 });
 
 /* Fenêtre proposée à l'auteur d'une suggestion dès qu'elle est acceptée : il choisit
-   lui-même s'il veut la publier dans « Suggestions retenues », et sous son nom ou non.
-   Appelée depuis la notif temps réel ou depuis verifierSuggestionsAcceptees() ci-dessous. */
+   lui-même s'il veut la publier dans « Suggestions retenues », et sous son nom ou non,
+   ou refuser d'un clic sur « Non merci ». Appelée depuis la notif temps réel, depuis le
+   bouton persistant du menu, ou automatiquement à la connexion s'il y en a une en attente. */
 function proposerRepost(s){
   suggestionARepost = s;
   $("suggRepostTexte").textContent =
@@ -1883,13 +1906,35 @@ function proposerRepost(s){
   $("suggRepostModal").classList.add("active");
 }
 
-/* Au cas où le joueur n'était pas connecté au moment où sa suggestion a été acceptée :
-   on vérifie ses suggestions à la connexion et on lui propose quand même le repost. */
-async function verifierSuggestionsAcceptees(){
-  if (!me) return;
+/** Suggestions acceptées mais pas encore publiées ni refusées par leur auteur — pilote le bouton/badge du menu. */
+let suggestionsARepostListe = [];
+
+function majBadgeSuggestions(){
+  const n = suggestionsARepostListe.length;
+  $("btnSuggARepost")?.classList.toggle("hidden", n === 0);
+  $("badgeSuggARepost")?.classList.toggle("hidden", n === 0);
+  if ($("badgeSuggARepost")) $("badgeSuggARepost").textContent = String(n);
+}
+
+/**
+ * Rafraîchit silencieusement la liste des suggestions en attente d'une décision, sans
+ * rouvrir la fenêtre — appelé à chaque retour au menu pour que le bouton reste à jour
+ * même si le joueur était déjà connecté quand l'administration a accepté sa suggestion
+ * (la notification en temps réel disparaît au bout de 8 secondes si elle est manquée).
+ */
+async function rafraichirSuggestionsARepost(){
+  if (!me){ suggestionsARepostListe = []; majBadgeSuggestions(); return; }
   const mesSuggestions = await fetch("/api/suggestions/mine").then(r => r.ok ? r.json() : []).catch(() => []);
-  const enAttenteDePublication = mesSuggestions.find(s => s.statut === "accepte" && !s.publie);
-  if (enAttenteDePublication) proposerRepost(enAttenteDePublication);
+  suggestionsARepostListe = mesSuggestions.filter(s => s.statut === "accepte" && !s.publie && !s.decline);
+  majBadgeSuggestions();
+}
+
+/* À la connexion : on vérifie s'il y a une suggestion en attente d'une décision et,
+   si oui, on ouvre directement la fenêtre — au cas où le joueur n'était pas connecté
+   au moment où l'administration l'a acceptée. */
+async function verifierSuggestionsAcceptees(){
+  await rafraichirSuggestionsARepost();
+  if (suggestionsARepostListe.length) proposerRepost(suggestionsARepostListe[0]);
 }
 
 fetch("/api/config").then(r => r.json())
@@ -4359,7 +4404,10 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
                 <label style="display:flex;align-items:center;gap:8px;margin:12px 0;cursor:pointer;font-size:15px;color:var(--chalk);text-transform:none;letter-spacing:0">
                     <input type="checkbox" id="suggRepostAnonyme" style="width:auto"> Publier anonymement (sans mon pseudo)
                 </label>
-                <div class="row"><button id="btnSuggRepost">Publier dans les suggestions retenues</button></div>
+                <div class="row">
+                    <button id="btnSuggRepost">Publier dans les suggestions retenues</button>
+                    <button class="ghost" id="btnSuggRepostDecliner" style="flex:0 0 auto">Non merci</button>
+                </div>
                 <p class="feedback" id="suggRepostFeedback"></p>
             </div>
         </div>
