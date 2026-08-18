@@ -1208,7 +1208,15 @@ app.get("/api/players/search", (req, res) => {
   const user = exigeCompte(req, res);
   if (!user) return;
   const trouves = chercherJoueurs(req.query.q, user.id)
-    .map((j) => ({ ...j, relation: statutRelation(user.id, j.id) }));
+    .map((j) => {
+      const relation = statutRelation(user.id, j.id);
+      // Ne proposer « regarder en direct » que pour un ami réellement en partie,
+      // ici aussi (et pas seulement depuis l'onglet Amis) : sinon le bouton
+      // n'apparaît jamais si on retrouve son ami via la recherche.
+      if (relation !== "ami") return { ...j, relation };
+      const room = salonDuJoueur(j.id);
+      return { ...j, relation, enPartie: Boolean(room), modeSalon: room ? room.mode : null };
+    });
   res.json(trouves);
 });
 
