@@ -11,7 +11,7 @@ import { createRequire } from "module";
 import { dirname, join } from "path";
 import crypto from "crypto";
 import fs from "fs";
-import { mountAuth, userFromCookie, chargerUtilisateurs, estCompteEnfant } from "./auth-x.js";
+import { mountAuth, userFromCookie, estCompteEnfant } from "./auth-x.js";
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
@@ -118,7 +118,6 @@ await initStockage();
 movies = await charger("movies", MOVIES_FILE, []);
 normaliserFilms();
 REGLAGES = { ...structuredClone(REGLAGES_DEFAUT), ...(await charger("reglages", null, {})) };
-await chargerUtilisateurs();
 
 httpServer.listen(PORT, "0.0.0.0", () => {
   console.log(`MichBen Ciné Quizz → http://localhost:${PORT}  (admin : /admin.html)`);
