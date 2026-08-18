@@ -7,23 +7,24 @@
 <meta name="theme-color" content="#0A0C16">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MichBen Ciné Quizz — devinez le film</title>
-<link href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
 <style>
-  :root{--ink:#0A0C16;--velvet:#151A2E;--card:#1C2238;--beam:#F5B942;--ticket:#E4586E;--teal:#4ECDC4;--chalk:#EDE8DC;--muted:#7C819B}
+  :root{--ink:#0A0C16;--velvet:#151A2E;--card:#1C2238;--beam:#F5B942;--ticket:#E4586E;--teal:#4ECDC4;--chalk:#EDE8DC;--muted:#7C819B;
+    --font-affiche:'Anton',sans-serif; --font-corps:'Inter',system-ui,sans-serif; --font-etiquette:'Oswald','Inter',system-ui,sans-serif; --font-code:'JetBrains Mono',monospace}
   *{box-sizing:border-box}
   body{margin:0;min-height:100vh;background:var(--ink);color:var(--chalk);
-    font-family:'Space Grotesk',system-ui,sans-serif;
+    font-family:var(--font-corps);
     background-image:radial-gradient(ellipse 80% 55% at 50% -10%, rgba(245,185,66,.16), transparent 70%)}
   .wrap{max-width:720px;margin:0 auto;padding:26px 18px 40px}
-  h1{font-family:'Anton',sans-serif;font-size:clamp(30px,8vw,52px);letter-spacing:.04em;text-transform:uppercase;margin:0;line-height:.92}
+  h1{font-family:var(--font-affiche);font-size:clamp(30px,8vw,52px);letter-spacing:.04em;text-transform:uppercase;margin:0;line-height:.92}
   h1 em{font-style:normal;color:var(--beam)}
-  h2{font-family:'Anton',sans-serif;text-transform:uppercase;letter-spacing:.03em;font-size:22px;margin:0 0 4px}
+  h2{font-family:var(--font-affiche);text-transform:uppercase;letter-spacing:.03em;font-size:22px;margin:0 0 4px}
   .baseline{color:var(--muted);font-size:16px;margin:10px 0 0;line-height:1.5;max-width:44ch}
-  .free{display:inline-block;margin-top:14px;font-size:11px;letter-spacing:.2em;text-transform:uppercase;
+  .free{display:inline-block;margin-top:14px;font-family:var(--font-etiquette);font-weight:500;font-size:11px;letter-spacing:.2em;text-transform:uppercase;
     color:var(--teal);border:1px solid var(--teal);border-radius:999px;padding:6px 14px}
   .card{background:var(--velvet);border:1px solid rgba(237,232,220,.09);border-radius:14px;padding:20px;margin-top:16px}
-  .tag{font-size:11px;letter-spacing:.26em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
-  label{display:block;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+  .tag{font-family:var(--font-etiquette);font-weight:500;font-size:11px;letter-spacing:.26em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+  label{display:block;font-family:var(--font-etiquette);font-weight:500;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
   input{width:100%;background:var(--card);border:1px solid rgba(237,232,220,.14);color:var(--chalk);border-radius:10px;padding:13px 14px;font:inherit;font-size:16px}
   input:focus-visible,button:focus-visible{outline:2px solid var(--beam);outline-offset:2px}
   #joinCode{font-family:'JetBrains Mono',monospace;letter-spacing:.5em;text-transform:uppercase;font-size:20px}
@@ -55,14 +56,34 @@
   .players{list-style:none;padding:0;margin:12px 0 0;display:flex;flex-wrap:wrap;gap:8px}
   /* Carte de profil : la photo est le premier élément vu, encadrée en grand. */
   #carteProfil{text-align:center;margin:4px 0 22px}
-  .barreNiveau{background:var(--card);border-radius:12px;padding:13px 15px;margin-top:14px}
-  .niveauTete{display:flex;align-items:center;gap:10px;margin-bottom:9px}
-  .pastilleNiveau{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;
+  .barreNiveau{position:relative;overflow:hidden;cursor:pointer;
+    background:linear-gradient(155deg,rgba(245,185,66,.16),rgba(228,88,110,.10) 55%,var(--card) 100%);
+    border:1px solid rgba(245,185,66,.35);border-radius:16px;padding:15px 17px;margin-top:14px;
+    box-shadow:0 8px 20px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.05);
+    transition:border-color .2s,transform .2s}
+  .barreNiveau:hover{border-color:var(--beam);transform:translateY(-1px)}
+  .barreNiveau::after{content:"";position:absolute;top:-60%;right:-20%;width:60%;height:220%;
+    background:radial-gradient(circle,rgba(245,185,66,.16),transparent 70%);pointer-events:none}
+  .niveauTete{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+  .pastilleNiveau{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;
     background:linear-gradient(140deg,var(--beam),var(--ticket));color:#161207;
-    font-family:'JetBrains Mono',monospace;font-weight:700;font-size:15px;flex:0 0 auto}
+    font-family:var(--font-code);font-weight:700;font-size:17px;flex:0 0 auto;
+    box-shadow:0 0 0 3px rgba(245,185,66,.2),0 4px 14px rgba(245,185,66,.4)}
+  body.animations-actives .pastilleNiveau{animation:pastillePulse 2.6s ease-in-out infinite}
+  @keyframes pastillePulse{
+    0%,100%{box-shadow:0 0 0 3px rgba(245,185,66,.2),0 4px 14px rgba(245,185,66,.4)}
+    50%{box-shadow:0 0 0 6px rgba(245,185,66,.1),0 4px 20px rgba(245,185,66,.6)}}
   .niveauTexte{flex:1;font-size:14px;color:var(--muted)}
-  .niveauTexte b{color:var(--chalk)}
-  .niveauXp{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted)}
+  .niveauTexte b{color:var(--beam);font-family:var(--font-affiche);font-size:19px;
+    letter-spacing:.02em;text-transform:uppercase;font-weight:400}
+  .niveauXp{font-family:var(--font-code);font-size:12px;color:var(--chalk);
+    background:rgba(0,0,0,.28);padding:4px 10px;border-radius:999px;white-space:nowrap}
+  .barreNiveau .jauge{height:9px;border-radius:99px;background:rgba(0,0,0,.32);
+    box-shadow:inset 0 1px 3px rgba(0,0,0,.5);margin:12px 0 2px}
+  .barreNiveau .jauge i{background:linear-gradient(90deg,var(--ticket),var(--beam),var(--teal));
+    background-size:200% 100%;box-shadow:0 0 10px rgba(245,185,66,.55);border-radius:99px}
+  body.animations-actives .barreNiveau .jauge i{animation:jaugeShimmer 2.2s linear infinite}
+  @keyframes jaugeShimmer{0%{background-position:0% 0}100%{background-position:200% 0}}
   .quete{display:flex;gap:12px;align-items:center;padding:14px 0;border-top:1px solid rgba(237,232,220,.1);flex-wrap:wrap}
   .quete .infos{flex:1;min-width:150px}
   .quete .infos b{display:block;font-size:15px}
@@ -236,7 +257,7 @@
   .flyEmoji{position:fixed;z-index:55;pointer-events:none;font-size:34px;
     animation:monte 2.2s ease-out forwards}
   .flyEmoji small{display:block;font-size:11px;color:var(--muted);text-align:center;
-    font-family:'Space Grotesk',sans-serif}
+    font-family:'Inter',sans-serif}
   @keyframes monte{
     0%{opacity:0;transform:translateY(0) scale(.6)}
     12%{opacity:1;transform:translateY(-14px) scale(1.15)}
@@ -389,6 +410,18 @@
 /* --- LE BOUTON POINT D'INTERROGATION --- */
 .help-btn { position: fixed; bottom: 20px; left: 20px; width: 40px; height: 40px; background: rgba(28, 34, 56, 0.6); color: var(--muted); border: 1px solid rgba(237, 232, 220, 0.15); border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 20px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2); transition: all 0.3s ease; z-index: 1000; backdrop-filter: blur(4px); }
 .help-btn:hover { transform: scale(1.1); color: var(--chalk); border-color: var(--beam); background: rgba(28, 34, 56, 0.9); }
+
+/* --- MODE ENFANT --- */
+#btnKidMode{font-size:18px;line-height:1;padding:13px 16px}
+#btnKidMode[aria-pressed="true"]{background:#3DDC84;color:#0A2015;border-color:#3DDC84}
+#btnKidMode:disabled{cursor:not-allowed;opacity:.85}
+/* Halo vert tout autour de l'écran tant que le mode enfant est actif. */
+html.mode-enfant-actif{box-shadow:inset 0 0 0 5px #3DDC84, inset 0 0 34px 6px rgba(61,220,132,.55)}
+html.mode-enfant-actif body{min-height:100vh}
+.bandeauEnfant{position:fixed;top:0;left:0;right:0;z-index:1200;background:#3DDC84;color:#0A2015;
+  text-align:center;font-family:var(--font-etiquette);font-weight:600;font-size:12px;letter-spacing:.14em;
+  text-transform:uppercase;padding:6px 10px}
+html.mode-enfant-actif .wrap{padding-top:48px}
 /* --- LA FENÊTRE MODALE --- */
 .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.85); display: none; justify-content: center; align-items: center; z-index: 1001; opacity: 0; transition: opacity 0.3s ease; }
 .modal-overlay.active { display: flex; opacity: 1; }
@@ -398,7 +431,7 @@
 .modal-header h2 { margin: 0; font-size: 24px; color: #f5f5f5; font-family: 'Anton', sans-serif;}
 .close-btn { background: none; border: none; color: #888; font-size: 32px; line-height: 1; cursor: pointer; transition: color 0.2s; }
 .close-btn:hover { color: #e50914; }
-.modal-body { padding: 25px; line-height: 1.6; font-family: 'Space Grotesk', sans-serif; text-align: left; }
+.modal-body { padding: 25px; line-height: 1.6; font-family: 'Inter', sans-serif; text-align: left; }
 .mode-section { background-color: #222; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; border-left: 5px solid #1db954; text-align: left; }
 .mode-section.cine { border-left-color: #e50914; }
 .mode-section h3 { margin-top: 0; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; color: white;}
@@ -487,6 +520,7 @@
 
 </head>
 <body>
+<div class="bandeauEnfant hidden" id="bandeauEnfant">🐻 Mode enfant activé — uniquement des films pour enfants</div>
 <div class="wrap">
 
   <button id="banner" title="Revenir à l'accueil">
@@ -520,6 +554,17 @@
       </div>
       <p class="feedback bad" id="mailError"></p>
 
+      <p class="tag" style="margin:22px 0 10px">🐻 Compte enfant</p>
+      <p class="note" style="margin-top:0">Identifiant et mot de passe remis par un adulte — ces comptes créés depuis
+        l'administration ne jouent qu'en mode enfant.</p>
+      <label for="ccIdentifiant">Identifiant</label>
+      <input id="ccIdentifiant" autocomplete="username" placeholder="Pseudo donné par un adulte">
+      <label for="ccMdp" style="margin-top:12px">Mot de passe</label>
+      <input id="ccMdp" type="password" autocomplete="current-password">
+      <div class="row">
+        <button id="btnCcConnexion">Se connecter</button>
+      </div>
+      <p class="feedback bad" id="ccError"></p>
 
       <p class="note" style="margin-bottom:0">En vous inscrivant, vous acceptez les <a href="/regles.html" style="color:var(--beam)">règles et le code de bonne conduite</a>.</p>
       <p class="note">Le compte X sert uniquement à identifier votre profil et votre classement. Aucun message ne sera publié en votre nom.</p>
@@ -691,6 +736,7 @@
       <div class="tabsAmis" id="tabsClassement">
         <button data-c="saison" aria-pressed="true">Saison en cours</button>
         <button data-c="global" aria-pressed="false">Classement global</button>
+        <button data-c="enfant" aria-pressed="false">🐻 Enfants</button>
       </div>
 
       <div id="seauBloc" style="text-align:center;margin-top:16px">
@@ -730,7 +776,7 @@
     <div class="barreNiveau" id="barreNiveau">
       <div class="niveauTete">
         <span class="pastilleNiveau" id="niveauNum">0</span>
-        <span class="niveauTexte">Niveau <b id="niveauLabel">0</b></span>
+        <span class="niveauTexte">🏅 Niveau <b id="niveauLabel">0</b></span>
         <span class="niveauXp" id="niveauXp"></span>
       </div>
       <div class="jauge"><i id="niveauJauge" style="width:0%"></i></div>
@@ -751,6 +797,7 @@
       <button class="ghost" id="btnBoard">Classement</button>
       <button class="ghost" id="btnQuetes">Quêtes <span id="badgeQuetes" class="pastille hidden">0</span></button>
       <button class="ghost" id="btnFriends">Amis <span id="badgeAmis" class="pastille hidden">0</span></button>
+      <button class="ghost" id="btnKidMode" aria-pressed="false" title="Mode enfant : uniquement des films pour enfants">🐻</button>
       <button class="ghost" id="btnProfile">Profil</button>
     </div>
         <div class="row"><button class="ghost hidden" id="btnModeration">Modération</button>
@@ -1063,7 +1110,46 @@ function setCredits(n){
   if (typeof n === "number") credits = n;
   document.querySelectorAll(".wallet b").forEach(el => el.textContent = credits);
 }
-let state = {code:null, mode:"ffa", isHost:false, hintCosts:{}, bought:{}, answered:false, timerId:null, freeHintsRemaining: 0, allHintsFree: false, coeursMax: 3};
+let state = {code:null, mode:"ffa", isHost:false, hintCosts:{}, bought:{}, answered:false, timerId:null, freeHintsRemaining: 0, allHintsFree: false, coeursMax: 3, kidMode:false};
+
+/* ---------- Mode enfant ---------- */
+/** Applique l'état du mode enfant à l'écran : halo vert, bouton, bandeau. */
+function appliquerModeEnfant(){
+  document.documentElement.classList.toggle("mode-enfant-actif", state.kidMode);
+  $("bandeauEnfant").classList.toggle("hidden", !state.kidMode);
+  $("btnKidMode").setAttribute("aria-pressed", String(state.kidMode));
+  // un compte enfant ne peut jamais désactiver le mode enfant
+  const verrouille = me && me.role === "enfant";
+  $("btnKidMode").disabled = verrouille;
+  $("btnKidMode").title = verrouille
+    ? "Mode enfant activé en permanence pour ce compte."
+    : (state.kidMode ? "Désactiver le mode enfant" : "Mode enfant : uniquement des films pour enfants");
+}
+$("btnKidMode").onclick = () => {
+  if (me && me.role === "enfant") return;   // verrouillé
+  state.kidMode = !state.kidMode;
+  try { localStorage.setItem("kidMode", state.kidMode ? "1" : "0"); } catch {}
+  appliquerModeEnfant();
+};
+try { state.kidMode = localStorage.getItem("kidMode") === "1"; } catch {}
+// appliquerModeEnfant() n'est appelé qu'après connexion (voir appliquerRole) :
+// avant, `me` n'existe pas encore et le bouton est de toute façon masqué.
+
+/** Applique les conséquences du rôle du compte connecté : bouton admin, mode enfant forcé. */
+function appliquerRole(){
+  if (!me) return;
+  $("btnAdminAccess").classList.toggle("hidden", me.role !== "admin");
+  if (me.role === "admin") $("btnAdminAccess").onclick = () => window.location.href = "/admin.html";
+  if (me.role === "enfant") {
+    state.kidMode = true;
+    try { localStorage.setItem("kidMode", "1"); } catch {}
+    // un compte enfant n'apparaît que dans le classement enfant : c'est celui qu'on lui montre par défaut
+    typeClassement = "enfant";
+    $("tabsClassement").querySelectorAll("[data-c]").forEach(x =>
+      x.setAttribute("aria-pressed", String(x.dataset.c === "enfant")));
+  }
+  appliquerModeEnfant();
+}
 
 /** Chaque écran commence en haut : personne ne doit remonter à la main. */
 const show = id => {
@@ -1092,40 +1178,36 @@ if (!window.tempsReelDispo) {
     b.disabled = true; b.style.opacity = .4;
     b.title = "Indisponible : le temps réel est bloqué par votre navigateur.";
   });
-  
-// Logic to show Admin button if admin
-if (["admin"].includes(me.role)) {
-    $("btnAdminAccess").classList.remove("hidden");
-    $("btnAdminAccess").onclick = () => window.location.href = "/admin.html";
-}
-
-        const suggestionModal = $("suggestionModal");
-        const btnSuggestion = $("btnSuggestion");
-        
-        btnSuggestion.onclick = () => suggestionModal.classList.add("active");
-        $("closeSuggestionBtn").onclick = () => suggestionModal.classList.remove("active");
-        
-        $("btnSendSugg").onclick = async () => {
-            const titre = $("suggTitre").value.trim();
-            const commentaire = $("suggComment").value.trim();
-            if(!titre) return;
-            
-            const res = await fetch("/api/suggestions", {
-                method: "POST",
-                headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({ titre, commentaire })
-            });
-            if(res.ok) {
-                $("suggFeedback").textContent = "Merci pour votre suggestion !";
-                $("suggFeedback").className = "feedback good";
-                $("suggTitre").value = ""; $("suggComment").value = "";
-                setTimeout(() => suggestionModal.classList.remove("active"), 2000);
-            }
-        };
-
-// le bouton reste cliquable : mieux vaut un message clair qu'un bouton mort
+  // le bouton reste cliquable : mieux vaut un message clair qu'un bouton mort
   $("btnJoin").title = "Le multijoueur exige la connexion temps réel.";
 }
+
+// Bouton « Suggérer un film » : doit fonctionner que le temps réel soit
+// disponible ou non (auparavant câblé par erreur dans le bloc ci-dessus,
+// qui ne s'exécute que lorsque le temps réel est bloqué).
+const suggestionModal = $("suggestionModal");
+const btnSuggestion = $("btnSuggestion");
+
+btnSuggestion.onclick = () => suggestionModal.classList.add("active");
+$("closeSuggestionBtn").onclick = () => suggestionModal.classList.remove("active");
+
+$("btnSendSugg").onclick = async () => {
+    const titre = $("suggTitre").value.trim();
+    const commentaire = $("suggComment").value.trim();
+    if(!titre) return;
+
+    const res = await fetch("/api/suggestions", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ titre, commentaire })
+    });
+    if(res.ok) {
+        $("suggFeedback").textContent = "Merci pour votre suggestion !";
+        $("suggFeedback").className = "feedback good";
+        $("suggTitre").value = ""; $("suggComment").value = "";
+        setTimeout(() => suggestionModal.classList.remove("active"), 2000);
+    }
+};
 
 fetch("/api/config").then(r => r.json())
   .then(c => { $("tipLink").href = c.tipUrl; tauxTicket = c.pointsParTicket || tauxTicket; if (c.animationsAvancees !== false) document.body.classList.add("animations-actives"); })
@@ -1151,6 +1233,7 @@ async function loadSession(){
     $("hello").innerHTML = `Bonjour ${esc(me.pseudo)}` +
       (["moderateur","admin"].includes(me.role) ? `<span class="badge-role">${esc(me.role)}</span>` : "");
     $("btnModeration").classList.toggle("hidden", !["moderateur","admin"].includes(me.role));
+    appliquerRole();
     show("menu");
   } catch (e) {
     $("diag").textContent = `Contact du serveur impossible : ${e.message}`;
@@ -1268,11 +1351,39 @@ async function authMail(chemin){
   if (!me.pseudoChosen) return firstVisit();
   $("hello").textContent = `Bonjour ${me.pseudo}`;
   majBadgeAmis();
+  appliquerRole();
   show("menu");
 }
 $("btnMailConnexion").onclick = () => authMail("connexion");
 $("btnMailInscription").onclick = () => authMail("inscription");
 $("mdp").addEventListener("keydown", e => { if (e.key === "Enter") authMail("connexion"); });
+
+/* ---------- Connexion des comptes créés par l'administration (compte enfant) ---------- */
+async function authEnfant(){
+  const pseudo = $("ccIdentifiant").value.trim(), motDePasse = $("ccMdp").value;
+  if (!pseudo || !motDePasse) return ($("ccError").textContent = "Renseignez l'identifiant et le mot de passe.");
+
+  const res = await fetch("/auth/enfant/connexion", {method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({pseudo, motDePasse})});
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return ($("ccError").textContent = MESSAGES_MAIL[data.error] || "Identifiant ou mot de passe incorrect.");
+
+  me = data;
+  $("ccMdp").value = "";
+  $("ccError").textContent = "";
+  setCredits(me.credits ?? 0);
+  setPoints(me.points ?? 0);
+
+  if (window.tempsReelDispo) socket.disconnect().connect();
+  if (!me.pseudoChosen) return firstVisit();
+  $("hello").textContent = `Bonjour ${me.pseudo}`;
+  majBadgeAmis();
+  appliquerRole();
+  show("menu");
+}
+$("btnCcConnexion").onclick = authEnfant;
+$("ccMdp").addEventListener("keydown", e => { if (e.key === "Enter") authEnfant(); });
 
 
 
@@ -1989,8 +2100,9 @@ $("btnSalonAmis").onclick = () => {
     $("amisMsg").className = "feedback good";
     return chargerAmis();
   }
-  socket.emit("room:create", {mode: modeAmis}, res => {
-    if (!res?.ok) return ($("amisMsg").textContent = "Création impossible.");
+  socket.emit("room:create", {mode: modeAmis, kids: state.kidMode}, res => {
+    if (!res?.ok) return ($("amisMsg").textContent =
+      res?.error === "NO_MOVIES_KIDS" ? "Aucun film enfant disponible pour le moment." : "Création impossible.");
     state.code = res.code; state.mode = modeAmis; state.hostId = res.state.hostId;
     setChatVisible(true);
     $("amisMsg").textContent = `Salon ${res.code} créé. Invitez vos amis en ligne ci-dessous.`;
@@ -2198,12 +2310,16 @@ $("btnBoard").onclick = async () => {
   $("globalRank").querySelectorAll("[data-joueur]").forEach(li => li.onclick = () =>
     ouvrirJoueur(li.dataset.joueur, li.dataset.pseudo, li.dataset.avatar, li.dataset.photo || null));
   $("boardEmpty").textContent = list.length
-    ? (typeClassement === "saison"
-        ? `${list.length} joueur${list.length>1?"s":""} en lice cette saison.`
-        : `${list.length} joueur${list.length>1?"s":""} · total cumulé depuis l'inscription.`)
-    : (typeClassement === "saison"
-        ? "Personne n'a encore joué de partie classée cette saison. À vous l'honneur."
-        : "Aucune partie terminée pour l'instant.");
+    ? (typeClassement === "global"
+        ? `${list.length} joueur${list.length>1?"s":""} · total cumulé depuis l'inscription.`
+        : typeClassement === "enfant"
+        ? `${list.length} joueur${list.length>1?"s":""} au classement enfant.`
+        : `${list.length} joueur${list.length>1?"s":""} en lice cette saison.`)
+    : (typeClassement === "global"
+        ? "Aucune partie terminée pour l'instant."
+        : typeClassement === "enfant"
+        ? "Aucun compte enfant n'a encore joué. À vous l'honneur."
+        : "Personne n'a encore joué de partie classée cette saison. À vous l'honneur.");
 };
 $("btnBoardBack").onclick = () => show("menu");
 
@@ -2616,12 +2732,14 @@ document.querySelectorAll(".mode").forEach(btn => btn.onclick = async () => {
 
   if (SANS_RESEAU.includes(mode)){
     const res = await fetch("/api/solo/start", {method:"POST",
-      headers:{"Content-Type":"application/json"}, body: JSON.stringify({mode})});
+      headers:{"Content-Type":"application/json"}, body: JSON.stringify({mode, kids: state.kidMode})});
     const m = res.ok ? await res.json() : null;
     if (!m){
       const err = await res.json().catch(() => ({}));
       $("joinError").textContent = err.error === "PLUS_DE_PARTIES"
         ? `Seau vide : vos ${err.partiesMax} parties classées du jour sont utilisées. Il se remplit dans ${Math.ceil((err.prochaineRecharge||0) / 3600000)} h.`
+        : err.error === "NO_MOVIES_KIDS"
+        ? "Aucun film enfant disponible pour le moment."
         : "Aucun film disponible pour ce niveau.";
       return;
     }
@@ -2633,9 +2751,10 @@ document.querySelectorAll(".mode").forEach(btn => btn.onclick = async () => {
   if (!window.tempsReelDispo)
     return ($("joinError").textContent = "Le multijoueur exige la connexion temps réel, bloquée par votre navigateur.");
 
-  socket.emit("room:create", {mode}, res => {
+  socket.emit("room:create", {mode, kids: state.kidMode}, res => {
     if (!res?.ok) return ($("joinError").textContent =
-      "Aucun film disponible pour ce niveau — choisissez-en un autre.");
+      res?.error === "NO_MOVIES_KIDS" ? "Aucun film enfant disponible pour le moment."
+      : "Aucun film disponible pour ce niveau — choisissez-en un autre.");
     state.code = res.code; state.mode = mode;
     setChatVisible(true);
     if (mode === "solo" || mode === "ranked") return; // démarre tout seul
@@ -2669,7 +2788,8 @@ $("btnJoin").onclick = () => {
       ROOM_NOT_FOUND:"Aucun salon avec ce code. Vérifiez les 4 lettres.",
       ROOM_FULL:"Ce salon est complet.",
       GAME_OVER:"Cette partie est terminée.",
-      GAME_ALREADY_STARTED:"La partie a déjà commencé."}[res?.error] || "Impossible de rejoindre.");
+      GAME_ALREADY_STARTED:"La partie a déjà commencé.",
+      ENFANT_MODE_ENFANT_UNIQUEMENT:"Un compte enfant ne peut rejoindre qu'un salon en mode enfant."}[res?.error] || "Impossible de rejoindre.");
     $("joinError").textContent = "";
     state.code = res.code; state.mode = res.state.mode;
     setChatVisible(true);
