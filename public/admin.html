@@ -1424,6 +1424,10 @@ async function loadReports(){
             <strong>${esc(m.titre)}</strong>
             <small style="display:block">${m.type === "fichier" ? "📁 fichier envoyé" : "🔗 lien externe"} — ${esc(m.url)}</small>
             <small style="display:block;margin-top:2px">👍 ${m.up || 0} &nbsp; 👎 ${m.down || 0}</small>
+            ${m.erreur ? `<small style="display:block;margin-top:4px;color:#ff6b6b">
+              ⚠️ Échec de lecture (×${m.erreur.count}) : ${esc(m.erreur.message)}
+              ${m.erreur.derniereFois ? ` — dernière fois le ${new Date(m.erreur.derniereFois).toLocaleString()}` : ""}
+            </small>` : ""}
           </div>
           <div style="display:flex;gap:6px">
             <button class="ghost" data-move="${esc(m.id)}" data-dir="haut" ${i === 0 ? "disabled" : ""}>▲</button>

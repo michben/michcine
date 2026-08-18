@@ -378,7 +378,8 @@
   .bulle small{display:block;font-size:11px;opacity:.6;margin-top:3px}
   #popJoueur{position:fixed;inset:0;background:rgba(10,12,22,.72);display:grid;place-items:center;z-index:70;padding:18px}
   #popJoueur .boite{background:var(--velvet);border:1px solid rgba(237,232,220,.14);border-radius:14px;
-    padding:22px;max-width:340px;width:100%;text-align:center}
+    padding:22px;max-width:340px;width:100%;text-align:center;position:relative}
+  #popJoueur .close-btn{position:absolute;top:6px;right:10px;font-size:28px}
   .ficheEntete{margin-bottom:16px}
   .cadreFiche{width:88px;height:88px;margin:0 auto 12px;border-radius:50%;padding:3px;
     background:linear-gradient(140deg,var(--beam),var(--ticket),var(--teal))}
@@ -475,6 +476,14 @@
 /* --- LE BOUTON POINT D'INTERROGATION --- */
 .help-btn { position: fixed; bottom: 20px; left: 20px; width: 40px; height: 40px; background: rgba(28, 34, 56, 0.6); color: var(--muted); border: 1px solid rgba(237, 232, 220, 0.15); border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 20px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2); transition: all 0.3s ease; z-index: 1000; backdrop-filter: blur(4px); }
 .help-btn:hover { transform: scale(1.1); color: var(--chalk); border-color: var(--beam); background: rgba(28, 34, 56, 0.9); }
+
+/* --- COIN "REGARDÉ PAR" : qui suit la partie en direct --- */
+#spectateursCorner{position:fixed;top:14px;right:14px;z-index:45;max-width:180px;
+  background:rgba(10,12,22,.78);border:1px solid rgba(237,232,220,.14);border-radius:10px;
+  padding:8px 12px;font-size:12.5px;color:var(--muted);text-align:right;backdrop-filter:blur(4px)}
+#spectateursCorner b{display:block;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--chalk);margin-bottom:3px}
+#spectateursCorner span{display:block;line-height:1.4}
 
 /* --- MODE ENFANT --- */
 #btnKidMode{font-size:18px;line-height:1;padding:13px 16px}
@@ -1167,6 +1176,7 @@ html.mode-enfant-actif .wrap{padding-top:48px}
 
   <div id="popJoueur" class="hidden">
     <div class="boite">
+      <button class="close-btn" id="popFermerX" aria-label="Fermer" title="Fermer">&times;</button>
       <div class="ficheEntete">
         <div id="popPhoto"></div>
         <h3 id="popNom"></h3>
@@ -1354,6 +1364,40 @@ $("btnHistorique").onclick = () => { afficherHistoriqueQuestions(); $("historiqu
 $("closeHistoriqueBtn").onclick = () => $("historiqueModal").classList.remove("active");
 $("historiqueModal").onclick = e => { if (e.target.id === "historiqueModal") $("historiqueModal").classList.remove("active"); };
 
+/* Réactions emoji pendant une partie multijoueur : un choix simple de quelques emojis,
+   affichés en bulle montante avec le pseudo de l'auteur pour tout le salon. */
+const EMOJIS_REACTION = ["👋", "❤️", "💯", "🩸", "😂", "😭"];
+$("emojiBar").innerHTML = EMOJIS_REACTION
+  .map(e => `<button type="button" data-emoji="${e}">${e}</button>`).join("");
+let derniereReactionEnvoyee = 0;
+$("emojiBar").querySelectorAll("[data-emoji]").forEach(btn => {
+  btn.onclick = () => {
+    if (!state.code) return;
+    const maintenant = Date.now();
+    if (maintenant - derniereReactionEnvoyee < 700) return;   // évite le matraquage côté client aussi
+    derniereReactionEnvoyee = maintenant;
+    socket.emit("reaction", { code: state.code, emoji: btn.dataset.emoji });
+  };
+});
+
+/** Fait monter l'emoji reçu à l'écran, avec le pseudo de son auteur, puis le retire. */
+function afficherReactionVolante(emoji, pseudo){
+  const el = document.createElement("div");
+  el.className = "flyEmoji";
+  el.style.left = (35 + Math.random() * 30) + "%";
+  el.style.bottom = "150px";
+  el.innerHTML = `${emoji}<small>${esc(pseudo || "")}</small>`;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2300);
+}
+socket.on("reaction", ({ emoji, pseudo }) => afficherReactionVolante(emoji, pseudo));
+
+/** Le serveur tient à jour la liste des amis en train de nous regarder jouer en direct. */
+socket.on("spectateurs:liste", ({ noms }) => {
+  spectateursActuels = Array.isArray(noms) ? noms : [];
+  majSpectateursCorner();
+});
+
 /* Bouton d'aide "?" : masqué tant que l'administration ne l'a pas explicitement activé
    (voir chargerAide(), défini plus bas une fois le bouton présent dans la page). */
 let aideActive = false;
@@ -1475,6 +1519,28 @@ async function voterMusique(sens){
 $("btnRadioLike").onclick = () => voterMusique("up");
 $("btnRadioDislike").onclick = () => voterMusique("down");
 
+/**
+ * Signale à l'administration qu'une piste n'a pas pu être diffusée, avec la
+ * raison si on peut la déterminer. Best-effort : on ne bloque jamais la
+ * lecture pour ça, et un échec d'envoi du signalement lui-même est ignoré.
+ */
+function signalerErreurMusique(piste, raison){
+  if (!piste) return;
+  fetch(`/api/musique/${encodeURIComponent(piste.id)}/signaler-erreur`, {
+    method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ raison }),
+  }).catch(() => {});
+}
+
+/** Traduit un MediaError du <audio> en code de raison compris par le serveur. */
+function raisonDepuisMediaError(err){
+  switch (err?.code){
+    case 2: return "reseau";
+    case 3: return "decodage";
+    case 4: return "format";
+    default: return "inconnue";
+  }
+}
+
 async function demarrerMusique(){
   if (!playlisteChargee) await playlistePromise;   // au tout premier clic seulement
   if (!playlisteMusique.length){
@@ -1498,16 +1564,38 @@ async function demarrerMusique(){
     await audio.play();
     messageRadio("");
   } catch (err) {
-    if (err?.name === "NotAllowedError")
+    if (err?.name === "NotAllowedError"){
+      // Blocage de la politique anti-autoplay du navigateur : ce n'est pas un problème avec la piste elle-même.
       messageRadio("Votre navigateur a bloqué la reprise automatique — cliquez sur ▶️ pour reprendre la radio.");
-    else
+    } else {
       messageRadio("Lecture impossible pour cette piste — vérifiez son lien ou son fichier depuis la console admin.");
+      signalerErreurMusique(piste, err?.name === "NotSupportedError" ? "format" : "introuvable");
+    }
   }
 }
 $("musiqueFond").addEventListener("ended", () => {
   indexMusique = playlisteMusique.length ? (indexMusique + 1) % playlisteMusique.length : 0;
   demarrerMusique();
 });
+// Panne réelle en cours de lecture (fichier corrompu, lien mort, etc.) : on la signale à
+// l'admin avec la raison précise, puis on enchaîne sur la piste suivante sans rester bloqué.
+let echecsMusiqueConsecutifs = 0;
+$("musiqueFond").addEventListener("error", () => {
+  const audio = $("musiqueFond");
+  const piste = playlisteMusique[indexMusique];
+  if (!piste || !audio.error) return;
+  signalerErreurMusique(piste, raisonDepuisMediaError(audio.error));
+  echecsMusiqueConsecutifs++;
+  // Toute la playlist est en panne : on arrête plutôt que de marteler le serveur en boucle.
+  if (echecsMusiqueConsecutifs >= playlisteMusique.length){
+    messageRadio("Aucune piste de la radio ne peut être lue actuellement — vérifiez la playlist depuis la console admin.");
+    return;
+  }
+  messageRadio("Cette piste est en panne — passage à la suivante.");
+  indexMusique = playlisteMusique.length ? (indexMusique + 1) % playlisteMusique.length : 0;
+  demarrerMusique();
+});
+$("musiqueFond").addEventListener("playing", () => { echecsMusiqueConsecutifs = 0; });
 $("musiqueFond").addEventListener("play", majBoutonMusique);
 $("musiqueFond").addEventListener("pause", majBoutonMusique);
 $("musiqueFond").addEventListener("play", sauverEtatRadio);
@@ -1630,16 +1718,32 @@ function appliquerRole(){
 }
 
 /** Chaque écran commence en haut : personne ne doit remonter à la main. */
+/** Pseudos des amis qui regardent la partie en direct — reçu du serveur, affiché dans le coin. */
+let spectateursActuels = [];
+let enPartieActuellement = false;
+function majSpectateursCorner(){
+  const el = $("spectateursCorner");
+  if (!el) return;
+  const visible = enPartieActuellement && spectateursActuels.length > 0;
+  el.classList.toggle("hidden", !visible);
+  if (visible){
+    el.innerHTML = `<b>👁️ Vous regarde${spectateursActuels.length > 1 ? "nt" : ""}</b>` +
+      spectateursActuels.map(n => `<span>${esc(n)}</span>`).join("");
+  }
+}
+
 const show = id => {
   ["landing","validation","parrainage","profile","board","exchange","friends","quetes","moderation","menu","lobby","waiting","round","between","over","regarder","roue"]
     .forEach(s => $(s).classList.toggle("hidden", s !== id));
   window.scrollTo({top: 0, behavior: "instant"});
-  
+
   const inGame = ["round", "between", "lobby", "waiting"].includes(id);
   $("btnQuitGame").classList.toggle("hidden", !inGame);
   // Le bouton d'aide "?" reste masqué tant que l'administration ne l'a pas activé (voir chargerAide()),
   // et aussi pendant une partie pour ne jamais recouvrir la rangée de boutons du bas.
   $("helpBtn")?.classList.toggle("hidden", inGame || !aideActive);
+  enPartieActuellement = inGame;
+  majSpectateursCorner();
 };
 /** Photo du joueur si l'administration lui en a attribué une, émoji sinon. */
 const vignette = (j) => j?.photo
@@ -2855,6 +2959,7 @@ async function ouvrirJoueur(id, pseudo, avatar, photoJoueur){
   });
 }
 $("popFermer").onclick = () => $("popJoueur").classList.add("hidden");
+$("popFermerX").onclick = () => $("popJoueur").classList.add("hidden");
 $("popJoueur").onclick = e => { if (e.target.id === "popJoueur") $("popJoueur").classList.add("hidden"); };
 
 $("tabsAmis").querySelectorAll("[data-onglet]").forEach(b => b.onclick = () => {
@@ -4167,6 +4272,10 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
             </div>
         </div>
     </div>
+
+    <!-- COIN "REGARDÉ PAR" : liste des amis qui suivent la partie en direct, visible
+         seulement pendant une partie et seulement s'il y a au moins un spectateur. -->
+    <div id="spectateursCorner" class="hidden"></div>
 
     <!-- BOUTON FLOTTANT ET MODALE D'AIDE : masqué tant que l'administration ne l'a pas activé
          depuis la console admin (onglet Réglages) — voir chargerAide() ci-dessous. -->
