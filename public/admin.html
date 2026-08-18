@@ -87,6 +87,7 @@
       <button id="tabSorties" aria-selected="false">Sorties Ciné</button>
             <button id="tabNowPlaying" aria-selected="false">Au Cinéma</button>
       <button id="tabSugg" aria-selected="false">Suggestions</button>
+      <button id="tabCitations" aria-selected="false">Citations</button>
     </div>
 
     <div id="paneMovies">
@@ -249,6 +250,32 @@
     
 
     <div id="paneSugg" class="hidden"><div class="card"><p class="tag" id="suggCount">Suggestions des joueurs</p><div id="suggList"></div></div></div>
+
+    <div id="paneCitations" class="hidden">
+      <div class="card">
+        <p class="tag">🎬 Nouvelle citation de cinéma</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 8px;line-height:1.6">
+          Une citation est montrée à chaque montée de niveau (et reste consultable dans « Votre Parcours »).
+          Chaque niveau tombe toujours sur la même réplique, dans l'ordre où elles apparaissent ici.
+        </p>
+        <label for="citTexte">Citation</label>
+        <textarea id="citTexte" rows="2" placeholder="Je vais lui faire une offre qu'il ne pourra pas refuser."></textarea>
+        <div class="row">
+          <div style="flex:2"><label for="citFilm">Film</label><input id="citFilm" placeholder="Le Parrain"></div>
+          <div style="flex:1"><label for="citAnnee">Année</label><input id="citAnnee" type="number" placeholder="1972"></div>
+        </div>
+        <label for="citSource">Personnage / acteur</label>
+        <input id="citSource" placeholder="Vito Corleone (Marlon Brando)">
+        <label for="citAnecdote">Anecdote (facultatif)</label>
+        <textarea id="citAnecdote" rows="2" placeholder="Petit fait amusant sur le film, l'acteur ou le tournage…"></textarea>
+        <div class="row"><button id="btnCitAjouter">Ajouter la citation</button></div>
+        <p class="msg" id="citFeedback"></p>
+      </div>
+      <div class="card">
+        <p class="tag" id="citCount">Citations enregistrées</p>
+        <div id="citList"></div>
+      </div>
+    </div>
 
     <div id="paneNowPlaying" class="hidden">
       <div class="card">
@@ -741,6 +768,7 @@ async function remove(id){
 /* ---------- Onglets ---------- */
 function tab(which){
   for (const [nom, onglet, volet] of [["movies","tabMovies","paneMovies"], ["sugg","tabSugg","paneSugg"],
+                                      ["citations","tabCitations","paneCitations"],
                                       ["users","tabUsers","paneUsers"],
                                       ["reports","tabReports","paneReports"],
                                       ["reglages","tabReglages","paneReglages"],
@@ -750,6 +778,7 @@ function tab(which){
     $(volet).classList.toggle("hidden", which !== nom);
   }
   if (which === "sugg") loadSuggestions();
+  if (which === "citations") loadCitations();
   if (which === "users") loadUsers();
   if (which === "reports"){ loadReports(); loadConversations(); }
   if (which === "reglages"){ etatSecurite(); chargerReglages(); }
@@ -758,6 +787,7 @@ function tab(which){
 }
 $("tabMovies").onclick = () => tab("movies");
 $("tabSugg").onclick = () => tab("sugg");
+$("tabCitations").onclick = () => tab("citations");
 $("tabUsers").onclick = () => tab("users");
 $("tabReports").onclick = () => tab("reports");
 $("tabReglages").onclick = () => tab("reglages");
@@ -1129,6 +1159,85 @@ async function loadReports(){
       `).join("") || "<p class='msg'>Aucune suggestion pour l'instant.</p>";
     }
 
+    /* ---------- Citations de cinéma ---------- */
+    let citations = [];
+
+    async function loadCitations() {
+      $("citCount").textContent = "Chargement…";
+      const res = await api("/api/citations");
+      if (!res.ok){ $("citCount").textContent = "Citations — échec du chargement."; return; }
+      citations = await res.json();
+      renderCitations();
+    }
+
+    function renderCitations() {
+      $("citCount").textContent = `${citations.length} citation${citations.length>1?"s":""} — niveau 1 = la première, niveau 2 = la deuxième, etc.`;
+      $("citList").innerHTML = citations.map((c, i) => `
+        <div class="item" data-cit="${c.id}">
+          <div style="flex:1">
+            <small style="color:var(--muted)">Niveau ${i+1} (puis niveau ${i+1+citations.length}, ${i+1+citations.length*2}…)</small>
+            <textarea data-f="texte" rows="2" style="width:100%;margin:4px 0">${esc(c.texte||"")}</textarea>
+            <div class="row" style="margin:4px 0">
+              <input data-f="film" value="${esc(c.film||"")}" placeholder="Film" style="flex:2">
+              <input data-f="annee" type="number" value="${esc(c.annee||"")}" placeholder="Année" style="flex:1">
+            </div>
+            <input data-f="source" value="${esc(c.source||"")}" placeholder="Personnage / acteur" style="width:100%;margin:4px 0">
+            <textarea data-f="anecdote" rows="2" style="width:100%;margin:4px 0" placeholder="Anecdote">${esc(c.anecdote||"")}</textarea>
+            <div class="row">
+              <button class="ghost" data-save="${c.id}">Enregistrer</button>
+              <button class="ghost danger" data-del="${c.id}">Supprimer</button>
+            </div>
+          </div>
+        </div>
+      `).join("") || "<p class='msg'>Aucune citation pour l'instant — ajoutez-en une ci-dessus.</p>";
+
+      $("citList").querySelectorAll("[data-save]").forEach(b => b.onclick = async () => {
+        const item = b.closest("[data-cit]");
+        const id = b.dataset.save;
+        const champ = (f) => item.querySelector(`[data-f="${f}"]`).value.trim();
+        b.disabled = true;
+        const res = await api(`/api/admin/citations/${id}`, { method:"PUT", body: JSON.stringify({
+          texte: champ("texte"), film: champ("film"), annee: champ("annee"),
+          source: champ("source"), anecdote: champ("anecdote"),
+        })});
+        b.disabled = false;
+        if (res.ok) { b.textContent = "Enregistré ✓"; setTimeout(loadCitations, 700); }
+        else alert("Échec de l'enregistrement.");
+      });
+
+      $("citList").querySelectorAll("[data-del]").forEach(b => b.onclick = async () => {
+        if (!confirm("Supprimer cette citation ?")) return;
+        const res = await api(`/api/admin/citations/${b.dataset.del}`, { method:"DELETE" });
+        if (res.ok) loadCitations(); else alert("Échec de la suppression.");
+      });
+    }
+
+    $("btnCitAjouter").onclick = async () => {
+      const texte = $("citTexte").value.trim();
+      const film = $("citFilm").value.trim();
+      if (!texte || !film) {
+        $("citFeedback").textContent = "La citation et le titre du film sont obligatoires.";
+        $("citFeedback").className = "msg err";
+        return;
+      }
+      $("btnCitAjouter").disabled = true;
+      const res = await api("/api/admin/citations", { method:"POST", body: JSON.stringify({
+        texte, film, annee: $("citAnnee").value.trim(), source: $("citSource").value.trim(),
+        anecdote: $("citAnecdote").value.trim(),
+      })});
+      $("btnCitAjouter").disabled = false;
+      if (res.ok) {
+        $("citTexte").value = ""; $("citFilm").value = ""; $("citAnnee").value = "";
+        $("citSource").value = ""; $("citAnecdote").value = "";
+        $("citFeedback").textContent = "Citation ajoutée !";
+        $("citFeedback").className = "msg ok";
+        loadCitations();
+      } else {
+        $("citFeedback").textContent = "Échec de l'ajout.";
+        $("citFeedback").className = "msg err";
+      }
+    };
+
 /* ---------- Joueurs ---------- */
 let players = [];
 async function loadUsers(){
@@ -1145,6 +1254,7 @@ function renderUsers(){
         <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
           <span style="font-size:18px;">${u.avatar||"🎬"}</span>
           <input type="text" data-pseudo="${u.id}" value="${esc(u.pseudo||"")}" placeholder="Pseudo" style="width:130px; padding:4px 8px; font-size:14px; font-weight:bold; border:1px solid rgba(237,232,220,.2); border-radius:6px; background:var(--velvet); color:var(--chalk);">
+          ${u.fondateur?'<span title="Membre fondateur">🎖️</span>':""}
           ${u.banned?'<span class="chip">banni</span>':""}
         </div>
         <small>${u.totalScore||0} pts · ${u.gamesPlayed||0} parties${u.xHandle?" · @"+esc(u.xHandle):""}${u.online?" · en ligne":""}</small>

@@ -92,13 +92,31 @@
   .quete .gain{font-size:13px;color:var(--beam);white-space:nowrap}
   .quete.finie .infos b{color:var(--teal)}
   .quete button{padding:9px 14px;font-size:14px}
-  .montee{position:fixed;left:50%;top:26%;transform:translateX(-50%);z-index:86;text-align:center;
-    pointer-events:none;animation:monteeNiveau 2.6s ease-out forwards}
+  .badgeFondateur{display:inline-block;font-size:.85em;filter:drop-shadow(0 0 2px rgba(255,196,0,.6))}
+  .montee{position:fixed;left:50%;top:18%;transform:translateX(-50%);z-index:86;text-align:center;
+    max-width:min(420px,88vw);pointer-events:none;animation:monteeNiveau 6s ease-out forwards}
   .montee b{display:block;font-family:'Anton',sans-serif;text-transform:uppercase;
     font-size:clamp(26px,7vw,40px);color:var(--beam);letter-spacing:.03em}
   @keyframes monteeNiveau{0%{opacity:0;transform:translateX(-50%) scale(.7)}
-    15%{opacity:1;transform:translateX(-50%) scale(1.1)}25%{transform:translateX(-50%) scale(1)}
-    100%{opacity:0;transform:translateX(-50%) translateY(-40px)}}
+    8%{opacity:1;transform:translateX(-50%) scale(1.1)}14%{transform:translateX(-50%) scale(1)}
+    88%{opacity:1;transform:translateX(-50%) translateY(0)}
+    100%{opacity:0;transform:translateX(-50%) translateY(-24px)}}
+  /* Petit carton façon pellicule de film : perforations en haut et en bas, coin doré. */
+  .citationCine{pointer-events:none;margin:14px auto 0;padding:14px 18px 12px;max-width:380px;
+    background:linear-gradient(180deg,rgba(20,16,10,.94),rgba(10,8,5,.94));
+    border:1px solid rgba(255,196,0,.35);border-radius:10px;
+    box-shadow:0 8px 28px rgba(0,0,0,.5);position:relative}
+  .citationCine::before,.citationCine::after{content:"";display:block;height:8px;margin:0 -18px 10px;
+    background-image:repeating-linear-gradient(90deg,var(--beam,#e9b64c) 0 8px,transparent 8px 16px);
+    background-size:16px 8px;opacity:.55}
+  .citationCine::after{margin:10px -18px 0}
+  .citationCine .texte{font-family:'Anton',sans-serif;letter-spacing:.01em;font-size:15px;
+    color:var(--chalk,#ede8dc);line-height:1.35;margin:0 0 8px;text-transform:none}
+  .citationCine .source{font-size:12px;color:var(--beam,#e9b64c);margin:0 0 6px;font-weight:600}
+  .citationCine .source .annee{color:var(--muted,#9a9284);font-weight:400}
+  .citationCine .anecdote{font-size:11.5px;color:var(--muted,#9a9284);margin:0;font-style:italic;line-height:1.4}
+  #citationNiveauPanel{padding:0 20px 14px}
+  #citationNiveauPanel .citationCine{margin:6px auto 0;max-width:none}
   .codeCadre{text-align:center;background:var(--card);border-radius:12px;padding:16px;margin-top:8px}
   .codeCadre .valeur{font-family:'JetBrains Mono',monospace;font-size:30px;letter-spacing:.32em;
     color:var(--beam);margin:6px 0 12px;user-select:all}
@@ -1184,6 +1202,10 @@ const vignette = (j) => j?.photo
   ? `<img class="pfp" src="${esc(j.photo)}" alt="" onerror="this.remove()">`
   : (j?.avatar || "🎬");
 
+/** Petit insigne pour reconnaître au premier coup d'œil les membres fondateurs. */
+const insigneFondateur = (j) => j?.fondateur
+  ? `<span class="badgeFondateur" title="Membre fondateur">🎖️</span>` : "";
+
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
 /* ---------- Pourboire ---------- */
@@ -1213,18 +1235,43 @@ $("closeSuggestionBtn").onclick = () => suggestionModal.classList.remove("active
 $("btnSendSugg").onclick = async () => {
     const titre = $("suggTitre").value.trim();
     const commentaire = $("suggComment").value.trim();
-    if(!titre) return;
+    if(!titre){
+        $("suggFeedback").textContent = "Indiquez au moins un titre de film.";
+        $("suggFeedback").className = "feedback bad";
+        return;
+    }
 
-    const res = await fetch("/api/suggestions", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ titre, commentaire })
-    });
-    if(res.ok) {
-        $("suggFeedback").textContent = "Merci pour votre suggestion !";
-        $("suggFeedback").className = "feedback good";
-        $("suggTitre").value = ""; $("suggComment").value = "";
-        setTimeout(() => suggestionModal.classList.remove("active"), 2000);
+    const btn = $("btnSendSugg");
+    btn.disabled = true;
+    $("suggFeedback").textContent = "Envoi en cours…";
+    $("suggFeedback").className = "feedback";
+
+    try {
+        const res = await fetch("/api/suggestions", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ titre, commentaire })
+        });
+
+        if(res.ok) {
+            $("suggFeedback").textContent = "Merci pour votre suggestion !";
+            $("suggFeedback").className = "feedback good";
+            $("suggTitre").value = ""; $("suggComment").value = "";
+            setTimeout(() => suggestionModal.classList.remove("active"), 2000);
+        } else if (res.status === 401) {
+            $("suggFeedback").textContent = "Vous devez être connecté pour suggérer un film.";
+            $("suggFeedback").className = "feedback bad";
+        } else {
+            let msg = "Erreur lors de l'envoi, réessayez.";
+            try { const d = await res.json(); if (d?.error) msg = `Erreur : ${d.error}`; } catch {}
+            $("suggFeedback").textContent = msg;
+            $("suggFeedback").className = "feedback bad";
+        }
+    } catch (e) {
+        $("suggFeedback").textContent = "Connexion impossible, vérifiez votre réseau.";
+        $("suggFeedback").className = "feedback bad";
+    } finally {
+        btn.disabled = false;
     }
 };
 
@@ -1786,6 +1833,65 @@ socket.on("invite:recue", ({code, mode, de, avatar, joueurs}) => {
 /* ---------- Niveaux et quêtes ---------- */
 let mesQuetes = [];
 
+/**
+ * Citations de grand cinéma, une par niveau franchi. Chaque niveau tombe
+ * toujours sur la même réplique (numéro de niveau modulo la taille de la
+ * liste) : le joueur redécouvre tout le stock au fil de sa progression.
+ * Cette liste sert de secours hors-ligne ; la liste réelle, modifiable
+ * depuis l'administration, est chargée juste après depuis /api/citations.
+ */
+const CITATIONS_FALLBACK = [
+  { texte:"Je vais lui faire une offre qu'il ne pourra pas refuser.", film:"Le Parrain", annee:1972, source:"Vito Corleone (Marlon Brando)", anecdote:"Brando avait glissé du coton dans ses joues pour se donner le physique bouledogue du parrain." },
+  { texte:"Que la Force soit avec toi.", film:"Star Wars", annee:1977, source:"Han Solo (Harrison Ford)", anecdote:"George Lucas a écrit près de quatre versions du scénario avant de trouver le ton de la saga." },
+  { texte:"Nobody's perfect.", film:"Certains l'aiment chaud", annee:1959, source:"Osgood (Joe E. Brown)", anecdote:"Cette dernière réplique du film est régulièrement classée parmi les meilleures fins de l'histoire du cinéma." },
+  { texte:"Ce fut un plaisir, Sam.", film:"Casablanca", annee:1942, source:"Rick Blaine (Humphrey Bogart)", anecdote:"Le scénario était encore réécrit pendant le tournage : personne ne savait comment le film finirait." },
+  { texte:"La vie, c'est comme une boîte de chocolats : on ne sait jamais sur quoi on va tomber.", film:"Forrest Gump", annee:1994, source:"Forrest Gump (Tom Hanks)", anecdote:"Tom Hanks a reçu l'Oscar du meilleur acteur pour ce rôle, un an après celui de Philadelphia." },
+  { texte:"Houston, on a un problème.", film:"Apollo 13", annee:1995, source:"Jim Lovell (Tom Hanks)", anecdote:"La véritable phrase radio de 1970 était en fait au passé : « Houston, we've had a problem. »" },
+  { texte:"Hasta la vista, baby.", film:"Terminator 2", annee:1991, source:"Le Terminator (Arnold Schwarzenegger)", anecdote:"Arnold Schwarzenegger a appris la réplique phonétiquement avant de comprendre ce qu'elle signifiait vraiment." },
+  { texte:"Aujourd'hui est peut-être un bon jour pour mourir.", film:"Le Roi Lion", annee:1994, source:"Mufasa (voix de James Earl Jones)", anecdote:"James Earl Jones prêtait déjà sa voix à Dark Vador : Mufasa était un clin d'œil assumé des studios Disney." },
+  { texte:"Avec de grands pouvoirs viennent de grandes responsabilités.", film:"Spider-Man", annee:2002, source:"Oncle Ben (Cliff Robertson)", anecdote:"Cette morale existait déjà dans le tout premier comic Spider-Man de 1962, sous une formulation légèrement différente." },
+  { texte:"Il n'y a pas de problème qu'on ne puisse résoudre en équipe.", film:"Les Indestructibles", annee:2004, source:"Mr Indestructible", anecdote:"Brad Bird a animé le film pour qu'il ressemble à un James Bond des années 60 revisité en famille." },
+  { texte:"Un jour, mon prince viendra.", film:"Blanche-Neige et les Sept Nains", annee:1937, source:"Blanche-Neige", anecdote:"Premier long métrage d'animation entièrement en couleurs produit par un studio américain." },
+  { texte:"Je suis le roi du monde !", film:"Titanic", annee:1997, source:"Jack Dawson (Leonardo DiCaprio)", anecdote:"La réplique était en réalité improvisée par DiCaprio pendant les essais caméra." },
+  { texte:"Dans la vie, il y a les mangeurs de pierre et les mangeurs de graines.", film:"Les Tontons flingueurs", annee:1963, source:"Fernand Naudin (Lino Ventura)", anecdote:"Les dialogues de Michel Audiard sont si célèbres qu'ils sont encore cités quotidiennement en France." },
+  { texte:"C'est un métier, ça, moussaillon ?", film:"L'Aile ou la Cuisse", annee:1976, source:"Charles Duchemin (Louis de Funès)", anecdote:"Louis de Funès a insisté pour tourner lui-même certaines cascades comiques du film." },
+  { texte:"Bienvenue chez les Ch'tis, ça vaut le déplacement.", film:"Bienvenue chez les Ch'tis", annee:2008, source:"Antoine Bailleul (Dany Boon)", anecdote:"Le film reste, encore aujourd'hui, l'un des plus gros succès du cinéma français en salles." },
+  { texte:"L'amour ne se commande pas.", film:"Le Fabuleux Destin d'Amélie Poulain", annee:2001, source:"Amélie Poulain (Audrey Tautou)", anecdote:"Jean-Pierre Jeunet a fait retoucher numériquement Paris pour effacer toute trace de saleté ou de graffiti." },
+  { texte:"Ici, c'est chacun pour sa gueule.", film:"La Haine", annee:1995, source:"Vinz (Vincent Cassel)", anecdote:"Le film a été tourné en noir et blanc pour accentuer le contraste social et l'urgence du propos." },
+  { texte:"Faut pas rêver, faut vivre.", film:"Le Grand Bleu", annee:1988, source:"Jacques Mayol (Jean-Marc Barr)", anecdote:"Luc Besson a dédié le film à son ami Jacques Mayol, véritable champion d'apnée qui a inspiré l'histoire." },
+  { texte:"Tu me parles ?", film:"Taxi Driver", annee:1976, source:"Travis Bickle (Robert De Niro)", anecdote:"Cette réplique culte a été entièrement improvisée par Robert De Niro devant la caméra." },
+  { texte:"Dis bonjour à mon petit ami.", film:"Scarface", annee:1983, source:"Tony Montana (Al Pacino)", anecdote:"Al Pacino a tourné la scène finale du film pendant près de deux semaines, un record pour l'époque." },
+  { texte:"Que la fête commence.", film:"Kaamelott", annee:2005, source:"Le Roi Arthur (Alexandre Astier)", anecdote:"Alexandre Astier a écrit, réalisé et interprété la quasi-totalité de la série à lui seul." },
+  { texte:"Je suis ton père.", film:"Star Wars : L'Empire contre-attaque", annee:1980, source:"Dark Vador (voix de James Earl Jones)", anecdote:"Même Mark Hamill, qui joue Luke Skywalker, ignorait ce twist avant le tournage de la scène." },
+  { texte:"On se retrouvera, si le destin le veut, sur le bateau de la vie.", film:"Intouchables", annee:2011, source:"Driss (Omar Sy)", anecdote:"L'histoire est inspirée de la véritable amitié entre Philippe Pozzo di Borgo et Abdel Sellou." },
+  { texte:"Toute grande histoire commence par une petite étincelle.", film:"Ratatouille", annee:2007, source:"Auguste Gusteau", anecdote:"Les animateurs de Pixar ont suivi un vrai cours de cuisine française pour rendre les scènes crédibles." },
+];
+
+// La liste réelle vient du serveur (modifiable par l'administration) ; le
+// secours ci-dessus ne sert que si cet appel échoue (réseau coupé, etc.).
+let CITATIONS_CINEMA = CITATIONS_FALLBACK;
+fetch("/api/citations").then(r => r.ok ? r.json() : null)
+  .then(list => { if (Array.isArray(list) && list.length) CITATIONS_CINEMA = list; })
+  .catch(() => {});
+
+/** Renvoie toujours la même citation pour un niveau donné : niveau 1 → la première, etc. */
+function citationPourNiveau(n){
+  const liste = (CITATIONS_CINEMA && CITATIONS_CINEMA.length) ? CITATIONS_CINEMA : CITATIONS_FALLBACK;
+  const i = Math.max(0, (Number(n) || 1) - 1) % liste.length;
+  return liste[i];
+}
+
+/** Bloc HTML d'une citation, réutilisé pour l'annonce de niveau et la carte de progression. */
+function citationHTML(n){
+  const c = citationPourNiveau(n);
+  if (!c) return "";
+  return `<div class="citationCine">
+    <p class="texte">« ${esc(c.texte || "")} »</p>
+    <p class="source">${esc(c.film || "")}${c.annee ? ` <span class="annee">(${esc(c.annee)})</span>` : ""}${c.source ? ` — ${esc(c.source)}` : ""}</p>
+    ${c.anecdote ? `<p class="anecdote">🎞️ ${esc(c.anecdote)}</p>` : ""}
+  </div>`;
+}
+
 function majNiveau(n){
   if (!n) return;
   $("niveauNum").textContent = n.niveau;
@@ -1794,15 +1900,22 @@ function majNiveau(n){
   $("niveauJauge").style.width = `${Math.min(100, n.reste / n.requis * 100)}%`;
 }
 
-/** Annonce visuelle d'une montée de niveau. */
+/** Annonce visuelle d'une montée de niveau, avec une citation de cinéma en prime. */
 function annoncerNiveau(niveau){
   const el = document.createElement("div");
   el.className = "montee";
-  el.innerHTML = `<b>Niveau ${niveau}</b><span class="note">Bravo !</span>`;
+  el.innerHTML = `<b>Niveau ${niveau}</b><span class="note">Bravo !</span>${citationHTML(niveau)}`;
   document.body.append(el);
-  setTimeout(() => el.remove(), 2700);
+  setTimeout(() => el.remove(), 6000);
   if (typeof confettis === "function") confettis();
 }
+
+/** Affiche, dans la carte de progression, la citation associée à un niveau déjà franchi. */
+window.voirCitationNiveau = function(n){
+  const panneau = $("citationNiveauPanel");
+  panneau.classList.remove("hidden");
+  panneau.innerHTML = `<p class="tag" style="margin:0 0 6px">Niveau ${n}</p>${citationHTML(n)}`;
+};
 
 async function chargerQuetes(){
   const d = await fetch("/api/quetes").then(r => r.json()).catch(() => null);
@@ -1982,7 +2095,7 @@ async function ouvrirJoueur(id, pseudo, avatar, photoJoueur){
   $("popPhoto").innerHTML = f.photo
     ? `<div class="cadreFiche"><img src="${esc(f.photo)}" alt=""></div>`
     : `<div class="cadreFiche emoji">${f.avatar || "🎬"}</div>`;
-  $("popNom").textContent = f.pseudo;
+  $("popNom").innerHTML = `${esc(f.pseudo)} ${insigneFondateur(f)}`;
   $("popRole").innerHTML =
     `<span class="dot ${f.online ? "on" : ""}" style="display:inline-block;margin-right:6px"></span>` +
     (f.online ? "En ligne" : "Hors ligne") +
@@ -2044,8 +2157,10 @@ function ligneJoueur(j, boutons){
     <span class="dot ${j.online ? "on" : ""}"></span>
     <span class="nom" data-fiche="${esc(j.id)}" data-pseudo="${esc(j.pseudo)}"
       data-avatar="${j.avatar||"🎬"}" data-photo="${esc(j.photo||"")}"
-      style="cursor:pointer">${vignette(j)} ${esc(j.pseudo)}</span>
-    ${j.enPartie ? `<span class="pastille" style="background:#3DDC84;color:#0A2015" title="En train de jouer">🔴 en direct</span>` : ""}
+      style="cursor:pointer">${vignette(j)} ${esc(j.pseudo)} ${insigneFondateur(j)}</span>
+    ${j.enPartie ? `<button class="ghost" data-act="regarder" data-id="${esc(j.id)}"
+       title="Regarder sa partie en direct" style="padding:6px 10px; font-size:15px;
+       background:#3DDC84; color:#0A2015; border-color:#3DDC84">👁️ en direct</button>` : ""}
     <div style="display:flex; gap:6px; flex-wrap:wrap;">
     ${boutons.map(([a, l]) =>
       `<button class="ghost" data-act="${a}" data-id="${esc(j.id)}" title="${a}" style="padding:6px 10px; font-size:15px;">${l}</button>`).join("")}
@@ -2058,6 +2173,10 @@ function brancher(){
     ouvrirJoueur(n.dataset.fiche, n.dataset.pseudo, n.dataset.avatar, n.dataset.photo || null));
 
   $("listeAmis").querySelectorAll("[data-act]").forEach(b => b.onclick = async () => {
+    if (b.dataset.act === "regarder") {
+        const nomEl = b.closest(".amiLigne").querySelector(".nom");
+        return regarderAmi(b.dataset.id, nomEl?.dataset.pseudo || "");
+    }
     if (b.dataset.act === "inviter") return inviter(b.dataset.id, b);
     if (b.dataset.act === "message") {
         const nomEl = b.closest(".amiLigne").querySelector(".nom");
@@ -2407,7 +2526,7 @@ $("btnBoard").onclick = async () => {
     `<li data-joueur="${esc(u.id || "")}" data-pseudo="${esc(u.pseudo)}"
        data-avatar="${u.avatar||"🎬"}" data-photo="${esc(u.photo||"")}"
        style="cursor:pointer" title="Voir la fiche de ${esc(u.pseudo)}">
-      <span class="dot ${u.online ? "on" : ""}"></span>${vignette(u)} ${esc(u.pseudo)}` +
+      <span class="dot ${u.online ? "on" : ""}"></span>${vignette(u)} ${esc(u.pseudo)} ${insigneFondateur(u)}` +
     (u.role && u.role !== "joueur" ? `<span class="badge-role">${esc(u.role)}</span>` : "") +
     `<b>${u.totalScore} pts</b></li>`).join("");
 
@@ -2917,7 +3036,7 @@ function renderLobby(s){
   $("lobbyPlayers").innerHTML = s.players.map(p =>
     `<li class="${p.team||""} ${p.online === false ? "off" : ""}" data-joueur="${esc(p.userId||"")}" data-pseudo="${esc(p.pseudo)}"
        data-avatar="${p.avatar||"🎬"}" data-photo="${p.photo||""}" style="cursor:pointer; ${p.online === false ? "opacity:0.5;" : ""}" title="${p.online === false ? "Déconnecté" : "Voir ce joueur"}">
-       <span class="dot ${p.online !== false ? "on" : ""}"></span>${vignette(p)} ${esc(p.pseudo)}</li>`).join("");
+       <span class="dot ${p.online !== false ? "on" : ""}"></span>${vignette(p)} ${esc(p.pseudo)} ${insigneFondateur(p)}</li>`).join("");
   $("lobbyPlayers").querySelectorAll("[data-joueur]").forEach(li => li.onclick = () =>
     ouvrirJoueur(li.dataset.joueur, li.dataset.pseudo, li.dataset.avatar, li.dataset.photo || null));
   $("teamPicker").classList.toggle("hidden", s.mode !== "teams");
@@ -3238,6 +3357,8 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
                 <div id="progressionMap" class="progression-map">
                     <p class='note' style='text-align:center; margin-top:20px;'>Génération de la carte...</p>
                 </div>
+                <p class="note" style="text-align:center;margin:6px 0 0">🎬 Cliquez sur un niveau franchi pour revoir sa citation de cinéma.</p>
+                <div id="citationNiveauPanel" class="hidden"></div>
             </div>
         </div>
     </div>
@@ -3538,9 +3659,11 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
                     }
                     if (isFog && !isBonus) content = "☁️";
                     
-                    const clickAttr = claimable ? `onclick="claimBonus(${i})"` : "";
+                    const clickAttr = claimable
+                        ? `onclick="claimBonus(${i})"`
+                        : (isDone || isCurrent) ? `onclick="voirCitationNiveau(${i})" style="cursor:pointer"` : "";
                     const line = i > 1 ? `<div class="progression-line ${isDone || isCurrent ? 'done' : ''}"></div>` : "";
-                    
+
                     html += `
                     <div style="display:flex; flex-direction:column; align-items:center;">
                         ${line}
@@ -3549,15 +3672,18 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
                         </div>
                     </div>`;
                 }
-                
+
                 document.getElementById("progressionMap").innerHTML = html;
-                
+
                 // Animate scrolling to the current level
                 setTimeout(() => {
                     const el = document.getElementById(`step-${currentLevel}`);
                     if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
                 }, 150);
-                
+
+                // La citation du niveau en cours s'affiche par défaut.
+                if (currentLevel >= 1 && typeof voirCitationNiveau === "function") voirCitationNiveau(currentLevel);
+
             } catch(e) {
                 document.getElementById("progressionMap").innerHTML = "<p class='note' style='color:var(--ticket)'>Erreur de chargement de la carte.</p>";
             }
