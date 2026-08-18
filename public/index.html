@@ -748,6 +748,12 @@ html.mode-enfant-actif .wrap{padding-top:48px}
         <div id="monCode"></div>
         <div id="mesFilleuls" style="margin-top:14px"></div>
       </div>
+      <div id="blocMesSuggestions" style="margin-top:20px;padding-top:18px;border-top:1px solid rgba(237,232,220,.12)">
+        <p class="tag" style="display:flex;align-items:center;gap:8px">🎬 Vos films suggérés<span id="badgeMesSuggestions" class="pastille hidden">0</span></p>
+        <p class="note" style="margin-top:0">Suivez ici le statut de vos propositions de films envoyées à l'administration.</p>
+        <div id="mesSuggestionsListe"></div>
+        <p class="note hidden" id="mesSuggestionsVide">Vous n'avez encore suggéré aucun film — utilisez le bouton « Suggérer un film » depuis le menu.</p>
+      </div>
       <p class="note" id="compteInfo"></p>
       <div class="row"><button id="btnLogout" class="ghost danger">Se déconnecter</button></div>
     </div>
@@ -1754,6 +1760,8 @@ const show = id => {
   // On revérifie discrètement (sans popup) à chaque passage par le menu si une suggestion
   // vient d'être acceptée, pour que le bouton/pastille reste à jour même sans se reconnecter.
   if (id === "menu") rafraichirSuggestionsARepost();
+  // La page Profil affiche le détail (statut de chaque suggestion) et sa propre pastille.
+  if (id === "profile") chargerMesSuggestionsProfil();
 };
 /** Photo du joueur si l'administration lui en a attribué une, émoji sinon. */
 const vignette = (j) => j?.photo
@@ -1935,6 +1943,63 @@ async function rafraichirSuggestionsARepost(){
 async function verifierSuggestionsAcceptees(){
   await rafraichirSuggestionsARepost();
   if (suggestionsARepostListe.length) proposerRepost(suggestionsARepostListe[0]);
+}
+
+/** Rafraîchit la carte « Vos films suggérés » de la page Profil : liste complète avec statuts,
+ *  et une pastille de notification sur celles retenues mais pas encore publiées — un clic sur
+ *  « À publier » ouvre directement la fenêtre de publication (le même chemin que le bouton du menu). */
+async function chargerMesSuggestionsProfil(){
+  const conteneur = $("mesSuggestionsListe");
+  const vide = $("mesSuggestionsVide");
+  const badge = $("badgeMesSuggestions");
+  if (!conteneur) return;
+  if (!me){
+    conteneur.innerHTML = "";
+    vide?.classList.add("hidden");
+    badge?.classList.add("hidden");
+    return;
+  }
+  const mesSuggestions = await fetch("/api/suggestions/mine").then(r => r.ok ? r.json() : []).catch(() => []);
+
+  // On profite de ce chargement pour garder à jour le bouton/pastille persistant du menu,
+  // sans refaire un second appel réseau identique.
+  suggestionsARepostListe = mesSuggestions.filter(s => s.statut === "accepte" && !s.publie && !s.decline);
+  majBadgeSuggestions();
+  if (badge){
+    const n = suggestionsARepostListe.length;
+    badge.classList.toggle("hidden", n === 0);
+    badge.textContent = String(n);
+  }
+
+  if (!mesSuggestions.length){
+    conteneur.innerHTML = "";
+    vide?.classList.remove("hidden");
+    return;
+  }
+  vide?.classList.add("hidden");
+
+  const LABEL_STATUT = { attente: "⏳ En attente d'examen", accepte: "✅ Retenue par l'administration", refuse: "✖️ Non retenue" };
+  conteneur.innerHTML = mesSuggestions
+    .slice()
+    .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
+    .map(s => {
+      const aPublier = s.statut === "accepte" && !s.publie && !s.decline;
+      const statutTxt = s.publie ? "📣 Publiée dans « Suggestions retenues »" : (LABEL_STATUT[s.statut] || s.statut);
+      return `<div class="histoItem" style="align-items:center;justify-content:space-between">
+        <div class="info">
+          <b>${esc(s.titre)}</b>
+          <small>${statutTxt}</small>
+        </div>
+        ${aPublier ? `<button class="ghost" style="flex:0 0 auto;border-color:var(--beam);color:var(--beam)" data-repost-profil="${esc(s.id)}">🎉 À publier</button>` : ""}
+      </div>`;
+    }).join("");
+
+  conteneur.querySelectorAll("[data-repost-profil]").forEach(btn => {
+    btn.onclick = () => {
+      const s = mesSuggestions.find(x => x.id === btn.dataset.repostProfil);
+      if (s) proposerRepost(s);
+    };
+  });
 }
 
 fetch("/api/config").then(r => r.json())
