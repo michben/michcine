@@ -22,7 +22,7 @@ import { mountAuth, userFromCookie, addRankedPoints,
          listUsers, adminUpdateUser, adminDeleteUser, grantAll,
          grantPoints, getPoints, exchangePoints,
          marquerEnLigne, marquerHorsLigne, estEnLigne, nombreEnLigne, getConnectedUsers,
-         estModerateur, definirRole, ROLES, chargerUtilisateurs,
+         estModerateur, estEnfant, definirRole, ROLES, chargerUtilisateurs,
          relations, demanderAmi, accepterAmi, retirerAmi, bloquer,
          chercherJoueurs, statutRelation, estBloque, emailAValider,
          leaderboard, reinitialiserClassement, definirPhoto, fichePublique,
@@ -34,7 +34,7 @@ import { mountAuth, userFromCookie, addRankedPoints,
          roueTirPayantDisponible, marquerTirPayantRoueUtilise, ROUE_MAX_TIRS_PAYANTS } from "./auth-x.js";
 
 const app = express();
-app.use(express.json({ limit: '10mb' })); // Limite augmentée pour l'upload d'images
+app.use(express.json({ limit: '15mb' })); // Limite augmentée pour l'upload d'images et de musique
 /**
  * Les pages HTML ne doivent jamais rester en cache : sinon un joueur garde
  * l'ancienne version après une mise à jour et croit le jeu cassé.
@@ -1301,6 +1301,82 @@ app.delete("/api/admin/citations/:id", requireAdmin, (req, res) => {
 });
 
 /* ------------------------------------------------------------------ */
+/* Musique d'ambiance : playlist diffusée en fond pendant les parties, */
+/* gérée depuis l'administration (lien externe ou fichier envoyé).     */
+/* ------------------------------------------------------------------ */
+
+const MUSIQUE_FILE = new URL("./musique.json", import.meta.url);
+let playlisteMusique = [];   // [{id, titre, type: "lien"|"fichier", url, ajouteLe}]
+const saveMusique = () => sauver("musique", playlisteMusique, MUSIQUE_FILE);
+const MUSIQUE_DIR = join(process.cwd(), "public", "musique");
+const MUSIQUE_EXT_AUTORISEES = ["mp3", "mpeg", "ogg", "wav", "m4a"];
+const MUSIQUE_MAX_BASE64 = 8 * 1024 * 1024; // ~8 Mo encodés : les fichiers doivent rester très légers
+
+app.get("/api/musique", (req, res) => {
+    res.json(playlisteMusique.map(({ id, titre, url }) => ({ id, titre, url })));
+});
+
+app.get("/api/admin/musique", requireAdmin, (req, res) => {
+    res.json(playlisteMusique);
+});
+
+app.post("/api/admin/musique", requireAdmin, (req, res) => {
+    const { titre, url, fichier, ext } = req.body || {};
+    const nom = String(titre || "").trim().slice(0, 80) || "Sans titre";
+
+    if (fichier) {
+        if (fichier.length > MUSIQUE_MAX_BASE64)
+            return res.status(400).json({ error: "FICHIER_TROP_LOURD" });
+        const cleanExt = MUSIQUE_EXT_AUTORISEES.includes(String(ext || "").toLowerCase())
+            ? String(ext).toLowerCase() : "mp3";
+        if (!fs.existsSync(MUSIQUE_DIR)) fs.mkdirSync(MUSIQUE_DIR, { recursive: true });
+        const nomFichier = `${crypto.randomUUID()}.${cleanExt}`;
+        const base64Data = String(fichier).split(";base64,").pop();
+        try {
+            fs.writeFileSync(join(MUSIQUE_DIR, nomFichier), Buffer.from(base64Data, "base64"));
+        } catch (e) {
+            return res.status(500).json({ error: "ECRITURE_IMPOSSIBLE" });
+        }
+        const piste = { id: crypto.randomUUID(), titre: nom, type: "fichier",
+            url: `/musique/${nomFichier}`, ajouteLe: new Date().toISOString() };
+        playlisteMusique.push(piste);
+        saveMusique();
+        return res.json({ ok: true, piste });
+    }
+
+    const lien = String(url || "").trim();
+    if (!/^https?:\/\/\S+$/i.test(lien))
+        return res.status(400).json({ error: "LIEN_INVALIDE" });
+    const piste = { id: crypto.randomUUID(), titre: nom, type: "lien", url: lien,
+        ajouteLe: new Date().toISOString() };
+    playlisteMusique.push(piste);
+    saveMusique();
+    res.json({ ok: true, piste });
+});
+
+app.delete("/api/admin/musique/:id", requireAdmin, (req, res) => {
+    const piste = playlisteMusique.find((p) => p.id === req.params.id);
+    if (!piste) return res.status(404).json({ error: "INTROUVABLE" });
+    playlisteMusique = playlisteMusique.filter((p) => p.id !== req.params.id);
+    saveMusique();
+    if (piste.type === "fichier") {
+        const chemin = join(process.cwd(), "public", piste.url.replace(/^\//, ""));
+        fs.unlink(chemin, () => {}); // silencieux : peu grave si le fichier est déjà absent
+    }
+    res.json({ ok: true });
+});
+
+app.post("/api/admin/musique/:id/deplacer", requireAdmin, (req, res) => {
+    const i = playlisteMusique.findIndex((p) => p.id === req.params.id);
+    if (i === -1) return res.status(404).json({ error: "INTROUVABLE" });
+    const j = req.body?.direction === "haut" ? i - 1 : i + 1;
+    if (j < 0 || j >= playlisteMusique.length) return res.json({ ok: true, playlist: playlisteMusique });
+    [playlisteMusique[i], playlisteMusique[j]] = [playlisteMusique[j], playlisteMusique[i]];
+    saveMusique();
+    res.json({ ok: true, playlist: playlisteMusique });
+});
+
+/* ------------------------------------------------------------------ */
 /* Porte-monnaie : historique horodaté des transactions (tickets et    */
 /* points), avec la provenance de chaque mouvement.                    */
 /* ------------------------------------------------------------------ */
@@ -1643,18 +1719,34 @@ app.post("/api/parrainage/rejoindre", (req, res) => {
   r.error ? res.status(400).json(r) : res.json({ ...r, ...infoParrainage(user.id) });
 });
 
-app.get("/api/presence", (_req, res) => res.json({ enLigne: nombreEnLigne() }));
+// Le joueur qui consulte la présence ne doit pas se compter lui-même : sinon le total affiché
+// ne correspond jamais à la liste des AUTRES joueurs en ligne qu'il voit à l'écran.
+// « En ligne » ne montre jamais des inconnus : uniquement les AMIS du joueur qui consulte.
+// Utile pour la vie privée de tous, et indispensable pour un compte enfant, qui ne doit
+// croiser ni être croisé par des joueurs qu'il n'a pas ajoutés lui-même.
+app.get("/api/presence", (req, res) => {
+  const user = userFromCookie(req.headers.cookie);
+  if (!user) return res.json({ enLigne: 0 });
+  const amis = relations(user.id)?.amis || [];
+  res.json({ enLigne: amis.filter((a) => a.online).length });
+});
 app.get("/api/presence/users", (req, res) => {
-  res.json(getConnectedUsers());
+  const user = userFromCookie(req.headers.cookie);
+  if (!user) return res.json([]);
+  const amis = relations(user.id)?.amis || [];
+  res.json(amis.filter((a) => a.online).map(({ id, pseudo, avatar, photo, role }) => ({ id, pseudo, avatar, photo, role })));
 });
 
 
 const SORTIES_FILE = new URL("./sorties.json", import.meta.url);
-let sortiesConfig = { hidden: [], custom: [] };
+// kidsOk : films explicitement approuvés par l'administration pour les comptes enfant.
+// Liste blanche volontairement vide par défaut — un film non approuvé n'est jamais montré
+// à un compte enfant, même s'il est visible pour les comptes adultes.
+let sortiesConfig = { hidden: [], custom: [], kidsOk: [] };
 const saveSortiesConfig = () => sauver("sortiesConfig", sortiesConfig, SORTIES_FILE);
 
 const NOWPLAYING_FILE = new URL("./nowplaying.json", import.meta.url);
-let nowPlayingConfig = { hidden: [], custom: [] };
+let nowPlayingConfig = { hidden: [], custom: [], kidsOk: [] };
 const saveNowPlayingConfig = () => sauver("nowPlayingConfig", nowPlayingConfig, NOWPLAYING_FILE);
 
 app.post("/api/admin/sorties/hide", requireAdmin, (req, res) => {
@@ -1689,6 +1781,18 @@ app.post("/api/admin/sorties/remove-custom", requireAdmin, (req, res) => {
     res.json({ ok: true });
 });
 
+/** Approuve ou retire un film de la liste blanche « adapté aux enfants » des sorties ciné. */
+app.post("/api/admin/sorties/kids-toggle", requireAdmin, (req, res) => {
+    const id = Number(req.body.id);
+    if (!id) return res.status(400).json({ error: "ID_MANQUANT" });
+    sortiesConfig.kidsOk = sortiesConfig.kidsOk || [];
+    sortiesConfig.kidsOk = sortiesConfig.kidsOk.includes(id)
+        ? sortiesConfig.kidsOk.filter(x => x !== id)
+        : [...sortiesConfig.kidsOk, id];
+    saveSortiesConfig();
+    res.json({ ok: true, kidsOk: sortiesConfig.kidsOk.includes(id) });
+});
+
 app.post("/api/admin/nowplaying/hide", requireAdmin, (req, res) => {
     const id = Number(req.body.id);
     if (id && !nowPlayingConfig.hidden.includes(id)) {
@@ -1721,12 +1825,25 @@ app.post("/api/admin/nowplaying/remove-custom", requireAdmin, (req, res) => {
     res.json({ ok: true });
 });
 
+/** Approuve ou retire un film de la liste blanche « adapté aux enfants » des films au cinéma. */
+app.post("/api/admin/nowplaying/kids-toggle", requireAdmin, (req, res) => {
+    const id = Number(req.body.id);
+    if (!id) return res.status(400).json({ error: "ID_MANQUANT" });
+    nowPlayingConfig.kidsOk = nowPlayingConfig.kidsOk || [];
+    nowPlayingConfig.kidsOk = nowPlayingConfig.kidsOk.includes(id)
+        ? nowPlayingConfig.kidsOk.filter(x => x !== id)
+        : [...nowPlayingConfig.kidsOk, id];
+    saveNowPlayingConfig();
+    res.json({ ok: true, kidsOk: nowPlayingConfig.kidsOk.includes(id) });
+});
+
 app.get("/api/movies/upcoming", async (req, res) => {
   try {
     const tmdbKey = REGLAGES.tmdbApiKey;
     if (!tmdbKey) return res.json({ error: "NO_KEY", movies: [] });
     
     const isAdmin = motDePasseAdminValide(req.get("x-admin-token"));
+    const estCompteEnfant = estEnfant(userFromCookie(req.headers.cookie));
 
     const now = new Date();
     const day = now.getDay();
@@ -1769,9 +1886,13 @@ app.get("/api/movies/upcoming", async (req, res) => {
         
         const isHidden = (sortiesConfig.hidden || []).includes(m.id);
         const isCustom = (sortiesConfig.custom || []).includes(m.id);
-        
+        const isKidsOk = (sortiesConfig.kidsOk || []).includes(m.id);
+
         if (isHidden && !isAdmin) continue;
-        
+        // Liste blanche stricte : un compte enfant ne voit que les films explicitement
+        // approuvés par l'administration, jamais le flux TMDB brut (non classé par âge).
+        if (estCompteEnfant && !isKidsOk) continue;
+
         finalMovies.push({
             id: m.id,
             title: m.title,
@@ -1779,12 +1900,13 @@ app.get("/api/movies/upcoming", async (req, res) => {
             poster: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : null,
             vote: m.vote_average,
             hidden: isHidden,
-            custom: isCustom
+            custom: isCustom,
+            kidsOk: isKidsOk
         });
     }
 
-    res.json({ 
-        dateDebut: gte, 
+    res.json({
+        dateDebut: gte,
         movies: isAdmin ? finalMovies : finalMovies.slice(0, 10)
     });
   } catch (err) {
@@ -1801,6 +1923,7 @@ app.get("/api/movies/now_playing", async (req, res) => {
     if (!tmdbKey) return res.json({ error: "NO_KEY", movies: [] });
     
     const isAdmin = motDePasseAdminValide(req.get("x-admin-token"));
+    const estCompteEnfant = estEnfant(userFromCookie(req.headers.cookie));
     const url = `https://api.themoviedb.org/3/movie/now_playing?api_key=${tmdbKey}&language=fr-FR&region=FR`;
     
     const response = await fetch(url);
@@ -1827,9 +1950,13 @@ app.get("/api/movies/now_playing", async (req, res) => {
         
         const isHidden = (nowPlayingConfig.hidden || []).includes(m.id);
         const isCustom = (nowPlayingConfig.custom || []).includes(m.id);
-        
+        const isKidsOk = (nowPlayingConfig.kidsOk || []).includes(m.id);
+
         if (isHidden && !isAdmin) continue;
-        
+        // Liste blanche stricte : un compte enfant ne voit que les films explicitement
+        // approuvés par l'administration, jamais le flux TMDB brut (non classé par âge).
+        if (estCompteEnfant && !isKidsOk) continue;
+
         finalMovies.push({
             id: m.id,
             title: m.title,
@@ -1837,7 +1964,8 @@ app.get("/api/movies/now_playing", async (req, res) => {
             poster: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : null,
             vote: m.vote_average,
             hidden: isHidden,
-            custom: isCustom
+            custom: isCustom,
+            kidsOk: isKidsOk
         });
     }
 
@@ -2407,10 +2535,24 @@ io.use((socket, next) => {
   next();
 });
 
+/**
+ * Diffuse le nombre de joueurs en ligne à chaque socket, en excluant son propre
+ * titulaire du compte : sinon chacun se voit lui-même comptabilisé, ce qui fausse
+ * le total par rapport à la liste des AUTRES joueurs affichée à l'écran.
+ */
+function diffuserPresence() {
+  for (const [, s] of io.of("/").sockets) {
+    const uid = s.data.user?.id;
+    if (!uid) continue;
+    const amis = relations(uid)?.amis || [];
+    s.emit("presence", { enLigne: amis.filter((a) => a.online).length });
+  }
+}
+
 io.on("connection", (socket) => {
   const user = socket.data.user;
   marquerEnLigne(user.id);
-  io.emit("presence", { enLigne: nombreEnLigne() });
+  diffuserPresence();
 
   // Notify friends that this user just connected
   const mesRelations = relations(user.id);
@@ -2432,12 +2574,15 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", () => {
     marquerHorsLigne(user.id);
-    io.emit("presence", { enLigne: nombreEnLigne() });
+    diffuserPresence();
   });
 
   socket.on("room:create", ({ rounds, mode, kids }, cb) => {
     // Un compte enfant crée forcément un salon en mode enfant, quoi qu'envoie le client.
-    const modeEnfant = user.role === "enfant" ? true : kids === true;
+    const compteEnfant = user.role === "enfant";
+    // Filtre de films "enfant" : forcé pour un compte enfant, ou activé volontairement par un adulte
+    // (contenu familial). Ceci est indépendant de la présence réelle d'un compte enfant dans le salon.
+    const modeEnfant = compteEnfant ? true : kids === true;
     let vivier = movies.filter((m) => m.enabled !== false);
     if (modeEnfant) vivier = vivier.filter((m) => m.kids === true);
     if (vivier.length === 0) return cb?.({ ok: false, error: modeEnfant ? "NO_MOVIES_KIDS" : "NO_MOVIES" });
@@ -2448,6 +2593,9 @@ io.on("connection", (socket) => {
       code, hostId: socket.id, status: "lobby", roundIndex: 0,
       mode: ["solo", "ffa", "duel", "teams", "ranked"].includes(mode) ? mode : "ffa",
       kids: modeEnfant,
+      // Isolation stricte : un salon créé par un compte enfant ne peut accueillir que des comptes enfants,
+      // et inversement. Distinct de "kids" (qui ne filtre que le catalogue de films).
+      compteEnfant,
       players: new Map(),
       playlist: choisirFilms(vivier, count, user.id),
       currentMovie: null, startedAt: null, timer: null, nextTimer: null, graceTimer: null,
@@ -2482,8 +2630,10 @@ io.on("connection", (socket) => {
   socket.on("room:join", ({ code }, cb) => {
     const room = rooms.get(String(code || "").toUpperCase());
     if (!room) return cb?.({ ok: false, error: "ROOM_NOT_FOUND" });
-    // Un compte enfant ne peut rejoindre qu'un salon déjà en mode enfant.
-    if (user.role === "enfant" && !room.kids) return cb?.({ ok: false, error: "ENFANT_MODE_ENFANT_UNIQUEMENT" });
+    // Séparation stricte enfant / adulte : un compte enfant ne peut rejoindre qu'un salon créé par un
+    // compte enfant, et un compte adulte ne peut jamais rejoindre un salon créé par un compte enfant.
+    if (user.role === "enfant" && !room.compteEnfant) return cb?.({ ok: false, error: "ENFANT_MODE_ENFANT_UNIQUEMENT" });
+    if (user.role !== "enfant" && room.compteEnfant) return cb?.({ ok: false, error: "ADULTE_SALON_ENFANT_INTERDIT" });
 
     const existingPlayer = room.players.get(user.id);
     const enCours = room.status !== "lobby";
@@ -2885,11 +3035,15 @@ progression = await charger("quetes", null, {});
 for (const [id, liste] of Object.entries(await charger("vus", null, {})))
   vusParJoueur.set(id, liste);
 conversations = await charger("conversations", null, {});
-  sortiesConfig = await charger("sortiesConfig", SORTIES_FILE, { hidden: [], custom: [] });
-  nowPlayingConfig = await charger("nowPlayingConfig", NOWPLAYING_FILE, { hidden: [], custom: [] });
+  sortiesConfig = await charger("sortiesConfig", SORTIES_FILE, { hidden: [], custom: [], kidsOk: [] });
+  if (!Array.isArray(sortiesConfig.kidsOk)) sortiesConfig.kidsOk = [];
+  nowPlayingConfig = await charger("nowPlayingConfig", NOWPLAYING_FILE, { hidden: [], custom: [], kidsOk: [] });
+  if (!Array.isArray(nowPlayingConfig.kidsOk)) nowPlayingConfig.kidsOk = [];
 suggestions = await charger("suggestions", SUGGESTIONS_FILE, []);
 citations = await charger("citations", CITATIONS_FILE, CITATIONS_DEFAUT);
 if (!Array.isArray(citations) || !citations.length) citations = CITATIONS_DEFAUT;
+playlisteMusique = await charger("musique", MUSIQUE_FILE, []);
+if (!Array.isArray(playlisteMusique)) playlisteMusique = [];
 roue = await charger("roue", ROUE_FILE, null);
 assurerRoueDuJour();
 gainsEnAttente = await charger("roueGains", GAINS_ROUE_FILE, {});

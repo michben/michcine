@@ -549,6 +549,10 @@ export function demanderAmi(deId, versId) {
   const a = users[deId], b = users[versId];
   if (!a || !b || deId === versId) return { error: "INTROUVABLE" };
   if ((b.bloques || []).includes(deId)) return { error: "BLOQUE" };
+  // Un compte enfant et un compte adulte ne peuvent jamais devenir amis directement :
+  // il n'existe aucun mécanisme d'approbation parentale dans le jeu, donc on refuse
+  // systématiquement plutôt que de laisser passer un lien non supervisé.
+  if (estEnfant(a) !== estEnfant(b)) return { error: "MONDE_DIFFERENT" };
   if ((a.amis || []).includes(versId)) return { error: "DEJA_AMIS" };
 
   // demande croisée : on lie directement les deux comptes
@@ -564,6 +568,9 @@ export function accepterAmi(userId, autreId) {
   const a = users[userId], b = users[autreId];
   if (!a || !b) return { error: "INTROUVABLE" };
   if (!(a.demandesRecues || []).includes(autreId)) return { error: "AUCUNE_DEMANDE" };
+  // Filet de sécurité : même une demande déjà en attente ne doit jamais aboutir
+  // à un lien enfant ↔ adulte.
+  if (estEnfant(a) !== estEnfant(b)) return { error: "MONDE_DIFFERENT" };
 
   a.demandesRecues = retirer(a.demandesRecues || [], autreId);
   b.demandesEnvoyees = retirer(b.demandesEnvoyees || [], userId);
@@ -607,10 +614,14 @@ export const estBloque = (userId, autreId) =>
 export function chercherJoueurs(requete, saufId, limite = 15) {
   const q = String(requete || "").trim().toLowerCase();
   if (q.length < 2) return [];
+  // Un compte enfant ne doit jamais croiser un compte adulte, ni dans un sens ni dans l'autre :
+  // la recherche reste cantonnée au même « monde » (enfant ↔ enfant, adulte ↔ adulte).
+  const monMonde = estEnfant(users[saufId]);
   return Object.values(users)
     .filter((u) => u.pseudoChosen && u.id !== saufId && !u.banned &&
                    (u.pseudo || "").toLowerCase().includes(q) &&
-                   !(u.bloques || []).includes(saufId))
+                   !(u.bloques || []).includes(saufId) &&
+                   estEnfant(u) === monMonde)
     .slice(0, limite)
     .map(lien);
 }
