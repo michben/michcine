@@ -1,1 +1,1 @@
-// server logic
+console.log('Server started');

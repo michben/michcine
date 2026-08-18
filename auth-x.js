@@ -1,1 +1,1 @@
-// auth logic
+export const mountAuth = (app) => {}; export const userFromCookie = () => null;
