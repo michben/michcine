@@ -41,6 +41,10 @@
   .levels button{flex:1 1 auto;background:var(--card);color:var(--muted);border:1px solid transparent;
     font-weight:500;font-size:14px;padding:11px 12px}
   .levels button[aria-pressed="true"]{color:#161207;background:var(--beam);font-weight:700}
+  /* Espace échange : les montants de tickets ressortent en jaune, y compris la dernière case (maximum). */
+  #xAmounts button{color:#FFD84D}
+  #xAmounts button small{color:inherit;opacity:.85}
+  #xAmounts button[aria-pressed="true"]{color:#161207}
   .modes{display:grid;gap:10px}
   .mode{display:flex;gap:14px;align-items:center;text-align:left;background:var(--card);
     border:1px solid rgba(237,232,220,.1);color:var(--chalk);padding:16px;border-radius:12px;font-weight:500}
@@ -141,8 +145,8 @@
   .roueDisque::after{content:"";position:absolute;inset:0;margin:auto;width:20%;height:20%;
     border-radius:50%;background:var(--velvet,#161207);border:3px solid var(--beam);
     top:0;bottom:0;left:0;right:0}
-  .roueEtiquette{position:absolute;top:50%;left:50%;width:0;height:50%}
-  .roueEtiquette span{position:absolute;left:0;top:-42%;transform:translateX(-50%);
+  .roueEtiquette{position:absolute;width:0;height:0}
+  .roueEtiquette span{position:absolute;left:0;top:0;transform:translate(-50%,-50%);
     white-space:nowrap;font-size:11px;font-weight:700;color:#fff;
     text-shadow:0 1px 3px rgba(0,0,0,.7);font-family:'Oswald',sans-serif;letter-spacing:.02em}
   #btnTournerRoue:disabled{opacity:.5;cursor:not-allowed}
@@ -2214,10 +2218,16 @@ function dessinerRoue(){
     `${s.couleur} ${i * pas}deg ${(i + 1) * pas}deg`).join(", ");
   const disque = $("roueDisque");
   disque.style.background = `conic-gradient(${degrade})`;
+  // Position calculée par trigonométrie plutôt que par rotation CSS imbriquée :
+  // ainsi chaque étiquette tombe exactement sur le quartier qu'elle décrit,
+  // avec le même repère que le conic-gradient (0° = midi, sens horaire).
+  const rayon = 33; // % du rayon du disque, entre le centre et le bord
   disque.innerHTML = ROUE_SEGMENTS.map((s, i) => {
     const angle = i * pas + pas / 2;
-    return `<div class="roueEtiquette" style="transform:rotate(${angle}deg)">
-      <span style="transform:rotate(${-angle}deg)">${s.label}</span></div>`;
+    const theta = (angle - 90) * Math.PI / 180;
+    const x = 50 + rayon * Math.cos(theta);
+    const y = 50 + rayon * Math.sin(theta);
+    return `<div class="roueEtiquette" style="left:${x}%;top:${y}%"><span>${s.label}</span></div>`;
   }).join("");
 }
 dessinerRoue();
