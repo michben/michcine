@@ -182,6 +182,45 @@ let reports = [];
 let palmares = [];   // podiums des saisons écoulées
 const saveReports = () => sauver("reports", reports, REPORTS_FILE);
 
+/* ---------- suggestions de films des joueurs ---------- */
+// Comme le reste des données persistées, on passe par charger/sauver (db.js) :
+// des écritures fs.* brutes ne survivent pas forcément au disque du serveur
+// en production, alors que ce mécanisme est celui qui fonctionne partout.
+const SUGGESTIONS_FILE = new URL("./suggestions.json", import.meta.url);
+let suggestions = [];
+const saveSuggestions = () => sauver("suggestions", suggestions, SUGGESTIONS_FILE);
+
+/* ---------- citations de cinéma affichées à chaque niveau ---------- */
+const CITATIONS_FILE = new URL("./citations.json", import.meta.url);
+let citations = [];
+const saveCitations = () => sauver("citations", citations, CITATIONS_FILE);
+const CITATIONS_DEFAUT = [
+  { id:1, texte:"Je vais lui faire une offre qu'il ne pourra pas refuser.", film:"Le Parrain", annee:1972, source:"Vito Corleone (Marlon Brando)", anecdote:"Brando avait glissé du coton dans ses joues pour se donner le physique bouledogue du parrain." },
+  { id:2, texte:"Que la Force soit avec toi.", film:"Star Wars", annee:1977, source:"Han Solo (Harrison Ford)", anecdote:"George Lucas a écrit près de quatre versions du scénario avant de trouver le ton de la saga." },
+  { id:3, texte:"Nobody's perfect.", film:"Certains l'aiment chaud", annee:1959, source:"Osgood (Joe E. Brown)", anecdote:"Cette dernière réplique du film est régulièrement classée parmi les meilleures fins de l'histoire du cinéma." },
+  { id:4, texte:"Ce fut un plaisir, Sam.", film:"Casablanca", annee:1942, source:"Rick Blaine (Humphrey Bogart)", anecdote:"Le scénario était encore réécrit pendant le tournage : personne ne savait comment le film finirait." },
+  { id:5, texte:"La vie, c'est comme une boîte de chocolats : on ne sait jamais sur quoi on va tomber.", film:"Forrest Gump", annee:1994, source:"Forrest Gump (Tom Hanks)", anecdote:"Tom Hanks a reçu l'Oscar du meilleur acteur pour ce rôle, un an après celui de Philadelphia." },
+  { id:6, texte:"Houston, on a un problème.", film:"Apollo 13", annee:1995, source:"Jim Lovell (Tom Hanks)", anecdote:"La véritable phrase radio de 1970 était en fait au passé : « Houston, we've had a problem. »" },
+  { id:7, texte:"Hasta la vista, baby.", film:"Terminator 2", annee:1991, source:"Le Terminator (Arnold Schwarzenegger)", anecdote:"Arnold Schwarzenegger a appris la réplique phonétiquement avant de comprendre ce qu'elle signifiait vraiment." },
+  { id:8, texte:"Aujourd'hui est peut-être un bon jour pour mourir.", film:"Le Roi Lion", annee:1994, source:"Mufasa (voix de James Earl Jones)", anecdote:"James Earl Jones prêtait déjà sa voix à Dark Vador : Mufasa était un clin d'œil assumé des studios Disney." },
+  { id:9, texte:"Avec de grands pouvoirs viennent de grandes responsabilités.", film:"Spider-Man", annee:2002, source:"Oncle Ben (Cliff Robertson)", anecdote:"Cette morale existait déjà dans le tout premier comic Spider-Man de 1962, sous une formulation légèrement différente." },
+  { id:10, texte:"Il n'y a pas de problème qu'on ne puisse résoudre en équipe.", film:"Les Indestructibles", annee:2004, source:"Mr Indestructible", anecdote:"Brad Bird a animé le film pour qu'il ressemble à un James Bond des années 60 revisité en famille." },
+  { id:11, texte:"Un jour, mon prince viendra.", film:"Blanche-Neige et les Sept Nains", annee:1937, source:"Blanche-Neige", anecdote:"Premier long métrage d'animation entièrement en couleurs produit par un studio américain." },
+  { id:12, texte:"Je suis le roi du monde !", film:"Titanic", annee:1997, source:"Jack Dawson (Leonardo DiCaprio)", anecdote:"La réplique était en réalité improvisée par DiCaprio pendant les essais caméra." },
+  { id:13, texte:"Dans la vie, il y a les mangeurs de pierre et les mangeurs de graines.", film:"Les Tontons flingueurs", annee:1963, source:"Fernand Naudin (Lino Ventura)", anecdote:"Les dialogues de Michel Audiard sont si célèbres qu'ils sont encore cités quotidiennement en France." },
+  { id:14, texte:"C'est un métier, ça, moussaillon ?", film:"L'Aile ou la Cuisse", annee:1976, source:"Charles Duchemin (Louis de Funès)", anecdote:"Louis de Funès a insisté pour tourner lui-même certaines cascades comiques du film." },
+  { id:15, texte:"Bienvenue chez les Ch'tis, ça vaut le déplacement.", film:"Bienvenue chez les Ch'tis", annee:2008, source:"Antoine Bailleul (Dany Boon)", anecdote:"Le film reste, encore aujourd'hui, l'un des plus gros succès du cinéma français en salles." },
+  { id:16, texte:"L'amour ne se commande pas.", film:"Le Fabuleux Destin d'Amélie Poulain", annee:2001, source:"Amélie Poulain (Audrey Tautou)", anecdote:"Jean-Pierre Jeunet a fait retoucher numériquement Paris pour effacer toute trace de saleté ou de graffiti." },
+  { id:17, texte:"Ici, c'est chacun pour sa gueule.", film:"La Haine", annee:1995, source:"Vinz (Vincent Cassel)", anecdote:"Le film a été tourné en noir et blanc pour accentuer le contraste social et l'urgence du propos." },
+  { id:18, texte:"Faut pas rêver, faut vivre.", film:"Le Grand Bleu", annee:1988, source:"Jacques Mayol (Jean-Marc Barr)", anecdote:"Luc Besson a dédié le film à son ami Jacques Mayol, véritable champion d'apnée qui a inspiré l'histoire." },
+  { id:19, texte:"Tu me parles ?", film:"Taxi Driver", annee:1976, source:"Travis Bickle (Robert De Niro)", anecdote:"Cette réplique culte a été entièrement improvisée par Robert De Niro devant la caméra." },
+  { id:20, texte:"Dis bonjour à mon petit ami.", film:"Scarface", annee:1983, source:"Tony Montana (Al Pacino)", anecdote:"Al Pacino a tourné la scène finale du film pendant près de deux semaines, un record pour l'époque." },
+  { id:21, texte:"Que la fête commence.", film:"Kaamelott", annee:2005, source:"Le Roi Arthur (Alexandre Astier)", anecdote:"Alexandre Astier a écrit, réalisé et interprété la quasi-totalité de la série à lui seul." },
+  { id:22, texte:"Je suis ton père.", film:"Star Wars : L'Empire contre-attaque", annee:1980, source:"Dark Vador (voix de James Earl Jones)", anecdote:"Même Mark Hamill, qui joue Luke Skywalker, ignorait ce twist avant le tournage de la scène." },
+  { id:23, texte:"On se retrouvera, si le destin le veut, sur le bateau de la vie.", film:"Intouchables", annee:2011, source:"Driss (Omar Sy)", anecdote:"L'histoire est inspirée de la véritable amitié entre Philippe Pozzo di Borgo et Abdel Sellou." },
+  { id:24, texte:"Toute grande histoire commence par une petite étincelle.", film:"Ratatouille", annee:2007, source:"Auguste Gusteau", anecdote:"Les animateurs de Pixar ont suivi un vrai cours de cuisine française pour rendre les scènes crédibles." },
+];
+
 const MOTIFS = {
   spoiler: "Le synopsis révèle le titre",
   synopsis: "Synopsis incompréhensible ou trop court",
@@ -1071,22 +1110,19 @@ app.post("/api/suggestions", (req, res) => {
     const { titre, commentaire } = req.body || {};
     if (!titre || !String(titre).trim()) return res.status(400).json({ error: "TITRE_MANQUANT" });
 
-    // Toute panne ici (disque en lecture seule, dossier manquant, JSON
-    // corrompu…) ne doit jamais renvoyer une page d'erreur HTML muette :
-    // le joueur doit systématiquement recevoir une réponse JSON claire.
+    // Comme pour le reste des données du jeu, on passe par charger/sauver
+    // (db.js) et non par fs.* directement : en production le stockage est
+    // Postgres (voir enBase plus bas), pas le disque du conteneur — des
+    // écritures fs.* brutes n'y survivent jamais, d'où le bouton qui
+    // semblait ne "rien faire" côté joueur.
     try {
-        const SUGGESTIONS_FILE = new URL("./suggestions.json", import.meta.url);
-        let suggestions = [];
-        try { suggestions = JSON.parse(fs.readFileSync(SUGGESTIONS_FILE, "utf8")); } catch(e) { suggestions = []; }
-        if (!Array.isArray(suggestions)) suggestions = [];
-
         suggestions.push({
             auteur: user.pseudo,
             titre: String(titre).trim(),
             commentaire: commentaire ? String(commentaire).trim() : "",
             date: new Date().toISOString()
         });
-        fs.writeFileSync(SUGGESTIONS_FILE, JSON.stringify(suggestions, null, 2));
+        saveSuggestions();
         res.json({ ok: true });
     } catch (err) {
         console.error("Erreur enregistrement suggestion:", err);
@@ -1095,10 +1131,52 @@ app.post("/api/suggestions", (req, res) => {
 });
 
 app.get("/api/admin/suggestions", requireAdmin, (req, res) => {
-    const SUGGESTIONS_FILE = new URL("./suggestions.json", import.meta.url);
-    try {
-        res.json(JSON.parse(fs.readFileSync(SUGGESTIONS_FILE, "utf8")));
-    } catch(e) { res.json([]); }
+    res.json(suggestions);
+});
+
+/* ---------- citations de cinéma (gérées depuis l'administration) ---------- */
+
+app.get("/api/citations", (req, res) => {
+    res.json(citations);
+});
+
+app.post("/api/admin/citations", requireAdmin, (req, res) => {
+    const { texte, film, annee, source, anecdote } = req.body || {};
+    if (!texte || !String(texte).trim() || !film || !String(film).trim())
+        return res.status(400).json({ error: "CHAMPS_MANQUANTS" });
+    const id = citations.reduce((max, c) => Math.max(max, c.id || 0), 0) + 1;
+    const citation = {
+        id,
+        texte: String(texte).trim(),
+        film: String(film).trim(),
+        annee: Number(annee) || null,
+        source: source ? String(source).trim() : "",
+        anecdote: anecdote ? String(anecdote).trim() : "",
+    };
+    citations.push(citation);
+    saveCitations();
+    res.json({ ok: true, citation });
+});
+
+app.put("/api/admin/citations/:id", requireAdmin, (req, res) => {
+    const citation = citations.find((c) => c.id === Number(req.params.id));
+    if (!citation) return res.status(404).json({ error: "INTROUVABLE" });
+    const { texte, film, annee, source, anecdote } = req.body || {};
+    if (texte !== undefined) citation.texte = String(texte).trim();
+    if (film !== undefined) citation.film = String(film).trim();
+    if (annee !== undefined) citation.annee = Number(annee) || null;
+    if (source !== undefined) citation.source = String(source).trim();
+    if (anecdote !== undefined) citation.anecdote = String(anecdote).trim();
+    saveCitations();
+    res.json({ ok: true, citation });
+});
+
+app.delete("/api/admin/citations/:id", requireAdmin, (req, res) => {
+    const avant = citations.length;
+    citations = citations.filter((c) => c.id !== Number(req.params.id));
+    if (citations.length === avant) return res.status(404).json({ error: "INTROUVABLE" });
+    saveCitations();
+    res.json({ ok: true });
 });
 
 /* ---------- amis ---------- */
@@ -2437,6 +2515,9 @@ for (const [id, liste] of Object.entries(await charger("vus", null, {})))
 conversations = await charger("conversations", null, {});
   sortiesConfig = await charger("sortiesConfig", SORTIES_FILE, { hidden: [], custom: [] });
   nowPlayingConfig = await charger("nowPlayingConfig", NOWPLAYING_FILE, { hidden: [], custom: [] });
+suggestions = await charger("suggestions", SUGGESTIONS_FILE, []);
+citations = await charger("citations", CITATIONS_FILE, CITATIONS_DEFAUT);
+if (!Array.isArray(citations) || !citations.length) citations = CITATIONS_DEFAUT;
 REGLAGES = { ...structuredClone(REGLAGES_DEFAUT), ...(await charger("reglages", null, {})) };
 if (!empreinteAdmin)
   console.warn("⚠️  Mot de passe d'administration par défaut : changez-le depuis /admin.html");
