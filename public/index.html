@@ -937,6 +937,7 @@ html.mode-enfant-actif .wrap{padding-top:48px}
       <button class="ghost" id="btnBoard">Classement</button>
       <button class="ghost" id="btnQuetes">Quêtes <span id="badgeQuetes" class="pastille hidden">0</span></button>
       <button class="ghost" id="btnFriends">Amis <span id="badgeAmis" class="pastille hidden">0</span></button>
+      <button class="ghost" id="btnSignets">🔖 Mes signets</button>
       <button class="ghost" id="btnKidMode" aria-pressed="false" title="Mode enfant : uniquement des films pour enfants">🐻</button>
       <button class="ghost" id="btnProfile">Profil</button>
     </div>
@@ -1038,6 +1039,21 @@ html.mode-enfant-actif .wrap{padding-top:48px}
     </div>
   </div>
 
+  <!-- MODALE : SIGNETS (films à voir plus tard) -->
+  <div class="modal-overlay" id="signetsModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>🔖 Mes signets</h2>
+        <button class="close-btn" id="closeSignetsBtn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="note" style="margin:0 0 10px">Les films que vous avez mis de côté pour les regarder plus tard.</p>
+        <div id="signetsListe"></div>
+        <p class="note hidden" id="signetsVide">Aucun signet pour l'instant — mettez un film de côté à la fin d'une question !</p>
+      </div>
+    </div>
+  </div>
+
   <!-- MODALE : CONFIRMATION AVANT DE LANCER UNE PARTIE -->
   <div class="modal-overlay" id="confirmModeModal">
     <div class="modal-content">
@@ -1075,6 +1091,7 @@ html.mode-enfant-actif .wrap{padding-top:48px}
       <ol class="rank" id="interRank"></ol>
       <div class="row">
         <button id="btnNext">Question suivante</button>
+        <button id="btnSignet" class="ghost" style="flex:0 0 auto">🔖 À voir plus tard</button>
         <button id="btnReport" class="ghost" style="flex:0 0 auto">⚑ Signaler</button>
       </div>
       <div id="reportBox" class="hidden" style="margin-top:14px">
@@ -1296,7 +1313,9 @@ const MODE_NAMES = {solo:"Solo", duel:"Duel", ffa:"Chacun pour soi", teams:"En �
 /** Historique des questions déjà posées dans la partie en cours (remis à zéro à chaque lancement). */
 let historiqueQuestions = [];
 
-function revelation(titre, affiche, annee, trouve){
+function revelation(titre, affiche, annee, trouve, movieId){
+  if (movieId != null) filmCourant = movieId;
+  majBoutonSignet();
   $("verdictTag").textContent = trouve === true ? "Bien joué" : trouve === false ? "Raté" : "La réponse était";
   $("verdictTag").className = `tag ${trouve === true ? "juste" : trouve === false ? "rate" : ""}`;
   $("answer").textContent = titre || "";
@@ -1607,6 +1626,7 @@ function appliquerRole(){
     $("musiqueFond")?.pause();
   }
   appliquerModeEnfant();
+  rafraichirSignets();
 }
 
 /** Chaque écran commence en haut : personne ne doit remonter à la main. */
@@ -3148,6 +3168,63 @@ $("btnReportSend").onclick = async () => {
   $("reportMsg").className = res.ok ? "feedback good" : "feedback bad";
 };
 
+/* ---------- Signets (films à voir plus tard) ---------- */
+let mesSignetsIds = new Set();
+
+async function rafraichirSignets(){
+  if (!me){ mesSignetsIds = new Set(); return []; }
+  const liste = await fetch("/api/signets").then(r => r.ok ? r.json() : []).catch(() => []);
+  mesSignetsIds = new Set(liste.map(f => f.id));
+  return liste;
+}
+
+function majBoutonSignet(){
+  const btn = $("btnSignet");
+  if (!btn) return;
+  const actif = filmCourant != null && mesSignetsIds.has(filmCourant);
+  btn.textContent = actif ? "🔖 Ajouté !" : "🔖 À voir plus tard";
+  btn.setAttribute("aria-pressed", String(!!actif));
+}
+
+$("btnSignet").onclick = async () => {
+  if (!me){ alert("Connectez-vous pour ajouter des films à vos signets."); return; }
+  if (filmCourant == null) return;
+  const btn = $("btnSignet");
+  btn.disabled = true;
+  const res = await fetch(`/api/signets/${encodeURIComponent(filmCourant)}/toggle`, { method: "POST" })
+    .then(r => r.ok ? r.json() : null).catch(() => null);
+  btn.disabled = false;
+  if (!res) return;
+  if (res.signet) mesSignetsIds.add(filmCourant); else mesSignetsIds.delete(filmCourant);
+  majBoutonSignet();
+};
+
+async function afficherSignets(){
+  $("signetsListe").innerHTML = "<p class='note'>Chargement…</p>";
+  const liste = await rafraichirSignets();
+  $("signetsVide").classList.toggle("hidden", liste.length > 0);
+  $("signetsListe").innerHTML = liste.map(f => `
+    <div class="histoItem">
+      ${f.poster ? `<img src="${esc(f.poster)}" alt="" onerror="this.remove()">` : ""}
+      <div class="info">
+        <b>${esc(f.title || "")}${f.year ? ` (${f.year})` : ""}</b>
+      </div>
+      <button class="ghost" style="flex:0 0 auto" data-id="${f.id}">Retirer</button>
+    </div>`).join("");
+  $("signetsListe").querySelectorAll("button[data-id]").forEach(b => {
+    b.onclick = async () => {
+      const id = Number(b.dataset.id);
+      await fetch(`/api/signets/${id}/toggle`, { method: "POST" }).catch(() => {});
+      mesSignetsIds.delete(id);
+      if (filmCourant === id) majBoutonSignet();
+      afficherSignets();
+    };
+  });
+}
+
+$("btnSignets").onclick = () => { $("signetsModal").classList.add("active"); afficherSignets(); };
+$("closeSignetsBtn").onclick = () => $("signetsModal").classList.remove("active");
+
 $("btnModeration").onclick = async () => {
   $("modList").innerHTML = "";
   $("modEmpty").textContent = "Chargement…";
@@ -3624,7 +3701,7 @@ function renderChoicesSolo(liste){
 
     // on montre le film avant d'enchaîner : c'est la récompense de la manche
     setTimeout(() => {
-      revelation(r.answer, r.poster, r.year, r.correct);
+      revelation(r.answer, r.poster, r.year, r.correct, r.movieId);
       $("interRank").innerHTML = "";
       $("btnNext").classList.remove("hidden");
       $("btnNext").disabled = false;
@@ -3918,7 +3995,7 @@ $("btnNext").onclick = () => {
 socket.on("round:end", ({answer, movieId, poster, year, scores, isHost, mode}) => {
   arreterLecture();
   filmCourant = movieId;
-  revelation(answer, poster, year, state.answered);
+  revelation(answer, poster, year, state.answered, movieId);
   $("reportBox").classList.add("hidden");
   $("reportMsg").textContent = "";
   clearInterval(state.timerId);
