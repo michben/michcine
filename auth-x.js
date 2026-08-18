@@ -660,8 +660,19 @@ export function fichePublique(id, demandeurId) {
     rangGlobal: classement("scoreGlobal"),
     rangSaison: classement("totalScore"),
     amis: (u.amis || []).length,
+    // Nombre d'amis en commun avec le demandeur, sans jamais lister les noms — juste le chiffre.
+    amisCommuns: amisCommuns(demandeurId, id),
     relation: statutRelation(demandeurId, id),
   };
+}
+
+/** Combien d'amis deux comptes ont-ils en commun ? Le chiffre seul, jamais la liste. */
+function amisCommuns(userId, autreId) {
+  if (!userId || !autreId || userId === autreId) return 0;
+  const mesAmis = users[userId]?.amis || [];
+  if (!mesAmis.length) return 0;
+  const sesAmis = new Set(users[autreId]?.amis || []);
+  return mesAmis.filter((aId) => sesAmis.has(aId)).length;
 }
 
 /** Relation entre deux joueurs, pour afficher le bon bouton. */
