@@ -474,7 +474,7 @@ export function infoParrainage(userId) {
 /* ---------- amis ---------- */
 
 const lien = (u) => ({ id: u.id, pseudo: u.pseudo, avatar: u.avatar, photo: u.photo || null,
-                       niveau: u.niveau || 0,
+                       niveau: u.niveau || 0, fondateur: Boolean(u.fondateur),
                        online: connectes.has(u.id), role: u.role || "joueur" });
 
 /** Listes d'amis, demandes reçues et envoyées, comptes bloqués. */
@@ -584,6 +584,7 @@ export function fichePublique(id, demandeurId) {
   return {
     id: u.id, pseudo: u.pseudo, avatar: u.avatar, photo: u.photo || null,
     role: u.role || "joueur",
+    fondateur: Boolean(u.fondateur),
     online: connectes.has(u.id),
     niveau: u.niveau || 0,
     xp: u.xp || 0,
@@ -772,7 +773,7 @@ export const leaderboard = (limit = 50, type = "saison") => {
       id: u.id,   // permet d'ouvrir la fiche du joueur depuis le classement
       rank: i + 1, pseudo: u.pseudo, avatar: u.avatar, photo: u.photo || null, niveau: u.niveau || 0,
       totalScore: u[champ] || 0, gamesPlayed: u[parties] || 0,
-      online: connectes.has(u.id), role: u.role || "joueur",
+      online: connectes.has(u.id), role: u.role || "joueur", fondateur: Boolean(u.fondateur),
     }));
 };
 

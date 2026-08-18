@@ -1068,21 +1068,30 @@ app.post("/api/progression/claim", (req, res) => {
 app.post("/api/suggestions", (req, res) => {
     const user = exigeCompte(req, res);
     if (!user) return;
-    const { titre, commentaire } = req.body;
-    if (!titre) return res.status(400).json({ error: "TITRE_MANQUANT" });
-    
-    const SUGGESTIONS_FILE = new URL("./suggestions.json", import.meta.url);
-    let suggestions = [];
-    try { suggestions = JSON.parse(fs.readFileSync(SUGGESTIONS_FILE, "utf8")); } catch(e) {}
-    
-    suggestions.push({
-        auteur: user.pseudo,
-        titre,
-        commentaire: commentaire || "",
-        date: new Date().toISOString()
-    });
-    fs.writeFileSync(SUGGESTIONS_FILE, JSON.stringify(suggestions, null, 2));
-    res.json({ ok: true });
+    const { titre, commentaire } = req.body || {};
+    if (!titre || !String(titre).trim()) return res.status(400).json({ error: "TITRE_MANQUANT" });
+
+    // Toute panne ici (disque en lecture seule, dossier manquant, JSON
+    // corrompu…) ne doit jamais renvoyer une page d'erreur HTML muette :
+    // le joueur doit systématiquement recevoir une réponse JSON claire.
+    try {
+        const SUGGESTIONS_FILE = new URL("./suggestions.json", import.meta.url);
+        let suggestions = [];
+        try { suggestions = JSON.parse(fs.readFileSync(SUGGESTIONS_FILE, "utf8")); } catch(e) { suggestions = []; }
+        if (!Array.isArray(suggestions)) suggestions = [];
+
+        suggestions.push({
+            auteur: user.pseudo,
+            titre: String(titre).trim(),
+            commentaire: commentaire ? String(commentaire).trim() : "",
+            date: new Date().toISOString()
+        });
+        fs.writeFileSync(SUGGESTIONS_FILE, JSON.stringify(suggestions, null, 2));
+        res.json({ ok: true });
+    } catch (err) {
+        console.error("Erreur enregistrement suggestion:", err);
+        res.status(500).json({ error: "ECRITURE_IMPOSSIBLE" });
+    }
 });
 
 app.get("/api/admin/suggestions", requireAdmin, (req, res) => {
@@ -1835,6 +1844,7 @@ function publicState(room) {
     players: [...room.players.values()].map((p) => ({
       id: p.id, userId: p.userId, pseudo: p.pseudo, avatar: p.avatar, score: p.score,
       team: p.team, hasAnswered: p.hasAnswered, online: p.online !== false,
+      fondateur: Boolean(p.fondateur),
     })),
     teams: room.mode === "teams" ? teamScores(room) : null,
   };
@@ -2389,6 +2399,7 @@ function joinRoom(socket, room, user) {
     pseudo: user.pseudo,
     avatar: user.avatar || "🎬",
     photo: user.photo || null,
+    fondateur: Boolean(user.fondateur),
     team: room.mode === "teams" ? balancedTeam(room) : null,
     score: 0, hints: [], paidHints: [], hasAnswered: false,
     coeursMax: REGLAGES.coeurs + avantages.extraCoeurs,
