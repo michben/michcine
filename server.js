@@ -1105,7 +1105,16 @@ function notifier(userId, charge) {
 
 app.get("/api/friends", (req, res) => {
   const user = exigeCompte(req, res);
-  if (user) res.json(relations(user.id));
+  if (!user) return;
+  const data = relations(user.id);
+  // Indique quels amis sont en train de jouer, pour proposer de les regarder en direct.
+  if (Array.isArray(data.amis)) {
+    data.amis = data.amis.map((a) => {
+      const room = salonDuJoueur(a.id);
+      return { ...a, enPartie: Boolean(room), modeSalon: room ? room.mode : null };
+    });
+  }
+  res.json(data);
 });
 
 app.get("/api/players/search", (req, res) => {
@@ -1121,6 +1130,12 @@ app.get("/api/players/:id/fiche", (req, res) => {
   if (!user) return;
   const fiche = fichePublique(req.params.id, user.id);
   if (!fiche) return res.status(404).json({ error: "INTROUVABLE" });
+  // Ne proposer « regarder en direct » qu'entre amis, et seulement si une partie est en cours.
+  if (fiche.relation === "ami") {
+    const room = salonDuJoueur(fiche.id);
+    fiche.enPartie = Boolean(room);
+    fiche.modeSalon = room ? room.mode : null;
+  }
   res.json(fiche);
 });
 
@@ -1563,6 +1578,15 @@ app.post("/api/premium/verify", (req, res) => res.json({ premium: verifyLicense(
 
 const rooms = new Map();
 
+/** Retrouve la partie active (non terminée) où joue actuellement un utilisateur. */
+function salonDuJoueur(userId) {
+  for (const room of rooms.values()) {
+    if (room.status === "finished") continue;
+    if (room.players.has(userId)) return room;
+  }
+  return null;
+}
+
 function generateRoomCode() {
   let code;
   do {
@@ -1823,6 +1847,16 @@ function teamScores(room) {
   return totals;
 }
 
+/**
+ * Diffuse un événement aux seuls spectateurs d'une partie (ceux qui la
+ * regardent en direct), sur des noms d'événements dédiés — jamais les mêmes
+ * que ceux des joueurs, pour ne jamais interférer avec leur écran de jeu.
+ */
+function diffuserSpectateurs(room, event, payload) {
+  if (!room.spectateurs || !room.spectateurs.size) return;
+  for (const socketId of room.spectateurs.keys()) io.to(socketId).emit(event, payload);
+}
+
 /* ------------------------------------------------------------------ */
 /* Boucle de jeu                                                       */
 /* ------------------------------------------------------------------ */
@@ -1858,6 +1892,15 @@ function startRound(room) {
     vitesseSynopsis: REGLAGES.vitesseSynopsis,
     choices: room.choices,
   });
+  diffuserSpectateurs(room, "regarder:manche", {
+    roundIndex: room.roundIndex,
+    total: room.playlist.length,
+    synopsis: masquerReponse(movie.synopsis, movie),
+    duration: CONFIG.ROUND_DURATION_MS,
+    posterStyle: styleAffiche(movie),
+    vitesseSynopsis: REGLAGES.vitesseSynopsis,
+    choices: room.choices,
+  });
 
   clearTimeout(room.timer);
   room.timer = setTimeout(() => endRound(room), CONFIG.ROUND_DURATION_MS);
@@ -1886,6 +1929,13 @@ function endRound(room) {
     isHost: room.hostId,
     mode: room.mode,
   });
+  diffuserSpectateurs(room, "regarder:fin", {
+    answer: room.currentMovie.title,
+    poster: room.currentMovie.poster,
+    year: room.currentMovie.year,
+    scores: publicState(room).players,
+    mode: room.mode,
+  });
   room.roundIndex++;
   room.status = "intermission";
   room.nextTimer = setTimeout(() => startRound(room), 6000);
@@ -1911,6 +1961,8 @@ function endGame(room) {
   for (const p of room.players.values())
     io.to(p.id).emit("game:end", { ranking, mode: room.mode, teams: state.teams,
       credits: getCredits(p.userId), points: getPoints(p.userId), bilan: p.bilan });
+  // Diffusion à ceux qui regardaient en direct (pas de gains, juste la fin de partie).
+  diffuserSpectateurs(room, "regarder:termine", { ranking, mode: room.mode, teams: state.teams });
   // TODO : persister la partie et créditer les récompenses
 }
 
@@ -2255,26 +2307,67 @@ io.on("connection", (socket) => {
     cb?.({ ok: true, livree });
   });
 
-  socket.on("room:leave", () => leaveAllRooms(socket));
+  /**
+   * Regarder en direct la partie d'un ami — lecture seule : synopsis, choix,
+   * scores en temps réel, mais aucune réponse possible. Réservé aux amis.
+   */
+  socket.on("room:regarder", ({ amiId }, cb) => {
+    if (!amiId || statutRelation(user.id, amiId) !== "ami")
+      return cb?.({ ok: false, error: "PAS_AMI" });
+    const room = salonDuJoueur(amiId);
+    if (!room) return cb?.({ ok: false, error: "PARTIE_INTROUVABLE" });
 
-  socket.on("disconnect", () => leaveAllRooms(socket));
+    arreterRegarder(socket);   // ne regarde qu'une seule partie à la fois
+    room.spectateurs = room.spectateurs || new Map();
+    room.spectateurs.set(socket.id, user.id);
+    socket.data.regarde = room.code;
+
+    const film = room.currentMovie;
+    const manche = room.status === "playing" && film ? {
+      roundIndex: room.roundIndex,
+      total: room.playlist.length,
+      synopsis: masquerReponse(film.synopsis, film),
+      duration: CONFIG.ROUND_DURATION_MS,
+      choices: room.choices,
+      posterStyle: styleAffiche(film),
+      vitesseSynopsis: REGLAGES.vitesseSynopsis,
+    } : null;
+
+    cb?.({ ok: true, code: room.code, state: publicState(room), manche });
+  });
+
+  socket.on("room:arreterRegarder", () => arreterRegarder(socket));
+
+  /** Quitte le suivi en direct d'une partie, sans affecter les joueurs. */
+  function arreterRegarder(socket) {
+    const code = socket.data.regarde;
+    if (!code) return;
+    const room = rooms.get(code);
+    room?.spectateurs?.delete(socket.id);
+    delete socket.data.regarde;
+  }
+
+  socket.on("room:leave", () => { leaveAllRooms(socket); arreterRegarder(socket); });
+
+  socket.on("disconnect", () => { leaveAllRooms(socket); arreterRegarder(socket); });
 
   function leaveAllRooms(socket) {
     const userId = socket.data.user?.id;
     for (const room of rooms.values()) {
       const p = room.players.get(userId);
       if (!p || p.id !== socket.id) continue;
-      
+
       if (room.status === "lobby") {
           room.players.delete(userId);
       } else {
           p.online = false;
       }
       socket.leave(room.code);
-      
+
       const activePlayers = [...room.players.values()].filter(x => x.online !== false);
       if (activePlayers.length === 0) {
         clearTimeout(room.timer); clearTimeout(room.nextTimer); clearTimeout(room.graceTimer);
+        diffuserSpectateurs(room, "regarder:termine", { abandon: true });
         rooms.delete(room.code);
       } else {
         if (room.hostId === socket.id && activePlayers.length > 0) {
