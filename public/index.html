@@ -93,7 +93,7 @@
   .quete.finie .infos b{color:var(--teal)}
   .quete button{padding:9px 14px;font-size:14px}
   .badgeFondateur{display:inline-block;font-size:.85em;filter:drop-shadow(0 0 2px rgba(255,196,0,.6))}
-  .montee{position:fixed;left:50%;top:18%;transform:translateX(-50%);z-index:86;text-align:center;
+  .montee{position:fixed;left:50%;top:11%;transform:translateX(-50%);z-index:86;text-align:center;
     max-width:min(420px,88vw);pointer-events:none;animation:monteeNiveau 6s ease-out forwards}
   .montee b{display:block;font-family:'Anton',sans-serif;text-transform:uppercase;
     font-size:clamp(26px,7vw,40px);color:var(--beam);letter-spacing:.03em}
@@ -101,20 +101,28 @@
     8%{opacity:1;transform:translateX(-50%) scale(1.1)}14%{transform:translateX(-50%) scale(1)}
     88%{opacity:1;transform:translateX(-50%) translateY(0)}
     100%{opacity:0;transform:translateX(-50%) translateY(-24px)}}
-  /* Petit carton façon pellicule de film : perforations en haut et en bas, coin doré. */
-  .citationCine{pointer-events:none;margin:14px auto 0;padding:14px 18px 12px;max-width:380px;
-    background:linear-gradient(180deg,rgba(20,16,10,.94),rgba(10,8,5,.94));
-    border:1px solid rgba(255,196,0,.35);border-radius:10px;
-    box-shadow:0 8px 28px rgba(0,0,0,.5);position:relative}
-  .citationCine::before,.citationCine::after{content:"";display:block;height:8px;margin:0 -18px 10px;
-    background-image:repeating-linear-gradient(90deg,var(--beam,#e9b64c) 0 8px,transparent 8px 16px);
-    background-size:16px 8px;opacity:.55}
-  .citationCine::after{margin:10px -18px 0}
+  /* Citation façon diapositive de cinéma : cadre sombre, perforations de
+     pellicule sur les côtés, fenêtre surélevée pour la réplique, bandeau
+     d'étiquette en dessous pour le film et l'anecdote. */
+  .citationCine{pointer-events:none;margin:10px auto 0;max-width:380px;
+    background:linear-gradient(180deg,#1c150c,#0d0906);
+    border:1px solid rgba(255,196,0,.4);border-radius:8px;
+    box-shadow:0 10px 32px rgba(0,0,0,.55);position:relative;overflow:hidden}
+  .citationCine .perfo{position:absolute;top:0;bottom:0;width:15px;opacity:.65;
+    background-image:repeating-linear-gradient(180deg,var(--beam,#e9b64c) 0 5px,transparent 5px 13px);
+    background-position:center;background-repeat:repeat-y}
+  .citationCine .perfo.g{left:0}
+  .citationCine .perfo.d{right:0}
+  .citationCine .fenetre{margin:12px 26px 0;padding:14px 12px;text-align:center;
+    background:radial-gradient(ellipse at 50% 0%,rgba(255,255,255,.07),transparent 72%);
+    border:1px solid rgba(255,196,0,.28);border-radius:6px}
   .citationCine .texte{font-family:'Anton',sans-serif;letter-spacing:.01em;font-size:15px;
-    color:var(--chalk,#ede8dc);line-height:1.35;margin:0 0 8px;text-transform:none}
-  .citationCine .source{font-size:12px;color:var(--beam,#e9b64c);margin:0 0 6px;font-weight:600}
+    color:var(--chalk,#ede8dc);line-height:1.3;margin:0;text-transform:none}
+  .citationCine .etiquette{margin:0 26px;padding:8px 10px 12px;text-align:center;
+    border-top:1px dashed rgba(255,196,0,.3)}
+  .citationCine .source{font-size:12px;color:var(--beam,#e9b64c);margin:8px 0 4px;font-weight:600}
   .citationCine .source .annee{color:var(--muted,#9a9284);font-weight:400}
-  .citationCine .anecdote{font-size:11.5px;color:var(--muted,#9a9284);margin:0;font-style:italic;line-height:1.4}
+  .citationCine .anecdote{font-size:11px;color:var(--muted,#9a9284);margin:0;font-style:italic;line-height:1.4}
   #citationNiveauPanel{padding:0 20px 14px}
   #citationNiveauPanel .citationCine{margin:6px auto 0;max-width:none}
   .codeCadre{text-align:center;background:var(--card);border-radius:12px;padding:16px;margin-top:8px}
@@ -1223,16 +1231,21 @@ if (!window.tempsReelDispo) {
   $("btnJoin").title = "Le multijoueur exige la connexion temps réel.";
 }
 
-// Bouton « Suggérer un film » : doit fonctionner que le temps réel soit
-// disponible ou non (auparavant câblé par erreur dans le bloc ci-dessus,
-// qui ne s'exécute que lorsque le temps réel est bloqué).
-const suggestionModal = $("suggestionModal");
-const btnSuggestion = $("btnSuggestion");
+// Bouton « Suggérer un film » : la fenêtre de suggestion (#suggestionModal)
+// est définie plus bas dans le document, avec les autres fenêtres modales.
+// Ce script s'exécute pendant que le navigateur lit encore la page : la
+// chercher ici la ratait purement et simplement (l'élément n'existait pas
+// encore), $() renvoyait alors l'objet inerte de secours, et les clics ne
+// faisaient donc RIEN de visible — ni ouverture de fenêtre, ni erreur. On
+// attend maintenant que tout le document soit chargé avant de la câbler.
+document.addEventListener("DOMContentLoaded", () => {
+  const suggestionModal = $("suggestionModal");
+  const btnSuggestion = $("btnSuggestion");
 
-btnSuggestion.onclick = () => suggestionModal.classList.add("active");
-$("closeSuggestionBtn").onclick = () => suggestionModal.classList.remove("active");
+  btnSuggestion.onclick = () => suggestionModal.classList.add("active");
+  $("closeSuggestionBtn").onclick = () => suggestionModal.classList.remove("active");
 
-$("btnSendSugg").onclick = async () => {
+  $("btnSendSugg").onclick = async () => {
     const titre = $("suggTitre").value.trim();
     const commentaire = $("suggComment").value.trim();
     if(!titre){
@@ -1273,7 +1286,8 @@ $("btnSendSugg").onclick = async () => {
     } finally {
         btn.disabled = false;
     }
-};
+  };
+});
 
 fetch("/api/config").then(r => r.json())
   .then(c => { $("tipLink").href = c.tipUrl; tauxTicket = c.pointsParTicket || tauxTicket; if (c.animationsAvancees !== false) document.body.classList.add("animations-actives"); })
@@ -1886,9 +1900,12 @@ function citationHTML(n){
   const c = citationPourNiveau(n);
   if (!c) return "";
   return `<div class="citationCine">
-    <p class="texte">« ${esc(c.texte || "")} »</p>
-    <p class="source">${esc(c.film || "")}${c.annee ? ` <span class="annee">(${esc(c.annee)})</span>` : ""}${c.source ? ` — ${esc(c.source)}` : ""}</p>
-    ${c.anecdote ? `<p class="anecdote">🎞️ ${esc(c.anecdote)}</p>` : ""}
+    <span class="perfo g"></span><span class="perfo d"></span>
+    <div class="fenetre"><p class="texte">« ${esc(c.texte || "")} »</p></div>
+    <div class="etiquette">
+      <p class="source">${esc(c.film || "")}${c.annee ? ` <span class="annee">(${esc(c.annee)})</span>` : ""}${c.source ? ` — ${esc(c.source)}` : ""}</p>
+      ${c.anecdote ? `<p class="anecdote">🎞️ ${esc(c.anecdote)}</p>` : ""}
+    </div>
   </div>`;
 }
 
