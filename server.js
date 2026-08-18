@@ -249,6 +249,7 @@ const saveDemandesVip = () => sauver("roueVip", demandesVip, DEMANDES_VIP_FILE);
 /** Emoji représentatif d'un lot, pour l'afficher dans la liste des lots de la roue. */
 function emojiLot(l) {
   if (l.type === "vip") return "👑";
+  if (l.type === "ranked") return "📈";
   if ((l.valeur || 0) >= 500) return "💎";
   if ((l.valeur || 0) >= 100) return "⭐";
   return "🎁";
@@ -277,6 +278,8 @@ function stockRoueDefaut() {
   for (let i = 0; i < 3; i++) lots.push({ type: "credits", label: "500 tickets", valeur: 500 });
   for (let i = 0; i < 5; i++) lots.push({ type: "credits", label: "100 tickets", valeur: 100 });
   for (let i = 0; i < 10; i++) lots.push({ type: "credits", label: "50 tickets", valeur: 50 });
+  // Lot « partie classée bonus » : deux exemplaires pour commencer, en test.
+  for (let i = 0; i < 2; i++) lots.push({ type: "ranked", label: "1 partie classée bonus", valeur: 1 });
   // Un identifiant unique par lot pour pouvoir le retirer précisément du stock.
   return lots.map((l, i) => ({ ...l, id: i + 1 }));
 }
@@ -1668,7 +1671,7 @@ app.post("/api/roue/tourner", (req, res) => {
     const [lot] = roue.lots.splice(index, 1);
 
     const resultat = { type: lot.type, label: lot.label };
-    if (lot.type === "credits") resultat.valeur = lot.valeur;
+    if (lot.type === "credits" || lot.type === "ranked") resultat.valeur = lot.valeur;
 
     // Le gain n'est pas crédité tout de suite : le joueur doit le réclamer via un bouton.
     gainsEnAttente[user.id] = { ...resultat, gratuit, date: new Date().toISOString() };
@@ -1706,6 +1709,11 @@ app.post("/api/roue/reclamer", (req, res) => {
         grantCredits(user.id, gain.valeur);
         enregistrerTransaction(user.id, gain.valeur, "credits", gain.gratuit ? "Roue du jour (tour gratuit)" : "Roue du jour");
         return res.json({ ok: true, type: "credits", valeur: gain.valeur, credits: getCredits(user.id) });
+    }
+
+    if (gain.type === "ranked") {
+        accorderPartiesClasseesBonus(user.id, gain.valeur);
+        return res.json({ ok: true, type: "ranked", valeur: gain.valeur, partiesRestantes: partiesRestantes(user.id) });
     }
 
     // Code VIP : pas de génération automatique — une demande part vers l'administrateur.
@@ -2236,7 +2244,29 @@ app.get("/api/config", (_req, res) => res.json({
 /**
  * Don de points à un ami. Plafonné par opération et sur 24 h : sans cela,
  * plusieurs comptes pourraient converger vers un seul pour gonfler un score.
+ *
+ * Le plafond par envoi (REGLAGES.transfertMax) est celui du premier palier
+ * (niveau 1) : plus un joueur progresse, plus son plafond grandit, jusqu'à
+ * 10 fois ce montant au niveau maximum (300 par défaut). Récompense la
+ * fidélité sans jamais réduire ce qu'un nouveau joueur peut déjà offrir.
  */
+const PALIERS_DON = 10;             // nombre de paliers, du niveau 1 (×1) au niveau max (×10)
+const MULTIPLICATEUR_DON_MAX = 10;  // au dernier palier, on peut envoyer 10 fois plus qu'au premier
+
+/** Palier de don atteint (1 à PALIERS_DON) pour un niveau donné, réparti sur toute la progression. */
+function palierDon(niveau) {
+  const plafondNiveau = REGLAGES.niveauMax || 300;
+  return Math.min(PALIERS_DON, Math.max(1, Math.ceil((Math.max(0, niveau) / plafondNiveau) * PALIERS_DON)));
+}
+
+/** Plafond de points transférables en un seul don pour ce joueur, selon son niveau actuel. */
+function plafondDonPourJoueur(userId) {
+  const niveau = infoNiveau(userId, { base: REGLAGES.xpBase, croissance: REGLAGES.xpCroissance, plafond: REGLAGES.niveauMax })?.niveau || 0;
+  const palier = palierDon(niveau);
+  const multiplicateur = 1 + (MULTIPLICATEUR_DON_MAX - 1) * (palier - 1) / (PALIERS_DON - 1);
+  return { max: Math.round(REGLAGES.transfertMax * multiplicateur), palier, niveau };
+}
+
 const donsRecents = new Map();   // userId -> [{ montant, at }]
 
 /** Total déjà donné par ce joueur sur les dernières 24h, et ce qu'il lui reste. */
@@ -2244,8 +2274,9 @@ function statutDonsJour(userId) {
   const limite = Date.now() - 24 * 60 * 60 * 1000;
   const recents = (donsRecents.get(userId) || []).filter((d) => d.at > limite);
   const dejaDonne = recents.reduce((t, d) => t + d.montant, 0);
+  const { max, palier, niveau } = plafondDonPourJoueur(userId);
   return {
-    max: REGLAGES.transfertMax,
+    max, palier, paliersMax: PALIERS_DON, niveau,
     plafondJour: REGLAGES.transfertParJour,
     dejaDonne,
     restant: Math.max(0, REGLAGES.transfertParJour - dejaDonne),
@@ -2265,8 +2296,9 @@ app.post("/api/points/donner", (req, res) => {
   const cible = String(req.body.id || "");
   const montant = Math.floor(Number(req.body.points) || 0);
   if (montant <= 0) return res.status(400).json({ error: "MONTANT_INVALIDE" });
-  if (montant > REGLAGES.transfertMax)
-    return res.status(400).json({ error: "TROP_ELEVE", max: REGLAGES.transfertMax });
+  const { max: plafondDon } = plafondDonPourJoueur(user.id);
+  if (montant > plafondDon)
+    return res.status(400).json({ error: "TROP_ELEVE", max: plafondDon });
   if (statutRelation(user.id, cible) !== "ami")
     return res.status(403).json({ error: "PAS_AMI" });
 
@@ -2424,19 +2456,41 @@ function partiesRecentes(userId) {
   return gardees;
 }
 
+/**
+ * Parties classées bonus, gagnées à la roue du jour (lot « partie classée
+ * bonus ») : s'ajoutent au quota quotidien classique sans jamais l'entamer,
+ * et ne se rechargent pas — une fois utilisées, elles sont consommées.
+ */
+const BONUS_RANKED_FILE = new URL("./bonusRanked.json", import.meta.url);
+let bonusPartiesClassees = {};   // userId -> nombre de parties classées bonus en réserve
+const saveBonusRanked = () => sauver("bonusRanked", bonusPartiesClassees, BONUS_RANKED_FILE);
+
+function accorderPartiesClasseesBonus(userId, n) {
+  bonusPartiesClassees[userId] = (bonusPartiesClassees[userId] || 0) + Math.max(0, n);
+  saveBonusRanked();
+}
+
 const partiesRestantes = (userId) => {
   verifierSaison();
-  return Math.max(0, REGLAGES.partiesClasseesParJour - partiesRecentes(userId).length);
+  const base = Math.max(0, REGLAGES.partiesClasseesParJour - partiesRecentes(userId).length);
+  return base + (bonusPartiesClassees[userId] || 0);
 };
 
 /** Quand la prochaine partie redevient disponible, en millisecondes. */
 function prochaineRecharge(userId) {
+  if (bonusPartiesClassees[userId] > 0) return 0;   // une partie bonus est immédiatement disponible
   const recentes = partiesRecentes(userId);
   if (recentes.length < REGLAGES.partiesClasseesParJour) return 0;
   return Math.max(0, Math.min(...recentes) + JOUR_MS - Date.now());
 }
 
 function consommerPartieClassee(userId) {
+  // On puise d'abord dans la réserve bonus : elle ne doit jamais entamer le quota quotidien classique.
+  if (bonusPartiesClassees[userId] > 0) {
+    bonusPartiesClassees[userId] -= 1;
+    saveBonusRanked();
+    return;
+  }
   const recentes = partiesRecentes(userId);
   saison.participations[userId] = [...recentes, Date.now()];
   sauver("saison", saison);
@@ -3302,6 +3356,8 @@ gainsEnAttente = await charger("roueGains", GAINS_ROUE_FILE, {});
 if (!gainsEnAttente || typeof gainsEnAttente !== "object") gainsEnAttente = {};
 demandesVip = await charger("roueVip", DEMANDES_VIP_FILE, []);
 if (!Array.isArray(demandesVip)) demandesVip = [];
+bonusPartiesClassees = await charger("bonusRanked", BONUS_RANKED_FILE, {});
+if (!bonusPartiesClassees || typeof bonusPartiesClassees !== "object") bonusPartiesClassees = {};
 walletHistorique = await charger("wallet", WALLET_FILE, {});
 if (!walletHistorique || typeof walletHistorique !== "object") walletHistorique = {};
 REGLAGES = { ...structuredClone(REGLAGES_DEFAUT), ...(await charger("reglages", null, {})) };
