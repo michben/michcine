@@ -1288,6 +1288,7 @@ app.post("/api/suggestions", (req, res) => {
             publie: false,       // l'auteur a choisi de la publier dans « Suggestions retenues »
             anonyme: false,
             publieLe: null,
+            decline: false,      // l'auteur a explicitement choisi de NE PAS publier : on arrête de lui proposer
         });
         saveSuggestions();
         res.json({ ok: true });
@@ -1332,6 +1333,17 @@ app.post("/api/suggestions/:id/publier", (req, res) => {
     s.publie = true;
     s.anonyme = Boolean(req.body?.anonyme);
     s.publieLe = new Date().toISOString();
+    saveSuggestions();
+    res.json({ ok: true });
+});
+
+/** L'auteur choisit explicitement de NE PAS publier sa suggestion acceptée — on arrête de le relancer. */
+app.post("/api/suggestions/:id/decliner", (req, res) => {
+    const user = exigeCompte(req, res);
+    if (!user) return;
+    const s = suggestions.find((x) => x.id === req.params.id && x.auteurId === user.id);
+    if (!s) return res.status(404).json({ error: "INTROUVABLE" });
+    s.decline = true;
     saveSuggestions();
     res.json({ ok: true });
 });
@@ -3335,6 +3347,7 @@ if (!Array.isArray(suggestions)) suggestions = [];
         if (s.anonyme === undefined) { s.anonyme = false; suggestionsAMigrer = true; }
         if (s.auteurId === undefined) { s.auteurId = null; suggestionsAMigrer = true; }
         if (s.publieLe === undefined) { s.publieLe = null; suggestionsAMigrer = true; }
+        if (s.decline === undefined) { s.decline = false; suggestionsAMigrer = true; }
     }
     if (suggestionsAMigrer) saveSuggestions();
 }
