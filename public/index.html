@@ -33,6 +33,11 @@
   button.danger{color:var(--ticket);border-color:rgba(228,88,110,.45)}
   button:disabled{opacity:.45;cursor:not-allowed}
   .row{display:flex;gap:10px;margin-top:14px}.row>*{flex:1}
+  /* Radio d'ambiance : visible dès la page d'accueil, en haut de chaque écran, et jamais superposée à rien
+     puisqu'elle suit le flux normal de la page (pas de position fixe). */
+  .radioBar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:10px 0}
+  .radioBar #musiqueVolLabel{font-size:12px}
+  #btnMusique[aria-pressed="true"]{background:#3DDC84;color:#0A2015;border-color:#3DDC84}
   .hidden{display:none !important}
   .avatars{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:4px}
   .avatars button{background:var(--card);border:1px solid transparent;font-size:22px;padding:8px 10px;line-height:1}
@@ -600,6 +605,15 @@ html.mode-enfant-actif .wrap{padding-top:48px}
   </button>
   <button id="btnQuitGame" class="ghost hidden" style="position:absolute; top:20px; right:18px; font-size:22px; padding:4px 8px; z-index:50;" title="Quitter la partie">🏠</button>
 
+  <!-- RADIO D'AMBIANCE : disponible dès la page d'accueil, continue de jouer jusqu'à la sortie du site. -->
+  <div class="radioBar">
+    <button id="btnMusique" class="ghost" style="flex:0 0 auto" title="Lancer la radio">📻 Lancer la radio</button>
+    <button id="btnMusiqueVolMoins" class="ghost" style="flex:0 0 auto;padding:10px 12px" title="Diminuer le volume">🔉➖</button>
+    <span id="musiqueVolLabel" class="tag" style="margin:0;min-width:34px;text-align:center">50%</span>
+    <button id="btnMusiqueVolPlus" class="ghost" style="flex:0 0 auto;padding:10px 12px" title="Augmenter le volume">🔊➕</button>
+  </div>
+  <audio id="musiqueFond" preload="none"></audio>
+
   <!-- PRÉSENTATION + CONNEXION -->
   <section id="landing">
     <p class="baseline">Un synopsis s'affiche, vous devinez le film. Plus vous répondez vite et sans indice, plus vous marquez. Seul ou jusqu'à 16 joueurs.</p>
@@ -978,14 +992,7 @@ html.mode-enfant-actif .wrap{padding-top:48px}
         <button id="btnPause" class="ghost" style="flex:0 0 auto">⏸ Pause</button>
         <button id="btnSkip" class="ghost hidden">Passer à la question suivante</button>
         <button id="btnHistorique" class="ghost" style="flex:0 0 auto">🕘 Questions précédentes</button>
-        <span class="musicControls" style="display:inline-flex;align-items:center;gap:4px;flex:0 0 auto">
-          <button id="btnMusique" class="ghost" style="flex:0 0 auto;padding:10px 12px" title="Mettre la musique en pause">⏸️</button>
-          <button id="btnMusiqueVolMoins" class="ghost" style="flex:0 0 auto;padding:10px 12px" title="Diminuer le volume de la musique">🔉➖</button>
-          <span id="musiqueVolLabel" class="tag" style="margin:0;min-width:34px;text-align:center;font-size:12px">50%</span>
-          <button id="btnMusiqueVolPlus" class="ghost" style="flex:0 0 auto;padding:10px 12px" title="Augmenter le volume de la musique">🔊➕</button>
-        </span>
       </div>
-      <audio id="musiqueFond" preload="none"></audio>
       <ul class="players" id="roundPlayers"></ul>
     </div>
   </section>
@@ -1318,12 +1325,12 @@ $("btnHistorique").onclick = () => { afficherHistoriqueQuestions(); $("historiqu
 $("closeHistoriqueBtn").onclick = () => $("historiqueModal").classList.remove("active");
 $("historiqueModal").onclick = e => { if (e.target.id === "historiqueModal") $("historiqueModal").classList.remove("active"); };
 
-/* ---------- Musique d'ambiance : playlist en boucle pendant les parties ---------- */
+/* ---------- Radio d'ambiance : playlist en boucle, disponible depuis la page d'accueil et qui ---------- */
+/* continue de jouer sans interruption au fil de la navigation, jusqu'à ce que le joueur la mette en   */
+/* pause lui-même ou quitte le site. On se fie directement à l'état réel de <audio> (paused / play /    */
+/* pause) plutôt qu'à un drapeau séparé, pour ne jamais désynchroniser le bouton de ce qui joue vraiment.*/
 let playlisteMusique = [];
 let indexMusique = 0;
-// Pause manuelle demandée par le joueur (bouton ⏸️/▶️) : indépendante de l'arrêt automatique
-// en fin de partie / pause menu / sortie de partie, qu'on ne veut pas mémoriser d'une partie à l'autre.
-let musiquePause = localStorage.getItem("michben_musique_pause") === "1";
 let musiqueVolume = (() => {
   const v = parseFloat(localStorage.getItem("michben_musique_volume"));
   return Number.isFinite(v) && v >= 0 && v <= 1 ? v : 0.5;
@@ -1336,9 +1343,12 @@ chargerPlaylisteMusique();
 
 function majBoutonMusique(){
   const btn = $("btnMusique");
-  if (!btn) return;
-  btn.textContent = musiquePause ? "▶️" : "⏸️";
-  btn.title = musiquePause ? "Reprendre la musique de fond" : "Mettre la musique en pause";
+  const audio = $("musiqueFond");
+  if (!btn || !audio) return;
+  const enCours = !audio.paused;
+  btn.textContent = enCours ? "⏸️ Radio" : "▶️ Lancer la radio";
+  btn.title = enCours ? "Mettre la radio en pause" : "Lancer la radio";
+  btn.setAttribute("aria-pressed", String(enCours));
 }
 majBoutonMusique();
 
@@ -1357,24 +1367,18 @@ function demarrerMusique(){
   if (indexMusique >= playlisteMusique.length) indexMusique = 0;
   const piste = playlisteMusique[indexMusique];
   if (audio.getAttribute("src") !== piste.url) audio.src = piste.url;
-  if (musiquePause) return;   // le joueur a mis la musique en pause : on respecte son choix
-  audio.play().catch(() => {});   // autoplay refusé silencieusement : le joueur pourra relancer au bouton ▶️
-}
-function arreterMusique(){
-  const audio = $("musiqueFond");
-  audio.pause();
+  audio.play().catch(() => {});   // autoplay refusé silencieusement : le joueur lance au bouton ▶️
 }
 $("musiqueFond").addEventListener("ended", () => {
   indexMusique = playlisteMusique.length ? (indexMusique + 1) % playlisteMusique.length : 0;
   demarrerMusique();
 });
+$("musiqueFond").addEventListener("play", majBoutonMusique);
+$("musiqueFond").addEventListener("pause", majBoutonMusique);
 $("btnMusique").onclick = () => {
-  musiquePause = !musiquePause;
-  localStorage.setItem("michben_musique_pause", musiquePause ? "1" : "0");
   const audio = $("musiqueFond");
-  if (musiquePause) audio.pause();
-  else if (playlisteMusique.length) audio.play().catch(() => {});
-  majBoutonMusique();
+  if (audio.paused) demarrerMusique();
+  else audio.pause();
 };
 function ajusterVolumeMusique(delta){
   musiqueVolume = Math.min(1, Math.max(0, Math.round((musiqueVolume + delta) * 10) / 10));
@@ -2095,7 +2099,7 @@ $("btnQuitterPause").onclick = () => {
   clearTimeout(state.suiteId);
   state.code = null;
   setChatVisible(false);
-  arreterMusique();
+  // La radio continue de jouer même en quittant la partie : elle ne s'arrête que si le joueur le décide.
   show("menu");
 };
 socket.on("game:paused", ({enPause: actif, reste, par}) => afficherPause(actif, reste, par));
@@ -3355,7 +3359,6 @@ const quitterPartie = () => {
     state.code = null;
     setChatVisible(false);
   }
-  arreterMusique();
   show("menu");
 };
 $("banner").onclick = quitterPartie;
@@ -3489,7 +3492,7 @@ function renderChoicesSolo(liste){
 
 async function mancheSuivanteSolo(){
   const r = await solo("next");
-  if (!r) { arreterMusique(); return show("menu"); }
+  if (!r) return show("menu");
   if (!r.fini) return afficherManche(r);   // afficherManche remet les cœurs à jour
   if (r.codeObtenu)
     setTimeout(() => bandeauNotif(
@@ -3505,7 +3508,6 @@ async function mancheSuivanteSolo(){
     (r.coeursEpuises ? ` · ${r.manchesJouees} question${r.manchesJouees>1?"s":""} sur ${r.manchesTotal}` : "");
   $("finalRank").innerHTML = `<li>${me.avatar||"🎬"} ${esc(me.pseudo)}<b>${r.score} pts</b></li>`;
   $("finalTeams").classList.add("hidden");
-  arreterMusique();
   show("over");
 }
 
@@ -3840,7 +3842,6 @@ socket.on("game:end", ({ranking, mode, teams, credits: solde, points: cagnotte, 
     $("teamA").textContent = teams.A; $("teamB").textContent = teams.B;
     board.classList.remove("hidden");
   } else board.classList.add("hidden");
-  arreterMusique();
   show("over");
 });
 
