@@ -1441,6 +1441,8 @@ function appliquerRole(){
   if (!me) return;
   $("btnAdminAccess").classList.toggle("hidden", me.role !== "admin");
   if (me.role === "admin") $("btnAdminAccess").onclick = () => window.location.href = "/admin.html";
+  // Un compte enfant ne doit jamais voir de bouton de don d'argent.
+  $("tipLink").classList.toggle("hidden", me.role === "enfant");
   if (me.role === "enfant") {
     state.kidMode = true;
     try { localStorage.setItem("kidMode", "1"); } catch {}
@@ -3945,7 +3947,20 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
                 document.getElementById('rulesModal').classList.remove('active');
             }
         });
-    
+
+        // Le bouton d'aide "?" est en bas à gauche, tout comme la fenêtre de chat en plein écran sur mobile :
+        // on le masque tant que le chat est ouvert pour qu'il ne recouvre plus le début du champ de message.
+        (function () {
+            const helpBtn = document.getElementById('helpBtn');
+            const chatPanel = document.getElementById('chatPanel');
+            if (!helpBtn || !chatPanel) return;
+            const majVisibiliteAide = () => {
+                helpBtn.style.display = chatPanel.classList.contains('hidden') ? '' : 'none';
+            };
+            majVisibiliteAide();
+            new MutationObserver(majVisibiliteAide).observe(chatPanel, { attributes: true, attributeFilter: ['class'] });
+        })();
+
         function inviterOnlineUser(amiId, btn) {
             if (!state.code) {
                 alert("Vous devez d'abord créer ou ouvrir un salon de jeu pour inviter des joueurs !");
