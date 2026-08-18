@@ -289,6 +289,52 @@ export function connecterEmail(email, motDePasse) {
   return { user: u };
 }
 
+/* ---------- comptes créés par l'administration (sans email) ---------- */
+
+const normPseudo = (p) => String(p || "").trim();
+const parPseudo = (p) =>
+  Object.values(users).find((u) => (u.pseudo || "").toLowerCase() === p.toLowerCase());
+
+/**
+ * Compte créé directement par l'administration : identifiant (pseudo) +
+ * mot de passe, sans adresse email à valider. Sert notamment aux comptes
+ * enfant, remis en main propre par un adulte.
+ */
+export function creerCompteAdmin({ pseudo, motDePasse, enfant = false }) {
+  const p = normPseudo(pseudo);
+  if (p.length < 2 || p.length > 20) return { error: "PSEUDO_INVALIDE" };
+  if (String(motDePasse || "").length < 6) return { error: "MOT_DE_PASSE_COURT" };
+  if (parPseudo(p)) return { error: "PSEUDO_PRIS" };
+
+  const id = `local:${crypto.randomBytes(8).toString("hex")}`;
+  users[id] = {
+    id, pseudo: p, pseudoChosen: true,
+    avatar: enfant ? "🧒" : "🎬",
+    motDePasse: hacher(motDePasse),
+    totalScore: 0, gamesPlayed: 0, credits: STARTING_CREDITS, points: 0,
+    role: enfant ? "enfant" : "joueur",
+    emailVerifie: true,     // pas d'email à valider pour un compte créé par l'admin
+    fondateur: true,        // dispensé de code de parrainage : le compte vient déjà d'un adulte de confiance
+    amis: [], demandesRecues: [], demandesEnvoyees: [], bloques: [], claimedBonuses: [],
+  };
+  saveUsers();
+  return { user: users[id] };
+}
+
+/** Connexion par pseudo + mot de passe, pour les comptes créés par l'administration. */
+export function connecterPseudo(pseudo, motDePasse) {
+  const u = parPseudo(normPseudo(pseudo));
+  if (!u || !verifierMotDePasse(motDePasse, u.motDePasse)) return { error: "IDENTIFIANTS_INVALIDES" };
+  if (u.banned) return { error: "BANNI" };
+  return { user: u };
+}
+
+/** Retire les champs sensibles avant d'envoyer un utilisateur au client. */
+export const sansMotDePasse = (u) => {
+  const { motDePasse, code, codeExpire, codeEssais, ...reste } = u;
+  return reste;
+};
+
 /* ---------- niveaux et expérience ---------- */
 
 /**
@@ -567,8 +613,9 @@ export function statutRelation(userId, autreId) {
 
 /* ---------- rôles ---------- */
 
-export const ROLES = ["joueur", "moderateur", "admin"];
+export const ROLES = ["joueur", "moderateur", "admin", "enfant"];
 export const estModerateur = (user) => user && ["moderateur", "admin"].includes(user.role);
+export const estEnfant = (user) => Boolean(user && user.role === "enfant");
 
 export function definirRole(id, role) {
   const user = users[id];
@@ -714,8 +761,11 @@ export function addRankedPoints(userId, points) {
 export const leaderboard = (limit = 50, type = "saison") => {
   const champ = type === "global" ? "scoreGlobal" : "totalScore";
   const parties = type === "global" ? "partiesGlobales" : "gamesPlayed";
+  // Le classement enfant est séparé : les comptes enfant n'apparaissent jamais
+  // dans les classements « saison » ou « global », et inversement.
   return Object.values(users)
     .filter((u) => u.pseudoChosen && ((u[parties] || 0) > 0 || (u[champ] || 0) > 0))
+    .filter((u) => (type === "enfant") === (u.role === "enfant"))
     .sort((a, b) => (b[champ] || 0) - (a[champ] || 0))
     .slice(0, limit)
     .map((u, i) => ({
@@ -795,6 +845,14 @@ export function mountAuth(app) {
 
   app.post("/auth/email/connexion", (req, res) => {
     const r = connecterEmail(req.body.email, req.body.motDePasse);
+    if (r.error) return res.status(401).json(r);
+    createSession(res, r.user);
+    res.json(sansSecret(r.user));
+  });
+
+  /** Connexion des comptes créés par l'administration (identifiant + mot de passe, sans email). */
+  app.post("/auth/enfant/connexion", (req, res) => {
+    const r = connecterPseudo(req.body.pseudo, req.body.motDePasse);
     if (r.error) return res.status(401).json(r);
     createSession(res, r.user);
     res.json(sansSecret(r.user));

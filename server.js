@@ -28,7 +28,8 @@ import { mountAuth, userFromCookie, addRankedPoints,
          leaderboard, reinitialiserClassement, definirPhoto, fichePublique,
          retirerPoints, grantPointsDon, ajouterXp, infoNiveau, validerManuellement,
          verifierCode, rattacherParrain, infoParrainage, verifierCodeParrain,
-         parrainageManquant, parrainageObligatoire, genererCodeAdmin } from "./auth-x.js";
+         parrainageManquant, parrainageObligatoire, genererCodeAdmin,
+         creerCompteAdmin, sansMotDePasse } from "./auth-x.js";
 
 const app = express();
 app.use(express.json({ limit: '10mb' })); // Limite augmentée pour l'upload d'images
@@ -169,6 +170,7 @@ function normaliserFilms() {
   for (const m of movies) {
     if (!m.difficulty) m.difficulty = niveauDepuisVotes(m.votes);
     if (m.enabled === undefined) m.enabled = true;
+    if (m.kids === undefined) m.kids = false;
   }
 }
 const saveMovies = () => sauver("movies", movies, MOVIES_FILE);
@@ -358,6 +360,21 @@ app.get("/api/admin/stats", requireAdmin, (_req, res) => {
 
 app.get("/api/admin/users", requireAdmin, (_req, res) => res.json(listUsers()));
 
+/**
+ * Création rapide d'un compte par l'administration : identifiant + mot de
+ * passe, sans email à valider. Cocher « enfant » crée un compte restreint
+ * au mode enfant, avec son propre classement.
+ */
+app.post("/api/admin/comptes", requireAdmin, (req, res) => {
+  const r = creerCompteAdmin({
+    pseudo: req.body.pseudo,
+    motDePasse: req.body.motDePasse,
+    enfant: req.body.enfant === true,
+  });
+  if (r.error) return res.status(400).json(r);
+  res.status(201).json(sansMotDePasse(r.user));
+});
+
 app.put("/api/admin/users/:id", requireAdmin, (req, res) => {
   const user = adminUpdateUser(req.params.id, req.body);
   if (!user) return res.status(404).json({ error: "NOT_FOUND" });
@@ -432,6 +449,8 @@ function sanitizeMovie(body) {
     difficulty: ["facile", "moyen", "difficile"].includes(body.difficulty)
       ? body.difficulty : niveauDepuisVotes(Number(body.votes) || 0),
     enabled: body.enabled !== false,
+    // Film adapté aux enfants (Disney, Pixar, familial…) : sert au mode enfant.
+    kids: body.kids === true || body.kids === "true",
   };
 }
 
@@ -616,9 +635,12 @@ app.post("/api/solo/start", (req, res) => {
   if (!user) return;
   if (parrainageManquant(user)) return res.status(403).json({ error: "PARRAINAGE_REQUIS" });
 
-  const { mode = "solo", rounds } = req.body;
-  const vivier = movies.filter((m) => m.enabled !== false);
-  if (!vivier.length) return res.status(400).json({ error: "NO_MOVIES" });
+  const { mode = "solo", rounds, kids } = req.body;
+  // Un compte enfant ne joue qu'avec le catalogue enfant, quoi que le client envoie.
+  const modeEnfant = user.role === "enfant" ? true : kids === true;
+  let vivier = movies.filter((m) => m.enabled !== false);
+  if (modeEnfant) vivier = vivier.filter((m) => m.kids === true);
+  if (!vivier.length) return res.status(400).json({ error: modeEnfant ? "NO_MOVIES_KIDS" : "NO_MOVIES" });
 
   if (mode === "ranked" && partiesRestantes(user.id) <= 0)
     return res.status(400).json({ error: "PLUS_DE_PARTIES", ...infoSaison(),
@@ -1314,7 +1336,7 @@ app.get("/api/movies/now_playing", async (req, res) => {
 });
 
 app.get("/api/leaderboard", (req, res) =>
-  res.json(leaderboard(50, req.query.type === "global" ? "global" : "saison"))
+  res.json(leaderboard(50, ["global", "enfant"].includes(req.query.type) ? req.query.type : "saison"))
 );
 
 app.get("/api/saison", (req, res) => {
@@ -1439,7 +1461,9 @@ function generateRoomCode() {
  * dans la même décennie — sinon le bon titre saute aux yeux.
  */
 function buildChoices(movie) {
-  const actifs = movies.filter((m) => m.enabled !== false);
+  // Si la question porte sur un film enfant, les leurres doivent l'être
+  // aussi : pas question qu'un titre pour adultes apparaisse comme option.
+  const actifs = movies.filter((m) => m.enabled !== false && (!movie.kids || m.kids === true));
   const memeEpoque = actifs.filter(
     (m) => m.id !== movie.id && m.year && movie.year && Math.abs(m.year - movie.year) <= 12
   );
@@ -1816,15 +1840,19 @@ io.on("connection", (socket) => {
     io.emit("presence", { enLigne: nombreEnLigne() });
   });
 
-  socket.on("room:create", ({ rounds, mode }, cb) => {
-    const vivier = movies.filter((m) => m.enabled !== false);
-    if (vivier.length === 0) return cb?.({ ok: false, error: "NO_MOVIES" });
+  socket.on("room:create", ({ rounds, mode, kids }, cb) => {
+    // Un compte enfant crée forcément un salon en mode enfant, quoi qu'envoie le client.
+    const modeEnfant = user.role === "enfant" ? true : kids === true;
+    let vivier = movies.filter((m) => m.enabled !== false);
+    if (modeEnfant) vivier = vivier.filter((m) => m.kids === true);
+    if (vivier.length === 0) return cb?.({ ok: false, error: modeEnfant ? "NO_MOVIES_KIDS" : "NO_MOVIES" });
 
     const code = generateRoomCode();
     const count = Math.min(Number(rounds) || 10, vivier.length);
     const room = {
       code, hostId: socket.id, status: "lobby", roundIndex: 0,
       mode: ["solo", "ffa", "duel", "teams", "ranked"].includes(mode) ? mode : "ffa",
+      kids: modeEnfant,
       players: new Map(),
       playlist: choisirFilms(vivier, count, user.id),
       currentMovie: null, startedAt: null, timer: null, nextTimer: null, graceTimer: null,
@@ -1859,7 +1887,9 @@ io.on("connection", (socket) => {
   socket.on("room:join", ({ code }, cb) => {
     const room = rooms.get(String(code || "").toUpperCase());
     if (!room) return cb?.({ ok: false, error: "ROOM_NOT_FOUND" });
-    
+    // Un compte enfant ne peut rejoindre qu'un salon déjà en mode enfant.
+    if (user.role === "enfant" && !room.kids) return cb?.({ ok: false, error: "ENFANT_MODE_ENFANT_UNIQUEMENT" });
+
     const existingPlayer = room.players.get(user.id);
     const enCours = room.status !== "lobby";
     
