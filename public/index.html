@@ -978,7 +978,12 @@ html.mode-enfant-actif .wrap{padding-top:48px}
         <button id="btnPause" class="ghost" style="flex:0 0 auto">⏸ Pause</button>
         <button id="btnSkip" class="ghost hidden">Passer à la question suivante</button>
         <button id="btnHistorique" class="ghost" style="flex:0 0 auto">🕘 Questions précédentes</button>
-        <button id="btnMusique" class="ghost" style="flex:0 0 auto" title="Couper/activer la musique de fond">🔊</button>
+        <span class="musicControls" style="display:inline-flex;align-items:center;gap:4px;flex:0 0 auto">
+          <button id="btnMusique" class="ghost" style="flex:0 0 auto;padding:10px 12px" title="Mettre la musique en pause">⏸️</button>
+          <button id="btnMusiqueVolMoins" class="ghost" style="flex:0 0 auto;padding:10px 12px" title="Diminuer le volume de la musique">🔉➖</button>
+          <span id="musiqueVolLabel" class="tag" style="margin:0;min-width:34px;text-align:center;font-size:12px">50%</span>
+          <button id="btnMusiqueVolPlus" class="ghost" style="flex:0 0 auto;padding:10px 12px" title="Augmenter le volume de la musique">🔊➕</button>
+        </span>
       </div>
       <audio id="musiqueFond" preload="none"></audio>
       <ul class="players" id="roundPlayers"></ul>
@@ -1316,7 +1321,13 @@ $("historiqueModal").onclick = e => { if (e.target.id === "historiqueModal") $("
 /* ---------- Musique d'ambiance : playlist en boucle pendant les parties ---------- */
 let playlisteMusique = [];
 let indexMusique = 0;
-let musiqueMutee = localStorage.getItem("michben_musique_mute") === "1";
+// Pause manuelle demandée par le joueur (bouton ⏸️/▶️) : indépendante de l'arrêt automatique
+// en fin de partie / pause menu / sortie de partie, qu'on ne veut pas mémoriser d'une partie à l'autre.
+let musiquePause = localStorage.getItem("michben_musique_pause") === "1";
+let musiqueVolume = (() => {
+  const v = parseFloat(localStorage.getItem("michben_musique_volume"));
+  return Number.isFinite(v) && v >= 0 && v <= 1 ? v : 0.5;
+})();
 
 async function chargerPlaylisteMusique(){
   playlisteMusique = await fetch("/api/musique").then(r => r.ok ? r.json() : []).catch(() => []);
@@ -1326,19 +1337,28 @@ chargerPlaylisteMusique();
 function majBoutonMusique(){
   const btn = $("btnMusique");
   if (!btn) return;
-  btn.textContent = musiqueMutee ? "🔇" : "🔊";
-  btn.title = musiqueMutee ? "Réactiver la musique de fond" : "Couper la musique de fond";
+  btn.textContent = musiquePause ? "▶️" : "⏸️";
+  btn.title = musiquePause ? "Reprendre la musique de fond" : "Mettre la musique en pause";
 }
 majBoutonMusique();
+
+function majVolumeMusique(){
+  const audio = $("musiqueFond");
+  if (audio) audio.volume = musiqueVolume;
+  const lbl = $("musiqueVolLabel");
+  if (lbl) lbl.textContent = Math.round(musiqueVolume * 100) + "%";
+}
+majVolumeMusique();
 
 function demarrerMusique(){
   if (!playlisteMusique.length) return;
   const audio = $("musiqueFond");
-  audio.muted = musiqueMutee;
+  audio.volume = musiqueVolume;
   if (indexMusique >= playlisteMusique.length) indexMusique = 0;
   const piste = playlisteMusique[indexMusique];
   if (audio.getAttribute("src") !== piste.url) audio.src = piste.url;
-  audio.play().catch(() => {});   // autoplay refusé silencieusement : le joueur pourra réactiver au bouton
+  if (musiquePause) return;   // le joueur a mis la musique en pause : on respecte son choix
+  audio.play().catch(() => {});   // autoplay refusé silencieusement : le joueur pourra relancer au bouton ▶️
 }
 function arreterMusique(){
   const audio = $("musiqueFond");
@@ -1349,11 +1369,20 @@ $("musiqueFond").addEventListener("ended", () => {
   demarrerMusique();
 });
 $("btnMusique").onclick = () => {
-  musiqueMutee = !musiqueMutee;
-  localStorage.setItem("michben_musique_mute", musiqueMutee ? "1" : "0");
-  $("musiqueFond").muted = musiqueMutee;
+  musiquePause = !musiquePause;
+  localStorage.setItem("michben_musique_pause", musiquePause ? "1" : "0");
+  const audio = $("musiqueFond");
+  if (musiquePause) audio.pause();
+  else if (playlisteMusique.length) audio.play().catch(() => {});
   majBoutonMusique();
 };
+function ajusterVolumeMusique(delta){
+  musiqueVolume = Math.min(1, Math.max(0, Math.round((musiqueVolume + delta) * 10) / 10));
+  localStorage.setItem("michben_musique_volume", String(musiqueVolume));
+  majVolumeMusique();
+}
+$("btnMusiqueVolMoins").onclick = () => ajusterVolumeMusique(-0.1);
+$("btnMusiqueVolPlus").onclick = () => ajusterVolumeMusique(0.1);
 
 /** Porte-monnaie : historique horodaté des tickets et points, avec leur provenance. */
 async function ouvrirPorteMonnaie(){
@@ -1462,6 +1491,9 @@ const show = id => {
   
   const inGame = ["round", "between", "lobby", "waiting"].includes(id);
   $("btnQuitGame").classList.toggle("hidden", !inGame);
+  // Le bouton d'aide "?" flotte en bas à gauche : pendant une partie, cette zone est déjà occupée
+  // par la rangée de boutons (Pause, Musique...), donc on le masque pour ne plus rien recouvrir.
+  $("helpBtn")?.classList.toggle("hidden", inGame);
 };
 /** Photo du joueur si l'administration lui en a attribué une, émoji sinon. */
 const vignette = (j) => j?.photo
@@ -2619,6 +2651,7 @@ async function ouvrirJoueur(id, pseudo, avatar, photoJoueur){
     <div><small>Parties jouées</small><b>${f.partiesGlobales}</b></div>
     <div><small>Moyenne par partie</small><b>${f.moyenne}</b></div>
     <div><small>Amis</small><b>${f.amis}</b></div>
+    <div><small>Amis en commun</small><b>${f.amisCommuns ?? 0}</b></div>
     <div class="large"><small>Rang global · rang de la saison</small>
       <b>${rang(f.rangGlobal)} · ${rang(f.rangSaison)}</b></div>`;
 
