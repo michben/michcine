@@ -91,6 +91,25 @@
 
     <div id="paneMovies">
     <div class="card">
+      <p class="tag">🐻 Importer des films enfants (TMDB)</p>
+      <p style="color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6">
+        Cherche sur TMDB des films d'animation et familiaux (Disney, Pixar, DreamWorks, etc.)
+        qui ne sont pas encore dans le catalogue, et les propose prêts à ajouter — synopsis,
+        affiche, réalisateur et acteurs déjà remplis, marqués « adapté aux enfants ».
+        Nécessite une clé TMDB renseignée dans l'onglet Réglages.
+      </p>
+      <div class="row">
+        <button id="btnTmdbKidsChercher">Chercher des films enfants</button>
+        <button class="ghost" id="btnTmdbKidsTout" disabled>Tout cocher / décocher</button>
+      </div>
+      <p class="msg" id="tmdbKidsMsg"></p>
+      <div id="tmdbKidsListe"></div>
+      <div class="row hidden" id="tmdbKidsAjouterRow">
+        <button id="btnTmdbKidsAjouter">Ajouter la sélection au catalogue</button>
+      </div>
+    </div>
+
+    <div class="card">
       <p class="tag">Sélection du catalogue</p>
       <p class="msg" id="stats"></p>
       <div class="grid">
@@ -584,6 +603,89 @@ async function loadStats(){
     + Object.entries(s.parNiveau).map(([n,v]) => `${n} ${v.actifs}/${v.total}`).join(", ");
   $("stats").className = "msg";
 }
+
+/* ---------- Import de films enfants depuis TMDB ---------- */
+let tmdbKidsSuggestions = [];
+
+$("btnTmdbKidsChercher").onclick = async () => {
+  $("tmdbKidsMsg").textContent = "Recherche en cours sur TMDB…";
+  $("tmdbKidsMsg").className = "msg";
+  $("tmdbKidsListe").innerHTML = "";
+  $("tmdbKidsAjouterRow").classList.add("hidden");
+  $("btnTmdbKidsTout").disabled = true;
+
+  const res = await api("/api/admin/movies/tmdb-kids-suggestions?pages=3&limite=24");
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok){
+    $("tmdbKidsMsg").textContent = data.error === "NO_KEY"
+      ? "Aucune clé TMDB configurée : renseignez-la dans l'onglet Réglages."
+      : "Échec de la recherche TMDB.";
+    $("tmdbKidsMsg").className = "msg err";
+    return;
+  }
+
+  tmdbKidsSuggestions = data.movies || [];
+  if (!tmdbKidsSuggestions.length){
+    $("tmdbKidsMsg").textContent = "Aucun nouveau film enfant trouvé — le catalogue est déjà à jour, ou aucun résultat.";
+    $("tmdbKidsMsg").className = "msg";
+    return;
+  }
+
+  $("tmdbKidsMsg").textContent =
+    `${tmdbKidsSuggestions.length} film${tmdbKidsSuggestions.length>1?"s":""} trouvé${tmdbKidsSuggestions.length>1?"s":""}. Décochez ceux à exclure, puis ajoutez la sélection.`;
+  $("tmdbKidsMsg").className = "msg ok";
+
+  $("tmdbKidsListe").innerHTML = tmdbKidsSuggestions.map((m, i) => `
+    <div class="item">
+      <input type="checkbox" data-tmdb-kid="${i}" checked style="width:auto;flex:0 0 auto">
+      <img src="${m.poster||""}" alt="" onerror="this.style.visibility='hidden'">
+      <div>
+        <strong>${esc(m.title)}<span class="lvl">${m.difficulty||"?"}</span></strong>
+        <small>${m.year||"—"} · ${m.rating ? m.rating+"/10 · " : ""}${esc(m.director||"réalisateur non renseigné")}</small>
+      </div>
+    </div>`).join("");
+
+  $("btnTmdbKidsTout").disabled = false;
+  $("tmdbKidsAjouterRow").classList.remove("hidden");
+};
+
+$("btnTmdbKidsTout").onclick = () => {
+  const cases = $("tmdbKidsListe").querySelectorAll("[data-tmdb-kid]");
+  const toutesCochees = [...cases].every(c => c.checked);
+  cases.forEach(c => { c.checked = !toutesCochees; });
+};
+
+$("btnTmdbKidsAjouter").onclick = async () => {
+  const choisis = [...$("tmdbKidsListe").querySelectorAll("[data-tmdb-kid]")]
+    .filter(c => c.checked)
+    .map(c => tmdbKidsSuggestions[Number(c.dataset.tmdbKid)]);
+  if (!choisis.length){
+    $("tmdbKidsMsg").textContent = "Cochez au moins un film à ajouter.";
+    $("tmdbKidsMsg").className = "msg err"; return;
+  }
+  $("tmdbKidsMsg").textContent = "Ajout en cours…";
+  $("tmdbKidsMsg").className = "msg";
+
+  const res = await api("/api/admin/movies/tmdb-kids-importer", {method:"POST", body: JSON.stringify({movies: choisis})});
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok){
+    $("tmdbKidsMsg").textContent = "Échec de l'ajout.";
+    $("tmdbKidsMsg").className = "msg err"; return;
+  }
+
+  $("tmdbKidsMsg").textContent =
+    `${data.ajoutes} film${data.ajoutes>1?"s":""} ajouté${data.ajoutes>1?"s":""} au catalogue` +
+    (data.ignores ? ` (${data.ignores} déjà présent${data.ignores>1?"s":""}, ignoré${data.ignores>1?"s":""}).` : ".");
+  $("tmdbKidsMsg").className = "msg ok";
+  $("tmdbKidsListe").innerHTML = "";
+  $("tmdbKidsAjouterRow").classList.add("hidden");
+  $("btnTmdbKidsTout").disabled = true;
+  tmdbKidsSuggestions = [];
+
+  const liste = await api("/api/movies");
+  if (liste.ok){ movies = await liste.json(); render(); }
+  loadStats();
+};
 
 async function bulk(enabled){
   const res = await api("/api/admin/movies/bulk", {method:"POST", body: JSON.stringify({
