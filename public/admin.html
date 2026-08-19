@@ -489,6 +489,15 @@
           <div><label for="rPartie">Tickets gagnés par partie</label><input id="rPartie" type="number" min="0" max="100"></div>
           <div><label for="rTaux">Points pour 1 ticket (échange)</label><input id="rTaux" type="number" min="10" max="100000"></div>
           <div style="grid-column: 1 / -1;"><label for="rTmdbKey">Clé API TMDB (Pour les prochaines sorties cinéma)</label><input id="rTmdbKey" type="text" placeholder="Entrez votre clé API TheMovieDB"></div>
+          <div style="grid-column: 1 / -1;">
+            <label for="rGeoapifyKey">Clé API Geoapify (pour « Cinéma le plus proche »)</label>
+            <input id="rGeoapifyKey" type="text" placeholder="Entrez votre clé API Geoapify">
+            <p style="color:var(--muted);font-size:12px;margin:4px 0 0;line-height:1.5">
+              Recommandée : sans elle, la recherche s'appuie uniquement sur OpenStreetMap (gratuit,
+              mais parfois indisponible depuis un serveur hébergé). Créez une clé gratuite (3000
+              requêtes/jour) sur <b>geoapify.com</b> → « MyProjects » → créer un projet → copier la clé.
+            </p>
+          </div>
           <div><label for="rGrace">Délai après la 1re bonne réponse (s)</label><input id="rGrace" type="number" min="0" max="120"></div>
           <div>
             <label for="rVitesse">Dévoilement du synopsis (ms) — 0 pour désactiver</label>
@@ -1149,7 +1158,7 @@ window.importNowPlaying = function(idx) {
 /* ---------- Réglages du jeu ---------- */
 let reglages = null;
 
-const CHAMPS = { rTmdbKey:"tmdbApiKey", rDuree:"roundDuration", rBase:"basePoints", rDepart:"creditsDepart",
+const CHAMPS = { rTmdbKey:"tmdbApiKey", rGeoapifyKey:"geoapifyApiKey", rDuree:"roundDuration", rBase:"basePoints", rDepart:"creditsDepart",
                  rPartie:"creditsParPartie", rTaux:"pointsParTicket", rGrace:"graceApresPremier",
                  rVitesse:"vitesseSynopsis", rParties:"partiesClasseesParJour",
                  rDonMax:"transfertMax", rDonJour:"transfertParJour", rCoeurs:"coeurs",
@@ -1201,7 +1210,7 @@ for (const id of ["rZoom","rFlou","rCadrage"])
 $("btnSaveReglages").onclick = async () => {
   const corps = { indices: {} };
   for (const [champ, cle] of Object.entries(CHAMPS)) {
-    if (cle === "tmdbApiKey") corps[cle] = $(champ).value.trim();
+    if (cle === "tmdbApiKey" || cle === "geoapifyApiKey") corps[cle] = $(champ).value.trim();
     else corps[cle] = Number($(champ).value);
   }
 
