@@ -93,6 +93,7 @@
       <button id="tabPub" aria-selected="false">Publicités</button>
       <button id="tabApparence" aria-selected="false">Apparence</button>
       <button id="tabClassement" aria-selected="false">Partie classée</button>
+      <button id="tabSondages" aria-selected="false">🍿 Sondages</button>
     </div>
 
     <div id="paneMovies">
@@ -453,6 +454,34 @@
       </div>
     </div>
 
+    <div id="paneSondages" class="hidden">
+      <div class="card">
+        <p class="tag">🍿 Créer un sondage</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 10px;line-height:1.6">
+          Un sondage à deux camps (ex. Pop-corn salé contre Pop-corn sucré), affiché à tous les
+          joueurs connectés avec un résultat en direct sous forme de pourcentages — jamais qui a
+          voté quoi. Un joueur peut changer son vote, la barre se met à jour aussitôt pour tout le
+          monde.
+        </p>
+        <label for="sdQuestion">Question (facultatif)</label>
+        <input id="sdQuestion" placeholder="Pop-corn : salé ou sucré ?" maxlength="120">
+        <div class="row" style="margin-top:12px">
+          <input id="sdOptionAEmoji" placeholder="🧂" maxlength="4" style="max-width:70px;text-align:center">
+          <input id="sdOptionATexte" placeholder="Salé" maxlength="40">
+        </div>
+        <div class="row" style="margin-top:10px">
+          <input id="sdOptionBEmoji" placeholder="🍬" maxlength="4" style="max-width:70px;text-align:center">
+          <input id="sdOptionBTexte" placeholder="Sucré" maxlength="40">
+        </div>
+        <div class="row" style="margin-top:14px"><button id="btnSdCreer">Publier le sondage</button></div>
+        <p class="msg" id="sdMsg"></p>
+      </div>
+      <div class="card">
+        <p class="tag" id="sdListeTag">Sondages</p>
+        <div id="sdListe"></div>
+      </div>
+    </div>
+
     <div id="paneNowPlaying" class="hidden">
       <div class="card">
         <p class="tag" id="nowPlayingCount">Actuellement au cinéma</p>
@@ -697,6 +726,7 @@
           <input type="checkbox" id="ccEnfant" style="width:auto">
           🐻 Compte enfant
         </label>
+        <p style="color:var(--muted);font-size:13px;margin:6px 0 0" id="ccEnfantCompteur"></p>
         <div class="row" style="margin-top:14px"><button id="btnCcCreer">Créer le compte</button></div>
         <p class="msg" id="ccMsg"></p>
       </div>
@@ -732,6 +762,10 @@
           La photo de profil se colle sous forme d'adresse https. Elle s'impose au joueur,
           qui ne peut ni la changer ni la retirer. Videz le champ pour revenir à l'émoji.
           Les comptes les plus récents apparaissent en premier.</p>
+        <label style="display:flex;align-items:center;gap:9px;text-transform:none;letter-spacing:0;font-size:14px;color:var(--chalk);margin:0 0 10px">
+          <input type="checkbox" id="filtreEnfantSeuls" style="width:auto">
+          🐻 N'afficher que les comptes enfant
+        </label>
         <div id="userList"></div>
       </div>
     </div>
@@ -1168,7 +1202,8 @@ function tab(which){
                                       ["reports","tabReports","paneReports"],
                                       ["reglages","tabReglages","paneReglages"],
                                       ["sorties","tabSorties","paneSorties"],
-                                      ["nowplaying","tabNowPlaying","paneNowPlaying"]]) {
+                                      ["nowplaying","tabNowPlaying","paneNowPlaying"],
+                                      ["sondages","tabSondages","paneSondages"]]) {
     $(onglet).setAttribute("aria-selected", which === nom);
     $(volet).classList.toggle("hidden", which !== nom);
   }
@@ -1179,11 +1214,12 @@ function tab(which){
   if (which === "pub") loadPublicites();
   if (which === "apparence") loadApparence();
   if (which === "classement") loadClassement();
-  if (which === "users") loadUsers();
+  if (which === "users") { loadUsers(); chargerCompteurEnfant(); }
   if (which === "reports"){ loadReports(); loadConversations(); }
   if (which === "reglages"){ etatSecurite(); chargerReglages(); chargerAide(); }
   if (which === "sorties") loadSorties();
   if (which === "nowplaying") loadNowPlaying();
+  if (which === "sondages") loadSondages();
 }
 $("tabMovies").onclick = () => tab("movies");
 $("tabSugg").onclick = () => tab("sugg");
@@ -1198,6 +1234,7 @@ $("tabReports").onclick = () => tab("reports");
 $("tabReglages").onclick = () => tab("reglages");
 $("tabSorties").onclick = () => tab("sorties");
 $("tabNowPlaying").onclick = () => tab("nowplaying");
+$("tabSondages").onclick = () => tab("sondages");
 
 
 $("btnLoadSorties").onclick = loadSorties;
@@ -2291,7 +2328,9 @@ function renderUsers(){
   $("userListAttente").innerHTML = enAttente.map(ligneJoueur).join("");
 
   $("userCount").textContent = `${players.length} joueur${players.length>1?"s":""} inscrit${players.length>1?"s":""}`;
-  $("userList").innerHTML = players.map(ligneJoueur).join("");
+  const affiches = $("filtreEnfantSeuls").checked ? players.filter(u => u.role === "enfant") : players;
+  $("userList").innerHTML = affiches.map(ligneJoueur).join("") ||
+    `<p class="note" style="margin:0">Aucun compte enfant pour l'instant.</p>`;
 
   // Les deux cartes partagent le même gabarit : on branche les actions une seule fois
   // sur l'ensemble de l'onglet plutôt que sur chaque liste séparément.
@@ -2370,6 +2409,76 @@ function motDePasseSimple(){
   return mots[Math.floor(Math.random() * mots.length)] + Math.floor(10 + Math.random() * 90);
 }
 $("btnCcGenerer").onclick = () => { $("ccMotDePasse").value = motDePasseSimple(); };
+$("filtreEnfantSeuls").onchange = renderUsers;
+
+/** Affiche combien de comptes enfant existent déjà (sur les 5 possibles), et bloque
+ *  la création d'un de plus une fois le plafond atteint — la case reste utilisable
+ *  pour créer un compte adulte normal. */
+/* ---------- Sondages "vs" ---------- */
+let sondages = [];
+
+async function loadSondages(){
+  const res = await api("/api/admin/sondages");
+  if (!res.ok) return;
+  sondages = await res.json();
+  renderSondagesAdmin();
+}
+
+function renderSondagesAdmin(){
+  $("sdListeTag").textContent = `Sondages — ${sondages.length}`;
+  $("sdListe").innerHTML = sondages.length ? sondages.map(s => `
+    <div class="item" data-sondage="${s.id}" style="flex-wrap:wrap">
+      <div style="flex:1 1 100%">
+        <strong>${s.question ? esc(s.question) : `${s.optionA.emoji} ${esc(s.optionA.texte)} / ${s.optionB.emoji} ${esc(s.optionB.texte)}`}</strong>
+        <span class="lvl">${s.actif ? "actif" : "désactivé"}</span>
+        <small>${s.total} vote${s.total>1?"s":""} · ${s.optionA.emoji} ${esc(s.optionA.texte)} ${s.pourcentA}%
+          — ${s.pourcentB}% ${esc(s.optionB.texte)} ${s.optionB.emoji}</small>
+      </div>
+      <button class="ghost" data-sd-toggle="${s.id}">${s.actif ? "Désactiver" : "Réactiver"}</button>
+      <button class="danger" data-sd-del="${s.id}">Supprimer</button>
+    </div>`).join("") : `<p class="note" style="margin:0">Aucun sondage pour l'instant.</p>`;
+
+  $("sdListe").querySelectorAll("[data-sd-toggle]").forEach(b => b.onclick = async () => {
+    const s = sondages.find(x => x.id === b.dataset.sdToggle);
+    await api(`/api/admin/sondages/${encodeURIComponent(s.id)}`, {method:"PUT", body: JSON.stringify({actif: !s.actif})});
+    loadSondages();
+  });
+  $("sdListe").querySelectorAll("[data-sd-del]").forEach(b => b.onclick = async () => {
+    if (!confirm("Supprimer définitivement ce sondage et ses votes ?")) return;
+    await api(`/api/admin/sondages/${encodeURIComponent(b.dataset.sdDel)}`, {method:"DELETE"});
+    loadSondages();
+  });
+}
+
+$("btnSdCreer").onclick = async () => {
+  const question = $("sdQuestion").value.trim();
+  const optionA = { emoji: $("sdOptionAEmoji").value.trim(), texte: $("sdOptionATexte").value.trim() };
+  const optionB = { emoji: $("sdOptionBEmoji").value.trim(), texte: $("sdOptionBTexte").value.trim() };
+  if (!optionA.texte || !optionB.texte){
+    $("sdMsg").textContent = "Les deux options ont besoin d'un texte.";
+    $("sdMsg").className = "msg err"; return;
+  }
+  const res = await api("/api/admin/sondages", {method:"POST", body: JSON.stringify({question, optionA, optionB})});
+  if (!res.ok){
+    $("sdMsg").textContent = "Échec de la création.";
+    $("sdMsg").className = "msg err"; return;
+  }
+  $("sdMsg").textContent = "Sondage publié — visible immédiatement par tous les joueurs.";
+  $("sdMsg").className = "msg ok";
+  $("sdQuestion").value = ""; $("sdOptionAEmoji").value = ""; $("sdOptionATexte").value = "";
+  $("sdOptionBEmoji").value = ""; $("sdOptionBTexte").value = "";
+  loadSondages();
+};
+
+async function chargerCompteurEnfant(){
+  const res = await api("/api/admin/comptes-enfant");
+  if (!res.ok) return;
+  const d = await res.json();
+  $("ccEnfantCompteur").textContent = `${d.utilises} / ${d.max} comptes enfant déjà créés` +
+    (d.restants === 0 ? " — plafond atteint." : "");
+  $("ccEnfant").disabled = d.restants === 0;
+  if (d.restants === 0) $("ccEnfant").checked = false;
+}
 
 $("btnCcCreer").onclick = async () => {
   const pseudo = $("ccPseudo").value.trim();
@@ -2387,7 +2496,8 @@ $("btnCcCreer").onclick = async () => {
   const data = await res.json().catch(() => ({}));
   if (!res.ok){
     const messages = {PSEUDO_PRIS: "Cet identifiant est déjà pris.", PSEUDO_INVALIDE: "Identifiant invalide.",
-                       MOT_DE_PASSE_COURT: "Mot de passe trop court."};
+                       MOT_DE_PASSE_COURT: "Mot de passe trop court.",
+                       MAX_COMPTES_ENFANT_ATTEINT: `Plafond de ${data.max || 5} comptes enfant déjà atteint.`};
     $("ccMsg").textContent = messages[data.error] || "Échec de la création.";
     $("ccMsg").className = "msg err"; return;
   }
@@ -2396,6 +2506,7 @@ $("btnCcCreer").onclick = async () => {
   $("ccMsg").className = "msg ok";
   $("ccPseudo").value = ""; $("ccMotDePasse").value = ""; $("ccEnfant").checked = false;
   loadUsers();
+  if (enfant) chargerCompteurEnfant();
 };
 
 $("btnTousFondateurs").onclick = async () => {

@@ -293,6 +293,22 @@
   .teamboard div{flex:1;background:var(--card);border-radius:12px;padding:14px;text-align:center}
   .teamboard div b{display:block;font-family:'JetBrains Mono',monospace;font-size:26px;margin-top:4px}
   .teamboard .a b{color:var(--beam)}.teamboard .b b{color:var(--teal)}
+  .sondageCard{background:var(--card);border-radius:14px;padding:16px;margin-bottom:14px}
+  .sondageQuestion{font-weight:700;margin:0 0 12px;font-size:15px}
+  .sondageChoix{display:flex;gap:10px}
+  .sondageChoix button{flex:1;padding:14px 10px;font-size:15px;border-radius:12px;
+    border:1px solid rgba(237,232,220,.15);background:var(--velvet);color:var(--chalk);cursor:pointer}
+  .sondageChoix button.voteA{border-color:var(--beam)}
+  .sondageChoix button.voteB{border-color:var(--teal)}
+  .sondageBarre{display:flex;height:26px;border-radius:999px;overflow:hidden;margin:12px 0 6px;background:var(--velvet)}
+  .sondageBarre .a{background:var(--beam);transition:width .4s ease}
+  .sondageBarre .b{background:var(--teal);transition:width .4s ease}
+  .sondageResultat{display:flex;justify-content:space-between;font-size:13px;color:var(--muted)}
+  .sondageMonVote{display:inline-flex;align-items:center;gap:8px;font-size:13px;margin-top:10px;color:var(--muted)}
+  .sondageAnneau{width:30px;height:30px;border-radius:50%;display:inline-flex;align-items:center;
+    justify-content:center;font-size:16px;background:var(--velvet)}
+  .sondageAnneau.anneauA{box-shadow:0 0 0 3px var(--beam)}
+  .sondageAnneau.anneauB{box-shadow:0 0 0 3px var(--teal)}
   .note{color:var(--muted);font-size:13px;margin-top:14px;line-height:1.5}
   footer{margin-top:34px;padding-top:20px;border-top:1px solid rgba(237,232,220,.1);text-align:center}
   footer p{color:var(--muted);font-size:13px;margin:0 0 12px}
@@ -976,6 +992,7 @@ html.mode-enfant-actif .wrap{padding-top:48px}
       <button class="ghost" id="btnExchange">Espace échange</button>
       <button class="ghost" id="btnBoard">Classement</button>
       <button class="ghost" id="btnQuetes">Quêtes <span id="badgeQuetes" class="pastille hidden">0</span></button>
+      <button class="ghost" id="btnSondages">🍿 Sondages <span id="badgeSondages" class="pastille hidden">0</span></button>
       <button class="ghost" id="btnFriends">Amis <span id="badgeAmis" class="pastille hidden">0</span></button>
       <button class="ghost" id="btnSignets">🔖 Mes signets</button>
       <button class="ghost" id="btnKidMode" aria-pressed="false" title="Mode enfant : uniquement des films pour enfants">🐻</button>
@@ -1087,6 +1104,21 @@ html.mode-enfant-actif .wrap{padding-top:48px}
     </div>
   </div>
 
+  <!-- MODALE : SONDAGES "VS" -->
+  <div class="modal-overlay" id="sondagesModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>🍿 Sondages</h2>
+        <button class="close-btn" id="closeSondagesBtn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="note" style="margin-top:0">Votez, et regardez le résultat évoluer en direct — jamais qui a voté quoi.</p>
+        <div id="sondagesListe"></div>
+        <p class="feedback" id="sondagesMsg"></p>
+      </div>
+    </div>
+  </div>
+
   <!-- MODALE : PORTE-MONNAIE (historique des transactions) -->
   <div class="modal-overlay" id="walletModal">
     <div class="modal-content">
@@ -1156,7 +1188,7 @@ html.mode-enfant-actif .wrap{padding-top:48px}
       </div>
       <ol class="rank" id="interRank"></ol>
       <div class="row">
-        <button id="btnNext">Question suivante</button>
+        <button id="btnNext" title="Question suivante" aria-label="Question suivante" style="font-size:22px">⏭️</button>
         <button id="btnSignet" class="ghost" style="flex:0 0 auto">🔖 À voir plus tard</button>
         <button id="btnReport" class="ghost" style="flex:0 0 auto">⚑ Signaler</button>
       </div>
@@ -2134,6 +2166,7 @@ async function loadSession(){
     if (!me.pseudoChosen) return firstVisit();
     majBadgeAmis();
     chargerQuetes(); // Met à jour le niveau au chargement
+    chargerSondages(); // Pastille des sondages en attente de vote
     verifierTicketRoue(); // Prévient si un tour gratuit de la roue n'a pas encore été utilisé
     $("hello").innerHTML = `Bonjour ${esc(me.pseudo)}` +
       (["moderateur","admin"].includes(me.role) ? `<span class="badge-role">${esc(me.role)}</span>` : "");
@@ -3827,6 +3860,92 @@ async function afficherSignets(){
 $("btnSignets").onclick = () => { $("signetsModal").classList.add("active"); afficherSignets(); };
 $("closeSignetsBtn").onclick = () => $("signetsModal").classList.remove("active");
 
+/* ---------- Sondages "vs" (pop-corn salé ou sucré ?, etc.) ---------- */
+let sondagesActifs = [];
+
+function sondageHtml(s){
+  const monVote = s.monVote;
+  const total = s.total || 0;
+  const boutonsOuResultat = monVote
+    ? `<div class="sondageBarre"><div class="a" style="width:${s.pourcentA}%"></div><div class="b" style="width:${s.pourcentB}%"></div></div>
+       <div class="sondageResultat">
+         <span>${s.optionA.emoji} ${esc(s.optionA.texte)} — ${s.pourcentA}%</span>
+         <span>${esc(s.optionB.texte)} ${s.optionB.emoji} — ${s.pourcentB}%</span>
+       </div>
+       <div class="sondageMonVote">
+         <span class="sondageAnneau ${monVote==="A"?"anneauA":"anneauB"}">${vignette(me)}</span>
+         Vous avez voté ${monVote==="A"?s.optionA.emoji+" "+esc(s.optionA.texte):s.optionB.emoji+" "+esc(s.optionB.texte)}
+         · ${total} vote${total>1?"s":""} au total
+       </div>`
+    : `<div class="sondageChoix">
+         <button class="voteA" data-sondage-vote="${s.id}" data-cote="A">${s.optionA.emoji}<br>${esc(s.optionA.texte)}</button>
+         <button class="voteB" data-sondage-vote="${s.id}" data-cote="B">${s.optionB.emoji}<br>${esc(s.optionB.texte)}</button>
+       </div>`;
+  return `<div class="sondageCard" data-sondage-id="${s.id}">
+    ${s.question ? `<p class="sondageQuestion">${esc(s.question)}</p>` : ""}
+    ${boutonsOuResultat}
+  </div>`;
+}
+
+function renderSondages(){
+  $("sondagesListe").innerHTML = sondagesActifs.length
+    ? sondagesActifs.map(sondageHtml).join("")
+    : `<p class="note" style="margin:0">Aucun sondage en ce moment.</p>`;
+  $("sondagesListe").querySelectorAll("[data-sondage-vote]").forEach(b => b.onclick = async () => {
+    const res = await fetch(`/api/sondages/${encodeURIComponent(b.dataset.sondageVote)}/voter`, {
+      method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({cote: b.dataset.cote}),
+    });
+    if (!res.ok){
+      $("sondagesMsg").textContent = "Vote impossible pour l'instant.";
+      $("sondagesMsg").className = "feedback bad";
+      return;
+    }
+    const s = await res.json();
+    const i = sondagesActifs.findIndex(x => x.id === s.id);
+    if (i >= 0) sondagesActifs[i] = s; else sondagesActifs.push(s);
+    renderSondages();
+    majBadgeSondages();
+  });
+}
+
+async function chargerSondages(){
+  const r = await fetch("/api/sondages").then(x => x.ok ? x.json() : []).catch(() => []);
+  sondagesActifs = Array.isArray(r) ? r : [];
+  renderSondages();
+  majBadgeSondages();
+}
+
+/** Pastille : nombre de sondages actifs auxquels ce compte n'a pas encore répondu. */
+function majBadgeSondages(){
+  const nonVotes = sondagesActifs.filter(s => !s.monVote).length;
+  $("badgeSondages").textContent = nonVotes;
+  $("badgeSondages").classList.toggle("hidden", nonVotes === 0);
+}
+
+$("btnSondages").onclick = () => { $("sondagesModal").classList.add("active"); chargerSondages(); };
+$("closeSondagesBtn").onclick = () => $("sondagesModal").classList.remove("active");
+$("sondagesModal").onclick = e => { if (e.target.id === "sondagesModal") $("sondagesModal").classList.remove("active"); };
+
+// Résultat en direct : si la modale est ouverte, la barre et les pourcentages bougent
+// tout seuls dès qu'un autre joueur vote, sans jamais révéler qui a voté quoi.
+socket.on("sondage:maj", (s) => {
+  const i = sondagesActifs.findIndex(x => x.id === s.id);
+  if (i >= 0){
+    // On garde le "monVote" déjà connu localement : la diffusion générale ne le contient jamais.
+    sondagesActifs[i] = { ...sondagesActifs[i], ...s };
+  } else if (s.actif) {
+    sondagesActifs.push({ ...s, monVote: null });
+  }
+  if (!s.actif) sondagesActifs = sondagesActifs.filter(x => x.id !== s.id);
+  if (!$("sondagesModal").classList.contains("hidden") && $("sondagesModal").classList.contains("active")) renderSondages();
+  majBadgeSondages();
+});
+socket.on("sondage:supprime", ({id}) => {
+  sondagesActifs = sondagesActifs.filter(x => x.id !== id);
+  if ($("sondagesModal").classList.contains("active")) renderSondages();
+  majBadgeSondages();
+});
+
 $("btnModeration").onclick = async () => {
   $("modList").innerHTML = "";
   $("modEmpty").textContent = "Chargement…";
@@ -4206,11 +4325,33 @@ async function solo(chemin, corps){
 function majCoeurs(restants, max, casse){
   const total = max ?? state.coeursMax ?? 3;
   state.coeurs = restants;
+  // En partie à plusieurs, cœurs épuisés = éliminé : il peut regarder la suite ou
+  // quitter le salon, mais ne répond plus (voir afficherEtatElimination()).
+  state.elimine = restants <= 0;
   $("coeurs").innerHTML = Array.from({length: total}, (_, i) => {
     const perdu = i >= restants;
     const vientDeCasser = casse && i === restants;
     return `<span class="${perdu ? "perdu" : ""} ${vientDeCasser ? "casse" : ""}">❤️</span>`;
   }).join("");
+}
+
+/** Un joueur éliminé (cœurs épuisés) en partie à plusieurs ne répond plus : il ne peut
+ *  que suivre la partie jusqu'au bout, ou quitter le salon. En solo/classé, l'élimination
+ *  arrête directement la partie ailleurs — cet écran ne le concerne pas. */
+function afficherEtatElimination(){
+  if (!state.elimine || SANS_RESEAU.includes(state.mode)) return false;
+  $("choices").innerHTML = `
+    <p class="note" style="margin:0;text-align:center;grid-column:1/-1">
+      💀 Cœurs épuisés — vous ne pouvez plus répondre. Vous pouvez suivre la partie jusqu'au
+      bout, ou quitter le salon.
+    </p>
+    <div class="row" style="justify-content:center;margin-top:10px;grid-column:1/-1">
+      <button class="ghost" id="btnQuitterElimine">Quitter le salon</button>
+    </div>`;
+  $("btnQuitterElimine").onclick = quitterPartie;
+  $("hints").innerHTML = "";
+  $("btnSkip").classList.add("hidden");
+  return true;
 }
 
 function afficherManche(m){
@@ -4541,6 +4682,7 @@ socket.on("round:start", ({roundIndex,total,synopsis,duration,hintCosts,hintCred
   $("roundPlayers").innerHTML = "";
   $("guessFeedback").textContent=""; $("guessFeedback").className="feedback";
   renderHints();
+  afficherEtatElimination();
   const demarrerManche = () => { derouler(synopsis); runBeam(duration); show("round"); };
   // Le décompte 3-2-1 n'accueille que le tout début de la partie, pas chaque manche.
   if (roundIndex === 0) compteARebours(demarrerManche); else demarrerManche();
@@ -4613,10 +4755,10 @@ function renderChoices(list){
   });
 }
 
-socket.on("player:answered", ({pseudo, team}) => {
+socket.on("player:answered", ({pseudo, team, points}) => {
   const li = document.createElement("li");
   if (team) li.className = team;
-  li.textContent = `${pseudo} a trouvé`;
+  li.textContent = `${pseudo} ${points > 0 ? "a trouvé" : "a mal répondu"}`;
   $("roundPlayers").prepend(li);
 });
 
