@@ -98,6 +98,12 @@ const REGLAGES_DEFAUT = {
   pubMaxParCycle: 5,     // Roue : nombre de tours "regarder une pub" autorisés par cycle de recharge.
   pubHeureRecharge: 18,  // Heure (0-23) d'ancrage de la recharge des pubs — comme les 18h de la roue
                          // elle-même ; le cycle dure 12h, donc la recharge a aussi lieu 12h plus tôt/tard.
+  afficherRadio: true,   // Affiche (ou masque entièrement, boutons compris) la radio d'ambiance
+                         // sur toutes les pages — réglable depuis la console (onglet Réglages).
+  // Logos affichés sur les fiches de « Cinéma le plus proche », selon l'enseigne détectée dans
+  // le nom du cinéma (UGC / MK2 / Gaumont) ou l'image "indépendant" par défaut pour les autres
+  // salles. Chaque valeur est soit "" (rien d'uploadé), soit une image encodée en base64.
+  logosCinema: { ugc: "", mk2: "", gaumont: "", independant: "" },
   creditsDepart: 12,
   creditsParPartie: 4,
   pointsParTicket: 250,
@@ -406,6 +412,38 @@ app.post("/api/admin/favicon", requireAdmin, (req, res) => {
   }
 });
 
+/**
+ * Logos des enseignes de cinéma (UGC, MK2, Gaumont) et logo générique « indépendant »,
+ * affichés sur les fiches de résultat de « Cinéma le plus proche ». Stockés directement dans
+ * REGLAGES (comme le reste de la config) plutôt qu'en fichier sur disque : contrairement au
+ * favicon, ça survit à un redéploiement même sans disque persistant sur l'hébergeur.
+ */
+const LOGOS_CINEMA_CLES = ["ugc", "mk2", "gaumont", "independant"];
+app.post("/api/admin/logos-cinema", requireAdmin, (req, res) => {
+  try {
+    const { cle, image } = req.body || {};
+    if (!LOGOS_CINEMA_CLES.includes(cle)) return res.status(400).json({ error: "CLE_INVALIDE" });
+    if (!REGLAGES.logosCinema) REGLAGES.logosCinema = { ugc: "", mk2: "", gaumont: "", independant: "" };
+    if (!image) {
+      // image vide/absente = on retire le logo pour cette enseigne
+      REGLAGES.logosCinema[cle] = "";
+      sauver("reglages", REGLAGES);
+      return res.json({ ok: true, logosCinema: REGLAGES.logosCinema });
+    }
+    if (!/^data:image\/(png|jpe?g|webp|gif|svg\+xml);base64,/.test(image))
+      return res.status(400).json({ error: "IMAGE_INVALIDE" });
+    // ~1.4 Mo de base64 ≈ 1 Mo d'image d'origine : large pour un logo, mais on borne quand même
+    // pour éviter qu'un fichier trop lourd n'alourdisse chaque sauvegarde des réglages.
+    if (image.length > 1_400_000) return res.status(400).json({ error: "IMAGE_TROP_LOURDE" });
+    REGLAGES.logosCinema[cle] = image;
+    sauver("reglages", REGLAGES);
+    res.json({ ok: true, logosCinema: REGLAGES.logosCinema });
+  } catch (error) {
+    console.error("Erreur upload logo cinéma:", error);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+});
+
 app.get("/api/admin/reglages", requireAdmin, (_req, res) => res.json(REGLAGES));
 
 app.put("/api/admin/reglages", requireAdmin, (req, res) => {
@@ -430,6 +468,7 @@ app.put("/api/admin/reglages", requireAdmin, (req, res) => {
   if (typeof r.adsterraApiKey === 'string') REGLAGES.adsterraApiKey = r.adsterraApiKey;
   REGLAGES.pubMaxParCycle   = borne(r.pubMaxParCycle, 1, 50, REGLAGES.pubMaxParCycle);
   REGLAGES.pubHeureRecharge = borne(r.pubHeureRecharge, 0, 23, REGLAGES.pubHeureRecharge);
+  if (typeof r.afficherRadio === "boolean") REGLAGES.afficherRadio = r.afficherRadio;
   REGLAGES.animationsAvancees = r.animationsAvancees !== false;
   REGLAGES.coeurs           = borne(r.coeurs, 1, 10, REGLAGES.coeurs);
   REGLAGES.xpBase           = borne(r.xpBase, 10, 10000, REGLAGES.xpBase);
@@ -2273,7 +2312,10 @@ app.get("/api/movies/upcoming", async (req, res) => {
     if (!tmdbKey) return res.json({ error: "NO_KEY", movies: [] });
     
     const isAdmin = motDePasseAdminValide(req.get("x-admin-token"));
-    const estCompteEnfant = estEnfant(userFromCookie(req.headers.cookie));
+    // Un compte "enfant" est toujours filtré, mais aussi n'importe quel compte qui a activé le
+    // bouton "Mode enfant" en cours de session (paramètre ?kids=1) : sans ça, ce mode ne
+    // s'appliquait qu'au choix des films de quiz, jamais aux Sorties Ciné / À l'affiche.
+    const estCompteEnfant = estEnfant(userFromCookie(req.headers.cookie)) || req.query.kids === "1";
 
     const now = new Date();
     const day = now.getDay();
@@ -2353,7 +2395,9 @@ app.get("/api/movies/now_playing", async (req, res) => {
     if (!tmdbKey) return res.json({ error: "NO_KEY", movies: [] });
     
     const isAdmin = motDePasseAdminValide(req.get("x-admin-token"));
-    const estCompteEnfant = estEnfant(userFromCookie(req.headers.cookie));
+    // Voir le commentaire équivalent dans /api/movies/upcoming : le mode enfant activé en session
+    // (pas seulement un compte enfant dédié) doit aussi filtrer la liste "Actuellement au cinéma".
+    const estCompteEnfant = estEnfant(userFromCookie(req.headers.cookie)) || req.query.kids === "1";
     const url = `https://api.themoviedb.org/3/movie/now_playing?api_key=${tmdbKey}&language=fr-FR&region=FR`;
     
     const response = await fetch(url);
@@ -2457,6 +2501,17 @@ const ENSEIGNES_CINEMA = [
 ];
 const enseigneDepuisNom = (nom) =>
   (ENSEIGNES_CINEMA.find((e) => e.motif.test(nom || "")) || {}).nom || "Cinéma indépendant";
+
+/** Logo à afficher sur une fiche cinéma, selon son enseigne — configuré (upload d'image) depuis
+ *  la console admin. Les enseignes non reconnues (ou sans logo dédié uploadé) reçoivent le logo
+ *  "indépendant" générique, s'il a été configuré ; sinon aucun logo n'est affiché. */
+function logoPourEnseigne(enseigne) {
+  const logos = REGLAGES.logosCinema || {};
+  if (enseigne === "UGC" && logos.ugc) return logos.ugc;
+  if (enseigne === "MK2" && logos.mk2) return logos.mk2;
+  if (enseigne === "Gaumont" && logos.gaumont) return logos.gaumont;
+  return logos.independant || "";
+}
 
 /** Distance à vol d'oiseau entre deux points GPS, en kilomètres (formule de haversine). */
 function distanceKm(lat1, lon1, lat2, lon2) {
@@ -2603,7 +2658,8 @@ app.get("/api/cinemas/proches", async (req, res) => {
     }
 
     cinemas.sort((a, b) => a.distanceKm - b.distanceKm);
-    res.json({ cinemas: cinemas.slice(0, 20), source });
+    const cinemasAvecLogo = cinemas.slice(0, 20).map((c) => ({ ...c, logo: logoPourEnseigne(c.enseigne) }));
+    res.json({ cinemas: cinemasAvecLogo, source });
   } catch (err) {
     console.error("Erreur cinémas proches:", err);
     res.status(500).json({ error: "INTERNAL_ERROR", cinemas: [] });
@@ -2658,6 +2714,7 @@ app.get("/api/birthdays", async (req, res) => {
 
 app.get("/api/config", (_req, res) => res.json({
   tipUrl: CONFIG.TIP_URL, maxPlayers: CONFIG.MAX_PLAYERS, pointsParTicket: CONFIG.POINTS_PAR_TICKET, animationsAvancees: REGLAGES.animationsAvancees,
+  afficherRadio: REGLAGES.afficherRadio,
   theme: REGLAGES.theme,
 }));
 
