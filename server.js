@@ -32,8 +32,8 @@ import { mountAuth, userFromCookie, addRankedPoints,
          creerCompteAdmin, sansMotDePasse,
          genererCodeParrainGagne, roueGratuiteDisponible, marquerRoueGratuiteUtilisee,
          roueTirPayantDisponible, marquerTirPayantRoueUtilise, ROUE_MAX_TIRS_PAYANTS,
-         roueTirPubDisponible, marquerTirPubRoueUtilise, ROUE_MAX_TIRS_PUB,
-         roueVerrouPubJusqua } from "./auth-x.js";
+         roueTirPubDisponible, marquerTirPubRoueUtilise,
+         roueTirsPubCycle, roueProchaineRechargePub } from "./auth-x.js";
 
 const app = express();
 app.use(express.json({ limit: '15mb' })); // Limite augmentée pour l'upload d'images et de musique
@@ -95,6 +95,9 @@ const REGLAGES_DEFAUT = {
   adsterraApiKey: "",   // Réservée pour un usage futur (ex. récupération de statistiques via l'API
                         // éditeur Adsterra) — non nécessaire pour diffuser une publicité « Lien
                         // direct » Adsterra, qui se configure uniquement via l'onglet Publicités.
+  pubMaxParCycle: 5,     // Roue : nombre de tours "regarder une pub" autorisés par cycle de recharge.
+  pubHeureRecharge: 18,  // Heure (0-23) d'ancrage de la recharge des pubs — comme les 18h de la roue
+                         // elle-même ; le cycle dure 12h, donc la recharge a aussi lieu 12h plus tôt/tard.
   creditsDepart: 12,
   creditsParPartie: 4,
   pointsParTicket: 250,
@@ -425,6 +428,8 @@ app.put("/api/admin/reglages", requireAdmin, (req, res) => {
   if (typeof r.tmdbApiKey === 'string') REGLAGES.tmdbApiKey = r.tmdbApiKey;
   if (typeof r.geoapifyApiKey === 'string') REGLAGES.geoapifyApiKey = r.geoapifyApiKey;
   if (typeof r.adsterraApiKey === 'string') REGLAGES.adsterraApiKey = r.adsterraApiKey;
+  REGLAGES.pubMaxParCycle   = borne(r.pubMaxParCycle, 1, 50, REGLAGES.pubMaxParCycle);
+  REGLAGES.pubHeureRecharge = borne(r.pubHeureRecharge, 0, 23, REGLAGES.pubHeureRecharge);
   REGLAGES.animationsAvancees = r.animationsAvancees !== false;
   REGLAGES.coeurs           = borne(r.coeurs, 1, 10, REGLAGES.coeurs);
   REGLAGES.xpBase           = borne(r.xpBase, 10, 10000, REGLAGES.xpBase);
@@ -1828,11 +1833,12 @@ app.get("/api/roue", (req, res) => {
         gratuitDisponible: roueGratuiteDisponible(user.id, roue.jour),
         tirPayantDisponible: roueTirPayantDisponible(user.id, roue.jour),
         tirsPayantsMax: ROUE_MAX_TIRS_PAYANTS,
-        tirPubDisponible: roueTirPubDisponible(user.id),
-        tirsPubMax: ROUE_MAX_TIRS_PUB,
-        // Verrou de 12 h une fois les 5 pubs épuisées (pas remis à zéro à minuit, contrairement
-        // au tour gratuit et aux tours payants) — le client l'utilise pour afficher un décompte.
-        pubVerrouJusqua: roueVerrouPubJusqua(user.id),
+        tirPubDisponible: roueTirPubDisponible(user.id, REGLAGES.pubHeureRecharge, REGLAGES.pubMaxParCycle),
+        tirsPubMax: REGLAGES.pubMaxParCycle,
+        tirsPubUtilises: roueTirsPubCycle(user.id, REGLAGES.pubHeureRecharge),
+        // Prochaine recharge du quota de pubs (cycle fixe de 12h ancré sur pubHeureRecharge,
+        // 18h par défaut, donc aussi 6h) — le client s'en sert pour un compte à rebours.
+        prochaineRechargePub: new Date(roueProchaineRechargePub(REGLAGES.pubHeureRecharge)).toISOString(),
         coutTour: COUT_TOUR_ROUE,
         credits: getCredits(user.id),
         derniersTirages: roue.historique.slice(-8).reverse(),
@@ -1859,8 +1865,9 @@ app.post("/api/roue/tourner", (req, res) => {
         if (!ok) return res.status(400).json({ error: "CREDITS_INSUFFISANTS" });
         enregistrerTransaction(user.id, -COUT_TOUR_ROUE, "credits", "Tour de roue");
     } else if (viaPub) {
-        if (!roueTirPubDisponible(user.id))
-            return res.status(429).json({ error: "LIMITE_TIRS_PUB", max: ROUE_MAX_TIRS_PUB, jusqua: roueVerrouPubJusqua(user.id) });
+        if (!roueTirPubDisponible(user.id, REGLAGES.pubHeureRecharge, REGLAGES.pubMaxParCycle))
+            return res.status(429).json({ error: "LIMITE_TIRS_PUB", max: REGLAGES.pubMaxParCycle,
+                jusqua: new Date(roueProchaineRechargePub(REGLAGES.pubHeureRecharge)).toISOString() });
     }
 
     if (roue.lots.length === 0) {
@@ -1885,7 +1892,7 @@ app.post("/api/roue/tourner", (req, res) => {
     saveGainsRoue();
 
     if (gratuit) marquerRoueGratuiteUtilisee(user.id, roue.jour);
-    else if (viaPub) marquerTirPubRoueUtilise(user.id);
+    else if (viaPub) marquerTirPubRoueUtilise(user.id, REGLAGES.pubHeureRecharge);
     else marquerTirPayantRoueUtilise(user.id, roue.jour);
     saveRoue();
 
