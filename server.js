@@ -113,6 +113,14 @@ const REGLAGES_DEFAUT = {
     poster:   { actif: true, points: 250, tickets: 2, libelle: "Photo du film",
                 zoom: 160, cadrage: "center", flou: 0 },
   },
+  // Personnalisation graphique (console admin, onglet « Apparence ») : couleurs, polices et
+  // ordre des modules du menu principal. Vide par défaut = apparence d'origine inchangée.
+  theme: {
+    couleurs: { ink: "#0A0C16", velvet: "#151A2E", card: "#1C2238", beam: "#F5B942",
+                ticket: "#E4586E", teal: "#4ECDC4", chalk: "#EDE8DC", muted: "#7C819B" },
+    polices: { affiche: "Anton", corps: "Inter", etiquette: "Oswald" },
+    ordre: { menu: ["sorties", "cinemas", "niveau", "quotidien", "modes", "actions", "admin", "repost", "rejoindre"] },
+  },
 };
 
 let REGLAGES = structuredClone(REGLAGES_DEFAUT);
@@ -446,6 +454,54 @@ app.post("/api/admin/reglages/defaut", requireAdmin, (_req, res) => {
   REGLAGES = structuredClone(REGLAGES_DEFAUT);
   sauver("reglages", REGLAGES);
   res.json(REGLAGES);
+});
+
+/**
+ * Personnalisation graphique (couleurs, polices, ordre des modules du menu).
+ *
+ * Listes fermées volontairement : les couleurs sont validées comme codes hexadécimaux, les
+ * polices et les identifiants de modules ne peuvent venir que des valeurs proposées par la
+ * console admin (mêmes polices que celles chargées dans index.html, mêmes modules que ceux
+ * marqués data-module). Rien d'arbitraire n'est jamais injecté dans le CSS ou le HTML du site.
+ */
+const THEME_COULEURS_CLES = ["ink", "velvet", "card", "beam", "ticket", "teal", "chalk", "muted"];
+const THEME_POLICES = {
+  affiche: ["Anton", "Bebas Neue", "Bangers", "Archivo Black", "Oswald", "Montserrat"],
+  corps: ["Inter", "Roboto", "Poppins", "Montserrat", "Nunito"],
+  etiquette: ["Oswald", "Barlow Condensed", "Teko", "Rajdhani", "Bebas Neue", "Montserrat"],
+};
+const THEME_MODULES_MENU = ["sorties", "cinemas", "niveau", "quotidien", "modes", "actions", "admin", "repost", "rejoindre"];
+
+app.put("/api/admin/theme", requireAdmin, (req, res) => {
+  const t = req.body || {};
+  for (const cle of THEME_COULEURS_CLES) {
+    const v = t.couleurs?.[cle];
+    if (typeof v === "string" && /^#[0-9a-fA-F]{6}$/.test(v)) REGLAGES.theme.couleurs[cle] = v;
+  }
+  for (const role of Object.keys(THEME_POLICES)) {
+    const v = t.polices?.[role];
+    if (THEME_POLICES[role].includes(v)) REGLAGES.theme.polices[role] = v;
+  }
+  const ordreMenu = t.ordre?.menu;
+  if (Array.isArray(ordreMenu)) {
+    const filtre = ordreMenu.filter((id) => THEME_MODULES_MENU.includes(id));
+    // On complète avec les modules manquants (dans l'ordre par défaut) pour ne jamais faire
+    // disparaître un module du menu suite à une liste incomplète envoyée par erreur.
+    const manquants = THEME_MODULES_MENU.filter((id) => !filtre.includes(id));
+    REGLAGES.theme.ordre.menu = [...filtre, ...manquants];
+  }
+  sauver("reglages", REGLAGES);
+  res.json({ ok: true, theme: REGLAGES.theme });
+});
+
+app.post("/api/admin/theme/defaut", requireAdmin, (_req, res) => {
+  REGLAGES.theme = structuredClone(REGLAGES_DEFAUT.theme);
+  sauver("reglages", REGLAGES);
+  res.json({ ok: true, theme: REGLAGES.theme });
+});
+
+app.get("/api/admin/theme/options", requireAdmin, (_req, res) => {
+  res.json({ couleurs: THEME_COULEURS_CLES, polices: THEME_POLICES, modulesMenu: THEME_MODULES_MENU });
 });
 
 /** Indique si le mot de passe par défaut est encore en usage. */
@@ -1666,12 +1722,15 @@ app.get("/api/wallet/historique", (req, res) => {
 });
 
 /* ---------- publicités "roue" : regarder une pub pour gagner un tour gratuit ---------- */
-// Gérées depuis la console admin, comme la playlist musicale : image ou vidéo (fichier direct
-// ou lien YouTube), un lien cible optionnel (le sponsor), et une durée minimale de visionnage
-// avant que le joueur puisse récupérer son tour gratuit.
+// Gérées depuis la console admin, comme la playlist musicale : image, vidéo (fichier direct ou
+// lien YouTube), ou lien direct (type "lien" — le format compatible avec les régies publicitaires
+// du type Adsterra « Direct Link » : une simple URL, ouverte dans un nouvel onglet, sans aperçu
+// intégré), un lien cible optionnel (le sponsor), et une durée minimale de visionnage avant que
+// le joueur puisse récupérer son tour gratuit.
 
+const PUBLICITES_TYPES = ["image", "video", "lien"];
 const PUBLICITES_FILE = new URL("./publicites.json", import.meta.url);
-let publicites = [];   // [{id, titre, type: "image"|"video", url, cible, duree, actif, ajouteLe}]
+let publicites = [];   // [{id, titre, type: "image"|"video"|"lien", url, cible, duree, actif, ajouteLe}]
 const savePublicites = () => sauver("publicites", publicites, PUBLICITES_FILE);
 
 /** Une publicité active tirée au hasard, présentée au joueur qui préfère regarder une pub
@@ -1688,7 +1747,7 @@ app.get("/api/admin/publicites", requireAdmin, (req, res) => res.json(publicites
 app.post("/api/admin/publicites", requireAdmin, (req, res) => {
     const { titre, type, url, cible, duree } = req.body || {};
     const nom = String(titre || "").trim().slice(0, 80) || "Sans titre";
-    const t = type === "video" ? "video" : "image";
+    const t = PUBLICITES_TYPES.includes(type) ? type : "image";
     const lien = String(url || "").trim();
     if (!/^https?:\/\/\S+$/i.test(lien)) return res.status(400).json({ error: "LIEN_INVALIDE" });
     const pub = {
@@ -1707,7 +1766,7 @@ app.put("/api/admin/publicites/:id", requireAdmin, (req, res) => {
     if (!p) return res.status(404).json({ error: "INTROUVABLE" });
     const { titre, type, url, cible, duree, actif } = req.body || {};
     if (titre !== undefined) p.titre = String(titre).trim().slice(0, 80) || p.titre;
-    if (type === "video" || type === "image") p.type = type;
+    if (PUBLICITES_TYPES.includes(type)) p.type = type;
     if (url !== undefined) {
         const lien = String(url).trim();
         if (!/^https?:\/\/\S+$/i.test(lien)) return res.status(400).json({ error: "LIEN_INVALIDE" });
@@ -2387,24 +2446,54 @@ app.get("/api/cinemas/proches", async (req, res) => {
     if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180)
       return res.status(400).json({ error: "POSITION_INVALIDE", cinemas: [] });
 
-    const chercher = async (rayonMetres) => {
-      const requete = `[out:json][timeout:15];(node["amenity"="cinema"](around:${rayonMetres},${lat},${lon});way["amenity"="cinema"](around:${rayonMetres},${lat},${lon}););out center;`;
-      const r = await fetch("https://overpass-api.de/api/interpreter", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: `data=${encodeURIComponent(requete)}`,
-      });
-      if (!r.ok) return null;
-      const d = await r.json();
-      return d.elements || [];
+    // Le serveur Overpass principal est parfois lent ou surchargé : on borne chaque appel à
+    // 10 s et on bascule sur un miroir si le premier échoue, plutôt que de laisser le joueur
+    // face à une roue qui tourne indéfiniment.
+    const OVERPASS_INSTANCES = [
+      "https://overpass-api.de/api/interpreter",
+      "https://overpass.kumi.systems/api/interpreter",
+    ];
+    const interrogerOverpass = async (url, requete) => {
+      const controleur = new AbortController();
+      const minuteur = setTimeout(() => controleur.abort(), 10000);
+      try {
+        const r = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            // Overpass demande un User-Agent explicite identifiant l'appli — son absence
+            // peut entraîner un rejet silencieux des requêtes sur certaines instances.
+            "User-Agent": "MichBenCineQuizz/1.0 (+https://michben-cine-quizz; contact: sospchs@gmail.com)",
+          },
+          body: `data=${encodeURIComponent(requete)}`,
+          signal: controleur.signal,
+        });
+        if (!r.ok) return null;
+        const d = await r.json();
+        return d.elements || [];
+      } catch (err) {
+        console.error(`Overpass (${url}) indisponible :`, err?.message || err);
+        return null;
+      } finally {
+        clearTimeout(minuteur);
+      }
     };
 
-    // On élargit la recherche si le rayon proche ne remonte presque rien : utile en zone peu
-    // dense où le cinéma le plus proche peut être à plus de 20 km.
-    let elements = await chercher(20000);
+    const chercher = async (rayonMetres) => {
+      const requete = `[out:json][timeout:9];(node["amenity"="cinema"](around:${rayonMetres},${lat},${lon});way["amenity"="cinema"](around:${rayonMetres},${lat},${lon}););out center;`;
+      for (const instance of OVERPASS_INSTANCES) {
+        const elements = await interrogerOverpass(instance, requete);
+        if (elements !== null) return elements;
+      }
+      return null;
+    };
+
+    // Rayon de recherche standard : 50 km autour du joueur. On élargit à 100 km si presque
+    // rien ne remonte — utile en zone peu dense où le cinéma le plus proche peut être plus loin.
+    let elements = await chercher(50000);
     if (elements === null) return res.status(502).json({ error: "SERVICE_INDISPONIBLE", cinemas: [] });
     if (elements.length < 3) {
-      const elargi = await chercher(60000);
+      const elargi = await chercher(100000);
       if (elargi) elements = elargi;
     }
 
@@ -2486,6 +2575,7 @@ app.get("/api/birthdays", async (req, res) => {
 
 app.get("/api/config", (_req, res) => res.json({
   tipUrl: CONFIG.TIP_URL, maxPlayers: CONFIG.MAX_PLAYERS, pointsParTicket: CONFIG.POINTS_PAR_TICKET, animationsAvancees: REGLAGES.animationsAvancees,
+  theme: REGLAGES.theme,
 }));
 
 /**
