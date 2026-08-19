@@ -1451,7 +1451,11 @@ let playlisteMusique = [];   // [{id, titre, type: "lien"|"fichier", url, ajoute
 const saveMusique = () => sauver("musique", playlisteMusique, MUSIQUE_FILE);
 const MUSIQUE_DIR = join(process.cwd(), "public", "musique");
 const MUSIQUE_EXT_AUTORISEES = ["mp3", "mpeg", "ogg", "wav", "m4a"];
-const MUSIQUE_MAX_BASE64 = 8 * 1024 * 1024; // ~8 Mo encodés : les fichiers doivent rester très légers
+// ~8 Mo de fichier réel. Comparer directement à la longueur de la chaîne base64 (comme
+// c'était fait avant) rejette à tort des fichiers d'à peine 6 Mo : l'encodage base64 gonfle
+// la taille d'environ 1,37×, donc un fichier de 8 Mo produit une chaîne d'environ 11 Mo. On
+// décode d'abord, puis on compare la taille réelle du fichier obtenu à cette limite.
+const MUSIQUE_MAX_OCTETS = 8 * 1024 * 1024;
 
 // Avis des joueurs sur chaque piste (pouce vers le haut / vers le bas), remonté dans l'admin.
 // Un vote par joueur et par piste : trackId -> { userId: "up" | "down" }. Revoter change ou retire l'avis.
@@ -1537,15 +1541,16 @@ app.post("/api/admin/musique", requireAdmin, (req, res) => {
     const nom = String(titre || "").trim().slice(0, 80) || "Sans titre";
 
     if (fichier) {
-        if (fichier.length > MUSIQUE_MAX_BASE64)
-            return res.status(400).json({ error: "FICHIER_TROP_LOURD" });
         const cleanExt = MUSIQUE_EXT_AUTORISEES.includes(String(ext || "").toLowerCase())
             ? String(ext).toLowerCase() : "mp3";
+        const base64Data = String(fichier).split(";base64,").pop();
+        const octets = Buffer.from(base64Data, "base64");
+        if (octets.length > MUSIQUE_MAX_OCTETS)
+            return res.status(400).json({ error: "FICHIER_TROP_LOURD" });
         if (!fs.existsSync(MUSIQUE_DIR)) fs.mkdirSync(MUSIQUE_DIR, { recursive: true });
         const nomFichier = `${crypto.randomUUID()}.${cleanExt}`;
-        const base64Data = String(fichier).split(";base64,").pop();
         try {
-            fs.writeFileSync(join(MUSIQUE_DIR, nomFichier), Buffer.from(base64Data, "base64"));
+            fs.writeFileSync(join(MUSIQUE_DIR, nomFichier), octets);
         } catch (e) {
             return res.status(500).json({ error: "ECRITURE_IMPOSSIBLE" });
         }
