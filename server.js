@@ -89,6 +89,8 @@ const REGLAGES_DEFAUT = {
   roundDuration: 60,                 // secondes
   basePoints: 1000,
   tmdbApiKey: "",
+  geoapifyApiKey: "",   // « Cinéma le plus proche » — clé gratuite (3000 requêtes/jour) sur geoapify.com,
+                        // utilisée en priorité pour la fiabilité (Overpass/OSM sert de repli sans clé).
   creditsDepart: 12,
   creditsParPartie: 4,
   pointsParTicket: 250,
@@ -417,6 +419,7 @@ app.put("/api/admin/reglages", requireAdmin, (req, res) => {
   REGLAGES.transfertMax     = borne(r.transfertMax, 0, 100000, REGLAGES.transfertMax);
   REGLAGES.transfertParJour = borne(r.transfertParJour, 0, 500000, REGLAGES.transfertParJour);
   if (typeof r.tmdbApiKey === 'string') REGLAGES.tmdbApiKey = r.tmdbApiKey;
+  if (typeof r.geoapifyApiKey === 'string') REGLAGES.geoapifyApiKey = r.geoapifyApiKey;
   REGLAGES.animationsAvancees = r.animationsAvancees !== false;
   REGLAGES.coeurs           = borne(r.coeurs, 1, 10, REGLAGES.coeurs);
   REGLAGES.xpBase           = borne(r.xpBase, 10, 10000, REGLAGES.xpBase);
@@ -2439,6 +2442,109 @@ function distanceKm(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+// Le serveur Overpass principal (OpenStreetMap, gratuit et sans clé) est parfois lent, surchargé
+// ou limite le débit des adresses IP partagées des hébergeurs cloud (Render, Heroku...) — ce qui
+// peut le rendre silencieusement inutilisable depuis un serveur, même quand tout fonctionne en
+// local. On borne chaque appel dans le temps et on bascule sur un miroir avant d'abandonner.
+const OVERPASS_INSTANCES = [
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+];
+async function interrogerOverpass(url, requete) {
+  const controleur = new AbortController();
+  const minuteur = setTimeout(() => controleur.abort(), 10000);
+  try {
+    const r = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        // Overpass demande un User-Agent explicite identifiant l'appli — son absence peut
+        // entraîner un rejet silencieux des requêtes sur certaines instances.
+        "User-Agent": "MichBenCineQuizz/1.0 (+https://michben-cine-quizz; contact: sospchs@gmail.com)",
+      },
+      body: `data=${encodeURIComponent(requete)}`,
+      signal: controleur.signal,
+    });
+    if (!r.ok) { console.error(`Overpass (${url}) a répondu ${r.status}`); return null; }
+    const d = await r.json();
+    return d.elements || [];
+  } catch (err) {
+    console.error(`Overpass (${url}) indisponible :`, err?.message || err);
+    return null;
+  } finally {
+    clearTimeout(minuteur);
+  }
+}
+
+/** Cherche des cinémas via OpenStreetMap/Overpass (gratuit, sans clé, mais pas toujours
+ *  fiable depuis un serveur cloud). Retourne un tableau (éventuellement vide) ou null si les
+ *  deux instances ont échoué. */
+async function cinemasViaOverpass(lat, lon, rayonMetres) {
+  const requete = `[out:json][timeout:9];(node["amenity"="cinema"](around:${rayonMetres},${lat},${lon});way["amenity"="cinema"](around:${rayonMetres},${lat},${lon}););out center;`;
+  let elements = null;
+  for (const instance of OVERPASS_INSTANCES) {
+    elements = await interrogerOverpass(instance, requete);
+    if (elements !== null) break;
+  }
+  if (elements === null) return null;
+
+  const vus = new Set();
+  const cinemas = [];
+  for (const el of elements) {
+    const nom = el.tags?.name;
+    if (!nom) continue;
+    const latEl = el.lat ?? el.center?.lat;
+    const lonEl = el.lon ?? el.center?.lon;
+    if (!Number.isFinite(latEl) || !Number.isFinite(lonEl)) continue;
+    const cle = nom + "|" + (el.tags?.["addr:street"] || "");
+    if (vus.has(cle)) continue;
+    vus.add(cle);
+    const adresse = [el.tags?.["addr:housenumber"], el.tags?.["addr:street"]].filter(Boolean).join(" ") || null;
+    cinemas.push({
+      nom, enseigne: enseigneDepuisNom(nom), adresse,
+      ville: el.tags?.["addr:city"] || null, codePostal: el.tags?.["addr:postcode"] || null,
+      lat: latEl, lon: lonEl, distanceKm: Math.round(distanceKm(lat, lon, latEl, lonEl) * 10) / 10,
+    });
+  }
+  return cinemas;
+}
+
+/** Cherche des cinémas via l'API Geoapify Places (clé gratuite requise, configurée en
+ *  console admin — bien plus fiable qu'Overpass depuis un hébergeur cloud). Retourne un
+ *  tableau (éventuellement vide) ou null en cas d'échec ou si aucune clé n'est configurée. */
+async function cinemasViaGeoapify(lat, lon, rayonMetres) {
+  const cle = REGLAGES.geoapifyApiKey;
+  if (!cle) return null;
+  const controleur = new AbortController();
+  const minuteur = setTimeout(() => controleur.abort(), 10000);
+  try {
+    const url = `https://api.geoapify.com/v2/places?categories=entertainment.cinema` +
+      `&filter=circle:${lon},${lat},${rayonMetres}&bias=proximity:${lon},${lat}&limit=20&apiKey=${encodeURIComponent(cle)}`;
+    const r = await fetch(url, { signal: controleur.signal });
+    if (!r.ok) { console.error(`Geoapify a répondu ${r.status}`); return null; }
+    const d = await r.json();
+    const features = d.features || [];
+    return features.map((f) => {
+      const p = f.properties || {};
+      return {
+        nom: p.name || "Cinéma",
+        enseigne: enseigneDepuisNom(p.name || ""),
+        adresse: p.address_line1 || [p.housenumber, p.street].filter(Boolean).join(" ") || null,
+        ville: p.city || null,
+        codePostal: p.postcode || null,
+        lat: p.lat, lon: p.lon,
+        distanceKm: Number.isFinite(p.distance) ? Math.round(p.distance / 100) / 10
+          : Math.round(distanceKm(lat, lon, p.lat, p.lon) * 10) / 10,
+      };
+    }).filter((c) => Number.isFinite(c.lat) && Number.isFinite(c.lon));
+  } catch (err) {
+    console.error("Geoapify indisponible :", err?.message || err);
+    return null;
+  } finally {
+    clearTimeout(minuteur);
+  }
+}
+
 app.get("/api/cinemas/proches", async (req, res) => {
   try {
     const lat = Number(req.query.lat);
@@ -2446,81 +2552,32 @@ app.get("/api/cinemas/proches", async (req, res) => {
     if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180)
       return res.status(400).json({ error: "POSITION_INVALIDE", cinemas: [] });
 
-    // Le serveur Overpass principal est parfois lent ou surchargé : on borne chaque appel à
-    // 10 s et on bascule sur un miroir si le premier échoue, plutôt que de laisser le joueur
-    // face à une roue qui tourne indéfiniment.
-    const OVERPASS_INSTANCES = [
-      "https://overpass-api.de/api/interpreter",
-      "https://overpass.kumi.systems/api/interpreter",
-    ];
-    const interrogerOverpass = async (url, requete) => {
-      const controleur = new AbortController();
-      const minuteur = setTimeout(() => controleur.abort(), 10000);
-      try {
-        const r = await fetch(url, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-            // Overpass demande un User-Agent explicite identifiant l'appli — son absence
-            // peut entraîner un rejet silencieux des requêtes sur certaines instances.
-            "User-Agent": "MichBenCineQuizz/1.0 (+https://michben-cine-quizz; contact: sospchs@gmail.com)",
-          },
-          body: `data=${encodeURIComponent(requete)}`,
-          signal: controleur.signal,
-        });
-        if (!r.ok) return null;
-        const d = await r.json();
-        return d.elements || [];
-      } catch (err) {
-        console.error(`Overpass (${url}) indisponible :`, err?.message || err);
-        return null;
-      } finally {
-        clearTimeout(minuteur);
-      }
-    };
-
-    const chercher = async (rayonMetres) => {
-      const requete = `[out:json][timeout:9];(node["amenity"="cinema"](around:${rayonMetres},${lat},${lon});way["amenity"="cinema"](around:${rayonMetres},${lat},${lon}););out center;`;
-      for (const instance of OVERPASS_INSTANCES) {
-        const elements = await interrogerOverpass(instance, requete);
-        if (elements !== null) return elements;
-      }
-      return null;
-    };
-
-    // Rayon de recherche standard : 50 km autour du joueur. On élargit à 100 km si presque
-    // rien ne remonte — utile en zone peu dense où le cinéma le plus proche peut être plus loin.
-    let elements = await chercher(50000);
-    if (elements === null) return res.status(502).json({ error: "SERVICE_INDISPONIBLE", cinemas: [] });
-    if (elements.length < 3) {
-      const elargi = await chercher(100000);
-      if (elargi) elements = elargi;
+    // Geoapify (avec clé configurée) est essayé en premier — bien plus fiable depuis un
+    // serveur cloud qu'Overpass, qui limite parfois le débit des adresses IP partagées des
+    // hébergeurs. Overpass sert de repli gratuit si aucune clé n'est configurée, ou si
+    // Geoapify échoue ou ne remonte presque rien.
+    let cinemas = await cinemasViaGeoapify(lat, lon, 50000);
+    let source = cinemas !== null ? "geoapify" : null;
+    if ((cinemas === null || cinemas.length < 3)) {
+      const viaOsm = await cinemasViaOverpass(lat, lon, 50000);
+      if (viaOsm !== null && (cinemas === null || viaOsm.length > cinemas.length)) { cinemas = viaOsm; source = "overpass"; }
+    }
+    // Élargit à 100 km si presque rien ne remonte — utile en zone peu dense.
+    if (cinemas !== null && cinemas.length < 3) {
+      const elargi = source === "geoapify" ? await cinemasViaGeoapify(lat, lon, 100000) : await cinemasViaOverpass(lat, lon, 100000);
+      if (elargi && elargi.length > cinemas.length) cinemas = elargi;
     }
 
-    const vus = new Set();
-    const cinemas = [];
-    for (const el of elements) {
-      const nom = el.tags?.name;
-      if (!nom) continue;
-      const latEl = el.lat ?? el.center?.lat;
-      const lonEl = el.lon ?? el.center?.lon;
-      if (!Number.isFinite(latEl) || !Number.isFinite(lonEl)) continue;
-      const cle = nom + "|" + (el.tags?.["addr:street"] || "");
-      if (vus.has(cle)) continue;
-      vus.add(cle);
-      const adresse = [el.tags?.["addr:housenumber"], el.tags?.["addr:street"]].filter(Boolean).join(" ") || null;
-      cinemas.push({
-        nom,
-        enseigne: enseigneDepuisNom(nom),
-        adresse,
-        ville: el.tags?.["addr:city"] || null,
-        codePostal: el.tags?.["addr:postcode"] || null,
-        lat: latEl, lon: lonEl,
-        distanceKm: Math.round(distanceKm(lat, lon, latEl, lonEl) * 10) / 10,
-      });
+    if (cinemas === null) {
+      const conseil = REGLAGES.geoapifyApiKey
+        ? "Geoapify et OpenStreetMap sont tous deux indisponibles pour le moment."
+        : "Aucune clé Geoapify configurée et OpenStreetMap est indisponible pour le moment — ajoutez une clé Geoapify gratuite en console admin (Réglages) pour fiabiliser cette fonctionnalité.";
+      console.error("Recherche de cinémas : aucune source disponible.", conseil);
+      return res.status(502).json({ error: "SERVICE_INDISPONIBLE", cinemas: [] });
     }
+
     cinemas.sort((a, b) => a.distanceKm - b.distanceKm);
-    res.json({ cinemas: cinemas.slice(0, 20) });
+    res.json({ cinemas: cinemas.slice(0, 20), source });
   } catch (err) {
     console.error("Erreur cinémas proches:", err);
     res.status(500).json({ error: "INTERNAL_ERROR", cinemas: [] });
