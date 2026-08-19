@@ -32,7 +32,8 @@ import { mountAuth, userFromCookie, addRankedPoints,
          creerCompteAdmin, sansMotDePasse,
          genererCodeParrainGagne, roueGratuiteDisponible, marquerRoueGratuiteUtilisee,
          roueTirPayantDisponible, marquerTirPayantRoueUtilise, ROUE_MAX_TIRS_PAYANTS,
-         roueTirPubDisponible, marquerTirPubRoueUtilise, ROUE_MAX_TIRS_PUB } from "./auth-x.js";
+         roueTirPubDisponible, marquerTirPubRoueUtilise, ROUE_MAX_TIRS_PUB,
+         roueVerrouPubJusqua } from "./auth-x.js";
 
 const app = express();
 app.use(express.json({ limit: '15mb' })); // Limite augmentée pour l'upload d'images et de musique
@@ -1827,8 +1828,11 @@ app.get("/api/roue", (req, res) => {
         gratuitDisponible: roueGratuiteDisponible(user.id, roue.jour),
         tirPayantDisponible: roueTirPayantDisponible(user.id, roue.jour),
         tirsPayantsMax: ROUE_MAX_TIRS_PAYANTS,
-        tirPubDisponible: roueTirPubDisponible(user.id, roue.jour),
+        tirPubDisponible: roueTirPubDisponible(user.id),
         tirsPubMax: ROUE_MAX_TIRS_PUB,
+        // Verrou de 12 h une fois les 5 pubs épuisées (pas remis à zéro à minuit, contrairement
+        // au tour gratuit et aux tours payants) — le client l'utilise pour afficher un décompte.
+        pubVerrouJusqua: roueVerrouPubJusqua(user.id),
         coutTour: COUT_TOUR_ROUE,
         credits: getCredits(user.id),
         derniersTirages: roue.historique.slice(-8).reverse(),
@@ -1855,8 +1859,8 @@ app.post("/api/roue/tourner", (req, res) => {
         if (!ok) return res.status(400).json({ error: "CREDITS_INSUFFISANTS" });
         enregistrerTransaction(user.id, -COUT_TOUR_ROUE, "credits", "Tour de roue");
     } else if (viaPub) {
-        if (!roueTirPubDisponible(user.id, roue.jour))
-            return res.status(429).json({ error: "LIMITE_TIRS_PUB", max: ROUE_MAX_TIRS_PUB });
+        if (!roueTirPubDisponible(user.id))
+            return res.status(429).json({ error: "LIMITE_TIRS_PUB", max: ROUE_MAX_TIRS_PUB, jusqua: roueVerrouPubJusqua(user.id) });
     }
 
     if (roue.lots.length === 0) {
@@ -1881,7 +1885,7 @@ app.post("/api/roue/tourner", (req, res) => {
     saveGainsRoue();
 
     if (gratuit) marquerRoueGratuiteUtilisee(user.id, roue.jour);
-    else if (viaPub) marquerTirPubRoueUtilise(user.id, roue.jour);
+    else if (viaPub) marquerTirPubRoueUtilise(user.id);
     else marquerTirPayantRoueUtilise(user.id, roue.jour);
     saveRoue();
 

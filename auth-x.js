@@ -148,23 +148,48 @@ export function marquerTirPayantRoueUtilise(userId, jour) {
 }
 export const ROUE_MAX_TIRS_PAYANTS = MAX_TIRS_PAYANTS_ROUE;
 
-const MAX_TIRS_PUB_ROUE = 5; // tours gagnés en regardant une publicité, plafonnés séparément des tours payants
+// Tours gagnés en regardant une publicité : plafonnés séparément des tours payants, mais pas
+// selon le jour calendaire — au bout de 5 pubs regardées, le joueur doit attendre 12 h pleines
+// (glissantes, pas remises à zéro à minuit) avant de pouvoir en regarder d'autres.
+const MAX_TIRS_PUB_ROUE = 5;
+const VERROU_PUB_MS = 12 * 60 * 60 * 1000;
 
-/** Nombre de tours "gagnés en regardant une pub" déjà effectués aujourd'hui. */
-export function roueTirsPubAujourdhui(userId, jour) {
+/** Purge automatiquement le verrou d'un joueur une fois les 12 h écoulées. */
+function purgerVerrouPub(u) {
+  if (u.pubVerrouJusqu && Date.now() >= u.pubVerrouJusqu) {
+    u.pubVerrouJusqu = null;
+    u.pubCompteur = 0;
+  }
+}
+
+/** Nombre de tours "gagnés en regardant une pub" effectués depuis le début du cycle en cours
+ *  (remis à zéro seulement quand le verrou de 12 h expire, pas à chaque nouveau jour). */
+export function roueTirsPubAujourdhui(userId) {
   const u = users[userId];
   if (!u) return 0;
-  return u.roueJourPub === jour ? (u.roueTirsPub || 0) : 0;
+  purgerVerrouPub(u);
+  return u.pubCompteur || 0;
 }
-/** Reste-t-il un tour "publicité" disponible aujourd'hui (max 5/jour) ? */
-export function roueTirPubDisponible(userId, jour) {
-  return roueTirsPubAujourdhui(userId, jour) < MAX_TIRS_PUB_ROUE;
+/** Reste-t-il un tour "publicité" disponible (max 5, puis verrouillé 12 h) ? */
+export function roueTirPubDisponible(userId) {
+  const u = users[userId];
+  if (!u) return false;
+  purgerVerrouPub(u);
+  return (u.pubCompteur || 0) < MAX_TIRS_PUB_ROUE;
 }
-export function marquerTirPubRoueUtilise(userId, jour) {
+/** Horodatage (ms epoch) auquel le verrou se lève, ou null si le joueur n'est pas verrouillé. */
+export function roueVerrouPubJusqua(userId) {
+  const u = users[userId];
+  if (!u) return null;
+  purgerVerrouPub(u);
+  return u.pubVerrouJusqu || null;
+}
+export function marquerTirPubRoueUtilise(userId) {
   const u = users[userId];
   if (!u) return;
-  if (u.roueJourPub !== jour) { u.roueJourPub = jour; u.roueTirsPub = 0; }
-  u.roueTirsPub = (u.roueTirsPub || 0) + 1;
+  purgerVerrouPub(u);
+  u.pubCompteur = (u.pubCompteur || 0) + 1;
+  if (u.pubCompteur >= MAX_TIRS_PUB_ROUE && !u.pubVerrouJusqu) u.pubVerrouJusqu = Date.now() + VERROU_PUB_MS;
   saveUsers();
 }
 export const ROUE_MAX_TIRS_PUB = MAX_TIRS_PUB_ROUE;
