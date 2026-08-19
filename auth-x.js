@@ -309,6 +309,7 @@ export function inscrireEmail(email, motDePasse) {
     pseudo: "", pseudoChosen: false, avatar: "🎬",
     totalScore: 0, gamesPlayed: 0, credits: STARTING_CREDITS, points: 0, role: "joueur",
     amis: [], demandesRecues: [], demandesEnvoyees: [], bloques: [], claimedBonuses: [],
+    creeLe: new Date().toISOString(),
   };
   saveUsers();
   return { user: users[id] };
@@ -349,6 +350,7 @@ export function creerCompteAdmin({ pseudo, motDePasse, enfant = false }) {
     emailVerifie: true,     // pas d'email à valider pour un compte créé par l'admin
     fondateur: true,        // dispensé de code de parrainage : le compte vient déjà d'un adulte de confiance
     amis: [], demandesRecues: [], demandesEnvoyees: [], bloques: [], claimedBonuses: [],
+    creeLe: new Date().toISOString(),
   };
   saveUsers();
   return { user: users[id] };
@@ -763,9 +765,11 @@ export function exchangePoints(userId, points, rate) {
 
 /* ---------- administration ---------- */
 
+/** Les comptes les plus récents en premier (les comptes créés avant l'ajout de ce suivi n'ont
+ *  pas de date : ils sont traités comme les plus anciens et se retrouvent donc en bas). */
 export const listUsers = () =>
   Object.values(users)
-    .sort((x, y) => (y.totalScore || 0) - (x.totalScore || 0))
+    .sort((x, y) => new Date(y.creeLe || 0) - new Date(x.creeLe || 0))
     .map(({ motDePasse, code, codeExpire, codeEssais, ...reste }) => reste);
 
 /**
@@ -966,7 +970,7 @@ export function mountAuth(app) {
     app.get("/auth/x/login", (_req, res) => {
       const id = `dev-${crypto.randomBytes(4).toString("hex")}`;
       users[id] = { id, pseudo: "", pseudoChosen: false, avatar: "🎬", totalScore: 0, gamesPlayed: 0, credits: STARTING_CREDITS, points: 0, role: "joueur",
-        amis: [], demandesRecues: [], demandesEnvoyees: [], bloques: [], claimedBonuses: [] };
+        amis: [], demandesRecues: [], demandesEnvoyees: [], bloques: [], claimedBonuses: [], creeLe: new Date().toISOString() };
       saveUsers();
       createSession(res, users[id]);
       res.redirect("/");
@@ -1020,7 +1024,7 @@ export function mountAuth(app) {
       const id = `x:${data.id}`;
       users[id] = users[id] || { id, pseudo: "", pseudoChosen: false, suggestion: data.username.slice(0, 20),
         avatar: "🎬", totalScore: 0, gamesPlayed: 0, credits: STARTING_CREDITS, points: 0, role: "joueur",
-        amis: [], demandesRecues: [], demandesEnvoyees: [], bloques: [], claimedBonuses: [] };
+        amis: [], demandesRecues: [], demandesEnvoyees: [], bloques: [], claimedBonuses: [], creeLe: new Date().toISOString() };
       users[id].xHandle = data.username;
       saveUsers();
       createSession(res, users[id]);

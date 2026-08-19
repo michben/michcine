@@ -1348,6 +1348,42 @@ app.post("/api/suggestions/:id/decliner", (req, res) => {
     res.json({ ok: true });
 });
 
+/** L'administration corrige le titre/commentaire d'une suggestion (coquille, orthographe...),
+ *  y compris une fois publiée dans la vitrine « Suggestions retenues » qui la reflète directement. */
+app.put("/api/admin/suggestions/:id", requireAdmin, (req, res) => {
+    const s = suggestions.find((x) => x.id === req.params.id);
+    if (!s) return res.status(404).json({ error: "INTROUVABLE" });
+    const { titre, commentaire } = req.body || {};
+    if (titre !== undefined) {
+        if (!String(titre).trim()) return res.status(400).json({ error: "TITRE_MANQUANT" });
+        s.titre = String(titre).trim();
+    }
+    if (commentaire !== undefined) s.commentaire = String(commentaire).trim();
+    saveSuggestions();
+    res.json({ ok: true });
+});
+
+/** L'administration retire une suggestion de la vitrine publique (publiée par erreur, par exemple) sans
+ *  supprimer la suggestion elle-même : elle reste visible côté admin, statut "acceptée" inchangé. */
+app.post("/api/admin/suggestions/:id/depublier", requireAdmin, (req, res) => {
+    const s = suggestions.find((x) => x.id === req.params.id);
+    if (!s) return res.status(404).json({ error: "INTROUVABLE" });
+    s.publie = false;
+    s.publieLe = null;
+    saveSuggestions();
+    res.json({ ok: true });
+});
+
+/** L'administration supprime définitivement une suggestion (elle disparaît aussi de la vitrine
+ *  publique si elle y était affichée). */
+app.delete("/api/admin/suggestions/:id", requireAdmin, (req, res) => {
+    const i = suggestions.findIndex((x) => x.id === req.params.id);
+    if (i === -1) return res.status(404).json({ error: "INTROUVABLE" });
+    suggestions.splice(i, 1);
+    saveSuggestions();
+    res.json({ ok: true });
+});
+
 /** Vitrine publique : les suggestions de joueurs acceptées ET publiées par leur auteur. */
 app.get("/api/suggestions/publiees", (req, res) => {
     const liste = suggestions
@@ -2200,6 +2236,38 @@ app.get("/api/movies/now_playing", async (req, res) => {
   } catch (err) {
     console.error("Erreur now_playing:", err);
     res.json({ error: "INTERNAL_ERROR", movies: [] });
+  }
+});
+
+/** Bande-annonce YouTube d'un film TMDB, utilisée par le lecteur vidéo des « Sorties de la
+ *  semaine » : cherche d'abord une bande-annonce officielle en VF, puis retente en VO si
+ *  TMDB n'en propose aucune (fréquent pour les sorties très récentes). Appelée à la demande,
+ *  au clic sur un film, plutôt qu'en même temps que la liste pour ne pas multiplier les
+ *  appels TMDB par film affiché. */
+app.get("/api/movies/:id/trailer", async (req, res) => {
+  try {
+    const tmdbKey = REGLAGES.tmdbApiKey;
+    if (!tmdbKey) return res.json({ error: "NO_KEY", key: null });
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: "ID_INVALIDE", key: null });
+
+    const chercherTrailer = async (langue) => {
+      const r = await fetch(`https://api.themoviedb.org/3/movie/${id}/videos?api_key=${tmdbKey}&language=${langue}`);
+      if (!r.ok) return null;
+      const d = await r.json();
+      const vids = d.results || [];
+      const officiel = vids.find((v) => v.site === "YouTube" && v.type === "Trailer" && v.official);
+      const trailer = officiel || vids.find((v) => v.site === "YouTube" && v.type === "Trailer");
+      const teaser = vids.find((v) => v.site === "YouTube" && v.type === "Teaser");
+      return trailer || teaser || null;
+    };
+
+    const trouve = (await chercherTrailer("fr-FR")) || (await chercherTrailer("en-US"));
+    if (!trouve) return res.json({ key: null });
+    res.json({ key: trouve.key });
+  } catch (err) {
+    console.error("Erreur bande-annonce:", err);
+    res.status(500).json({ error: "INTERNAL_ERROR", key: null });
   }
 });
 
