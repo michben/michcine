@@ -957,6 +957,7 @@ html.mode-enfant-actif .wrap{padding-top:48px}
       <div id="listeTeteAffiche" class="listeTeteAffiche"></div>
     </div>
     <h2 id="hello">Bonjour</h2>
+    <p class="note" id="totalFilmsMenu" style="margin:0 0 10px;font-size:12px;opacity:0.7">🎬 <b id="totalFilmsNb">—</b> films dans le jeu</p>
     <p class="wallet" id="walletMenu" style="cursor:pointer" title="Voir l'historique de vos tickets et points">🎟️ <b>0</b> crédits</p>
     <p class="online" id="btnOnlineUsers" style="cursor:pointer" title="Voir vos amis en ligne"><span class="dot on"></span><b id="onlineNb">—</b><span id="onlineCount">amis en ligne</span></p>
     <div class="row" style="margin-bottom: 14px;" data-module="sorties">
@@ -2167,6 +2168,7 @@ async function loadSession(){
     majBadgeAmis();
     chargerQuetes(); // Met à jour le niveau au chargement
     chargerSondages(); // Pastille des sondages en attente de vote
+    chargerNombreFilms(); // Petit compteur de films en haut du menu
     verifierTicketRoue(); // Prévient si un tour gratuit de la roue n'a pas encore été utilisé
     $("hello").innerHTML = `Bonjour ${esc(me.pseudo)}` +
       (["moderateur","admin"].includes(me.role) ? `<span class="badge-role">${esc(me.role)}</span>` : "");
@@ -3906,6 +3908,13 @@ function renderSondages(){
     renderSondages();
     majBadgeSondages();
   });
+}
+
+/** Petit compteur affiché en haut du menu : nombre de films actifs dans le jeu. */
+async function chargerNombreFilms(){
+  const r = await fetch("/api/movies/total", { credentials: "same-origin" })
+    .then(x => x.ok ? x.json() : null).catch(() => null);
+  if (r && typeof r.total === "number") $("totalFilmsNb").textContent = r.total;
 }
 
 async function chargerSondages(){
