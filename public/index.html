@@ -1579,6 +1579,13 @@ async function demarrerMusique(){
     if (err?.name === "NotAllowedError"){
       // Blocage de la politique anti-autoplay du navigateur : ce n'est pas un problème avec la piste elle-même.
       messageRadio("Votre navigateur a bloqué la reprise automatique — cliquez sur ▶️ pour reprendre la radio.");
+    } else if (err?.name === "AbortError"){
+      // La requête play() a été interrompue par une action normale (pause() rapide après un clic,
+      // changement de piste pendant le chargement, reprise automatique concurrente au chargement de
+      // la page...) — c'est le navigateur qui annule LUI-MÊME la lecture en cours, pas un souci avec
+      // le fichier. Le traiter comme une vraie panne affichait "Lecture impossible" et remontait une
+      // fausse erreur à l'administration sur des pistes pourtant valides, quel que soit le fichier.
+      return;
     } else {
       messageRadio("Lecture impossible pour cette piste — vérifiez son lien ou son fichier depuis la console admin.");
       signalerErreurMusique(piste, err?.name === "NotSupportedError" ? "format" : "introuvable");
