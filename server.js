@@ -1751,12 +1751,21 @@ app.get("/api/publicites/une", (req, res) => {
 
 app.get("/api/admin/publicites", requireAdmin, (req, res) => res.json(publicites));
 
+// Certaines régies (dont Adsterra, hors format « Direct Link ») fournissent un extrait
+// <script src="...tag.min.js">...</script> à coller directement dans le code d'une page —
+// pas une adresse de page à ouvrir. Si on ouvre ce genre de lien tel quel dans un nouvel
+// onglet, le navigateur affiche le code source du script au lieu d'une publicité. On détecte
+// ce cas pour le type « lien » et on prévient l'administrateur plutôt que de le laisser
+// enregistrer un lien qui ne fonctionnera jamais.
+const ressembleAUnScript = (lien) => /\.(js|mjs)(\?.*)?$/i.test(lien);
+
 app.post("/api/admin/publicites", requireAdmin, (req, res) => {
     const { titre, type, url, cible, duree } = req.body || {};
     const nom = String(titre || "").trim().slice(0, 80) || "Sans titre";
     const t = PUBLICITES_TYPES.includes(type) ? type : "image";
     const lien = String(url || "").trim();
     if (!/^https?:\/\/\S+$/i.test(lien)) return res.status(400).json({ error: "LIEN_INVALIDE" });
+    if (t === "lien" && ressembleAUnScript(lien)) return res.status(400).json({ error: "LIEN_SCRIPT_DETECTE" });
     const pub = {
         id: crypto.randomUUID(), titre: nom, type: t, url: lien,
         cible: cible ? String(cible).trim().slice(0, 300) : "",
@@ -1777,6 +1786,8 @@ app.put("/api/admin/publicites/:id", requireAdmin, (req, res) => {
     if (url !== undefined) {
         const lien = String(url).trim();
         if (!/^https?:\/\/\S+$/i.test(lien)) return res.status(400).json({ error: "LIEN_INVALIDE" });
+        const typeFinal = PUBLICITES_TYPES.includes(type) ? type : p.type;
+        if (typeFinal === "lien" && ressembleAUnScript(lien)) return res.status(400).json({ error: "LIEN_SCRIPT_DETECTE" });
         p.url = lien;
     }
     if (cible !== undefined) p.cible = String(cible).trim().slice(0, 300);
