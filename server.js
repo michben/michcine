@@ -107,6 +107,12 @@ const REGLAGES_DEFAUT = {
   // Un ami peut-il regarder la partie d'un autre ami en direct (lecture seule) ? Désactivé par
   // défaut — réglable depuis la console admin (onglet Réglages).
   autoriserSpectateur: false,
+  // Plafond (en %) de la part de films français dans une manche tirée au sort — le reste
+  // (international + non classés) comble la différence. Sert à rééquilibrer un catalogue trop
+  // riche en films français, sans jamais raccourcir une partie si le vivier international est
+  // insuffisant (voir choisirFilms). Ignoré tant que des films ne sont pas classés « France » /
+  // « International » depuis l'onglet Films de la console admin (champ « Origine »).
+  ratioFilmsFrancaisMax: 40,
   creditsDepart: 12,
   creditsParPartie: 4,
   pointsParTicket: 250,
@@ -200,6 +206,12 @@ function normaliserFilms() {
     if (!m.difficulty) m.difficulty = niveauDepuisVotes(m.votes);
     if (m.enabled === undefined) m.enabled = true;
     if (m.kids === undefined) m.kids = false;
+    // Origine (France / international) utilisée pour équilibrer le tirage des manches (voir
+    // choisirFilms) : reprend l'ancien champ `vf` posé par le script d'import en masse quand il
+    // existe, sinon reste "non classé" (n'entre alors dans aucun des deux quotas, sans jamais
+    // être exclu du jeu) — à corriger au cas par cas depuis l'onglet Films de la console admin.
+    if (m.origine === undefined)
+      m.origine = m.vf === true ? "france" : (m.vf === false ? "international" : "");
   }
 }
 const saveMovies = () => sauver("movies", movies, MOVIES_FILE);
@@ -473,6 +485,7 @@ app.put("/api/admin/reglages", requireAdmin, (req, res) => {
   REGLAGES.pubHeureRecharge = borne(r.pubHeureRecharge, 0, 23, REGLAGES.pubHeureRecharge);
   if (typeof r.afficherRadio === "boolean") REGLAGES.afficherRadio = r.afficherRadio;
   if (typeof r.autoriserSpectateur === "boolean") REGLAGES.autoriserSpectateur = r.autoriserSpectateur;
+  REGLAGES.ratioFilmsFrancaisMax = borne(r.ratioFilmsFrancaisMax, 0, 100, REGLAGES.ratioFilmsFrancaisMax);
   REGLAGES.animationsAvancees = r.animationsAvancees !== false;
   REGLAGES.coeurs           = borne(r.coeurs, 1, 10, REGLAGES.coeurs);
   REGLAGES.xpBase           = borne(r.xpBase, 10, 10000, REGLAGES.xpBase);
@@ -723,7 +736,16 @@ app.get("/api/admin/stats", requireAdmin, (_req, res) => {
       total: movies.filter((m) => m.difficulty === n).length,
       actifs: movies.filter((m) => m.difficulty === n && m.enabled).length,
     };
-  res.json({ total: movies.length, actifs: movies.filter((m) => m.enabled).length, parNiveau });
+  // Répartition France / international parmi les films actifs : sert à voir d'un coup d'œil si
+  // le catalogue est équilibré, sans quoi le tirage (voir choisirFilms) a beau plafonner la part
+  // de films français par manche, il ne peut pas inventer des films internationaux manquants.
+  const actifsListe = movies.filter((m) => m.enabled);
+  const parOrigine = {
+    france: actifsListe.filter((m) => m.origine === "france").length,
+    international: actifsListe.filter((m) => m.origine === "international").length,
+    nonClasse: actifsListe.filter((m) => !m.origine).length,
+  };
+  res.json({ total: movies.length, actifs: actifsListe.length, parNiveau, parOrigine });
 });
 
 /* ---------- administration des joueurs ---------- */
@@ -828,6 +850,10 @@ function sanitizeMovie(body) {
     kids: body.kids === true || body.kids === "true",
     // Identifiant TMDB d'origine, pour éviter les doublons lors d'un futur import.
     tmdbId: Number(body.tmdbId) || null,
+    // France / international : sert à équilibrer le tirage des manches (voir choisirFilms),
+    // pour éviter qu'un catalogue trop riche en films français à l'ajout n'étouffe les
+    // films internationaux. "" = non classé (n'entre dans aucun des deux quotas).
+    origine: ["france", "international"].includes(body.origine) ? body.origine : "",
   };
 }
 
@@ -3088,20 +3114,74 @@ function titlePattern(title) {
 }
 
 /**
- * Sélectionne des films en évitant ceux déjà vus récemment par le joueur.
- * Sans cela, un tirage purement aléatoire ramène statistiquement les mêmes
- * titres bien plus souvent que ne le perçoit un joueur — c'est le reproche
- * le plus fréquent sur ce type de jeu.
+ * Films servis récemment, tous joueurs confondus (pas seulement l'historique du joueur qui a
+ * lancé la partie). En multijoueur, seule la personne qui crée le salon comptait jusqu'ici pour
+ * éviter les répétitions : les autres joueurs du salon pouvaient très bien retomber sur des
+ * films qu'ils venaient eux-mêmes de voir dans une partie précédente. Ce filet de sécurité
+ * partagé réduit ce cas sans avoir à connaître à l'avance tous les joueurs d'un salon.
+ */
+const recemmentServis = new Map();          // id de film -> horodatage du dernier tirage
+const COOLDOWN_SERVI_MS = 3 * 60 * 60 * 1000; // 3 h : large sur un petit catalogue, discret sur un grand
+
+function purgerServisRecents() {
+  const limite = Date.now() - COOLDOWN_SERVI_MS;
+  for (const [id, t] of recemmentServis) if (t < limite) recemmentServis.delete(id);
+}
+function marquerServis(films) {
+  const maintenant = Date.now();
+  for (const f of films) recemmentServis.set(f.id, maintenant);
+}
+
+/**
+ * Parmi un ensemble de films déjà filtré (indemnes de répétition), plafonne la part de films
+ * français à REGLAGES.ratioFilmsFrancaisMax % et comble le reste avec l'international (et les
+ * films non classés, qui ne sont pénalisés ni favorisés). Ne raccourcit jamais une manche : si le
+ * vivier international est insuffisant pour atteindre `nombre`, on repuise dans le reste des
+ * films français plutôt que de livrer moins de films que demandé.
+ */
+function tirerAvecEquilibreOrigine(pool, nombre) {
+  const ratioMax = Math.min(1, Math.max(0, (REGLAGES.ratioFilmsFrancaisMax ?? 100) / 100));
+  const francais = melange(pool.filter((m) => m.origine === "france"));
+  const autres = melange(pool.filter((m) => m.origine !== "france"));
+  const maxFrancais = Math.min(francais.length, Math.ceil(nombre * ratioMax));
+
+  const choisis = [...francais.slice(0, maxFrancais), ...autres.slice(0, nombre - maxFrancais)];
+  if (choisis.length < nombre) {
+    // L'international (+ non classés) ne suffit pas à compléter : on repuise dans le reste des
+    // films français déjà écartés par le plafond, plutôt que de jouer une manche plus courte.
+    const resteFrancais = francais.slice(maxFrancais);
+    choisis.push(...resteFrancais.slice(0, nombre - choisis.length));
+  }
+  return melange(choisis).slice(0, nombre);
+}
+
+/**
+ * Sélectionne des films en évitant ceux déjà vus récemment par le joueur (et, dans la mesure du
+ * possible, ceux servis à n'importe qui il y a peu), puis équilibre la part de films français /
+ * internationaux du tirage. Sans anti-répétition, un tirage purement aléatoire ramène
+ * statistiquement les mêmes titres bien plus souvent que ne le perçoit un joueur — c'est le
+ * reproche le plus fréquent sur ce type de jeu, avec celui d'un catalogue trop mono-national.
  */
 function choisirFilms(vivier, nombre, userId) {
+  purgerServisRecents();
   const vus = new Set(historiqueVus(userId));
-  const frais = vivier.filter((m) => !vus.has(m.id));
+  const dispoBase = vivier.filter((m) => !vus.has(m.id));
+  // On essaie d'abord d'éviter aussi ce qui vient d'être servi à d'autres joueurs, mais seulement
+  // si ça laisse assez de choix — sinon on revient au filtrage simple plutôt que de bloquer la partie.
+  const dispoFrais = dispoBase.filter((m) => !recemmentServis.has(m.id));
+  const dispo = dispoFrais.length >= nombre ? dispoFrais : dispoBase;
 
-  // on puise d'abord dans les films jamais vus, puis dans les plus anciens
-  if (frais.length >= nombre) return melange(frais).slice(0, nombre);
-
-  const anciens = melange(vivier.filter((m) => vus.has(m.id)));
-  return [...melange(frais), ...anciens].slice(0, nombre);
+  let choix;
+  if (dispo.length >= nombre) {
+    choix = tirerAvecEquilibreOrigine(dispo, nombre);
+  } else {
+    // Pas assez d'inédits pour ce joueur : on complète avec les films déjà vus, les plus
+    // anciennement vus en priorité — toujours en essayant de respecter l'équilibre d'origine.
+    const anciens = melange(vivier.filter((m) => vus.has(m.id)));
+    choix = [...tirerAvecEquilibreOrigine(dispo, dispo.length), ...anciens].slice(0, nombre);
+  }
+  marquerServis(choix);
+  return choix;
 }
 
 /** Films récemment vus par un joueur, du plus ancien au plus récent. */
