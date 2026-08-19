@@ -165,6 +165,9 @@ const CONFIG = {
   MAX_PLAYERS: 16,
   CHOICE_RATIO: 1,                // le clic est le seul mode de réponse : score plein
   TIP_URL: process.env.TIP_URL || "https://buymeacoffee.com/votre-pseudo",
+  // Le temps laissé à un salon sans aucun joueur en ligne avant sa suppression :
+  // couvre une coupure wifi ou une mise en veille de téléphone le temps de revenir.
+  ROOM_VIDE_GRACE_MS: 90 * 1000,
 };
 
 /**
@@ -712,6 +715,116 @@ app.post("/api/admin/movies/tmdb-kids-importer", requireAdmin, (req, res) => {
       ignores++; continue;
     }
     const film = sanitizeMovie({ ...brut, kids: true });
+    if (!film.title || !film.synopsis) { ignores++; continue; }
+    film.tmdbId = Number(brut.tmdbId) || null;
+    film.id = Math.max(0, ...movies.map((m) => m.id)) + 1;
+    movies.push(film);
+    titresConnus.add(titreNorm);
+    if (film.tmdbId) idsConnus.add(film.tmdbId);
+    ajoutes++;
+  }
+  saveMovies();
+  res.json({ ajoutes, ignores, total: movies.length });
+});
+
+/** Codes pays acceptés pour l'import ciblé (voir tmdb-pays-suggestions) — liste volontairement
+ *  fermée pour ne jamais transmettre à TMDB une valeur arbitraire venue du client. */
+const PAYS_IMPORT_TMDB = {
+  FR: "France", US: "États-Unis", GB: "Royaume-Uni", CA: "Canada", IT: "Italie", ES: "Espagne",
+  DE: "Allemagne", BE: "Belgique", CH: "Suisse", JP: "Japon", KR: "Corée du Sud", CN: "Chine",
+  HK: "Hong Kong", IN: "Inde", BR: "Brésil", MX: "Mexique", AU: "Australie", SE: "Suède",
+  DK: "Danemark", NO: "Norvège", NL: "Pays-Bas", RU: "Russie", PL: "Pologne", TR: "Turquie",
+  IR: "Iran", TH: "Thaïlande", EG: "Égypte", SN: "Sénégal", MA: "Maroc", DZ: "Algérie",
+  TN: "Tunisie", AR: "Argentine", CO: "Colombie", ZA: "Afrique du Sud", NG: "Nigeria",
+};
+
+/**
+ * Cherche sur TMDB des films d'un pays donné, absents du catalogue — même principe que
+ * l'import ciblé « enfant » ci-dessus, mais filtré par pays d'origine (with_origin_country)
+ * plutôt que par genre. Classe automatiquement chaque suggestion « France » ou
+ * « international » selon le pays choisi, pour alimenter directement l'équilibrage du tirage
+ * des manches (voir choisirFilms / REGLAGES.ratioFilmsFrancaisMax) sans reclassement manuel.
+ */
+app.get("/api/admin/movies/tmdb-pays-suggestions", requireAdmin, async (req, res) => {
+  const tmdbKey = REGLAGES.tmdbApiKey;
+  if (!tmdbKey) return res.status(400).json({ error: "NO_KEY" });
+
+  const pays = String(req.query.pays || "").toUpperCase();
+  if (!PAYS_IMPORT_TMDB[pays]) return res.status(400).json({ error: "PAYS_INVALIDE" });
+
+  const pages = Math.min(5, Math.max(1, Number(req.query.pages) || 2));
+  const limite = Math.min(40, Math.max(1, Number(req.query.limite) || 24));
+  const origine = pays === "FR" ? "france" : "international";
+
+  const idsConnus = new Set(movies.filter((m) => m.tmdbId).map((m) => m.tmdbId));
+  const titresConnus = new Set(movies.map((m) => String(m.title || "").trim().toLowerCase()));
+
+  try {
+    const candidats = [];
+    for (let page = 1; page <= pages && candidats.length < limite * 2; page++) {
+      const url = `https://api.themoviedb.org/3/discover/movie?api_key=${tmdbKey}&language=fr-FR` +
+        `&sort_by=popularity.desc&include_adult=false&with_origin_country=${pays}` +
+        `&vote_count.gte=100&page=${page}`;
+      const r = await fetch(url);
+      if (!r.ok) break;
+      const data = await r.json();
+      for (const m of data.results || []) {
+        if (idsConnus.has(m.id)) continue;
+        if (titresConnus.has(String(m.title || "").trim().toLowerCase())) continue;
+        if (!m.overview || !m.poster_path) continue;
+        candidats.push(m);
+      }
+    }
+
+    const retenus = [];
+    for (const brut of candidats.slice(0, limite)) {
+      try {
+        const dRes = await fetch(
+          `https://api.themoviedb.org/3/movie/${brut.id}?api_key=${tmdbKey}&language=fr-FR&append_to_response=credits`
+        );
+        if (!dRes.ok) continue;
+        const d = await dRes.json();
+        if (!d.overview || !d.poster_path) continue;
+        const estAnime = (d.genres || []).some((g) => g.id === GENRE_ANIMATION_TMDB);
+        const estFamille = (d.genres || []).some((g) => g.id === GENRE_FAMILLE_TMDB);
+        retenus.push({
+          tmdbId: d.id,
+          title: d.title,
+          acceptedAnswers: buildAnswersTmdb(d.title, d.original_title),
+          synopsis: scrubTitreTmdb(d.overview, d.title),
+          year: Number((d.release_date || "").slice(0, 4)) || null,
+          director: (d.credits?.crew || []).find((c) => c.job === "Director")?.name || "",
+          actors: (d.credits?.cast || []).slice(0, 3).map((c) => c.name).join(", "),
+          poster: `https://image.tmdb.org/t/p/w500${d.poster_path}`,
+          still: d.backdrop_path ? `https://image.tmdb.org/t/p/w780${d.backdrop_path}` : "",
+          rating: Math.round((d.vote_average || 0) * 10) / 10,
+          votes: d.vote_count || 0,
+          difficulty: niveauDepuisVotes(d.vote_count || 0),
+          kids: estAnime || estFamille,
+          origine,
+        });
+      } catch { /* un film en erreur n'empêche pas les autres */ }
+    }
+    res.json({ movies: retenus, pays, paysNom: PAYS_IMPORT_TMDB[pays] });
+  } catch (err) {
+    console.error("Erreur suggestions TMDB par pays:", err);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+});
+
+/** Ajoute au catalogue les films choisis par l'administration parmi les suggestions par pays. */
+app.post("/api/admin/movies/tmdb-pays-importer", requireAdmin, (req, res) => {
+  const proposes = Array.isArray(req.body.movies) ? req.body.movies : [];
+  const titresConnus = new Set(movies.map((m) => String(m.title || "").trim().toLowerCase()));
+  const idsConnus = new Set(movies.filter((m) => m.tmdbId).map((m) => m.tmdbId));
+
+  let ajoutes = 0, ignores = 0;
+  for (const brut of proposes) {
+    const titreNorm = String(brut.title || "").trim().toLowerCase();
+    if (!titreNorm || titresConnus.has(titreNorm) || (brut.tmdbId && idsConnus.has(Number(brut.tmdbId)))) {
+      ignores++; continue;
+    }
+    const film = sanitizeMovie(brut);
     if (!film.title || !film.synopsis) { ignores++; continue; }
     film.tmdbId = Number(brut.tmdbId) || null;
     film.id = Math.max(0, ...movies.map((m) => m.id)) + 1;
@@ -3245,6 +3358,9 @@ function publicState(room) {
       id: p.id, userId: p.userId, pseudo: p.pseudo, avatar: p.avatar, score: p.score,
       team: p.team, hasAnswered: p.hasAnswered, online: p.online !== false,
       fondateur: Boolean(p.fondateur),
+      // Diffusés à tout le salon (pas seulement au joueur concerné) pour permettre
+      // l'affichage permanent des cœurs des adversaires en duel / équipes.
+      coeurs: p.coeurs, coeursMax: p.coeursMax,
     })),
     teams: room.mode === "teams" ? teamScores(room) : null,
   };
@@ -3347,7 +3463,11 @@ function startRound(room) {
 
   clearTimeout(room.timer);
   room.timer = setTimeout(() => endRound(room), CONFIG.ROUND_DURATION_MS);
-  
+
+  // Remet à jour l'état public (cœurs inclus) pour l'affichage permanent des
+  // adversaires en duel / équipes, dès le début de la manche.
+  io.to(room.code).emit("room:update", publicState(room));
+
   for (const p of room.players.values()) {
     io.to(p.id).emit("player:round_info", {
       coeursMax: p.coeursMax,
@@ -3469,6 +3589,11 @@ io.on("connection", (socket) => {
   });
 
   socket.on("room:create", ({ rounds, mode, kids }, cb) => {
+    // Un compte ne doit jamais se retrouver hôte de deux salons à la fois : un salon
+    // abandonné sans départ propre (page rechargée, onglet fermé sans clic "quitter")
+    // créerait sinon une partie fantôme en double. On nettoie d'abord son ancien salon.
+    leaveAllRooms(socket, true);
+
     // Un compte enfant crée forcément un salon en mode enfant, quoi qu'envoie le client.
     const compteEnfant = user.role === "enfant";
     // Filtre de films "enfant" : forcé pour un compte enfant, ou activé volontairement par un adulte
@@ -3481,7 +3606,7 @@ io.on("connection", (socket) => {
     const code = generateRoomCode();
     const count = Math.min(Number(rounds) || 10, vivier.length);
     const room = {
-      code, hostId: socket.id, status: "lobby", roundIndex: 0,
+      code, hostId: user.id, status: "lobby", roundIndex: 0,
       mode: ["solo", "ffa", "duel", "teams", "ranked"].includes(mode) ? mode : "ffa",
       kids: modeEnfant,
       // Isolation stricte : un salon créé par un compte enfant ne peut accueillir que des comptes enfants,
@@ -3489,7 +3614,7 @@ io.on("connection", (socket) => {
       compteEnfant,
       players: new Map(),
       playlist: choisirFilms(vivier, count, user.id),
-      currentMovie: null, startedAt: null, timer: null, nextTimer: null, graceTimer: null,
+      currentMovie: null, startedAt: null, timer: null, nextTimer: null, graceTimer: null, emptyTimer: null,
     };
     memoriserVus(user.id, room.playlist);
     rooms.set(code, room);
@@ -3528,16 +3653,28 @@ io.on("connection", (socket) => {
 
     const existingPlayer = room.players.get(user.id);
     const enCours = room.status !== "lobby";
-    
+
+    if (!existingPlayer) {
+      // Rejoindre un nouveau salon (ex. accepter l'invitation d'un ami) nettoie
+      // d'abord toute appartenance à un autre salon : sinon un joueur qui avait déjà
+      // le sien ouvert se retrouve fantôme dans les deux à la fois — une des causes
+      // des « parties en double ». Sans effet sur ce salon-ci, puisqu'il n'y est pas.
+      leaveAllRooms(socket, true);
+    }
+
     if (existingPlayer) {
        existingPlayer.id = socket.id;
        existingPlayer.online = true;
+       // Une reconnexion (coupure réseau, mise en veille…) annule le compte à rebours
+       // de suppression du salon vide déclenché par la déconnexion précédente.
+       clearTimeout(room.emptyTimer);
+       room.emptyTimer = null;
        socket.join(room.code);
        io.to(room.code).emit("room:update", publicState(room));
-       
+
        cb?.({ ok: true, code: room.code, state: publicState(room), waiting: enCours && existingPlayer.hasAnswered,
            roundIndex: room.roundIndex, total: room.playlist.length });
-           
+
        if (room.status === "playing" && !existingPlayer.hasAnswered) {
           const movie = room.currentMovie;
           io.to(socket.id).emit("round:start", {
@@ -3557,6 +3694,18 @@ io.on("connection", (socket) => {
             coeurs: existingPlayer.coeurs,
             freeHintsRemaining: existingPlayer.freeHintsRemaining,
             allHintsFree: existingPlayer.allHintsFree
+          });
+       } else if (room.status === "intermission" && room.currentMovie) {
+          // Reconnecté pendant l'entracte : on rejoue la révélation de la manche
+          // qui vient de se terminer, sinon l'écran resterait figé jusqu'à la suivante.
+          io.to(socket.id).emit("round:end", {
+            answer: room.currentMovie.title,
+            movieId: room.currentMovie.id,
+            poster: room.currentMovie.poster,
+            year: room.currentMovie.year,
+            scores: publicState(room).players,
+            isHost: room.hostId,
+            mode: room.mode,
           });
        }
        return;
@@ -3582,7 +3731,7 @@ io.on("connection", (socket) => {
 
   socket.on("game:start", ({ code }) => {
     const room = rooms.get(code);
-    if (!room || room.hostId !== socket.id || room.status !== "lobby") return;
+    if (!room || !estHote(room, socket.data.user.id) || room.status !== "lobby") return;
     startRound(room);
   });
 
@@ -3629,7 +3778,9 @@ io.on("connection", (socket) => {
       if (!parClic) return cb?.({ ok: true, correct: false });
       player.hasAnswered = true;
       player.coeurs = Math.max(0, (player.coeurs ?? player.coeursMax) - 1);
-      io.to(room.code).emit("player:answered", { id: player.id, pseudo: player.pseudo, team: player.team, points: 0 });
+      io.to(room.code).emit("player:answered", { id: player.id, pseudo: player.pseudo, team: player.team, points: 0,
+        coeurs: player.coeurs, coeursMax: player.coeursMax });
+      io.to(room.code).emit("room:update", publicState(room));   // pour l'affichage permanent des cœurs adverses
       if ([...room.players.values()].every((p) => p.hasAnswered)) endRound(room);
       return cb?.({ ok: true, correct: false, final: true,
                     coeurs: player.coeurs, elimine: player.coeurs === 0 });
@@ -3642,7 +3793,8 @@ io.on("connection", (socket) => {
 
     cb?.({ ok: true, correct: true, points, movieId: room.currentMovie.id,
            coeurs: player.coeurs ?? player.coeursMax });
-    io.to(room.code).emit("player:answered", { id: player.id, pseudo: player.pseudo, team: player.team, points });
+    io.to(room.code).emit("player:answered", { id: player.id, pseudo: player.pseudo, team: player.team, points,
+      coeurs: player.coeurs, coeursMax: player.coeursMax });
 
     const tousTrouve = [...room.players.values()]
       .every((p) => p.hasAnswered || p.coeurs === 0);
@@ -3695,6 +3847,9 @@ io.on("connection", (socket) => {
       player.hasAnswered = true;
       player.coeurs = Math.max(0, (player.coeurs ?? player.coeursMax) - 1);
       socket.emit("coeurs:maj", { coeurs: player.coeurs, elimine: player.coeurs === 0 });
+      io.to(room.code).emit("player:answered", { id: player.id, pseudo: player.pseudo, team: player.team, points: 0,
+        coeurs: player.coeurs, coeursMax: player.coeursMax });
+      io.to(room.code).emit("room:update", publicState(room));   // pour l'affichage permanent des cœurs adverses
     }
     if ([...room.players.values()].every((p) => p.hasAnswered || p.coeurs === 0)) endRound(room);
   });
@@ -3703,7 +3858,7 @@ io.on("connection", (socket) => {
   socket.on("round:next", ({ code }) => {
     const room = rooms.get(code);
     if (!room || !room.players.has(socket.data.user.id) || room.status !== "intermission") return;
-    if (!["solo", "ranked"].includes(room.mode) && room.hostId !== socket.id) return; // l'hôte décide
+    if (!["solo", "ranked"].includes(room.mode) && !estHote(room, socket.data.user.id)) return; // l'hôte décide
     clearTimeout(room.nextTimer);
     startRound(room);
   });
@@ -3715,7 +3870,7 @@ io.on("connection", (socket) => {
    */
   socket.on("game:pause", ({ code, reprendre }) => {
     const room = rooms.get(code);
-    if (!room || room.hostId !== socket.id || room.status !== "playing") return;
+    if (!room || !estHote(room, socket.data.user.id) || room.status !== "playing") return;
 
     if (reprendre) {
       if (!room.pauseA) return;
@@ -3854,17 +4009,22 @@ io.on("connection", (socket) => {
     }
   }
 
-  socket.on("room:leave", () => { leaveAllRooms(socket); arreterRegarder(socket); });
+  // Un départ volontaire (clic sur "quitter") retire vraiment le joueur d'un salon
+  // encore en lobby ; une déconnexion involontaire (coupure réseau, mise en veille du
+  // téléphone, changement de wifi…) ne fait que le marquer hors-ligne un moment, le
+  // temps qu'il revienne — sinon la moindre coupure pendant l'attente d'un ami fait
+  // disparaître tout le salon.
+  socket.on("room:leave", () => { leaveAllRooms(socket, true); arreterRegarder(socket); });
 
-  socket.on("disconnect", () => { leaveAllRooms(socket); arreterRegarder(socket); });
+  socket.on("disconnect", () => { leaveAllRooms(socket, false); arreterRegarder(socket); });
 
-  function leaveAllRooms(socket) {
+  function leaveAllRooms(socket, explicite = false) {
     const userId = socket.data.user?.id;
     for (const room of rooms.values()) {
       const p = room.players.get(userId);
       if (!p || p.id !== socket.id) continue;
 
-      if (room.status === "lobby") {
+      if (room.status === "lobby" && explicite) {
           room.players.delete(userId);
       } else {
           p.online = false;
@@ -3872,13 +4032,28 @@ io.on("connection", (socket) => {
       socket.leave(room.code);
 
       const activePlayers = [...room.players.values()].filter(x => x.online !== false);
+      clearTimeout(room.emptyTimer);
+      room.emptyTimer = null;
+
       if (activePlayers.length === 0) {
         clearTimeout(room.timer); clearTimeout(room.nextTimer); clearTimeout(room.graceTimer);
         diffuserSpectateurs(room, "regarder:termine", { abandon: true });
-        rooms.delete(room.code);
+        // Salon vide : on ne le détruit pas immédiatement. Une coupure réseau ou une
+        // mise en veille de quelques secondes ne doit pas faire perdre la partie —
+        // on laisse une marge de reconnexion avant de vraiment l'effacer.
+        const code = room.code;
+        room.emptyTimer = setTimeout(() => {
+          const r = rooms.get(code);
+          if (r && [...r.players.values()].every((x) => x.online === false)) rooms.delete(code);
+        }, CONFIG.ROOM_VIDE_GRACE_MS);
       } else {
-        if (room.hostId === socket.id && activePlayers.length > 0) {
-            room.hostId = activePlayers[0].id;
+        // Un départ VOLONTAIRE de l'hôte transfère vraiment la main à un autre joueur
+        // actif : il ne reviendra pas. Une simple coupure réseau, elle, ne change rien
+        // à l'hôte affiché — estHote() (plus bas) permet aux autres de continuer si
+        // besoin, et le titulaire retrouve automatiquement son statut dès son retour,
+        // au lieu de le perdre à la moindre micro-coupure.
+        if (explicite && room.hostId === userId) {
+            room.hostId = activePlayers[0].userId;
         }
         io.to(room.code).emit("room:update", publicState(room));
       }
@@ -3886,9 +4061,24 @@ io.on("connection", (socket) => {
   }
 });
 
+/**
+ * Un joueur a l'autorité d'hôte s'il l'est vraiment, ou si l'hôte titulaire est
+ * actuellement injoignable (coupure réseau, mise en veille…) — pour qu'un salon
+ * ne reste jamais bloqué en attendant un hôte parti, tout en lui rendant
+ * automatiquement la main dès qu'il revient (voir leaveAllRooms ci-dessus).
+ */
+function estHote(room, userId) {
+  if (room.hostId === userId) return true;
+  const hote = room.players.get(room.hostId);
+  return !hote || hote.online === false;
+}
+
 function joinRoom(socket, room, user) {
   const niveau = infoNiveau(user.id)?.niveau || 0;
   const avantages = getAvantagesNiveau(niveau);
+  // Un nouveau joueur qui rejoint annule une éventuelle suppression programmée du salon.
+  clearTimeout(room.emptyTimer);
+  room.emptyTimer = null;
 
   room.players.set(user.id, {
     id: socket.id,
