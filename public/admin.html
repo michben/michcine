@@ -498,6 +498,15 @@
               requêtes/jour) sur <b>geoapify.com</b> → « MyProjects » → créer un projet → copier la clé.
             </p>
           </div>
+          <div style="grid-column: 1 / -1;">
+            <label for="rAdsterraKey">Clé API Adsterra (optionnel)</label>
+            <input id="rAdsterraKey" type="text" placeholder="Entrez votre clé API éditeur Adsterra">
+            <p style="color:var(--muted);font-size:12px;margin:4px 0 0;line-height:1.5">
+              Non nécessaire pour diffuser une publicité Adsterra dans la roue : ça se fait uniquement
+              via l'onglet « Publicités » (type « Lien direct »), avec l'URL Adsterra copiée depuis
+              votre tableau de bord. Ce champ est réservé à un usage futur (ex. statistiques).
+            </p>
+          </div>
           <div><label for="rGrace">Délai après la 1re bonne réponse (s)</label><input id="rGrace" type="number" min="0" max="120"></div>
           <div>
             <label for="rVitesse">Dévoilement du synopsis (ms) — 0 pour désactiver</label>
@@ -1158,7 +1167,7 @@ window.importNowPlaying = function(idx) {
 /* ---------- Réglages du jeu ---------- */
 let reglages = null;
 
-const CHAMPS = { rTmdbKey:"tmdbApiKey", rGeoapifyKey:"geoapifyApiKey", rDuree:"roundDuration", rBase:"basePoints", rDepart:"creditsDepart",
+const CHAMPS = { rTmdbKey:"tmdbApiKey", rGeoapifyKey:"geoapifyApiKey", rAdsterraKey:"adsterraApiKey", rDuree:"roundDuration", rBase:"basePoints", rDepart:"creditsDepart",
                  rPartie:"creditsParPartie", rTaux:"pointsParTicket", rGrace:"graceApresPremier",
                  rVitesse:"vitesseSynopsis", rParties:"partiesClasseesParJour",
                  rDonMax:"transfertMax", rDonJour:"transfertParJour", rCoeurs:"coeurs",
@@ -1210,7 +1219,7 @@ for (const id of ["rZoom","rFlou","rCadrage"])
 $("btnSaveReglages").onclick = async () => {
   const corps = { indices: {} };
   for (const [champ, cle] of Object.entries(CHAMPS)) {
-    if (cle === "tmdbApiKey" || cle === "geoapifyApiKey") corps[cle] = $(champ).value.trim();
+    if (cle === "tmdbApiKey" || cle === "geoapifyApiKey" || cle === "adsterraApiKey") corps[cle] = $(champ).value.trim();
     else corps[cle] = Number($(champ).value);
   }
 
@@ -1795,7 +1804,10 @@ async function loadReports(){
         $("pubFeedback").className = "msg ok";
         loadPublicites();
       } else {
-        $("pubFeedback").textContent = "Lien invalide ou refusé.";
+        const d = await res.json().catch(() => ({}));
+        $("pubFeedback").textContent = d.error === "LIEN_SCRIPT_DETECTE"
+          ? "Ce lien pointe vers un fichier .js (un script à intégrer dans une page), pas vers une page à ouvrir — ça affichera du code au lieu d'une publicité. Pour Adsterra, utilisez l'onglet « Direct Links » → « CREATE SMARTLINK » : l'URL générée doit ressembler à une page web classique, pas se terminer par .js."
+          : "Lien invalide ou refusé.";
         $("pubFeedback").className = "msg err";
       }
     };
