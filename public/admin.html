@@ -252,7 +252,14 @@
 
     
 
-    <div id="paneSugg" class="hidden"><div class="card"><p class="tag" id="suggCount">Suggestions des joueurs</p><div id="suggList"></div></div></div>
+    <div id="paneSugg" class="hidden">
+      <div class="card"><p class="tag" id="suggCount">Suggestions des joueurs</p><div id="suggList"></div></div>
+      <div class="card" style="margin-top:16px">
+        <p class="tag" id="suggPubliqueAdminCount">🎟️ Suggestions retenues (vitrine publique)</p>
+        <p class="msg" style="margin-top:0">Visible de tous les joueurs. Corrigez une coquille, retirez-la de la vitrine sans la supprimer, ou supprimez-la définitivement si elle a été publiée par erreur.</p>
+        <div id="suggPubliqueAdminList"></div>
+      </div>
+    </div>
 
     <div id="paneCitations" class="hidden">
       <div class="card">
@@ -549,11 +556,18 @@
         </div>
         <p class="msg" id="grantMsg"></p>
       </div>
+      <div class="card hidden" id="cardUsersAttente" style="border-color:rgba(228,88,110,.5)">
+        <p class="tag" id="userAttenteCount" style="color:var(--ticket)">✉️ Comptes en attente de validation</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 6px;line-height:1.6">
+          Ces comptes viennent de s'inscrire par email et n'ont pas encore confirmé leur adresse — les plus récents en premier.</p>
+        <div id="userListAttente"></div>
+      </div>
       <div class="card">
         <p class="tag" id="userCount">Joueurs</p>
         <p style="color:var(--muted);font-size:13px;margin:0 0 6px;line-height:1.6">
           La photo de profil se colle sous forme d'adresse https. Elle s'impose au joueur,
-          qui ne peut ni la changer ni la retirer. Videz le champ pour revenir à l'émoji.</p>
+          qui ne peut ni la changer ni la retirer. Videz le champ pour revenir à l'émoji.
+          Les comptes les plus récents apparaissent en premier.</p>
         <div id="userList"></div>
       </div>
     </div>
@@ -1322,6 +1336,73 @@ async function loadReports(){
           if (res.ok) loadSuggestions(); else alert("Échec du refus.");
         };
       });
+
+      /* Vitrine publique « Suggestions retenues » : on réutilise la même liste (déjà chargée
+         ci-dessus) filtrée sur publie=true, pour pouvoir corriger une coquille, retirer une
+         suggestion de la vitrine sans la supprimer, ou la supprimer définitivement si elle a
+         été publiée par erreur. */
+      const publiees = list.filter((s) => s.publie);
+      $("suggPubliqueAdminCount").textContent = `🎟️ Suggestions retenues (vitrine publique) — ${publiees.length}`;
+      $("suggPubliqueAdminList").innerHTML = publiees.map((s) => `
+        <div class="item" data-suggpub-item="${esc(s.id)}">
+            <div style="flex:1">
+              <div data-vue>
+                <strong>${esc(s.titre)}</strong><small>${s.anonyme ? "Publiée anonymement" : `Par ${esc(s.auteur)}`}${s.publieLe ? ` le ${new Date(s.publieLe).toLocaleDateString()}` : ""}</small>
+                <div style="font-size:13px; color:var(--muted)">${esc(s.commentaire || "")}</div>
+              </div>
+              <div data-edition class="hidden" style="margin-top:8px">
+                <input data-champ-titre value="${esc(s.titre)}" style="width:100%;margin-bottom:6px" placeholder="Titre">
+                <textarea data-champ-commentaire style="width:100%;min-height:60px" placeholder="Commentaire">${esc(s.commentaire || "")}</textarea>
+              </div>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-start">
+              <button class="ghost" data-editer="${esc(s.id)}">✏️ Modifier</button>
+              <button class="ghost hidden" data-enregistrer="${esc(s.id)}">💾 Enregistrer</button>
+              <button class="ghost hidden" data-annuler="${esc(s.id)}">Annuler</button>
+              <button class="ghost" data-depublier="${esc(s.id)}">🚫 Retirer</button>
+              <button class="ghost danger" data-supprimer="${esc(s.id)}">🗑️ Supprimer</button>
+            </div>
+        </div>
+      `).join("") || "<p class='msg'>Aucune suggestion publiée pour l'instant.</p>";
+
+      $("suggPubliqueAdminList").querySelectorAll("[data-editer]").forEach((btn) => {
+        btn.onclick = () => {
+          const item = btn.closest("[data-suggpub-item]");
+          item.querySelector("[data-vue]").classList.add("hidden");
+          item.querySelector("[data-edition]").classList.remove("hidden");
+          btn.classList.add("hidden");
+          item.querySelector("[data-enregistrer]").classList.remove("hidden");
+          item.querySelector("[data-annuler]").classList.remove("hidden");
+        };
+      });
+      $("suggPubliqueAdminList").querySelectorAll("[data-annuler]").forEach((btn) => {
+        btn.onclick = () => loadSuggestions();
+      });
+      $("suggPubliqueAdminList").querySelectorAll("[data-enregistrer]").forEach((btn) => {
+        btn.onclick = async () => {
+          const item = btn.closest("[data-suggpub-item]");
+          const titre = item.querySelector("[data-champ-titre]").value.trim();
+          const commentaire = item.querySelector("[data-champ-commentaire]").value.trim();
+          if (!titre){ alert("Le titre ne peut pas être vide."); return; }
+          const res = await api(`/api/admin/suggestions/${encodeURIComponent(btn.dataset.enregistrer)}`,
+            { method:"PUT", body: JSON.stringify({ titre, commentaire }) });
+          if (res.ok) loadSuggestions(); else alert("Échec de la modification.");
+        };
+      });
+      $("suggPubliqueAdminList").querySelectorAll("[data-depublier]").forEach((btn) => {
+        btn.onclick = async () => {
+          if (!confirm("Retirer cette suggestion de la vitrine publique ? Elle restera visible ici et son auteur pourra la republier plus tard.")) return;
+          const res = await api(`/api/admin/suggestions/${encodeURIComponent(btn.dataset.depublier)}/depublier`, { method:"POST" });
+          if (res.ok) loadSuggestions(); else alert("Échec du retrait.");
+        };
+      });
+      $("suggPubliqueAdminList").querySelectorAll("[data-supprimer]").forEach((btn) => {
+        btn.onclick = async () => {
+          if (!confirm("Supprimer définitivement cette suggestion ? Cette action est irréversible.")) return;
+          const res = await api(`/api/admin/suggestions/${encodeURIComponent(btn.dataset.supprimer)}`, { method:"DELETE" });
+          if (res.ok) loadSuggestions(); else alert("Échec de la suppression.");
+        };
+      });
     }
 
     /* ---------- Citations de cinéma ---------- */
@@ -1629,9 +1710,9 @@ async function loadUsers(){
   players = await res.json();
   renderUsers();
 }
-function renderUsers(){
-  $("userCount").textContent = `${players.length} joueur${players.length>1?"s":""} inscrit${players.length>1?"s":""}`;
-  $("userList").innerHTML = players.map(u => `
+/** Une ligne de la liste des joueurs — utilisée à la fois pour la liste complète et pour
+ *  la carte « en attente de validation » ci-dessus, afin de garder un seul gabarit à jour. */
+const ligneJoueur = (u) => `
     <div class="urow ${u.banned?"banned":""}">
       <div class="who">
         <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
@@ -1641,7 +1722,7 @@ function renderUsers(){
           ${u.banned?'<span class="chip">banni</span>':""}
         </div>
         <small>${u.totalScore||0} pts · ${u.gamesPlayed||0} parties${u.xHandle?" · @"+esc(u.xHandle):""}${u.online?" · en ligne":""}</small>
-        <small>niveau ${u.niveau || 0}${u.codeParrain ? " · code "+esc(u.codeParrain) : ""}${u.fondateur ? " · fondateur" : ""}${u.email && !u.emailVerifie ? " · email à valider" : ""}</small>
+        <small>niveau ${u.niveau || 0}${u.codeParrain ? " · code "+esc(u.codeParrain) : ""}${u.fondateur ? " · fondateur" : ""}${u.email && !u.emailVerifie ? " · email à valider" : ""}${u.creeLe ? " · inscrit le "+new Date(u.creeLe).toLocaleDateString() : ""}</small>
       </div>
       <img src="${u.photo || ""}" alt="" class="pfp ${u.photo ? "" : "vide"}"
            onerror="this.classList.add('vide')" title="${u.photo ? "Photo attribuée" : "Aucune photo"}">
@@ -1661,77 +1742,71 @@ function renderUsers(){
       <button class="ghost" data-ban="${u.id}">${u.banned?"Réactiver":"Bannir"}</button>
       <button class="danger" data-del="${u.id}">Supprimer</button>
       <button class="ghost" style="color:var(--teal)" data-debug="${u.id}">🔍 Debug</button>
-    </div>`).join("");
+    </div>`;
+
+function renderUsers(){
+  // Les comptes email non encore validés, les plus récents en premier (players est déjà
+  // trié ainsi côté serveur) — mis en avant dans leur propre carte pour ne pas se noyer
+  // dans la liste complète.
+  const enAttente = players.filter(u => u.email && !u.emailVerifie);
+  $("cardUsersAttente").classList.toggle("hidden", enAttente.length === 0);
+  $("userAttenteCount").textContent = `✉️ Comptes en attente de validation — ${enAttente.length}`;
+  $("userListAttente").innerHTML = enAttente.map(ligneJoueur).join("");
+
+  $("userCount").textContent = `${players.length} joueur${players.length>1?"s":""} inscrit${players.length>1?"s":""}`;
+  $("userList").innerHTML = players.map(ligneJoueur).join("");
+
+  // Les deux cartes partagent le même gabarit : on branche les actions une seule fois
+  // sur l'ensemble de l'onglet plutôt que sur chaque liste séparément.
+  const zone = $("paneUsers");
 
   // aperçu immédiat quand on colle une adresse
-  $("userList").querySelectorAll("[data-photo]").forEach(champ => champ.oninput = () => {
+  zone.querySelectorAll("[data-photo]").forEach(champ => champ.oninput = () => {
     const img = champ.previousElementSibling;
     img.src = champ.value.trim();
     img.classList.toggle("vide", !champ.value.trim());
   });
 
-  $("userList").querySelectorAll("[data-save]").forEach(b => b.onclick = async () => {
+  zone.querySelectorAll("[data-save]").forEach(b => b.onclick = async () => {
     const id = b.dataset.save;
-    const credits = Number($("userList").querySelector(`[data-credits="${CSS.escape(id)}"]`).value);
-    const role = $("userList").querySelector(`[data-role="${CSS.escape(id)}"]`).value;
-    const photo = $("userList").querySelector(`[data-photo="${CSS.escape(id)}"]`).value.trim();
-    const pseudo = $("userList").querySelector(`[data-pseudo="${CSS.escape(id)}"]`).value.trim();
+    const credits = Number(zone.querySelector(`[data-credits="${CSS.escape(id)}"]`).value);
+    const role = zone.querySelector(`[data-role="${CSS.escape(id)}"]`).value;
+    const photo = zone.querySelector(`[data-photo="${CSS.escape(id)}"]`).value.trim();
+    const pseudo = zone.querySelector(`[data-pseudo="${CSS.escape(id)}"]`).value.trim();
     await api(`/api/admin/users/${encodeURIComponent(id)}`, {method:"PUT", body:JSON.stringify({credits, role, photo, pseudo})});
     loadUsers();
   });
-  $("userList").querySelectorAll("[data-debug]").forEach(b => b.onclick = async () => {
-    const res = await api(`/api/admin/debug-user/${encodeURIComponent(b.dataset.debug)}`, {method:"POST"});
-    if(res.ok) { alert("Compte debuggé : email validé, ban levé."); loadUsers(); }
-    else { alert("Erreur debug."); }
-  });
 
-  $("userList").querySelectorAll("[data-valider]").forEach(b => b.onclick = async () => {
+  zone.querySelectorAll("[data-valider]").forEach(b => b.onclick = async () => {
     await api(`/api/admin/users/${encodeURIComponent(b.dataset.valider)}/valider`, {method:"PUT"});
     loadUsers();
   });
-  $("userList").querySelectorAll("[data-debug]").forEach(b => b.onclick = async () => {
-    const res = await api(`/api/admin/debug-user/${encodeURIComponent(b.dataset.debug)}`, {method:"POST"});
-    if(res.ok) { alert("Compte debuggé : email validé, ban levé."); loadUsers(); }
-    else { alert("Erreur debug."); }
-  });
 
-
-  $("userList").querySelectorAll("[data-fondateur]").forEach(b => b.onclick = async () => {
+  zone.querySelectorAll("[data-fondateur]").forEach(b => b.onclick = async () => {
     const u = players.find(p => p.id === b.dataset.fondateur);
     await api(`/api/admin/users/${encodeURIComponent(u.id)}/fondateur`,
       {method:"PUT", body: JSON.stringify({fondateur: !u.fondateur})});
     loadUsers();
   });
-  $("userList").querySelectorAll("[data-debug]").forEach(b => b.onclick = async () => {
-    const res = await api(`/api/admin/debug-user/${encodeURIComponent(b.dataset.debug)}`, {method:"POST"});
-    if(res.ok) { alert("Compte debuggé : email validé, ban levé."); loadUsers(); }
-    else { alert("Erreur debug."); }
-  });
 
-
-  $("userList").querySelectorAll("[data-ban]").forEach(b => b.onclick = async () => {
+  zone.querySelectorAll("[data-ban]").forEach(b => b.onclick = async () => {
     const u = players.find(p => p.id === b.dataset.ban);
     await api(`/api/admin/users/${encodeURIComponent(u.id)}`, {method:"PUT", body:JSON.stringify({banned: !u.banned})});
     loadUsers();
   });
-  $("userList").querySelectorAll("[data-debug]").forEach(b => b.onclick = async () => {
-    const res = await api(`/api/admin/debug-user/${encodeURIComponent(b.dataset.debug)}`, {method:"POST"});
-    if(res.ok) { alert("Compte debuggé : email validé, ban levé."); loadUsers(); }
-    else { alert("Erreur debug."); }
-  });
 
-  $("userList").querySelectorAll("[data-del]").forEach(b => b.onclick = async () => {
+  zone.querySelectorAll("[data-del]").forEach(b => b.onclick = async () => {
     const u = players.find(p => p.id === b.dataset.del);
     if (!confirm(`Supprimer définitivement le compte « ${u.pseudo || u.id} » ?`)) return;
     await api(`/api/admin/users/${encodeURIComponent(u.id)}`, {method:"DELETE"});
     loadUsers();
   });
-  $("userList").querySelectorAll("[data-debug]").forEach(b => b.onclick = async () => {
+
+  zone.querySelectorAll("[data-debug]").forEach(b => b.onclick = async () => {
     const res = await api(`/api/admin/debug-user/${encodeURIComponent(b.dataset.debug)}`, {method:"POST"});
     if(res.ok) { alert("Compte debuggé : email validé, ban levé."); loadUsers(); }
     else { alert("Erreur debug."); }
   });
-
 }
 
 $("btnGenInvite").onclick = async () => {

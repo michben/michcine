@@ -4410,6 +4410,22 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
         </div>
     </div>
 
+    <!-- MODALE BANDE-ANNONCE : ouverte au clic sur un film des « Sorties de la semaine ». -->
+    <div class="modal-overlay" id="trailerModal">
+        <div class="modal-content">
+            <div class="modal-header" style="border-bottom-color: var(--ticket);">
+                <h2 id="trailerTitre">🎬 Bande-annonce</h2>
+                <button class="close-btn" id="closeTrailerBtn">&times;</button>
+            </div>
+            <div class="modal-body" style="padding:0">
+                <div style="position:relative;width:100%;padding-top:56.25%;background:#000">
+                    <iframe id="trailerFrame" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0" allow="autoplay; encrypted-media" allowfullscreen title="Bande-annonce"></iframe>
+                </div>
+                <p class="note" id="trailerMsg" style="text-align:center;padding:14px"></p>
+            </div>
+        </div>
+    </div>
+
     <!-- MODALE ACTUELLEMENT AU CINEMA -->
     <div class="modal-overlay" id="nowPlayingModal">
         <div class="modal-content">
@@ -4631,18 +4647,23 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
 
                     let html = `<p class="tag" style="margin-bottom:16px;">Semaine du mercredi ${dateFr}</p>`;
                     html += data.movies.map(m => `
-                        <div class="bday-item" style="border-left-color: var(--ticket); align-items:flex-start;">
+                        <div class="bday-item" data-trailer-id="${m.id}" data-trailer-titre="${esc(m.title || "")}" style="border-left-color: var(--ticket); align-items:flex-start; cursor:pointer;" title="Voir la bande-annonce">
                             ${m.poster ? `<img src="${m.poster}" alt="" style="width:70px;height:100px;border-radius:4px;">` : `<div style="width:70px;height:100px;border-radius:4px;background:#333;display:flex;align-items:center;justify-content:center;font-size:24px">🍿</div>`}
                             <div class="info" style="flex:1;">
                                 <b style="font-family:'Anton', sans-serif; letter-spacing:1px; text-transform:uppercase; font-size:18px;">${m.title}</b>
-                                <div style="display:flex;gap:6px;margin:6px 0;">
+                                <div style="display:flex;gap:6px;margin:6px 0;align-items:center;">
                                     <span style="font-size:11px;background:var(--ticket);padding:2px 6px;border-radius:4px;color:#fff;">⭐ ${m.vote.toFixed(1)}/10</span>
+                                    <span style="font-size:11px;color:var(--beam)">▶ Bande-annonce</span>
                                 </div>
                                 <small style="display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;">${m.overview || "Aucun synopsis disponible."}</small>
                             </div>
                         </div>
                     `).join("");
                     document.getElementById("upcomingMoviesList").innerHTML = html;
+                    // Un clic n'importe où sur la fiche d'un film ouvre sa bande-annonce dans le lecteur vidéo.
+                    document.getElementById("upcomingMoviesList").querySelectorAll("[data-trailer-id]").forEach(el => {
+                        el.onclick = () => ouvrirTrailer(el.dataset.trailerId, el.dataset.trailerTitre);
+                    });
                 } catch(e) {
                     document.getElementById("upcomingMoviesList").innerHTML = "<p class='note' style='color:var(--ticket)'>Erreur lors du chargement des sorties.</p>";
                 }
@@ -4652,6 +4673,43 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
                 if (e.target === upcomingMoviesModal) upcomingMoviesModal.classList.remove('active');
             });
         }
+
+        /* Lecteur de bande-annonce : ouvert au clic sur un film des « Sorties de la semaine ».
+           La bande-annonce (YouTube) n'est cherchée qu'à ce moment-là, film par film, pour ne
+           pas multiplier les appels TMDB à chaque ouverture de la liste. */
+        const trailerModal = document.getElementById("trailerModal");
+        const trailerFrame = document.getElementById("trailerFrame");
+        const trailerMsg = document.getElementById("trailerMsg");
+        const trailerTitreEl = document.getElementById("trailerTitre");
+        const closeTrailerBtn = document.getElementById("closeTrailerBtn");
+
+        function fermerTrailer(){
+            trailerModal.classList.remove("active");
+            trailerFrame.src = "";   // coupe la lecture dès la fermeture
+        }
+
+        async function ouvrirTrailer(tmdbId, titre){
+            trailerTitreEl.textContent = `🎬 ${titre || "Bande-annonce"}`;
+            trailerMsg.textContent = "Recherche de la bande-annonce…";
+            trailerFrame.src = "";
+            trailerModal.classList.add("active");
+            try {
+                const res = await fetch(`/api/movies/${encodeURIComponent(tmdbId)}/trailer`);
+                const data = await res.json();
+                if (data.key){
+                    trailerFrame.src = `https://www.youtube.com/embed/${encodeURIComponent(data.key)}?autoplay=1&rel=0`;
+                    trailerMsg.textContent = "";
+                } else if (data.error === "NO_KEY"){
+                    trailerMsg.textContent = "Fonctionnalité en attente de configuration (clé API TMDB manquante).";
+                } else {
+                    trailerMsg.textContent = "Aucune bande-annonce trouvée pour ce film.";
+                }
+            } catch(e){
+                trailerMsg.textContent = "Erreur lors du chargement de la bande-annonce.";
+            }
+        }
+        closeTrailerBtn.addEventListener("click", fermerTrailer);
+        trailerModal.addEventListener("click", (e) => { if (e.target === trailerModal) fermerTrailer(); });
     </script>
 
 
