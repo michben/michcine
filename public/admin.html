@@ -540,10 +540,27 @@
       </div>
 
       <div class="card">
+        <p class="tag">Logos « Cinéma le plus proche »</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 16px;line-height:1.5">
+          Uploadez un logo pour chaque enseigne détectée automatiquement dans le nom du cinéma
+          (UGC, MK2, Gaumont), et une image générique pour tous les autres cinémas
+          (« indépendants » — CGR, Pathé, Cinéville, salles locales…). Le logo s'affiche sur la
+          fiche du cinéma dans « Cinéma le plus proche ». Formats acceptés : PNG, JPG, WEBP, SVG,
+          GIF — 1 Mo maximum par image.
+        </p>
+        <div id="logosCinemaGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px"></div>
+        <p class="msg" id="logosCinemaMsg"></p>
+      </div>
+
+      <div class="card">
         <p class="tag">Apparence du site</p>
         <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer;font-size:15px;color:var(--chalk);text-transform:none;letter-spacing:0">
           <input type="checkbox" id="rAnimAvancees" style="width:auto">
           Activer les effets visuels (Animations boutons au survol/toucher)
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer;font-size:15px;color:var(--chalk);text-transform:none;letter-spacing:0">
+          <input type="checkbox" id="rAfficherRadio" style="width:auto">
+          Afficher la radio d'ambiance (bouton lecture, 👍/👎 compris) sur le site
         </label>
         <label for="favInput">Changer le Favicon (l'icône de l'onglet)</label>
         <input type="file" id="favInput" accept=".png, .svg, .ico, .jpg, .jpeg" style="background: transparent; border: none; padding: 0;">
@@ -1197,6 +1214,8 @@ async function chargerReglages(){
   $("rCadrage").value = p.cadrage;
   majApercu();
   $("rAnimAvancees").checked = reglages.animationsAvancees !== false;
+  $("rAfficherRadio").checked = reglages.afficherRadio !== false;
+  renderLogosCinema();
 
   $("listeIndices").innerHTML = Object.entries(reglages.indices).map(([cle, v]) => `
     <div class="urow">
@@ -1243,6 +1262,7 @@ $("btnSaveReglages").onclick = async () => {
     };
   }
   corps.animationsAvancees = $("rAnimAvancees").checked;
+  corps.afficherRadio = $("rAfficherRadio").checked;
   Object.assign(corps.indices.poster, {
     zoom: Number($("rZoom").value), flou: Number($("rFlou").value), cadrage: $("rCadrage").value,
   });
@@ -1314,6 +1334,72 @@ $("btnChangerMdp").onclick = async () => {
   dire("Mot de passe changé. Notez-le : il est irrécupérable.", true);
   etatSecurite();
 };
+
+/* ---------- Logos des enseignes de cinéma (« Cinéma le plus proche ») ---------- */
+const LOGOS_CINEMA_DEFS = [
+  { cle: "ugc", libelle: "UGC" },
+  { cle: "mk2", libelle: "MK2" },
+  { cle: "gaumont", libelle: "Gaumont" },
+  { cle: "independant", libelle: "Cinémas indépendants" },
+];
+
+function renderLogosCinema(){
+  const logos = reglages.logosCinema || {};
+  $("logosCinemaGrid").innerHTML = LOGOS_CINEMA_DEFS.map(({ cle, libelle }) => `
+    <div style="background:var(--card);border-radius:10px;padding:10px;text-align:center">
+      <div style="width:100%;aspect-ratio:1;border-radius:8px;background:#222;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:8px">
+        ${logos[cle] ? `<img src="${logos[cle]}" alt="${esc(libelle)}" style="width:100%;height:100%;object-fit:contain;padding:6px;box-sizing:border-box">` : `<span style="font-size:12px;color:var(--muted)">Aucun logo</span>`}
+      </div>
+      <p style="font-size:13px;font-weight:700;margin:0 0 8px">${esc(libelle)}</p>
+      <input type="file" data-logo-input="${cle}" accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif" style="background:transparent;border:none;padding:0;font-size:12px;width:100%">
+      <div class="row" style="margin-top:8px;gap:6px">
+        <button data-logo-upload="${cle}" style="flex:1;padding:7px 8px;font-size:12px">Uploader</button>
+        ${logos[cle] ? `<button data-logo-retirer="${cle}" class="ghost" style="flex:0 0 auto;padding:7px 10px;font-size:12px">✕</button>` : ""}
+      </div>
+    </div>`).join("");
+
+  $("logosCinemaGrid").querySelectorAll("[data-logo-upload]").forEach(btn => btn.onclick = () => {
+    const cle = btn.dataset.logoUpload;
+    const file = $("logosCinemaGrid").querySelector(`[data-logo-input="${cle}"]`).files[0];
+    if (!file) {
+      $("logosCinemaMsg").textContent = "Sélectionnez d'abord une image.";
+      $("logosCinemaMsg").className = "msg err";
+      return;
+    }
+    if (file.size > 1_000_000) {
+      $("logosCinemaMsg").textContent = "Image trop lourde (1 Mo maximum) — réduisez-la puis réessayez.";
+      $("logosCinemaMsg").className = "msg err";
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      $("logosCinemaMsg").textContent = "Upload en cours...";
+      $("logosCinemaMsg").className = "msg";
+      const res = await api("/api/admin/logos-cinema", { method: "POST", body: JSON.stringify({ cle, image: e.target.result }) });
+      if (res.ok) {
+        reglages.logosCinema = (await res.json()).logosCinema;
+        renderLogosCinema();
+        $("logosCinemaMsg").textContent = "Logo mis à jour.";
+        $("logosCinemaMsg").className = "msg ok";
+      } else {
+        $("logosCinemaMsg").textContent = "Erreur lors de l'upload (image invalide ou trop lourde).";
+        $("logosCinemaMsg").className = "msg err";
+      }
+    };
+    reader.readAsDataURL(file);
+  });
+
+  $("logosCinemaGrid").querySelectorAll("[data-logo-retirer]").forEach(btn => btn.onclick = async () => {
+    const cle = btn.dataset.logoRetirer;
+    const res = await api("/api/admin/logos-cinema", { method: "POST", body: JSON.stringify({ cle, image: "" }) });
+    if (res.ok) {
+      reglages.logosCinema = (await res.json()).logosCinema;
+      renderLogosCinema();
+      $("logosCinemaMsg").textContent = "Logo retiré.";
+      $("logosCinemaMsg").className = "msg ok";
+    }
+  });
+}
 
 /* ---------- Conversations signalées ---------- */
 $("btnUploadFavicon").onclick = () => {
