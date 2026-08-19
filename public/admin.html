@@ -165,6 +165,13 @@
       </label>
       <p class="msg" id="fKidsMsg" style="margin-top:4px"></p>
 
+      <label for="fOrigine" style="margin-top:14px">Origine (pour équilibrer le tirage des manches)</label>
+      <select id="fOrigine">
+        <option value="">Non classé</option>
+        <option value="france">🇫🇷 France</option>
+        <option value="international">🌍 International</option>
+      </select>
+
       <div style="margin-top:20px;padding-top:18px;border-top:1px solid rgba(237,232,220,.12)">
         <p class="tag" style="margin-bottom:8px">Cadrage de l'image d'indice pour ce série</p>
         <label style="display:flex;align-items:center;gap:9px;text-transform:none;letter-spacing:0;font-size:15px;color:var(--chalk);margin-bottom:12px">
@@ -449,6 +456,10 @@
           Décochez un indice pour le retirer du jeu. Les points sont retranchés du score de
           la manche, les tickets débités du compte du joueur.</p>
         <div id="listeIndices"></div>
+        <div class="row">
+          <button id="btnSaveIndices">Enregistrer ces réglages</button>
+        </div>
+        <p class="msg" id="indicesReglagesMsg"></p>
       </div>
 
       <div class="card">
@@ -478,6 +489,10 @@
         <div id="apercuCadre" style="width:260px;aspect-ratio:16/9;overflow:hidden;border-radius:10px;background:var(--card)">
           <img id="apercuImg" alt="" style="width:100%;height:100%;object-fit:cover;display:block">
         </div>
+        <div class="row" style="margin-top:14px">
+          <button id="btnSaveCadrage">Enregistrer ces réglages</button>
+        </div>
+        <p class="msg" id="cadrageReglagesMsg"></p>
       </div>
 
       <div class="card">
@@ -525,6 +540,17 @@
           <div><label for="rDonMax">Don maximum par opération</label><input id="rDonMax" type="number" min="0" max="100000"></div>
           <div><label for="rDonJour">Plafond de dons par 24 h</label><input id="rDonJour" type="number" min="0" max="500000"></div>
           <div><label for="rCoeurs">Cœurs par partie (erreurs tolérées)</label><input id="rCoeurs" type="number" min="1" max="10"></div>
+          <div style="grid-column: 1 / -1;">
+            <label for="rRatioFr">Films français : maximum par manche (%)</label>
+            <input id="rRatioFr" type="number" min="0" max="100">
+            <p style="color:var(--muted);font-size:12px;margin:4px 0 0;line-height:1.5">
+              Le reste (international + films non classés) comble la différence. Une partie
+              n'est jamais raccourcie si le vivier international manque : on repuise alors dans
+              le français. Ce plafond n'a d'effet que sur les films classés « France » /
+              « International » depuis l'onglet Films (champ « Origine ») — voir le résumé en
+              haut de cet onglet pour savoir combien restent à classer.
+            </p>
+          </div>
           <div><label for="rNivMax">Niveau maximum</label><input id="rNivMax" type="number" min="10" max="1000"></div>
           <div><label for="rXpBase">Expérience du premier niveau</label><input id="rXpBase" type="number" min="10" max="10000"></div>
           <div><label for="rXpCroiss">Croissance par niveau (1.04 = +4 %)</label><input id="rXpCroiss" type="number" min="1.01" max="2" step="0.01"></div>
@@ -566,7 +592,11 @@
           <input type="checkbox" id="rAutoriserSpectateur" style="width:auto">
           Autoriser à regarder la partie d'un ami en direct (lecture seule, désactivé par défaut)
         </label>
-        <label for="favInput">Changer le Favicon (l'icône de l'onglet)</label>
+        <div class="row">
+          <button id="btnSaveApparence">Enregistrer ces réglages</button>
+        </div>
+        <p class="msg" id="apparenceReglagesMsg"></p>
+        <label for="favInput" style="display:block;margin-top:18px">Changer le Favicon (l'icône de l'onglet)</label>
         <input type="file" id="favInput" accept=".png, .svg, .ico, .jpg, .jpeg" style="background: transparent; border: none; padding: 0;">
         <div class="row">
           <button id="btnUploadFavicon">Uploader le favicon</button>
@@ -724,11 +754,13 @@ function render(){
     <div class="item ${m.enabled === false ? "off" : ""}">
       <img src="${m.poster||""}" alt="" onerror="this.style.visibility='hidden'">
       <div>
-        <strong>${esc(m.title)}<span class="lvl">${m.difficulty||"?"}</span>${m.cadrageImage ? '<span class="lvl" style="border-color:var(--beam);color:var(--beam)">cadrage</span>' : ""}${m.kids ? '<span class="lvl" style="border-color:#3DDC84;color:#3DDC84">🐻 enfant</span>' : ""}</strong>
+        <strong>${esc(m.title)}<span class="lvl">${m.difficulty||"?"}</span>${m.cadrageImage ? '<span class="lvl" style="border-color:var(--beam);color:var(--beam)">cadrage</span>' : ""}${m.kids ? '<span class="lvl" style="border-color:#3DDC84;color:#3DDC84">🐻 enfant</span>' : ""}${m.origine ? `<span class="lvl">${m.origine === "france" ? "🇫🇷 France" : "🌍 International"}</span>` : '<span class="lvl" style="opacity:.6">origine non classée</span>'}</strong>
         <small>${m.year||"—"} · ${m.rating ? m.rating+"/10 · " : ""}${esc(m.director||"réalisateur non renseigné")}</small>
       </div>
       <button class="ghost" data-toggle="${m.id}">${m.enabled === false ? "Activer" : "Retirer"}</button>
       <button class="ghost" data-kids-toggle="${m.id}" style="${m.kids ? "border-color:#3DDC84;color:#3DDC84" : ""}">${m.kids ? "🐻 Retirer enfant" : "🐻 Marquer enfant"}</button>
+      <button class="ghost" data-origine-toggle="${m.id}" title="Cliquez pour faire tourner : non classé → France → International">
+        ${m.origine === "france" ? "🇫🇷 France" : m.origine === "international" ? "🌍 International" : "Origine : non classé"}</button>
       <button class="ghost" data-edit="${m.id}">Modifier</button>
       <button class="danger" data-del="${m.id}">Supprimer</button>
     </div>`).join("");
@@ -744,6 +776,13 @@ function render(){
     const res = await api(`/api/movies/${m.id}`, {method:"PUT",
       body: JSON.stringify({...m, kids: !m.kids})});
     if (res.ok){ Object.assign(m, await res.json()); render(); }
+  });
+  $("list").querySelectorAll("[data-origine-toggle]").forEach(b => b.onclick = async () => {
+    const m = movies.find(x => x.id === Number(b.dataset.origineToggle));
+    const suivant = m.origine === "" || !m.origine ? "france" : m.origine === "france" ? "international" : "";
+    const res = await api(`/api/movies/${m.id}`, {method:"PUT",
+      body: JSON.stringify({...m, origine: suivant})});
+    if (res.ok){ Object.assign(m, await res.json()); render(); loadStats(); }
   });
   $("list").querySelectorAll("[data-edit]").forEach(b => b.onclick = () => edit(Number(b.dataset.edit)));
   $("list").querySelectorAll("[data-del]").forEach(b => b.onclick = () => remove(Number(b.dataset.del)));
@@ -829,6 +868,7 @@ function edit(id){
   chargerCadrage(m);
   $("fKids").checked = !!m.kids;
   fKidsTouche = true;
+  $("fOrigine").value = m.origine || "";
   $("formTitle").textContent = `Modifier : ${m.title}`;
   $("btnCancel").classList.remove("hidden");
   window.scrollTo({top:0, behavior:"smooth"});
@@ -840,6 +880,7 @@ function resetForm(){
   chargerCadrage(null);
   $("fKids").checked = false;
   fKidsTouche = false;
+  $("fOrigine").value = "";
   $("formTitle").textContent = "Nouveau film";
   $("btnCancel").classList.add("hidden");
 }
@@ -849,8 +890,11 @@ async function loadStats(){
   const res = await api("/api/admin/stats");
   if (!res.ok) return;
   const s = await res.json();
+  const o = s.parOrigine || { france: 0, international: 0, nonClasse: 0 };
   $("stats").textContent = `${s.actifs} films actifs sur ${s.total} — `
-    + Object.entries(s.parNiveau).map(([n,v]) => `${n} ${v.actifs}/${v.total}`).join(", ");
+    + Object.entries(s.parNiveau).map(([n,v]) => `${n} ${v.actifs}/${v.total}`).join(", ")
+    + ` — origine : 🇫🇷 ${o.france} · 🌍 ${o.international} · non classés ${o.nonClasse}`
+    + (o.nonClasse > 0 ? ` (à classer depuis les fiches ci-dessous, pour un tirage vraiment équilibré)` : "");
   $("stats").className = "msg";
 }
 
@@ -956,9 +1000,16 @@ $("btnEnable").onclick = () => bulk(true);
 $("btnDisable").onclick = () => bulk(false);
 
 $("btnSave").onclick = async () => {
-  const body = Object.fromEntries(FIELDS.map(f => [f, $(f).value.trim()]));
+  // On repart de la fiche existante (si modification) pour ne pas écraser les champs que ce
+  // formulaire ne présente pas — note, votes, tmdbId, difficulté, activation, origine… — avec
+  // les valeurs par défaut du serveur : c'était le cas jusqu'ici, et chaque modification via ce
+  // formulaire remettait silencieusement le film à "difficile" et le réactivait.
+  const existant = editingId ? movies.find(m => m.id === editingId) : null;
+  const body = { ...(existant || {}) };
+  for (const f of FIELDS) body[f] = $(f).value.trim();
   body.cadrageImage = cadrageSaisi();
   body.kids = $("fKids").checked;
+  body.origine = $("fOrigine").value;
   if (!body.title || !body.synopsis){
     $("formMsg").textContent = "Le titre et le synopsis sont obligatoires.";
     $("formMsg").className = "msg err"; return;
@@ -1203,6 +1254,7 @@ const CHAMPS = { rTmdbKey:"tmdbApiKey", rGeoapifyKey:"geoapifyApiKey", rAdsterra
                  rPartie:"creditsParPartie", rTaux:"pointsParTicket", rGrace:"graceApresPremier",
                  rVitesse:"vitesseSynopsis", rParties:"partiesClasseesParJour",
                  rDonMax:"transfertMax", rDonJour:"transfertParJour", rCoeurs:"coeurs",
+                 rRatioFr:"ratioFilmsFrancaisMax",
                  rNivMax:"niveauMax", rXpBase:"xpBase", rXpCroiss:"xpCroissance",
                  rXpPartie:"xpParPartie", rXpBonne:"xpParBonneReponse", rXpVict:"xpParVictoire" };
 
@@ -1251,7 +1303,13 @@ for (const id of ["rZoom","rFlou","rCadrage"])
     majApercu();
   });
 
-$("btnSaveReglages").onclick = async () => {
+/**
+ * Un seul et même enregistrement pour TOUS les champs de l'onglet Réglages, quelle que soit la
+ * carte visuelle où ils se trouvent (Rythme et économie, Indices, Cadrage, Apparence du site…) :
+ * plusieurs boutons y donnent accès (voir plus bas) pour que chaque carte ait le sien sous la
+ * main, sans dupliquer la logique d'enregistrement elle-même.
+ */
+async function enregistrerReglages(msgEl){
   const corps = { indices: {} };
   for (const [champ, cle] of Object.entries(CHAMPS)) {
     if (cle === "tmdbApiKey" || cle === "geoapifyApiKey" || cle === "adsterraApiKey") corps[cle] = $(champ).value.trim();
@@ -1274,12 +1332,18 @@ $("btnSaveReglages").onclick = async () => {
   });
 
   const res = await api("/api/admin/reglages", {method:"PUT", body: JSON.stringify(corps)});
-  $("reglagesMsg").textContent = res.ok
+  const cible = msgEl || $("reglagesMsg");
+  cible.textContent = res.ok
     ? "Réglages enregistrés. Ils s'appliquent dès la prochaine manche."
     : "Enregistrement refusé.";
-  $("reglagesMsg").className = res.ok ? "msg ok" : "msg err";
+  cible.className = res.ok ? "msg ok" : "msg err";
   if (res.ok) chargerReglages();
-};
+}
+
+$("btnSaveReglages").onclick = () => enregistrerReglages($("reglagesMsg"));
+$("btnSaveApparence").onclick = () => enregistrerReglages($("apparenceReglagesMsg"));
+$("btnSaveIndices").onclick = () => enregistrerReglages($("indicesReglagesMsg"));
+$("btnSaveCadrage").onclick = () => enregistrerReglages($("cadrageReglagesMsg"));
 
 $("btnResetReglages").onclick = async () => {
   if (!confirm("Rétablir tous les réglages par défaut ?")) return;
