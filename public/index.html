@@ -53,11 +53,25 @@
   #xAmounts button small{color:inherit;opacity:.85}
   #xAmounts button[aria-pressed="true"]{color:#161207}
   .modes{display:grid;gap:10px}
-  .mode{display:flex;gap:14px;align-items:center;text-align:left;background:var(--card);
-    border:1px solid rgba(237,232,220,.1);color:var(--chalk);padding:16px;border-radius:12px;font-weight:500}
+  /* overflow:hidden fait que la barre de couleur (::before) épouse le coin arrondi de la carte
+     au lieu de dépasser en angle droit ; padding-left compense la place prise par cette barre. */
+  .mode{position:relative;overflow:hidden;display:flex;gap:14px;align-items:center;text-align:left;background:var(--card);
+    border:1px solid rgba(237,232,220,.1);color:var(--chalk);padding:16px 16px 16px 20px;border-radius:12px;font-weight:500}
+  .mode::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--muted)}
+  .mode[data-mode="solo"]::before{background:var(--beam)}
+  .mode[data-mode="duel"]::before{background:var(--ticket)}
+  .mode[data-mode="ffa"]::before{background:var(--teal)}
+  .mode[data-mode="teams"]::before{background:linear-gradient(180deg,var(--beam),var(--teal))}
+  .mode[data-mode="ranked"]::before{background:linear-gradient(180deg,var(--beam),var(--ticket))}
+  .mode:disabled{pointer-events:none}
   .mode span.ic{font-size:26px}
+  .mode .details{flex:1;min-width:0}
   .mode b{display:block;font-family:'Anton',sans-serif;text-transform:uppercase;letter-spacing:.03em;font-size:17px;font-weight:400}
   .mode small{color:var(--muted)}
+  /* Chip de capacité : même langage visuel que .niveauXp, pour indiquer d'un coup d'œil
+     combien de joueurs chaque mode demande. */
+  .mode .capacite{flex:0 0 auto;font-family:var(--font-code);font-size:12px;color:var(--muted);
+    background:rgba(0,0,0,.28);padding:5px 10px;border-radius:999px;white-space:nowrap}
   .marquee{display:flex;gap:10px;justify-content:center;margin:6px 0 16px}
   .flap{width:54px;height:70px;display:grid;place-items:center;border-radius:8px;
     background:linear-gradient(180deg,#232A44 0 49%,#1A2034 51% 100%);box-shadow:inset 0 0 0 1px rgba(245,185,66,.25);
@@ -95,6 +109,14 @@
     background-size:200% 100%;box-shadow:0 0 10px rgba(245,185,66,.55);border-radius:99px}
   body.animations-actives .barreNiveau .jauge i{animation:jaugeShimmer 2.2s linear infinite}
   @keyframes jaugeShimmer{0%{background-position:0% 0}100%{background-position:200% 0}}
+  #niveauEmoji{display:inline-block}
+  body.animations-actives #niveauEmoji{animation:niveauEmojiFlotte 2.6s ease-in-out infinite}
+  @keyframes niveauEmojiFlotte{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-2px) rotate(-6deg)}}
+  /* Petit signal quand le joueur est tout proche du niveau suivant — encourage à finir une manche de plus. */
+  .tagPresque{margin:8px 0 0;font-size:12px;color:var(--teal);font-weight:600}
+  .barreNiveau.presque{border-color:var(--teal);box-shadow:0 8px 20px rgba(78,205,196,.28),inset 0 1px 0 rgba(255,255,255,.05)}
+  body.animations-actives .barreNiveau.presque{animation:presquePulse 1.8s ease-in-out infinite}
+  @keyframes presquePulse{0%,100%{box-shadow:0 8px 20px rgba(78,205,196,.22)}50%{box-shadow:0 8px 26px rgba(78,205,196,.45)}}
   .quete{display:flex;gap:12px;align-items:center;padding:14px 0;border-top:1px solid rgba(237,232,220,.1);flex-wrap:wrap}
   .quete .infos{flex:1;min-width:150px}
   .quete .infos b{display:block;font-size:15px}
@@ -483,8 +505,9 @@
     .row{flex-wrap:wrap}
     button,input{min-height:48px}
     .flap{width:46px;height:60px;font-size:26px}
-    .mode{padding:14px;gap:10px}
+    .mode{padding:14px 14px 14px 18px;gap:10px}
     .mode span.ic{font-size:22px}
+    .mode .capacite{font-size:11px;padding:4px 8px}
     .hints{gap:6px}
       .hints button{flex:1 1 calc(50% - 6px);padding:12px 8px;font-size:13px;justify-content:center}
     .choices{grid-template-columns:1fr;gap:8px}
@@ -621,6 +644,12 @@ html.mode-enfant-actif .wrap{padding-top:48px}
     box-shadow: 0 8px 25px rgba(0,0,0,0.5);
     border-color: var(--beam);
   }
+  /* Au survol, le liseré de la carte reprend la couleur propre à chaque mode plutôt que
+     toujours le jaune par défaut — cohérent avec la barre de couleur affichée en permanence. */
+  body.animations-actives .mode[data-mode="solo"]:hover, body.animations-actives .mode[data-mode="solo"]:active { border-color: var(--beam); box-shadow: 0 8px 25px rgba(245,185,66,.3); }
+  body.animations-actives .mode[data-mode="duel"]:hover, body.animations-actives .mode[data-mode="duel"]:active { border-color: var(--ticket); box-shadow: 0 8px 25px rgba(228,88,110,.3); }
+  body.animations-actives .mode[data-mode="ffa"]:hover, body.animations-actives .mode[data-mode="ffa"]:active { border-color: var(--teal); box-shadow: 0 8px 25px rgba(78,205,196,.3); }
+  body.animations-actives .mode[data-mode="teams"]:hover, body.animations-actives .mode[data-mode="teams"]:active { border-color: var(--teal); box-shadow: 0 8px 25px rgba(78,205,196,.22), 0 -8px 25px rgba(245,185,66,.18); }
   body.animations-actives .mode:hover .ic, body.animations-actives .mode:active .ic { animation: bounceIcon 0.5s; }
   @keyframes bounceIcon { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px) scale(1.1); } }
 
@@ -970,10 +999,11 @@ html.mode-enfant-actif .wrap{padding-top:48px}
     <div class="barreNiveau" id="barreNiveau" data-module="niveau">
       <div class="niveauTete">
         <span class="pastilleNiveau" id="niveauNum">0</span>
-        <span class="niveauTexte">🏅 Niveau <b id="niveauLabel">0</b></span>
+        <span class="niveauTexte"><span id="niveauEmoji">🌱</span> Niveau <b id="niveauLabel">0</b></span>
         <span class="niveauXp" id="niveauXp"></span>
       </div>
       <div class="jauge"><i id="niveauJauge" style="width:0%"></i></div>
+      <p class="tagPresque hidden" id="tagPresqueNiveau">✨ Presque au niveau supérieur !</p>
     </div>
     <div data-module="quotidien">
       <p class="tag" style="margin-top:18px">Choisissez votre partie</p>
@@ -983,11 +1013,11 @@ html.mode-enfant-actif .wrap{padding-top:48px}
       </div>
     </div>
     <div class="modes" data-module="modes">
-      <button class="mode" data-mode="solo"><span class="ic">🎬</span><span><b>Solo</b><small>Contre le chrono, pour s'entraîner</small></span></button>
-      <button class="mode" data-mode="duel"><span class="ic">⚔️</span><span><b>Duel</b><small>Deux joueurs, face à face</small></span></button>
-      <button class="mode" data-mode="ffa"><span class="ic">🍿</span><span><b>Chacun pour soi</b><small>De 2 à 16 joueurs, classement individuel</small></span></button>
-      <button class="mode" data-mode="teams"><span class="ic">🏆</span><span><b>En équipes</b><small>Deux équipes, scores cumulés</small></span></button>
-      <button class="mode" data-mode="ranked"><span class="ic">📈</span><span><b>Partie classée</b><small id="rankedSous">Vos points comptent au classement de la saison</small></span></button>
+      <button class="mode" data-mode="solo"><span class="ic">🎬</span><span class="details"><b>Solo</b><small>Contre le chrono, pour s'entraîner</small></span><span class="capacite">👤 1</span></button>
+      <button class="mode" data-mode="duel"><span class="ic">⚔️</span><span class="details"><b>Duel</b><small>Deux joueurs, face à face</small></span><span class="capacite">👥 2</span></button>
+      <button class="mode" data-mode="ffa"><span class="ic">🍿</span><span class="details"><b>Chacun pour soi</b><small>De 2 à 16 joueurs, classement individuel</small></span><span class="capacite">👥 2-16</span></button>
+      <button class="mode" data-mode="teams"><span class="ic">🏆</span><span class="details"><b>En équipes</b><small>Deux équipes, scores cumulés</small></span><span class="capacite">🤝 2 équipes</span></button>
+      <button class="mode" data-mode="ranked"><span class="ic">📈</span><span class="details"><b>Partie classée</b><small id="rankedSous">Vos points comptent au classement de la saison</small></span><span class="capacite">🏆 solo</span></button>
     </div>
     <div class="row" data-module="actions">
       <button class="ghost" id="btnExchange">Espace échange</button>
@@ -2820,19 +2850,33 @@ function citationHTML(n){
   </div>`;
 }
 
+/** Petit emoji qui évolue avec le niveau, pour rendre la progression plus parlante d'un coup d'œil. */
+function emojiNiveau(n){
+  if (n >= 30) return "👑";
+  if (n >= 20) return "🥇";
+  if (n >= 10) return "🥈";
+  if (n >= 5) return "🎬";
+  return "🌱";
+}
+
 function majNiveau(n){
   if (!n) return;
   $("niveauNum").textContent = n.niveau;
   $("niveauLabel").textContent = n.niveau;
-  $("niveauXp").textContent = `${n.reste} / ${n.requis} xp`;
-  $("niveauJauge").style.width = `${Math.min(100, n.reste / n.requis * 100)}%`;
+  $("niveauEmoji").textContent = emojiNiveau(n.niveau);
+  $("niveauXp").textContent = `⚡ ${n.reste} / ${n.requis} xp`;
+  const pct = n.requis ? Math.min(100, n.reste / n.requis * 100) : 0;
+  $("niveauJauge").style.width = `${pct}%`;
+  const presque = pct >= 85;
+  $("barreNiveau").classList.toggle("presque", presque);
+  $("tagPresqueNiveau").classList.toggle("hidden", !presque);
 }
 
 /** Annonce visuelle d'une montée de niveau, avec une citation de cinéma en prime. */
 function annoncerNiveau(niveau){
   const el = document.createElement("div");
   el.className = "montee";
-  el.innerHTML = `<b>Niveau ${niveau}</b><span class="note">Bravo !</span>${citationHTML(niveau)}`;
+  el.innerHTML = `<b>${emojiNiveau(niveau)} Niveau ${niveau}</b><span class="note">🎉 Bravo !</span>${citationHTML(niveau)}`;
   document.body.append(el);
   setTimeout(() => el.remove(), 6000);
   if (typeof confettis === "function") confettis();
@@ -2858,16 +2902,16 @@ async function chargerQuetes(){
   $("listeQuetes").innerHTML = mesQuetes.map(q => `
     <div class="quete ${q.accomplie ? "finie" : ""}">
       <div class="infos">
-        <b>${q.accomplie ? "✓ " : ""}${esc(q.titre)}</b>
+        <b>${q.accomplie ? "✅ " : "🎯 "}${esc(q.titre)}</b>
         <small>${q.avancement} sur ${q.cible}</small>
         <div class="jauge"><i style="width:${q.avancement / q.cible * 100}%"></i></div>
       </div>
-      <span class="gain">🎟️ ${q.tickets} · ${q.xp} xp</span>
+      <span class="gain">🎟️ ${q.tickets} · ⚡ ${q.xp} xp</span>
       ${q.reclamee
-        ? '<span class="note" style="margin:0">Réclamée</span>'
+        ? '<span class="note" style="margin:0">👌 Réclamée</span>'
         : q.accomplie
-          ? `<button data-quete="${q.cle}">Réclamer</button>`
-          : '<span class="note" style="margin:0">En cours</span>'}
+          ? `<button data-quete="${q.cle}">🎁 Réclamer</button>`
+          : '<span class="note" style="margin:0">⏳ En cours</span>'}
     </div>`).join("");
 
   $("listeQuetes").querySelectorAll("[data-quete]").forEach(b => b.onclick = async () => {
