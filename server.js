@@ -865,16 +865,32 @@ app.get("/api/admin/stats", requireAdmin, (_req, res) => {
 
 app.get("/api/admin/users", requireAdmin, (_req, res) => res.json(listUsers()));
 
+// Le fondateur peut créer jusqu'à ce nombre de comptes enfant depuis la console admin —
+// au-delà, on considère que c'est une erreur de manipulation plutôt qu'un vrai besoin.
+const MAX_COMPTES_ENFANT = 5;
+const nombreComptesEnfant = () => listUsers().filter((u) => u.role === "enfant").length;
+
+/** Combien de comptes enfant existent déjà, et combien il en reste possible à créer. */
+app.get("/api/admin/comptes-enfant", requireAdmin, (_req, res) => {
+  const utilises = nombreComptesEnfant();
+  res.json({ utilises, max: MAX_COMPTES_ENFANT, restants: Math.max(0, MAX_COMPTES_ENFANT - utilises) });
+});
+
 /**
  * Création rapide d'un compte par l'administration : identifiant + mot de
  * passe, sans email à valider. Cocher « enfant » crée un compte restreint
- * au mode enfant, avec son propre classement.
+ * au mode enfant, avec son propre classement — plafonné à MAX_COMPTES_ENFANT
+ * pour éviter les créations accidentelles en rafale.
  */
 app.post("/api/admin/comptes", requireAdmin, (req, res) => {
+  const enfant = req.body.enfant === true;
+  if (enfant && nombreComptesEnfant() >= MAX_COMPTES_ENFANT) {
+    return res.status(400).json({ error: "MAX_COMPTES_ENFANT_ATTEINT", max: MAX_COMPTES_ENFANT });
+  }
   const r = creerCompteAdmin({
     pseudo: req.body.pseudo,
     motDePasse: req.body.motDePasse,
-    enfant: req.body.enfant === true,
+    enfant,
   });
   if (r.error) return res.status(400).json(r);
   res.status(201).json(sansMotDePasse(r.user));
@@ -1139,6 +1155,95 @@ function exigeCompte(req, res) {
   if (!user) { res.status(401).json({ error: "NOT_AUTHENTICATED" }); return null; }
   return user;
 }
+
+/* ------------------------------------------------------------------ */
+/* Sondages « vs » (ex. pop-corn salé ou sucré ?)                       */
+/*                                                                      */
+/* Fonctionnalité à part entière, indépendante des salons de jeu : un   */
+/* sondage à deux camps, ouvert à tous les comptes connectés, avec un   */
+/* résultat en direct sous forme de pourcentages — jamais les noms des  */
+/* votants. Un joueur peut changer d'avis, son vote remplace le         */
+/* précédent plutôt que de s'additionner.                               */
+/* ------------------------------------------------------------------ */
+const SONDAGES_FILE = new URL("./sondages.json", import.meta.url);
+let sondages = [];
+const saveSondages = () => sauver("sondages", sondages, SONDAGES_FILE);
+
+function resultatsSondage(s) {
+  const votes = Object.values(s.votes || {});
+  const totalA = votes.filter((v) => v === "A").length;
+  const totalB = votes.filter((v) => v === "B").length;
+  const total = totalA + totalB;
+  const pourcentA = total ? Math.round((totalA / total) * 100) : 0;
+  return { total, totalA, totalB, pourcentA, pourcentB: total ? 100 - pourcentA : 0 };
+}
+/** Vue générique (diffusée à tout le monde) : jamais qui a voté quoi. */
+function sondageAggrege(s) {
+  const { votes, ...reste } = s;
+  return { ...reste, ...resultatsSondage(s) };
+}
+/** Vue personnelle (réponse à une requête d'un joueur précis) : ajoute son propre vote. */
+function sondagePersonnel(s, userId) {
+  return { ...sondageAggrege(s), monVote: (s.votes || {})[userId] || null };
+}
+
+app.get("/api/sondages", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (!user) return;
+  res.json(sondages.filter((s) => s.actif).map((s) => sondagePersonnel(s, user.id)));
+});
+
+app.post("/api/sondages/:id/voter", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (!user) return;
+  const s = sondages.find((x) => x.id === req.params.id && x.actif);
+  if (!s) return res.status(404).json({ error: "NOT_FOUND" });
+  const cote = req.body.cote;
+  if (!["A", "B"].includes(cote)) return res.status(400).json({ error: "COTE_INVALIDE" });
+  s.votes = s.votes || {};
+  s.votes[user.id] = cote;
+  saveSondages();
+  io.emit("sondage:maj", sondageAggrege(s));   // diffusé à tous, sans jamais dire qui a voté quoi
+  res.json(sondagePersonnel(s, user.id));
+});
+
+app.get("/api/admin/sondages", requireAdmin, (_req, res) =>
+  res.json(sondages.map((s) => sondageAggrege(s))));
+
+app.post("/api/admin/sondages", requireAdmin, (req, res) => {
+  const texteA = String(req.body.optionA?.texte || "").trim();
+  const texteB = String(req.body.optionB?.texte || "").trim();
+  if (!texteA || !texteB) return res.status(400).json({ error: "OPTIONS_MANQUANTES" });
+  const s = {
+    id: crypto.randomUUID(),
+    question: String(req.body.question || "").trim().slice(0, 120),
+    optionA: { texte: texteA.slice(0, 40), emoji: String(req.body.optionA?.emoji || "🅰️").slice(0, 8) },
+    optionB: { texte: texteB.slice(0, 40), emoji: String(req.body.optionB?.emoji || "🅱️").slice(0, 8) },
+    actif: true,
+    creeLe: new Date().toISOString(),
+    votes: {},
+  };
+  sondages.unshift(s);
+  saveSondages();
+  res.status(201).json(sondageAggrege(s));
+});
+
+app.put("/api/admin/sondages/:id", requireAdmin, (req, res) => {
+  const s = sondages.find((x) => x.id === req.params.id);
+  if (!s) return res.status(404).json({ error: "NOT_FOUND" });
+  if (typeof req.body.actif === "boolean") s.actif = req.body.actif;
+  if (typeof req.body.question === "string") s.question = req.body.question.trim().slice(0, 120);
+  saveSondages();
+  io.emit("sondage:maj", sondageAggrege(s));   // active/désactive en direct sur les écrans ouverts
+  res.json(sondageAggrege(s));
+});
+
+app.delete("/api/admin/sondages/:id", requireAdmin, (req, res) => {
+  sondages = sondages.filter((x) => x.id !== req.params.id);
+  saveSondages();
+  io.emit("sondage:supprime", { id: req.params.id });
+  res.json({ ok: true });
+});
 
 /* ------------------------------------------------------------------ */
 /* Solo et partie classée, sans temps réel                            */
@@ -3433,10 +3538,12 @@ function startRound(room) {
   room.pauseA = null;
   room.graceRestant = null;
   for (const p of room.players.values()) {
-    p.hasAnswered = false;
+    if (p.coeurs === undefined) p.coeurs = p.coeursMax ?? REGLAGES.coeurs;
+    // Cœurs épuisés : éliminé pour le reste de la partie — on ne le sollicite plus à
+    // chaque manche, il ne peut plus que suivre la partie ou quitter le salon.
+    p.hasAnswered = p.coeurs === 0;
     p.hints = [];
     p.paidHints = [];
-    if (p.coeurs === undefined) p.coeurs = p.coeursMax ?? REGLAGES.coeurs;
   }
 
   io.to(room.code).emit("round:start", {
@@ -3675,7 +3782,10 @@ io.on("connection", (socket) => {
        cb?.({ ok: true, code: room.code, state: publicState(room), waiting: enCours && existingPlayer.hasAnswered,
            roundIndex: room.roundIndex, total: room.playlist.length });
 
-       if (room.status === "playing" && !existingPlayer.hasAnswered) {
+       // Réémis aussi pour un joueur éliminé (cœurs à 0) qui se reconnecte : il ne peut plus
+       // répondre, mais doit pouvoir suivre la manche en cours plutôt que rester sur un écran
+       // vide — le client bascule automatiquement sur l'écran « éliminé » via state.elimine.
+       if (room.status === "playing" && (!existingPlayer.hasAnswered || existingPlayer.coeurs === 0)) {
           const movie = room.currentMovie;
           io.to(socket.id).emit("round:start", {
             roundIndex: room.roundIndex,
@@ -3765,7 +3875,13 @@ io.on("connection", (socket) => {
   socket.on("answer:submit", ({ code, guess, choiceId }, cb) => {
     const room = rooms.get(code);
     const player = room?.players.get(socket.data.user.id);
-    if (!room || !player || room.status !== "playing" || player.hasAnswered) return cb?.({ ok: false });
+    if (!room || !player || room.status !== "playing") return cb?.({ ok: false });
+    // Cœurs épuisés : éliminé pour le reste de la partie, ne peut plus répondre — seulement
+    // suivre la partie ou quitter le salon (voir aussi startRound, qui ne le sollicite plus).
+    // Ce contrôle passe AVANT celui de hasAnswered (startRound met hasAnswered=true pour les
+    // joueurs éliminés) afin que le client reçoive toujours un motif clair ("ELIMINE").
+    if (player.coeurs === 0) return cb?.({ ok: false, error: "ELIMINE" });
+    if (player.hasAnswered) return cb?.({ ok: false, error: "DEJA_REPONDU" });
     if (room.pauseA) return cb?.({ ok: false, error: "EN_PAUSE" });
 
     const parClic = choiceId !== undefined && choiceId !== null;
@@ -3840,7 +3956,7 @@ io.on("connection", (socket) => {
   socket.on("round:skip", ({ code }) => {
     const room = rooms.get(code);
     const player = room?.players.get(socket.data.user.id);
-    if (!room || !player || room.status !== "playing") return;
+    if (!room || !player || room.status !== "playing" || player.coeurs === 0) return;
 
     // renoncer à la manche coûte un cœur, comme une mauvaise réponse
     if (!player.hasAnswered) {
@@ -4145,6 +4261,8 @@ if (!Array.isArray(suggestions)) suggestions = [];
 }
 citations = await charger("citations", CITATIONS_FILE, CITATIONS_DEFAUT);
 if (!Array.isArray(citations) || !citations.length) citations = CITATIONS_DEFAUT;
+sondages = await charger("sondages", SONDAGES_FILE, []);
+if (!Array.isArray(sondages)) sondages = [];
 playlisteMusique = await charger("musique", MUSIQUE_FILE, []);
 if (!Array.isArray(playlisteMusique)) playlisteMusique = [];
 votesMusique = await charger("votesMusique", VOTES_MUSIQUE_FILE, {});
