@@ -940,9 +940,8 @@ html.mode-enfant-actif .wrap{padding-top:48px}
     <h2 id="hello">Bonjour</h2>
     <p class="wallet" id="walletMenu" style="cursor:pointer" title="Voir l'historique de vos tickets et points">🎟️ <b>0</b> crédits</p>
     <p class="online" id="btnOnlineUsers" style="cursor:pointer" title="Voir vos amis en ligne"><span class="dot on"></span><b id="onlineNb">—</b><span id="onlineCount">amis en ligne</span></p>
-    <div class="row" style="margin-bottom: 14px; gap: 10px;" data-module="sorties">
-      <button id="btnUpcomingMovies" style="flex:1; padding: 10px 16px; background: var(--beam); color: #0A0C16; font-weight: bold; border: 0; border-radius: 999px; cursor: pointer;">🍿 Sorties Ciné</button>
-      <button id="btnNowPlaying" style="flex:1; padding: 10px 16px; background: var(--teal); color: #0A0C16; font-weight: bold; border: 0; border-radius: 999px; cursor: pointer;">🎥 Actuellement au cinéma</button>
+    <div class="row" style="margin-bottom: 14px;" data-module="sorties">
+      <button id="btnFilmsCinema" style="flex:1; padding: 10px 16px; background: var(--beam); color: #0A0C16; font-weight: bold; border: 0; border-radius: 999px; cursor: pointer;">🎬 Films au cinéma</button>
     </div>
     <div class="row" style="margin-bottom: 14px;" data-module="cinemas">
       <button id="btnCinemasProches" class="ghost" style="border-color: var(--ticket); color: var(--ticket);">📍 Cinéma le plus proche</button>
@@ -1451,6 +1450,9 @@ let musiqueVolume = (() => {
 // Réglable depuis la console admin (onglet Réglages) : masque entièrement la barre de radio
 // (bouton lecture, like/dislike compris) pour tout le monde, indépendamment du mode enfant.
 let afficherRadioGlobal = true;
+// Réglable depuis la console admin (onglet Réglages) : autorise (ou non) le bouton « Regarder
+// sa partie en direct » sur les fiches d'amis. Désactivé par défaut.
+let autoriserSpectateurGlobal = false;
 /** Combine le réglage admin et le rôle du compte pour décider si la radio doit être visible. */
 function majVisibiliteRadio(){
   const masquer = !afficherRadioGlobal || (me && me.role === "enfant");
@@ -2086,6 +2088,7 @@ fetch("/api/config").then(r => r.json())
     $("tipLink").href = c.tipUrl; tauxTicket = c.pointsParTicket || tauxTicket;
     if (c.animationsAvancees !== false) document.body.classList.add("animations-actives");
     afficherRadioGlobal = c.afficherRadio !== false;
+    autoriserSpectateurGlobal = c.autoriserSpectateur === true;
     majVisibiliteRadio();
     appliquerTheme(c.theme);
   })
@@ -3364,7 +3367,7 @@ async function ouvrirJoueur(id, pseudo, avatar, photoJoueur){
   $("popEtat").textContent = f.enPartie
     ? `${ETATS[relation] || ""} En train de jouer${MODE_NAMES[f.modeSalon] ? ` (${MODE_NAMES[f.modeSalon]})` : ""}.`.trim()
     : (ETATS[relation] || "");
-  const regarderBtn = f.enPartie
+  const regarderBtn = (f.enPartie && autoriserSpectateurGlobal)
     ? `<button data-act="regarder" style="background:#3DDC84;color:#0A2015">👁️ Regarder en direct</button>` : "";
   $("popActions").innerHTML = regarderBtn + (ACTIONS_AMI[relation] || []).map(([a, libelle]) =>
     `<button class="${a === "bloquer" ? "ghost danger" : ""}" data-act="${a}">${libelle}</button>`).join("");
@@ -3414,7 +3417,7 @@ function ligneJoueur(j, boutons){
       style="cursor:pointer">${vignette(j)} ${esc(j.pseudo)} ${insigneFondateur(j)}${
         nonLus ? ` <span class="pastille" title="${nonLus} message${nonLus>1?"s":""} non lu${nonLus>1?"s":""}">${nonLus}</span>` : ""
       }</span>
-    ${j.enPartie ? `<button class="ghost" data-act="regarder" data-id="${esc(j.id)}"
+    ${(j.enPartie && autoriserSpectateurGlobal) ? `<button class="ghost" data-act="regarder" data-id="${esc(j.id)}"
        title="Regarder sa partie en direct" style="padding:6px 10px; font-size:15px;
        background:#3DDC84; color:#0A2015; border-color:#3DDC84">👁️ en direct</button>` : ""}
     <div style="display:flex; gap:6px; flex-wrap:wrap;">
@@ -3520,6 +3523,7 @@ function regarderAmi(amiId, pseudo){
       const msgs = {
         PAS_AMI: "Vous devez être amis pour regarder sa partie.",
         PARTIE_INTROUVABLE: "Cette partie est déjà terminée.",
+        SPECTATEUR_DESACTIVE: "Cette fonctionnalité est désactivée par l'administration.",
       };
       alert(msgs[res?.error] || "Impossible de regarder cette partie pour le moment.");
       return;
@@ -3642,8 +3646,13 @@ async function majBadgeAmis(){
   return total;
 }
 
-/** Bandeau éphémère, cliquable pour aller directement à l'écran concerné. */
+/** Bandeau éphémère, cliquable pour aller directement à l'écran concerné.
+ *  En veille dès qu'une partie est en cours (lobby, attente, manche, entre deux manches) : un
+ *  bandeau qui surgit par-dessus l'écran de jeu gênait la lecture du synopsis ou le clic sur une
+ *  réponse. Les compteurs (pastilles, titre d'onglet) continuent, eux, d'être mis à jour en
+ *  silence — rien n'est perdu, seul le pop-up est différé jusqu'à la fin de la partie. */
 function bandeauNotif(html, action){
+  if (enPartieActuellement) return;
   const el = document.createElement("div");
   el.className = "notif";
   el.innerHTML = html;
@@ -4659,15 +4668,23 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
         </div>
     </div>
 
-    <!-- MODALE SORTIES CINEMA -->
-    <div class="modal-overlay" id="upcomingMoviesModal">
+    <!-- MODALE FILMS AU CINEMA : « à l'affiche » et « prochaines sorties » réunis dans la même
+         fenêtre, avec un onglet pour basculer de l'un à l'autre plutôt que deux boutons séparés. -->
+    <div class="modal-overlay" id="filmsCinemaModal">
         <div class="modal-content">
-            <div class="modal-header" style="border-bottom-color: var(--ticket);">
-                <h2>🍿 Sorties de la semaine</h2>
-                <button class="close-btn" id="closeUpcomingMoviesBtn">&times;</button>
+            <div class="modal-header" style="border-bottom-color: var(--teal);">
+                <h2>🎬 Films au cinéma</h2>
+                <button class="close-btn" id="closeFilmsCinemaBtn">&times;</button>
             </div>
-            <div class="modal-body" id="upcomingMoviesList" style="max-height: 60vh; overflow-y: auto;">
+            <div class="tabsAmis" id="tabsFilmsCinema" style="padding:14px 25px 0">
+                <button data-onglet="affiche" aria-pressed="true">🎥 À l'affiche</button>
+                <button data-onglet="prochainement" aria-pressed="false">🍿 Prochainement</button>
+            </div>
+            <div class="modal-body hidden" id="upcomingMoviesList" style="max-height: 60vh; overflow-y: auto;">
                 <p class="note" style="text-align:center">Recherche des nouveautés UGC, Pathé, Gaumont...</p>
+            </div>
+            <div class="modal-body" id="nowPlayingList" style="max-height: 60vh; overflow-y: auto;">
+                <p class="note" style="text-align:center">Recherche des films à l'affiche...</p>
             </div>
         </div>
     </div>
@@ -4729,24 +4746,21 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
             <div class="row" style="padding:0 20px;margin-top:10px">
                 <button class="ghost" id="btnCinemasRelancer" style="border-color: var(--ticket); color: var(--ticket);">🎯 Relancer ma localisation</button>
             </div>
+            <p class="note" style="text-align:center;margin:14px 20px 0;padding-top:12px;border-top:1px solid rgba(237,232,220,.12)">— ou cherchez par code postal —</p>
+            <div class="row" style="padding:8px 20px 0;gap:8px">
+                <input type="text" id="cinemasCodePostal" inputmode="numeric" maxlength="5" placeholder="Code postal (ex. 75001)" style="flex:1">
+                <button id="btnCinemasCodePostal" style="flex:0 0 auto">Chercher</button>
+            </div>
+            <div class="row hidden" id="cinemasCommuneRow" style="padding:8px 20px 0;gap:8px">
+                <select id="cinemasCommune" style="flex:1"></select>
+            </div>
+            <p class="note" id="cinemasCodePostalMsg" style="text-align:center;margin:6px 0 0"></p>
             <div class="modal-body" id="cinemasList" style="max-height: 60vh; overflow-y: auto;">
                 <p class="note" style="text-align:center">Localisation en cours…</p>
             </div>
         </div>
     </div>
 
-    <!-- MODALE ACTUELLEMENT AU CINEMA -->
-    <div class="modal-overlay" id="nowPlayingModal">
-        <div class="modal-content">
-            <div class="modal-header" style="border-bottom-color: var(--teal);">
-                <h2>🎥 Actuellement au cinéma</h2>
-                <button class="close-btn" id="closeNowPlayingBtn">&times;</button>
-            </div>
-            <div class="modal-body" id="nowPlayingList" style="max-height: 60vh; overflow-y: auto;">
-                <p class="note" style="text-align:center">Recherche des films à l'affiche...</p>
-            </div>
-        </div>
-    </div>
 
     
     
@@ -4928,59 +4942,49 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
             });
         }
 
-        const btnUpcomingMovies = document.getElementById("btnUpcomingMovies");
-        const upcomingMoviesModal = document.getElementById("upcomingMoviesModal");
-        const closeUpcomingMoviesBtn = document.getElementById("closeUpcomingMoviesBtn");
+        /** Onglet « Prochainement » de la modale Films au cinéma (ex-modale séparée « Sorties Ciné »). */
+        async function chargerProchainementCinema(){
+            document.getElementById("upcomingMoviesList").innerHTML = "<p class='note' style='text-align:center'>Recherche des nouveautés...</p>";
+            try {
+                const res = await fetch(`/api/movies/upcoming${state.kidMode ? "?kids=1" : ""}`);
+                const data = await res.json();
 
-        if (btnUpcomingMovies) {
-            btnUpcomingMovies.addEventListener("click", async () => {
-                upcomingMoviesModal.classList.add("active");
-                document.getElementById("upcomingMoviesList").innerHTML = "<p class='note' style='text-align:center'>Recherche des nouveautés...</p>";
-                try {
-                    const res = await fetch(`/api/movies/upcoming${state.kidMode ? "?kids=1" : ""}`);
-                    const data = await res.json();
-                    
-                    if (data.error === "NO_KEY") {
-                        document.getElementById("upcomingMoviesList").innerHTML = "<p class='note' style='color:var(--ticket)'>Fonctionnalité en attente de configuration. L'administrateur doit renseigner une clé API TMDB dans les réglages.</p>";
-                        return;
-                    }
-                    if (!data.movies || data.movies.length === 0) {
-                        document.getElementById("upcomingMoviesList").innerHTML = "<p class='note'>Aucune sortie trouvée pour cette semaine.</p>";
-                        return;
-                    }
-                    
-                    // Formater la date en français
-                    const options = { day: 'numeric', month: 'long', year: 'numeric' };
-                    const d = new Date(data.dateDebut);
-                    const dateFr = d.toLocaleDateString('fr-FR', options);
-
-                    let html = `<p class="tag" style="margin-bottom:16px;">Semaine du mercredi ${dateFr}</p>`;
-                    html += data.movies.map(m => `
-                        <div class="bday-item" data-trailer-id="${m.id}" data-trailer-titre="${esc(m.title || "")}" style="border-left-color: var(--ticket); align-items:flex-start; cursor:pointer;" title="Voir la bande-annonce">
-                            ${m.poster ? `<img src="${m.poster}" alt="" style="width:70px;height:100px;border-radius:4px;">` : `<div style="width:70px;height:100px;border-radius:4px;background:#333;display:flex;align-items:center;justify-content:center;font-size:24px">🍿</div>`}
-                            <div class="info" style="flex:1;">
-                                <b style="font-family:'Anton', sans-serif; letter-spacing:1px; text-transform:uppercase; font-size:18px;">${m.title}</b>
-                                <div style="display:flex;gap:6px;margin:6px 0;align-items:center;">
-                                    <span style="font-size:11px;background:var(--ticket);padding:2px 6px;border-radius:4px;color:#fff;">⭐ ${m.vote.toFixed(1)}/10</span>
-                                    <span style="font-size:11px;color:var(--beam)">▶ Bande-annonce</span>
-                                </div>
-                                <small style="display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;">${m.overview || "Aucun synopsis disponible."}</small>
-                            </div>
-                        </div>
-                    `).join("");
-                    document.getElementById("upcomingMoviesList").innerHTML = html;
-                    // Un clic n'importe où sur la fiche d'un film ouvre sa bande-annonce dans le lecteur vidéo.
-                    document.getElementById("upcomingMoviesList").querySelectorAll("[data-trailer-id]").forEach(el => {
-                        el.onclick = () => ouvrirTrailer(el.dataset.trailerId, el.dataset.trailerTitre);
-                    });
-                } catch(e) {
-                    document.getElementById("upcomingMoviesList").innerHTML = "<p class='note' style='color:var(--ticket)'>Erreur lors du chargement des sorties.</p>";
+                if (data.error === "NO_KEY") {
+                    document.getElementById("upcomingMoviesList").innerHTML = "<p class='note' style='color:var(--ticket)'>Fonctionnalité en attente de configuration. L'administrateur doit renseigner une clé API TMDB dans les réglages.</p>";
+                    return;
                 }
-            });
-            closeUpcomingMoviesBtn.addEventListener("click", () => upcomingMoviesModal.classList.remove("active"));
-            upcomingMoviesModal.addEventListener('click', (e) => {
-                if (e.target === upcomingMoviesModal) upcomingMoviesModal.classList.remove('active');
-            });
+                if (!data.movies || data.movies.length === 0) {
+                    document.getElementById("upcomingMoviesList").innerHTML = "<p class='note'>Aucune sortie trouvée pour cette semaine.</p>";
+                    return;
+                }
+
+                // Formater la date en français
+                const options = { day: 'numeric', month: 'long', year: 'numeric' };
+                const d = new Date(data.dateDebut);
+                const dateFr = d.toLocaleDateString('fr-FR', options);
+
+                let html = `<p class="tag" style="margin-bottom:16px;">Semaine du mercredi ${dateFr}</p>`;
+                html += data.movies.map(m => `
+                    <div class="bday-item" data-trailer-id="${m.id}" data-trailer-titre="${esc(m.title || "")}" style="border-left-color: var(--ticket); align-items:flex-start; cursor:pointer;" title="Voir la bande-annonce">
+                        ${m.poster ? `<img src="${m.poster}" alt="" style="width:70px;height:100px;border-radius:4px;">` : `<div style="width:70px;height:100px;border-radius:4px;background:#333;display:flex;align-items:center;justify-content:center;font-size:24px">🍿</div>`}
+                        <div class="info" style="flex:1;">
+                            <b style="font-family:'Anton', sans-serif; letter-spacing:1px; text-transform:uppercase; font-size:18px;">${m.title}</b>
+                            <div style="display:flex;gap:6px;margin:6px 0;align-items:center;">
+                                <span style="font-size:11px;background:var(--ticket);padding:2px 6px;border-radius:4px;color:#fff;">⭐ ${m.vote.toFixed(1)}/10</span>
+                                <span style="font-size:11px;color:var(--beam)">▶ Bande-annonce</span>
+                            </div>
+                            <small style="display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;">${m.overview || "Aucun synopsis disponible."}</small>
+                        </div>
+                    </div>
+                `).join("");
+                document.getElementById("upcomingMoviesList").innerHTML = html;
+                // Un clic n'importe où sur la fiche d'un film ouvre sa bande-annonce dans le lecteur vidéo.
+                document.getElementById("upcomingMoviesList").querySelectorAll("[data-trailer-id]").forEach(el => {
+                    el.onclick = () => ouvrirTrailer(el.dataset.trailerId, el.dataset.trailerTitre);
+                });
+            } catch(e) {
+                document.getElementById("upcomingMoviesList").innerHTML = "<p class='note' style='color:var(--ticket)'>Erreur lors du chargement des sorties.</p>";
+            }
         }
 
         /* Lecteur de bande-annonce : ouvert au clic sur un film des « Sorties de la semaine ».
@@ -5084,68 +5088,132 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
          *  fenêtre et par le bouton « Relancer ma localisation » (position refusée, changement de
          *  lieu, échec temporaire du service…) sans avoir à fermer/rouvrir la fenêtre. Ne fait
          *  rien si le joueur a désactivé la géolocalisation dans l'application. */
+        /** Cherche les cinémas autour d'un point (lat/lon) et affiche le résultat dans #cinemasList —
+         *  point qui peut venir du GPS ou d'une commune choisie via un code postal saisi à la main. */
+        async function rechercherCinemasPres(lat, lon){
+            const liste = document.getElementById("cinemasList");
+            liste.innerHTML = "<p class='note' style='text-align:center'>Recherche des cinémas dans un rayon de 50 km… (peut prendre jusqu'à 20 secondes)</p>";
+            // Le service de recherche (Overpass) peut être lent : on borne l'attente pour
+            // ne jamais laisser le joueur face à un écran figé sans explication.
+            const controleur = new AbortController();
+            const minuteur = setTimeout(() => controleur.abort(), 22000);
+            try {
+                const res = await fetch(`/api/cinemas/proches?lat=${lat}&lon=${lon}`, { signal: controleur.signal });
+                clearTimeout(minuteur);
+                if (!res.ok){
+                    liste.innerHTML = "<p class='note' style='color:var(--ticket)'>Le service de recherche de cinémas est momentanément indisponible — réessayez dans quelques instants.</p>";
+                    return;
+                }
+                const data = await res.json();
+                if (!data.cinemas || !data.cinemas.length){
+                    liste.innerHTML = "<p class='note'>Aucun cinéma trouvé dans un rayon de 50 km autour de ce point.</p>";
+                    return;
+                }
+                liste.innerHTML = `<p class="note" style="text-align:center;margin-bottom:10px">${data.cinemas.length} cinéma${data.cinemas.length>1?"s":""} trouvé${data.cinemas.length>1?"s":""} dans un rayon de 50 km</p>` +
+                    data.cinemas.map(c => {
+                    const couleur = ENSEIGNE_COULEUR[c.enseigne] || "var(--muted)";
+                    return `
+                    <div class="bday-item" style="border-left-color: ${couleur}; align-items:flex-start;">
+                        ${c.logo
+                          ? `<img src="${c.logo}" alt="${esc(c.enseigne)}" style="width:44px;height:44px;border-radius:8px;object-fit:contain;background:#222;flex:0 0 auto;padding:4px;box-sizing:border-box;">`
+                          : `<div style="width:44px;height:44px;border-radius:8px;background:#222;display:flex;align-items:center;justify-content:center;font-size:20px;flex:0 0 auto;">🎥</div>`}
+                        <div class="info" style="flex:1;">
+                            <b>${esc(c.nom)}</b>
+                            <div style="display:flex;gap:6px;margin:6px 0;flex-wrap:wrap;align-items:center;">
+                                <span style="font-size:11px;background:${couleur};padding:2px 8px;border-radius:4px;color:#161207;font-weight:bold;">${esc(c.enseigne)}</span>
+                                <span style="font-size:12px;color:var(--muted)">📍 ${c.distanceKm} km</span>
+                            </div>
+                            <small>${esc([c.adresse, c.codePostal, c.ville].filter(Boolean).join(", ") || "Adresse non renseignée")}</small>
+                            <div class="row" style="margin-top:8px">
+                                <a href="https://www.google.com/maps/dir/?api=1&destination=${c.lat},${c.lon}" target="_blank" rel="noopener" style="display:block;text-align:center;text-decoration:none;padding:8px 12px;font-size:13px;border-radius:8px;border:1px solid rgba(237,232,220,.22);color:var(--chalk)">🗺️ Itinéraire (GPS)</a>
+                            </div>
+                        </div>
+                    </div>`;
+                }).join("");
+            } catch(e){
+                clearTimeout(minuteur);
+                liste.innerHTML = e?.name === "AbortError"
+                    ? "<p class='note' style='color:var(--ticket)'>La recherche a pris trop de temps — réessayez dans quelques instants.</p>"
+                    : "<p class='note' style='color:var(--ticket)'>Erreur lors de la recherche des cinémas.</p>";
+            }
+        }
+
         function lancerRechercheCinemas(){
             const liste = document.getElementById("cinemasList");
             if (!geolocPrefActivee()){
-                liste.innerHTML = "<p class='note' style='text-align:center'>Géolocalisation désactivée — activez-la ci-dessus pour voir les cinémas près de vous.</p>";
+                liste.innerHTML = "<p class='note' style='text-align:center'>Géolocalisation désactivée — activez-la ci-dessus, ou cherchez par code postal ci-dessous.</p>";
                 return;
             }
             if (!navigator.geolocation){
-                liste.innerHTML = "<p class='note' style='color:var(--ticket)'>La géolocalisation n'est pas disponible sur cet appareil ou ce navigateur.</p>";
+                liste.innerHTML = "<p class='note' style='color:var(--ticket)'>La géolocalisation n'est pas disponible sur cet appareil ou ce navigateur — essayez la recherche par code postal ci-dessous.</p>";
                 return;
             }
             liste.innerHTML = "<p class='note' style='text-align:center'>Localisation en cours…</p>";
-            navigator.geolocation.getCurrentPosition(async (pos) => {
-                liste.innerHTML = "<p class='note' style='text-align:center'>Recherche des cinémas dans un rayon de 50 km… (peut prendre jusqu'à 20 secondes)</p>";
-                // Le service de recherche (Overpass) peut être lent : on borne l'attente pour
-                // ne jamais laisser le joueur face à un écran figé sans explication.
-                const controleur = new AbortController();
-                const minuteur = setTimeout(() => controleur.abort(), 22000);
-                try {
-                    const { latitude, longitude } = pos.coords;
-                    const res = await fetch(`/api/cinemas/proches?lat=${latitude}&lon=${longitude}`, { signal: controleur.signal });
-                    clearTimeout(minuteur);
-                    if (!res.ok){
-                        liste.innerHTML = "<p class='note' style='color:var(--ticket)'>Le service de recherche de cinémas est momentanément indisponible — réessayez dans quelques instants.</p>";
-                        return;
-                    }
-                    const data = await res.json();
-                    if (!data.cinemas || !data.cinemas.length){
-                        liste.innerHTML = "<p class='note'>Aucun cinéma trouvé dans un rayon de 50 km — essayez « Relancer ma localisation » si vous avez changé de lieu.</p>";
-                        return;
-                    }
-                    liste.innerHTML = `<p class="note" style="text-align:center;margin-bottom:10px">${data.cinemas.length} cinéma${data.cinemas.length>1?"s":""} trouvé${data.cinemas.length>1?"s":""} dans un rayon de 50 km</p>` +
-                        data.cinemas.map(c => {
-                        const couleur = ENSEIGNE_COULEUR[c.enseigne] || "var(--muted)";
-                        return `
-                        <div class="bday-item" style="border-left-color: ${couleur}; align-items:flex-start;">
-                            ${c.logo
-                              ? `<img src="${c.logo}" alt="${esc(c.enseigne)}" style="width:44px;height:44px;border-radius:8px;object-fit:contain;background:#222;flex:0 0 auto;padding:4px;box-sizing:border-box;">`
-                              : `<div style="width:44px;height:44px;border-radius:8px;background:#222;display:flex;align-items:center;justify-content:center;font-size:20px;flex:0 0 auto;">🎥</div>`}
-                            <div class="info" style="flex:1;">
-                                <b>${esc(c.nom)}</b>
-                                <div style="display:flex;gap:6px;margin:6px 0;flex-wrap:wrap;align-items:center;">
-                                    <span style="font-size:11px;background:${couleur};padding:2px 8px;border-radius:4px;color:#161207;font-weight:bold;">${esc(c.enseigne)}</span>
-                                    <span style="font-size:12px;color:var(--muted)">📍 ${c.distanceKm} km</span>
-                                </div>
-                                <small>${esc([c.adresse, c.codePostal, c.ville].filter(Boolean).join(", ") || "Adresse non renseignée")}</small>
-                                <div class="row" style="margin-top:8px">
-                                    <a href="https://www.google.com/maps/dir/?api=1&destination=${c.lat},${c.lon}" target="_blank" rel="noopener" style="display:block;text-align:center;text-decoration:none;padding:8px 12px;font-size:13px;border-radius:8px;border:1px solid rgba(237,232,220,.22);color:var(--chalk)">🗺️ Itinéraire (GPS)</a>
-                                </div>
-                            </div>
-                        </div>`;
-                    }).join("");
-                } catch(e){
-                    clearTimeout(minuteur);
-                    liste.innerHTML = e?.name === "AbortError"
-                        ? "<p class='note' style='color:var(--ticket)'>La recherche a pris trop de temps — réessayez dans quelques instants.</p>"
-                        : "<p class='note' style='color:var(--ticket)'>Erreur lors de la recherche des cinémas.</p>";
-                }
+            navigator.geolocation.getCurrentPosition((pos) => {
+                rechercherCinemasPres(pos.coords.latitude, pos.coords.longitude);
             }, (err) => {
                 liste.innerHTML = (err && err.code === err.PERMISSION_DENIED)
-                    ? "<p class='note' style='color:var(--ticket)'>Localisation refusée — autorisez l'accès à votre position (dans les réglages du navigateur ou du téléphone) puis cliquez sur « Relancer ma localisation ».</p>"
-                    : "<p class='note' style='color:var(--ticket)'>Impossible d'obtenir votre position — vérifiez que le GPS est activé puis cliquez sur « Relancer ma localisation ».</p>";
+                    ? "<p class='note' style='color:var(--ticket)'>Localisation refusée — autorisez l'accès à votre position (dans les réglages du navigateur ou du téléphone), ou cherchez par code postal ci-dessous.</p>"
+                    : "<p class='note' style='color:var(--ticket)'>Impossible d'obtenir votre position — vérifiez que le GPS est activé, ou cherchez par code postal ci-dessous.</p>";
             }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 });
+        }
+
+        /* ---------- Recherche de cinémas par code postal (sans GPS) ---------- */
+        const cinemasCodePostalInput = document.getElementById("cinemasCodePostal");
+        const btnCinemasCodePostal = document.getElementById("btnCinemasCodePostal");
+        const cinemasCommuneRow = document.getElementById("cinemasCommuneRow");
+        const cinemasCommuneSelect = document.getElementById("cinemasCommune");
+        const cinemasCodePostalMsg = document.getElementById("cinemasCodePostalMsg");
+        let communesTrouvees = [];
+
+        async function chercherParCodePostal(){
+            const cp = cinemasCodePostalInput.value.trim();
+            cinemasCommuneRow.classList.add("hidden");
+            cinemasCommuneSelect.innerHTML = "";
+            if (!/^\d{5}$/.test(cp)){
+                cinemasCodePostalMsg.textContent = "Saisissez un code postal à 5 chiffres.";
+                cinemasCodePostalMsg.className = "note";
+                cinemasCodePostalMsg.style.color = "var(--ticket)";
+                return;
+            }
+            cinemasCodePostalMsg.textContent = "Recherche de la commune…";
+            cinemasCodePostalMsg.style.color = "";
+            try {
+                const res = await fetch(`/api/communes?codePostal=${cp}`);
+                const data = await res.json();
+                if (data.error === "CODE_POSTAL_INVALIDE"){
+                    cinemasCodePostalMsg.textContent = "Ce code postal ne correspond pas à la France métropolitaine.";
+                    cinemasCodePostalMsg.style.color = "var(--ticket)";
+                    return;
+                }
+                if (!data.communes || !data.communes.length){
+                    cinemasCodePostalMsg.textContent = "Aucune commune trouvée pour ce code postal.";
+                    cinemasCodePostalMsg.style.color = "var(--ticket)";
+                    return;
+                }
+                communesTrouvees = data.communes;
+                if (communesTrouvees.length === 1){
+                    cinemasCodePostalMsg.textContent = `Recherche autour de ${communesTrouvees[0].nom}…`;
+                    return rechercherCinemasPres(communesTrouvees[0].lat, communesTrouvees[0].lon);
+                }
+                // Plusieurs communes partagent ce code postal (fréquent à Paris/Lyon/Marseille,
+                // ou selon le découpage local) : on laisse la personne choisir la bonne.
+                cinemasCommuneSelect.innerHTML = communesTrouvees.map((c, i) =>
+                    `<option value="${i}">${esc(c.nom)}</option>`).join("");
+                cinemasCommuneRow.classList.remove("hidden");
+                cinemasCodePostalMsg.textContent = "Plusieurs communes correspondent — choisissez la vôtre.";
+            } catch(e){
+                cinemasCodePostalMsg.textContent = "Erreur lors de la recherche de la commune.";
+                cinemasCodePostalMsg.style.color = "var(--ticket)";
+            }
+        }
+        if (btnCinemasCodePostal){
+            btnCinemasCodePostal.addEventListener("click", chercherParCodePostal);
+            cinemasCodePostalInput.addEventListener("keydown", e => { if (e.key === "Enter") chercherParCodePostal(); });
+            cinemasCommuneSelect.addEventListener("change", () => {
+                const c = communesTrouvees[Number(cinemasCommuneSelect.value)];
+                if (c) rechercherCinemasPres(c.lat, c.lon);
+            });
         }
         if (btnCinemasProches){
             btnCinemasProches.addEventListener("click", () => {
@@ -5211,53 +5279,71 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
             });
         }
     
-        const btnNowPlaying = document.getElementById("btnNowPlaying");
-        const nowPlayingModal = document.getElementById("nowPlayingModal");
-        const closeNowPlayingBtn = document.getElementById("closeNowPlayingBtn");
+        /** Onglet « À l'affiche » de la modale Films au cinéma (ex-modale séparée « Actuellement au cinéma »). */
+        async function chargerAfficheCinema(){
+            document.getElementById("nowPlayingList").innerHTML = "<p class='note' style='text-align:center'>Recherche des films à l'affiche...</p>";
+            try {
+                const res = await fetch(`/api/movies/now_playing${state.kidMode ? "?kids=1" : ""}`);
+                const data = await res.json();
 
-        if (btnNowPlaying) {
-            btnNowPlaying.addEventListener("click", async () => {
-                nowPlayingModal.classList.add("active");
-                document.getElementById("nowPlayingList").innerHTML = "<p class='note' style='text-align:center'>Recherche des films à l'affiche...</p>";
-                try {
-                    const res = await fetch(`/api/movies/now_playing${state.kidMode ? "?kids=1" : ""}`);
-                    const data = await res.json();
-                    
-                    if (data.error === "NO_KEY") {
-                        document.getElementById("nowPlayingList").innerHTML = "<p class='note' style='color:var(--ticket)'>Fonctionnalité en attente de configuration. L'administrateur doit renseigner une clé API TMDB dans les réglages.</p>";
-                        return;
-                    }
-                    if (!data.movies || data.movies.length === 0) {
-                        document.getElementById("nowPlayingList").innerHTML = "<p class='note'>Aucun film à l'affiche trouvé.</p>";
-                        return;
-                    }
-
-                    let html = `<p class="tag" style="margin-bottom:16px;">Sélection des films du moment</p>`;
-                    html += data.movies.map(m => `
-                        <div class="bday-item" data-trailer-id="${m.id}" data-trailer-titre="${esc(m.title || "")}" style="border-left-color: var(--teal); align-items:flex-start; cursor:pointer;" title="Voir la bande-annonce">
-                            ${m.poster ? `<img src="${m.poster}" alt="" style="width:70px;height:100px;border-radius:4px;">` : `<div style="width:70px;height:100px;border-radius:4px;background:#333;display:flex;align-items:center;justify-content:center;font-size:24px">🎥</div>`}
-                            <div class="info" style="flex:1;">
-                                <b style="font-family:'Anton', sans-serif; letter-spacing:1px; text-transform:uppercase; font-size:18px;">${m.title}</b>
-                                <div style="display:flex;gap:6px;margin:6px 0;align-items:center;">
-                                    <span style="font-size:11px;background:var(--teal);padding:2px 6px;border-radius:4px;color:#161207;font-weight:bold;">⭐ ${m.vote.toFixed(1)}/10</span>
-                                    <span style="font-size:11px;color:var(--beam)">▶ Bande-annonce</span>
-                                </div>
-                                <small style="display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;">${m.overview || "Aucun synopsis disponible."}</small>
-                            </div>
-                        </div>
-                    `).join("");
-                    document.getElementById("nowPlayingList").innerHTML = html;
-                    // Même lecteur de bande-annonce que pour les « Sorties de la semaine ».
-                    document.getElementById("nowPlayingList").querySelectorAll("[data-trailer-id]").forEach(el => {
-                        el.onclick = () => ouvrirTrailer(el.dataset.trailerId, el.dataset.trailerTitre);
-                    });
-                } catch(e) {
-                    document.getElementById("nowPlayingList").innerHTML = "<p class='note' style='color:var(--ticket)'>Erreur lors du chargement des films à l'affiche.</p>";
+                if (data.error === "NO_KEY") {
+                    document.getElementById("nowPlayingList").innerHTML = "<p class='note' style='color:var(--ticket)'>Fonctionnalité en attente de configuration. L'administrateur doit renseigner une clé API TMDB dans les réglages.</p>";
+                    return;
                 }
+                if (!data.movies || data.movies.length === 0) {
+                    document.getElementById("nowPlayingList").innerHTML = "<p class='note'>Aucun film à l'affiche trouvé.</p>";
+                    return;
+                }
+
+                let html = `<p class="tag" style="margin-bottom:16px;">Sélection des films du moment</p>`;
+                html += data.movies.map(m => `
+                    <div class="bday-item" data-trailer-id="${m.id}" data-trailer-titre="${esc(m.title || "")}" style="border-left-color: var(--teal); align-items:flex-start; cursor:pointer;" title="Voir la bande-annonce">
+                        ${m.poster ? `<img src="${m.poster}" alt="" style="width:70px;height:100px;border-radius:4px;">` : `<div style="width:70px;height:100px;border-radius:4px;background:#333;display:flex;align-items:center;justify-content:center;font-size:24px">🎥</div>`}
+                        <div class="info" style="flex:1;">
+                            <b style="font-family:'Anton', sans-serif; letter-spacing:1px; text-transform:uppercase; font-size:18px;">${m.title}</b>
+                            <div style="display:flex;gap:6px;margin:6px 0;align-items:center;">
+                                <span style="font-size:11px;background:var(--teal);padding:2px 6px;border-radius:4px;color:#161207;font-weight:bold;">⭐ ${m.vote.toFixed(1)}/10</span>
+                                <span style="font-size:11px;color:var(--beam)">▶ Bande-annonce</span>
+                            </div>
+                            <small style="display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;">${m.overview || "Aucun synopsis disponible."}</small>
+                        </div>
+                    </div>
+                `).join("");
+                document.getElementById("nowPlayingList").innerHTML = html;
+                // Même lecteur de bande-annonce que pour l'onglet « Prochainement ».
+                document.getElementById("nowPlayingList").querySelectorAll("[data-trailer-id]").forEach(el => {
+                    el.onclick = () => ouvrirTrailer(el.dataset.trailerId, el.dataset.trailerTitre);
+                });
+            } catch(e) {
+                document.getElementById("nowPlayingList").innerHTML = "<p class='note' style='color:var(--ticket)'>Erreur lors du chargement des films à l'affiche.</p>";
+            }
+        }
+
+        /* Modale unique « Films au cinéma » : à l'affiche et prochaines sorties dans la même
+           fenêtre, sous deux onglets, plutôt que deux boutons/fenêtres séparés comme avant. */
+        const btnFilmsCinema = document.getElementById("btnFilmsCinema");
+        const filmsCinemaModal = document.getElementById("filmsCinemaModal");
+        const closeFilmsCinemaBtn = document.getElementById("closeFilmsCinemaBtn");
+        const tabsFilmsCinema = document.getElementById("tabsFilmsCinema");
+
+        function afficherOngletFilmsCinema(onglet){
+            tabsFilmsCinema.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.onglet === onglet)));
+            document.getElementById("nowPlayingList").classList.toggle("hidden", onglet !== "affiche");
+            document.getElementById("upcomingMoviesList").classList.toggle("hidden", onglet !== "prochainement");
+            if (onglet === "affiche") chargerAfficheCinema();
+            else chargerProchainementCinema();
+        }
+
+        if (btnFilmsCinema) {
+            btnFilmsCinema.addEventListener("click", () => {
+                filmsCinemaModal.classList.add("active");
+                afficherOngletFilmsCinema("affiche");
             });
-            closeNowPlayingBtn.addEventListener("click", () => nowPlayingModal.classList.remove("active"));
-            nowPlayingModal.addEventListener('click', (e) => {
-                if (e.target === nowPlayingModal) nowPlayingModal.classList.remove('active');
+            tabsFilmsCinema.querySelectorAll("[data-onglet]").forEach(b =>
+                b.addEventListener("click", () => afficherOngletFilmsCinema(b.dataset.onglet)));
+            closeFilmsCinemaBtn.addEventListener("click", () => filmsCinemaModal.classList.remove("active"));
+            filmsCinemaModal.addEventListener('click', (e) => {
+                if (e.target === filmsCinemaModal) filmsCinemaModal.classList.remove('active');
             });
         }
 

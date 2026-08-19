@@ -562,6 +562,10 @@
           <input type="checkbox" id="rAfficherRadio" style="width:auto">
           Afficher la radio d'ambiance (bouton lecture, 👍/👎 compris) sur le site
         </label>
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer;font-size:15px;color:var(--chalk);text-transform:none;letter-spacing:0">
+          <input type="checkbox" id="rAutoriserSpectateur" style="width:auto">
+          Autoriser à regarder la partie d'un ami en direct (lecture seule, désactivé par défaut)
+        </label>
         <label for="favInput">Changer le Favicon (l'icône de l'onglet)</label>
         <input type="file" id="favInput" accept=".png, .svg, .ico, .jpg, .jpeg" style="background: transparent; border: none; padding: 0;">
         <div class="row">
@@ -1215,6 +1219,7 @@ async function chargerReglages(){
   majApercu();
   $("rAnimAvancees").checked = reglages.animationsAvancees !== false;
   $("rAfficherRadio").checked = reglages.afficherRadio !== false;
+  $("rAutoriserSpectateur").checked = reglages.autoriserSpectateur === true;
   renderLogosCinema();
 
   $("listeIndices").innerHTML = Object.entries(reglages.indices).map(([cle, v]) => `
@@ -1263,6 +1268,7 @@ $("btnSaveReglages").onclick = async () => {
   }
   corps.animationsAvancees = $("rAnimAvancees").checked;
   corps.afficherRadio = $("rAfficherRadio").checked;
+  corps.autoriserSpectateur = $("rAutoriserSpectateur").checked;
   Object.assign(corps.indices.poster, {
     zoom: Number($("rZoom").value), flou: Number($("rFlou").value), cadrage: $("rCadrage").value,
   });
@@ -2085,6 +2091,10 @@ const ligneJoueur = (u) => `
         : ""}
       <button class="ghost" data-fondateur="${u.id}" title="Dispense de code d'invitation">
         ${u.fondateur ? "★ Fondateur" : "☆ Fondateur"}</button>
+      <span style="display:inline-flex;align-items:center;gap:4px" title="Redonne une ou plusieurs parties classées sans entamer le quota du jour — utile après une déconnexion subie (coupure réseau, mise à jour du serveur qui a coupé les parties en cours sans prévenir)">
+        <input type="number" min="1" max="20" value="1" data-rankedn="${u.id}" style="width:52px;padding:4px 6px;font-size:13px">
+        <button class="ghost" data-rankedbonus="${u.id}">🎟️ Partie(s) classée(s)</button>
+      </span>
       <button class="ghost" data-save="${u.id}">Enregistrer</button>
       <button class="ghost" data-ban="${u.id}">${u.banned?"Réactiver":"Bannir"}</button>
       <button class="danger" data-del="${u.id}">Supprimer</button>
@@ -2134,6 +2144,16 @@ function renderUsers(){
     await api(`/api/admin/users/${encodeURIComponent(u.id)}/fondateur`,
       {method:"PUT", body: JSON.stringify({fondateur: !u.fondateur})});
     loadUsers();
+  });
+
+  zone.querySelectorAll("[data-rankedbonus]").forEach(b => b.onclick = async () => {
+    const id = b.dataset.rankedbonus;
+    const n = Math.max(1, Math.min(20, Number(zone.querySelector(`[data-rankedn="${CSS.escape(id)}"]`).value) || 1));
+    const res = await api(`/api/admin/users/${encodeURIComponent(id)}/ranked-bonus`,
+      {method:"POST", body: JSON.stringify({n})});
+    const d = await res.json().catch(() => ({}));
+    b.textContent = res.ok ? `✓ +${n} accordée${n>1?"s":""}` : "Erreur";
+    setTimeout(() => { b.textContent = "🎟️ Partie(s) classée(s)"; }, 2500);
   });
 
   zone.querySelectorAll("[data-ban]").forEach(b => b.onclick = async () => {
