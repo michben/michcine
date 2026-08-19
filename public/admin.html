@@ -507,6 +507,15 @@
               votre tableau de bord. Ce champ est réservé à un usage futur (ex. statistiques).
             </p>
           </div>
+          <div><label for="rPubMax">Pubs « tour gratuit » autorisées par cycle</label><input id="rPubMax" type="number" min="1" max="50"></div>
+          <div>
+            <label for="rPubHeure">Heure de recharge des pubs (0-23)</label>
+            <input id="rPubHeure" type="number" min="0" max="23">
+            <p style="color:var(--muted);font-size:12px;margin:4px 0 0;line-height:1.5">
+              Le quota recharge à cette heure-là et aussi 12h plus tard (ex. 18 → recharge à 6h ET 18h),
+              comme le réapprovisionnement de la roue.
+            </p>
+          </div>
           <div><label for="rGrace">Délai après la 1re bonne réponse (s)</label><input id="rGrace" type="number" min="0" max="120"></div>
           <div>
             <label for="rVitesse">Dévoilement du synopsis (ms) — 0 pour désactiver</label>
@@ -1167,7 +1176,9 @@ window.importNowPlaying = function(idx) {
 /* ---------- Réglages du jeu ---------- */
 let reglages = null;
 
-const CHAMPS = { rTmdbKey:"tmdbApiKey", rGeoapifyKey:"geoapifyApiKey", rAdsterraKey:"adsterraApiKey", rDuree:"roundDuration", rBase:"basePoints", rDepart:"creditsDepart",
+const CHAMPS = { rTmdbKey:"tmdbApiKey", rGeoapifyKey:"geoapifyApiKey", rAdsterraKey:"adsterraApiKey",
+                 rPubMax:"pubMaxParCycle", rPubHeure:"pubHeureRecharge",
+                 rDuree:"roundDuration", rBase:"basePoints", rDepart:"creditsDepart",
                  rPartie:"creditsParPartie", rTaux:"pointsParTicket", rGrace:"graceApresPremier",
                  rVitesse:"vitesseSynopsis", rParties:"partiesClasseesParJour",
                  rDonMax:"transfertMax", rDonJour:"transfertParJour", rCoeurs:"coeurs",

@@ -2913,29 +2913,58 @@ async function chargerRoue(){
   $("rowRoueRegarderPub").classList.toggle("hidden", !proposerPub);
   $("btnRoueRegarderPub").disabled = false;
 
-  const verrouEl = $("roueVerrouPub");
-  if (!dispo && !d.gainEnAttente && !d.tirPubDisponible && d.pubVerrouJusqua) {
-    const restant = new Date(d.pubVerrouJusqua).getTime() - Date.now();
-    verrouEl.textContent = restant > 0
-      ? `Limite de ${d.tirsPubMax} pubs atteinte — réessayez dans ${formatDureeHM(restant)}.`
-      : `Limite de ${d.tirsPubMax} pubs atteinte — réessayez dans un instant.`;
-    verrouEl.classList.remove("hidden");
+  // Indication permanente du quota de pubs et de l'heure de la prochaine recharge (cycle fixe
+  // de 12h ancré en console admin, 18h par défaut) — visible dès que le tour gratuit du jour
+  // est déjà utilisé, avec un vrai compte à rebours qui tourne seconde par seconde.
+  if (!dispo && !d.gainEnAttente && d.prochaineRechargePub) {
+    demarrerCompteARebours(d.prochaineRechargePub, d.tirsPubUtilises || 0, d.tirsPubMax, d.tirPubDisponible);
+    $("roueVerrouPub").classList.remove("hidden");
   } else {
-    verrouEl.classList.add("hidden");
+    if (minuteurRechargePub) { clearInterval(minuteurRechargePub); minuteurRechargePub = null; }
+    $("roueVerrouPub").classList.add("hidden");
   }
 }
 
-/** Formate une durée en millisecondes en "Xh Ymin" (ou juste "Ymin" si moins d'une heure),
- *  utilisé pour afficher le temps restant avant le déverrouillage des pubs de la roue. */
-function formatDureeHM(ms){
-  const totalMin = Math.max(1, Math.ceil(ms / 60000));
-  const h = Math.floor(totalMin / 60);
-  const min = totalMin % 60;
-  return h > 0 ? `${h}h ${min}min` : `${min}min`;
+/** Formate une durée en millisecondes en "HH:MM:SS" (ou "MM:SS" si moins d'une heure), pour un
+ *  compte à rebours qui tourne seconde par seconde. */
+function formatHMS(ms){
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60), s = total % 60;
+  const pad = (n) => String(n).padStart(2, "0");
+  return h > 0 ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
+
+let minuteurRechargePub = null;
+
+/** Démarre (ou redémarre) le compte à rebours jusqu'à la prochaine recharge du quota de pubs,
+ *  affiché sous le bouton « Regarder une pub » et mis à jour chaque seconde. Se resynchronise
+ *  automatiquement auprès du serveur dès que le compte à rebours atteint zéro. */
+function demarrerCompteARebours(prochaineRechargeIso, utilises, max, disponible){
+  if (minuteurRechargePub) clearInterval(minuteurRechargePub);
+  const cible = new Date(prochaineRechargeIso).getTime();
+  const heureAffiche = new Date(prochaineRechargeIso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  const maj = () => {
+    const restant = cible - Date.now();
+    if (restant <= 0){
+      clearInterval(minuteurRechargePub);
+      minuteurRechargePub = null;
+      $("roueVerrouPub").textContent = "Recharge des pubs en cours…";
+      chargerRoue();
+      return;
+    }
+    $("roueVerrouPub").textContent = disponible
+      ? `🎬 Pubs utilisées : ${utilises}/${max} — prochaine recharge à ${heureAffiche} (dans ${formatHMS(restant)})`
+      : `🎬 Limite de ${max} pubs atteinte — recharge à ${heureAffiche} (dans ${formatHMS(restant)})`;
+  };
+  maj();
+  minuteurRechargePub = setInterval(maj, 1000);
 }
 
 $("btnRoue").onclick = () => { chargerRoue(); show("roue"); };
-$("btnRoueBack").onclick = () => show("menu");
+$("btnRoueBack").onclick = () => {
+  if (minuteurRechargePub) { clearInterval(minuteurRechargePub); minuteurRechargePub = null; }
+  show("menu");
+};
 
 /** Envoie le tour à jouer (normal / payant / gagné en regardant une pub) puis anime la roue
  *  jusqu'au lot tiré. Les boutons « Tourner » et « Regarder une pub » partagent cette logique,
@@ -2961,7 +2990,7 @@ async function lancerTourRoue(via){
     const d = await res.json().catch(() => ({}));
     $("roueInfo").textContent = d.error === "CREDITS_INSUFFISANTS" ? "Pas assez de tickets pour ce tour."
       : d.error === "LIMITE_TIRS_PAYANTS" ? `Limite de ${d.max} tours payants par jour atteinte.`
-      : d.error === "LIMITE_TIRS_PUB" ? `Limite de ${d.max} pubs atteinte — réessayez dans ${d.jusqua ? formatDureeHM(new Date(d.jusqua).getTime() - Date.now()) : "quelques heures"}.`
+      : d.error === "LIMITE_TIRS_PUB" ? `Limite de ${d.max} pubs atteinte — réessayez dans ${d.jusqua ? formatHMS(new Date(d.jusqua).getTime() - Date.now()) : "quelques heures"}.`
       : d.error === "GAIN_EN_ATTENTE" ? "Réclamez d'abord votre gain précédent."
       : "Impossible de tourner la roue pour le moment.";
     roueEnCours = false; chargerRoue();
