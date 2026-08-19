@@ -148,6 +148,27 @@ export function marquerTirPayantRoueUtilise(userId, jour) {
 }
 export const ROUE_MAX_TIRS_PAYANTS = MAX_TIRS_PAYANTS_ROUE;
 
+const MAX_TIRS_PUB_ROUE = 5; // tours gagnés en regardant une publicité, plafonnés séparément des tours payants
+
+/** Nombre de tours "gagnés en regardant une pub" déjà effectués aujourd'hui. */
+export function roueTirsPubAujourdhui(userId, jour) {
+  const u = users[userId];
+  if (!u) return 0;
+  return u.roueJourPub === jour ? (u.roueTirsPub || 0) : 0;
+}
+/** Reste-t-il un tour "publicité" disponible aujourd'hui (max 5/jour) ? */
+export function roueTirPubDisponible(userId, jour) {
+  return roueTirsPubAujourdhui(userId, jour) < MAX_TIRS_PUB_ROUE;
+}
+export function marquerTirPubRoueUtilise(userId, jour) {
+  const u = users[userId];
+  if (!u) return;
+  if (u.roueJourPub !== jour) { u.roueJourPub = jour; u.roueTirsPub = 0; }
+  u.roueTirsPub = (u.roueTirsPub || 0) + 1;
+  saveUsers();
+}
+export const ROUE_MAX_TIRS_PUB = MAX_TIRS_PUB_ROUE;
+
 /** Présence : un joueur peut avoir plusieurs onglets, on compte les connexions. */
 export function marquerEnLigne(userId) {
   connectes.set(userId, (connectes.get(userId) || 0) + 1);

@@ -31,7 +31,8 @@ import { mountAuth, userFromCookie, addRankedPoints,
          parrainageManquant, parrainageObligatoire, genererCodeAdmin,
          creerCompteAdmin, sansMotDePasse,
          genererCodeParrainGagne, roueGratuiteDisponible, marquerRoueGratuiteUtilisee,
-         roueTirPayantDisponible, marquerTirPayantRoueUtilise, ROUE_MAX_TIRS_PAYANTS } from "./auth-x.js";
+         roueTirPayantDisponible, marquerTirPayantRoueUtilise, ROUE_MAX_TIRS_PAYANTS,
+         roueTirPubDisponible, marquerTirPubRoueUtilise, ROUE_MAX_TIRS_PUB } from "./auth-x.js";
 
 const app = express();
 app.use(express.json({ limit: '15mb' })); // Limite augmentée pour l'upload d'images et de musique
@@ -1664,6 +1665,69 @@ app.get("/api/wallet/historique", (req, res) => {
   res.json({ transactions, credits: getCredits(user.id), points: getPoints(user.id) });
 });
 
+/* ---------- publicités "roue" : regarder une pub pour gagner un tour gratuit ---------- */
+// Gérées depuis la console admin, comme la playlist musicale : image ou vidéo (fichier direct
+// ou lien YouTube), un lien cible optionnel (le sponsor), et une durée minimale de visionnage
+// avant que le joueur puisse récupérer son tour gratuit.
+
+const PUBLICITES_FILE = new URL("./publicites.json", import.meta.url);
+let publicites = [];   // [{id, titre, type: "image"|"video", url, cible, duree, actif, ajouteLe}]
+const savePublicites = () => sauver("publicites", publicites, PUBLICITES_FILE);
+
+/** Une publicité active tirée au hasard, présentée au joueur qui préfère regarder une pub
+ *  plutôt que de payer pour un tour de roue supplémentaire. */
+app.get("/api/publicites/une", (req, res) => {
+    const actives = publicites.filter((p) => p.actif !== false);
+    if (!actives.length) return res.json({ publicite: null });
+    const p = actives[Math.floor(Math.random() * actives.length)];
+    res.json({ publicite: { id: p.id, titre: p.titre, type: p.type, url: p.url, cible: p.cible || null, duree: p.duree || 15 } });
+});
+
+app.get("/api/admin/publicites", requireAdmin, (req, res) => res.json(publicites));
+
+app.post("/api/admin/publicites", requireAdmin, (req, res) => {
+    const { titre, type, url, cible, duree } = req.body || {};
+    const nom = String(titre || "").trim().slice(0, 80) || "Sans titre";
+    const t = type === "video" ? "video" : "image";
+    const lien = String(url || "").trim();
+    if (!/^https?:\/\/\S+$/i.test(lien)) return res.status(400).json({ error: "LIEN_INVALIDE" });
+    const pub = {
+        id: crypto.randomUUID(), titre: nom, type: t, url: lien,
+        cible: cible ? String(cible).trim().slice(0, 300) : "",
+        duree: Math.min(60, Math.max(5, Number(duree) || 15)),
+        actif: true, ajouteLe: new Date().toISOString(),
+    };
+    publicites.push(pub);
+    savePublicites();
+    res.json({ ok: true, publicite: pub });
+});
+
+app.put("/api/admin/publicites/:id", requireAdmin, (req, res) => {
+    const p = publicites.find((x) => x.id === req.params.id);
+    if (!p) return res.status(404).json({ error: "INTROUVABLE" });
+    const { titre, type, url, cible, duree, actif } = req.body || {};
+    if (titre !== undefined) p.titre = String(titre).trim().slice(0, 80) || p.titre;
+    if (type === "video" || type === "image") p.type = type;
+    if (url !== undefined) {
+        const lien = String(url).trim();
+        if (!/^https?:\/\/\S+$/i.test(lien)) return res.status(400).json({ error: "LIEN_INVALIDE" });
+        p.url = lien;
+    }
+    if (cible !== undefined) p.cible = String(cible).trim().slice(0, 300);
+    if (duree !== undefined) p.duree = Math.min(60, Math.max(5, Number(duree) || p.duree));
+    if (actif !== undefined) p.actif = Boolean(actif);
+    savePublicites();
+    res.json({ ok: true, publicite: p });
+});
+
+app.delete("/api/admin/publicites/:id", requireAdmin, (req, res) => {
+    const p = publicites.find((x) => x.id === req.params.id);
+    if (!p) return res.status(404).json({ error: "INTROUVABLE" });
+    publicites = publicites.filter((x) => x.id !== req.params.id);
+    savePublicites();
+    res.json({ ok: true });
+});
+
 /* ---------- roue quotidienne ---------- */
 
 const COUT_TOUR_ROUE = 100;
@@ -1686,6 +1750,8 @@ app.get("/api/roue", (req, res) => {
         gratuitDisponible: roueGratuiteDisponible(user.id, roue.jour),
         tirPayantDisponible: roueTirPayantDisponible(user.id, roue.jour),
         tirsPayantsMax: ROUE_MAX_TIRS_PAYANTS,
+        tirPubDisponible: roueTirPubDisponible(user.id, roue.jour),
+        tirsPubMax: ROUE_MAX_TIRS_PUB,
         coutTour: COUT_TOUR_ROUE,
         credits: getCredits(user.id),
         derniersTirages: roue.historique.slice(-8).reverse(),
@@ -1702,18 +1768,25 @@ app.post("/api/roue/tourner", (req, res) => {
     if (gainsEnAttente[user.id]) return res.status(409).json({ error: "GAIN_EN_ATTENTE" });
 
     const gratuit = roueGratuiteDisponible(user.id, roue.jour);
-    if (!gratuit) {
+    // Une fois le tour gratuit du jour consommé, le joueur choisit : payer en tickets, ou
+    // regarder une publicité (gérée depuis la console admin) pour un tour gratuit à la place.
+    const viaPub = !gratuit && req.body?.via === "pub";
+    if (!gratuit && !viaPub) {
         if (!roueTirPayantDisponible(user.id, roue.jour))
             return res.status(429).json({ error: "LIMITE_TIRS_PAYANTS", max: ROUE_MAX_TIRS_PAYANTS });
         const ok = spendCredits(user.id, COUT_TOUR_ROUE);
         if (!ok) return res.status(400).json({ error: "CREDITS_INSUFFISANTS" });
         enregistrerTransaction(user.id, -COUT_TOUR_ROUE, "credits", "Tour de roue");
+    } else if (viaPub) {
+        if (!roueTirPubDisponible(user.id, roue.jour))
+            return res.status(429).json({ error: "LIMITE_TIRS_PUB", max: ROUE_MAX_TIRS_PUB });
     }
 
     if (roue.lots.length === 0) {
         // Filet de sécurité : assurerRoueDuJour() vient tout juste de réapprovisionner,
-        // ce cas ne devrait jamais se produire — on rembourse par précaution.
-        if (!gratuit) {
+        // ce cas ne devrait jamais se produire — on rembourse par précaution (seulement si
+        // des tickets ont réellement été dépensés : ni le tour gratuit, ni le tour "pub" n'en coûtent).
+        if (!gratuit && !viaPub) {
             grantCredits(user.id, COUT_TOUR_ROUE);
             enregistrerTransaction(user.id, COUT_TOUR_ROUE, "credits", "Remboursement — roue vide");
         }
@@ -1727,10 +1800,11 @@ app.post("/api/roue/tourner", (req, res) => {
     if (lot.type === "credits" || lot.type === "ranked") resultat.valeur = lot.valeur;
 
     // Le gain n'est pas crédité tout de suite : le joueur doit le réclamer via un bouton.
-    gainsEnAttente[user.id] = { ...resultat, gratuit, date: new Date().toISOString() };
+    gainsEnAttente[user.id] = { ...resultat, gratuit, viaPub, date: new Date().toISOString() };
     saveGainsRoue();
 
     if (gratuit) marquerRoueGratuiteUtilisee(user.id, roue.jour);
+    else if (viaPub) marquerTirPubRoueUtilise(user.id, roue.jour);
     else marquerTirPayantRoueUtilise(user.id, roue.jour);
     saveRoue();
 
@@ -2273,6 +2347,94 @@ app.get("/api/movies/:id/trailer", async (req, res) => {
   } catch (err) {
     console.error("Erreur bande-annonce:", err);
     res.status(500).json({ error: "INTERNAL_ERROR", key: null });
+  }
+});
+
+/* ------------------------------------------------------------------ */
+/* Cinémas à proximité : géolocalisation du joueur → cinémas les plus  */
+/* proches via OpenStreetMap (Overpass API, gratuit, sans clé), avec   */
+/* identification des grandes enseignes (UGC, MK2, Gaumont, Pathé...)  */
+/* pour les distinguer des cinémas indépendants / de quartier.         */
+/* ------------------------------------------------------------------ */
+
+const ENSEIGNES_CINEMA = [
+  { motif: /\bugc\b/i, nom: "UGC" },
+  { motif: /\bmk2\b/i, nom: "MK2" },
+  { motif: /gaumont/i, nom: "Gaumont" },
+  { motif: /path[eé]/i, nom: "Pathé" },
+  { motif: /\bcgr\b/i, nom: "CGR" },
+  { motif: /cin[eé]ville/i, nom: "Cinéville" },
+  { motif: /kinepolis/i, nom: "Kinepolis" },
+  { motif: /megarama/i, nom: "Megarama" },
+];
+const enseigneDepuisNom = (nom) =>
+  (ENSEIGNES_CINEMA.find((e) => e.motif.test(nom || "")) || {}).nom || "Cinéma indépendant";
+
+/** Distance à vol d'oiseau entre deux points GPS, en kilomètres (formule de haversine). */
+function distanceKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+app.get("/api/cinemas/proches", async (req, res) => {
+  try {
+    const lat = Number(req.query.lat);
+    const lon = Number(req.query.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180)
+      return res.status(400).json({ error: "POSITION_INVALIDE", cinemas: [] });
+
+    const chercher = async (rayonMetres) => {
+      const requete = `[out:json][timeout:15];(node["amenity"="cinema"](around:${rayonMetres},${lat},${lon});way["amenity"="cinema"](around:${rayonMetres},${lat},${lon}););out center;`;
+      const r = await fetch("https://overpass-api.de/api/interpreter", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: `data=${encodeURIComponent(requete)}`,
+      });
+      if (!r.ok) return null;
+      const d = await r.json();
+      return d.elements || [];
+    };
+
+    // On élargit la recherche si le rayon proche ne remonte presque rien : utile en zone peu
+    // dense où le cinéma le plus proche peut être à plus de 20 km.
+    let elements = await chercher(20000);
+    if (elements === null) return res.status(502).json({ error: "SERVICE_INDISPONIBLE", cinemas: [] });
+    if (elements.length < 3) {
+      const elargi = await chercher(60000);
+      if (elargi) elements = elargi;
+    }
+
+    const vus = new Set();
+    const cinemas = [];
+    for (const el of elements) {
+      const nom = el.tags?.name;
+      if (!nom) continue;
+      const latEl = el.lat ?? el.center?.lat;
+      const lonEl = el.lon ?? el.center?.lon;
+      if (!Number.isFinite(latEl) || !Number.isFinite(lonEl)) continue;
+      const cle = nom + "|" + (el.tags?.["addr:street"] || "");
+      if (vus.has(cle)) continue;
+      vus.add(cle);
+      const adresse = [el.tags?.["addr:housenumber"], el.tags?.["addr:street"]].filter(Boolean).join(" ") || null;
+      cinemas.push({
+        nom,
+        enseigne: enseigneDepuisNom(nom),
+        adresse,
+        ville: el.tags?.["addr:city"] || null,
+        codePostal: el.tags?.["addr:postcode"] || null,
+        lat: latEl, lon: lonEl,
+        distanceKm: Math.round(distanceKm(lat, lon, latEl, lonEl) * 10) / 10,
+      });
+    }
+    cinemas.sort((a, b) => a.distanceKm - b.distanceKm);
+    res.json({ cinemas: cinemas.slice(0, 20) });
+  } catch (err) {
+    console.error("Erreur cinémas proches:", err);
+    res.status(500).json({ error: "INTERNAL_ERROR", cinemas: [] });
   }
 });
 
@@ -3432,6 +3594,8 @@ votesMusique = await charger("votesMusique", VOTES_MUSIQUE_FILE, {});
 if (!votesMusique || typeof votesMusique !== "object") votesMusique = {};
 erreursMusique = await charger("erreursMusique", ERREURS_MUSIQUE_FILE, {});
 if (!erreursMusique || typeof erreursMusique !== "object") erreursMusique = {};
+publicites = await charger("publicites", PUBLICITES_FILE, []);
+if (!Array.isArray(publicites)) publicites = [];
 signets = await charger("signets", SIGNETS_FILE, {});
 if (!signets || typeof signets !== "object") signets = {};
 aideConfig = await charger("aide", AIDE_FILE, aideConfig);
