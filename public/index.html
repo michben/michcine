@@ -860,6 +860,9 @@ html.mode-enfant-actif .wrap{padding-top:48px}
       <div class="row" style="margin-top:16px">
         <button id="btnTournerRoue">Tourner</button>
       </div>
+      <div class="row hidden" id="rowRoueRegarderPub">
+        <button class="ghost" id="btnRoueRegarderPub" style="border-color:var(--teal); color:var(--teal)">🎬 Regarder une pub pour un tour gratuit</button>
+      </div>
 
       <div id="roueGagnants" style="margin-top:18px">
         <p class="tag" style="margin:0 0 6px">🏆 Derniers gagnants</p>
@@ -925,6 +928,9 @@ html.mode-enfant-actif .wrap{padding-top:48px}
     <div class="row" style="margin-bottom: 14px; gap: 10px;">
       <button id="btnUpcomingMovies" style="flex:1; padding: 10px 16px; background: var(--beam); color: #0A0C16; font-weight: bold; border: 0; border-radius: 999px; cursor: pointer;">🍿 Sorties Ciné</button>
       <button id="btnNowPlaying" style="flex:1; padding: 10px 16px; background: var(--teal); color: #0A0C16; font-weight: bold; border: 0; border-radius: 999px; cursor: pointer;">🎥 Actuellement au cinéma</button>
+    </div>
+    <div class="row" style="margin-bottom: 14px;">
+      <button id="btnCinemasProches" class="ghost" style="border-color: var(--ticket); color: var(--ticket);">📍 Cinéma le plus proche</button>
     </div>
 
     <div class="barreNiveau" id="barreNiveau">
@@ -2840,36 +2846,51 @@ async function chargerRoue(){
     : dispo
       ? `Votre tour <b style="color:var(--teal)">gratuit</b> du jour vous attend !`
       : d.tirPayantDisponible
-        ? `Tour gratuit déjà utilisé aujourd'hui. Prochain tour : <b style="color:var(--beam)">${d.coutTour} 🎟️</b> (vous avez ${d.credits} 🎟️).`
+        ? `Tour gratuit déjà utilisé aujourd'hui. Prochain tour : <b style="color:var(--beam)">${d.coutTour} 🎟️</b> (vous avez ${d.credits} 🎟️) — ou regardez une pub ci-dessous pour tourner gratuitement.`
         : `Vous avez atteint la limite de ${d.tirsPayantsMax} tours payants aujourd'hui — rendez-vous à la prochaine roue, à 18h !`;
   $("roueStock").textContent = `${d.lotsRestants} lot${d.lotsRestants>1?"s":""} restant${d.lotsRestants>1?"s":""} dans la roue d'aujourd'hui — réapprovisionnée chaque jour à 18h.`;
   $("btnTournerRoue").textContent = dispo ? "Tourner (gratuit)" : `Tourner (${d.coutTour} 🎟️)`;
   $("btnTournerRoue").disabled = Boolean(d.gainEnAttente) || d.lotsRestants === 0
     || (!dispo && (!d.tirPayantDisponible || d.credits < d.coutTour));
+
+  // Le bouton « Regarder une pub » n'a de sens que quand le tour gratuit est déjà consommé
+  // (sinon autant utiliser celui-ci) et tant que le quota quotidien de tours-pub n'est pas atteint.
+  const proposerPub = !dispo && !d.gainEnAttente && d.lotsRestants > 0 && d.tirPubDisponible;
+  $("rowRoueRegarderPub").classList.toggle("hidden", !proposerPub);
+  $("btnRoueRegarderPub").disabled = false;
 }
 
 $("btnRoue").onclick = () => { chargerRoue(); show("roue"); };
 $("btnRoueBack").onclick = () => show("menu");
 
-$("btnTournerRoue").onclick = async () => {
+/** Envoie le tour à jouer (normal / payant / gagné en regardant une pub) puis anime la roue
+ *  jusqu'au lot tiré. Les boutons « Tourner » et « Regarder une pub » partagent cette logique,
+ *  seul le corps de la requête change. */
+async function lancerTourRoue(via){
   if (roueEnCours) return;
   roueEnCours = true;
   $("btnTournerRoue").disabled = true;
+  $("btnRoueRegarderPub").disabled = true;
   $("roueResultat").classList.add("hidden");
 
-  const res = await fetch("/api/roue/tourner", { method:"POST" }).catch(() => null);
+  const res = await fetch("/api/roue/tourner", {
+    method: "POST",
+    headers: via ? { "Content-Type": "application/json" } : undefined,
+    body: via ? JSON.stringify({ via }) : undefined,
+  }).catch(() => null);
   if (!res){
     $("roueInfo").textContent = "Connexion impossible, réessayez.";
-    roueEnCours = false; $("btnTournerRoue").disabled = false;
+    roueEnCours = false; chargerRoue();
     return;
   }
   if (!res.ok){
     const d = await res.json().catch(() => ({}));
     $("roueInfo").textContent = d.error === "CREDITS_INSUFFISANTS" ? "Pas assez de tickets pour ce tour."
       : d.error === "LIMITE_TIRS_PAYANTS" ? `Limite de ${d.max} tours payants par jour atteinte.`
+      : d.error === "LIMITE_TIRS_PUB" ? `Limite de ${d.max} tours gagnés par pub aujourd'hui atteinte.`
       : d.error === "GAIN_EN_ATTENTE" ? "Réclamez d'abord votre gain précédent."
       : "Impossible de tourner la roue pour le moment.";
-    roueEnCours = false; $("btnTournerRoue").disabled = false;
+    roueEnCours = false; chargerRoue();
     return;
   }
   const d = await res.json();
@@ -2895,7 +2916,92 @@ $("btnTournerRoue").onclick = async () => {
     setCredits(d.credits);
     chargerRoue();
   }, 4300);
-};
+}
+
+$("btnTournerRoue").onclick = () => lancerTourRoue();
+
+/** Extrait un identifiant vidéo YouTube d'une URL, quel que soit son format (youtu.be,
+ *  watch?v=, /embed/...) — réutilisé pour les publicités vidéo hébergées sur YouTube. */
+function idYoutubeDepuisUrl(url){
+  const m = String(url || "").match(/(?:youtu\.be\/|v=|\/embed\/)([\w-]{6,})/);
+  return m ? m[1] : null;
+}
+
+let minuteurPub = null;
+
+/** Ferme la fenêtre de publicité et arrête tout minuteur ou lecture en cours. */
+function fermerPub(){
+  if (minuteurPub) { clearInterval(minuteurPub); minuteurPub = null; }
+  $("pubModal").classList.remove("active");
+  $("pubFrame").src = "";
+  $("pubImage").src = "";
+}
+
+/**
+ * Propose au joueur de regarder une publicité (choisie par l'administration depuis la
+ * console) en échange d'un tour de roue gratuit, sans dépenser de tickets. Le bouton
+ * « Continuer » reste désactivé pendant la durée minimale fixée par l'administration pour
+ * cette publicité, avec un décompte visible.
+ */
+async function ouvrirPub(){
+  $("pubModal").classList.add("active");
+  $("pubZoneImage").classList.add("hidden");
+  $("pubZoneVideo").classList.add("hidden");
+  $("pubMsg").textContent = "Chargement de la publicité…";
+  $("btnPubContinuer").disabled = true;
+  $("btnPubContinuer").textContent = "Patientez…";
+
+  const data = await fetch("/api/publicites/une").then(r => r.ok ? r.json() : null).catch(() => null);
+  const pub = data?.publicite;
+  if (!pub){
+    $("pubMsg").textContent = "Aucune publicité disponible pour le moment — réessayez plus tard ou payez votre tour.";
+    $("btnPubContinuer").classList.add("hidden");
+    return;
+  }
+  $("btnPubContinuer").classList.remove("hidden");
+  $("pubTitre").textContent = `🎬 ${pub.titre || "Publicité"}`;
+
+  const idYoutube = pub.type === "video" ? idYoutubeDepuisUrl(pub.url) : null;
+  if (pub.type === "image"){
+    $("pubZoneImage").classList.remove("hidden");
+    $("pubImage").src = pub.url;
+  } else if (idYoutube){
+    $("pubZoneVideo").classList.remove("hidden");
+    $("pubFrame").src = `https://www.youtube.com/embed/${encodeURIComponent(idYoutube)}?autoplay=1&rel=0&controls=0`;
+  } else {
+    // Vidéo hébergée directement (mp4/webm...) plutôt qu'un lien YouTube.
+    $("pubZoneVideo").classList.remove("hidden");
+    $("pubFrame").outerHTML = `<video id="pubFrame" autoplay muted playsinline style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:contain;background:#000" src="${pub.url}"></video>`;
+  }
+
+  const duree = Math.max(3, Number(pub.duree) || 15);
+  let restant = duree;
+  $("pubMsg").textContent = `Merci de patienter ${restant} s avant de récupérer votre tour gratuit…`;
+  if (minuteurPub) clearInterval(minuteurPub);
+  minuteurPub = setInterval(() => {
+    restant -= 1;
+    if (restant <= 0){
+      clearInterval(minuteurPub);
+      minuteurPub = null;
+      $("pubMsg").textContent = "Merci ! Vous pouvez récupérer votre tour gratuit.";
+      $("btnPubContinuer").disabled = false;
+      $("btnPubContinuer").textContent = "🎁 Récupérer mon tour gratuit";
+    } else {
+      $("pubMsg").textContent = `Merci de patienter ${restant} s avant de récupérer votre tour gratuit…`;
+    }
+  }, 1000);
+}
+
+$("btnRoueRegarderPub").onclick = ouvrirPub;
+// #pubModal est défini plus bas dans le document (avec les autres fenêtres modales) : on
+// attend le DOMContentLoaded pour brancher ses boutons, comme pour les fenêtres similaires.
+document.addEventListener("DOMContentLoaded", () => {
+  $("btnPubAnnuler").onclick = fermerPub;
+  $("btnPubContinuer").onclick = () => {
+    fermerPub();
+    lancerTourRoue("pub");
+  };
+});
 
 $("btnRoueReclamer").onclick = async () => {
   if (!gainRoueEnAttente) return;
@@ -4433,6 +4539,43 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
         </div>
     </div>
 
+    <!-- MODALE PUBLICITÉ : regardée en échange d'un tour de roue gratuit, sans dépenser de tickets. -->
+    <div class="modal-overlay" id="pubModal">
+        <div class="modal-content">
+            <div class="modal-header" style="border-bottom-color: var(--teal);">
+                <h2 id="pubTitre">🎬 Publicité</h2>
+            </div>
+            <div class="modal-body" style="padding:0">
+                <div id="pubZoneImage" class="hidden" style="width:100%;background:#000;display:flex;align-items:center;justify-content:center">
+                    <img id="pubImage" alt="Publicité" style="max-width:100%;max-height:340px;display:block;margin:0 auto">
+                </div>
+                <div id="pubZoneVideo" class="hidden" style="position:relative;width:100%;padding-top:56.25%;background:#000">
+                    <iframe id="pubFrame" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0" allow="autoplay; encrypted-media" allowfullscreen title="Publicité vidéo"></iframe>
+                </div>
+                <div style="padding:14px">
+                    <p class="note" id="pubMsg" style="text-align:center;margin:0 0 10px"></p>
+                    <div class="row">
+                        <button id="btnPubContinuer" disabled>Patientez…</button>
+                        <button class="ghost" id="btnPubAnnuler" style="flex:0 0 auto">Annuler</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALE CINÉMAS À PROXIMITÉ : géolocalisation du joueur. -->
+    <div class="modal-overlay" id="cinemasModal">
+        <div class="modal-content">
+            <div class="modal-header" style="border-bottom-color: var(--ticket);">
+                <h2>📍 Cinémas à proximité</h2>
+                <button class="close-btn" id="closeCinemasBtn">&times;</button>
+            </div>
+            <div class="modal-body" id="cinemasList" style="max-height: 60vh; overflow-y: auto;">
+                <p class="note" style="text-align:center">Localisation en cours…</p>
+            </div>
+        </div>
+    </div>
+
     <!-- MODALE ACTUELLEMENT AU CINEMA -->
     <div class="modal-overlay" id="nowPlayingModal">
         <div class="modal-content">
@@ -4717,6 +4860,66 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
         }
         closeTrailerBtn.addEventListener("click", fermerTrailer);
         trailerModal.addEventListener("click", (e) => { if (e.target === trailerModal) fermerTrailer(); });
+
+        /* Cinémas à proximité : géolocalisation du navigateur puis recherche des salles les plus
+           proches (OpenStreetMap, gratuit) avec identification des grandes enseignes. */
+        const btnCinemasProches = document.getElementById("btnCinemasProches");
+        const cinemasModal = document.getElementById("cinemasModal");
+        const closeCinemasBtn = document.getElementById("closeCinemasBtn");
+        const ENSEIGNE_COULEUR = {
+            "UGC": "var(--ticket)", "MK2": "var(--teal)", "Gaumont": "var(--beam)",
+            "Pathé": "#a78bfa", "CGR": "#60a5fa", "Cinéville": "#f472b6",
+            "Kinepolis": "#34d399", "Megarama": "#fb923c",
+        };
+        if (btnCinemasProches){
+            btnCinemasProches.addEventListener("click", () => {
+                cinemasModal.classList.add("active");
+                const liste = document.getElementById("cinemasList");
+                if (!navigator.geolocation){
+                    liste.innerHTML = "<p class='note' style='color:var(--ticket)'>La géolocalisation n'est pas disponible sur cet appareil ou ce navigateur.</p>";
+                    return;
+                }
+                liste.innerHTML = "<p class='note' style='text-align:center'>Localisation en cours…</p>";
+                navigator.geolocation.getCurrentPosition(async (pos) => {
+                    liste.innerHTML = "<p class='note' style='text-align:center'>Recherche des cinémas à proximité…</p>";
+                    try {
+                        const { latitude, longitude } = pos.coords;
+                        const res = await fetch(`/api/cinemas/proches?lat=${latitude}&lon=${longitude}`);
+                        const data = await res.json();
+                        if (!data.cinemas || !data.cinemas.length){
+                            liste.innerHTML = "<p class='note'>Aucun cinéma trouvé à proximité.</p>";
+                            return;
+                        }
+                        liste.innerHTML = data.cinemas.map(c => {
+                            const couleur = ENSEIGNE_COULEUR[c.enseigne] || "var(--muted)";
+                            return `
+                            <div class="bday-item" style="border-left-color: ${couleur}; align-items:flex-start;">
+                                <div style="width:44px;height:44px;border-radius:8px;background:#222;display:flex;align-items:center;justify-content:center;font-size:20px;flex:0 0 auto;">🎥</div>
+                                <div class="info" style="flex:1;">
+                                    <b>${esc(c.nom)}</b>
+                                    <div style="display:flex;gap:6px;margin:6px 0;flex-wrap:wrap;align-items:center;">
+                                        <span style="font-size:11px;background:${couleur};padding:2px 8px;border-radius:4px;color:#161207;font-weight:bold;">${esc(c.enseigne)}</span>
+                                        <span style="font-size:12px;color:var(--muted)">📍 ${c.distanceKm} km</span>
+                                    </div>
+                                    <small>${esc([c.adresse, c.codePostal, c.ville].filter(Boolean).join(", ") || "Adresse non renseignée")}</small>
+                                    <div class="row" style="margin-top:8px">
+                                        <a href="https://www.google.com/maps/dir/?api=1&destination=${c.lat},${c.lon}" target="_blank" rel="noopener" style="display:block;text-align:center;text-decoration:none;padding:8px 12px;font-size:13px;border-radius:8px;border:1px solid rgba(237,232,220,.22);color:var(--chalk)">🗺️ Itinéraire</a>
+                                    </div>
+                                </div>
+                            </div>`;
+                        }).join("");
+                    } catch(e){
+                        liste.innerHTML = "<p class='note' style='color:var(--ticket)'>Erreur lors de la recherche des cinémas.</p>";
+                    }
+                }, (err) => {
+                    liste.innerHTML = (err && err.code === err.PERMISSION_DENIED)
+                        ? "<p class='note' style='color:var(--ticket)'>Localisation refusée — autorisez l'accès à votre position pour trouver les cinémas proches.</p>"
+                        : "<p class='note' style='color:var(--ticket)'>Impossible d'obtenir votre position.</p>";
+                }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 });
+            });
+            closeCinemasBtn.addEventListener("click", () => cinemasModal.classList.remove("active"));
+            cinemasModal.addEventListener("click", (e) => { if (e.target === cinemasModal) cinemasModal.classList.remove("active"); });
+        }
     </script>
 
 
@@ -4794,18 +4997,23 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
 
                     let html = `<p class="tag" style="margin-bottom:16px;">Sélection des films du moment</p>`;
                     html += data.movies.map(m => `
-                        <div class="bday-item" style="border-left-color: var(--teal); align-items:flex-start;">
+                        <div class="bday-item" data-trailer-id="${m.id}" data-trailer-titre="${esc(m.title || "")}" style="border-left-color: var(--teal); align-items:flex-start; cursor:pointer;" title="Voir la bande-annonce">
                             ${m.poster ? `<img src="${m.poster}" alt="" style="width:70px;height:100px;border-radius:4px;">` : `<div style="width:70px;height:100px;border-radius:4px;background:#333;display:flex;align-items:center;justify-content:center;font-size:24px">🎥</div>`}
                             <div class="info" style="flex:1;">
                                 <b style="font-family:'Anton', sans-serif; letter-spacing:1px; text-transform:uppercase; font-size:18px;">${m.title}</b>
-                                <div style="display:flex;gap:6px;margin:6px 0;">
+                                <div style="display:flex;gap:6px;margin:6px 0;align-items:center;">
                                     <span style="font-size:11px;background:var(--teal);padding:2px 6px;border-radius:4px;color:#161207;font-weight:bold;">⭐ ${m.vote.toFixed(1)}/10</span>
+                                    <span style="font-size:11px;color:var(--beam)">▶ Bande-annonce</span>
                                 </div>
                                 <small style="display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;">${m.overview || "Aucun synopsis disponible."}</small>
                             </div>
                         </div>
                     `).join("");
                     document.getElementById("nowPlayingList").innerHTML = html;
+                    // Même lecteur de bande-annonce que pour les « Sorties de la semaine ».
+                    document.getElementById("nowPlayingList").querySelectorAll("[data-trailer-id]").forEach(el => {
+                        el.onclick = () => ouvrirTrailer(el.dataset.trailerId, el.dataset.trailerTitre);
+                    });
                 } catch(e) {
                     document.getElementById("nowPlayingList").innerHTML = "<p class='note' style='color:var(--ticket)'>Erreur lors du chargement des films à l'affiche.</p>";
                 }

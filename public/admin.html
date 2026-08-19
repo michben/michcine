@@ -90,6 +90,7 @@
       <button id="tabCitations" aria-selected="false">Citations</button>
       <button id="tabRoue" aria-selected="false">Roue</button>
       <button id="tabMusique" aria-selected="false">Musique</button>
+      <button id="tabPub" aria-selected="false">Publicités</button>
       <button id="tabClassement" aria-selected="false">Partie classée</button>
     </div>
 
@@ -337,6 +338,37 @@
       <div class="card">
         <p class="tag" id="musCount">Playlist</p>
         <div id="musListe"></div>
+      </div>
+    </div>
+
+    <div id="panePub" class="hidden">
+      <div class="card">
+        <p class="tag">🎬 Publicités « regarder pour un tour gratuit »</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 8px;line-height:1.6">
+          Une fois son tour gratuit quotidien utilisé, le joueur peut soit payer en tickets, soit
+          regarder l'une de ces publicités (tirée au hasard parmi celles activées) pour obtenir un
+          tour gratuit à la place — jusqu'à 5 fois par jour. Image : une affiche fixe pendant la durée
+          indiquée. Vidéo : un lien direct (mp4/webm) ou un lien YouTube.
+        </p>
+        <label for="pubTitreInput">Titre / nom du sponsor</label>
+        <input id="pubTitreInput" placeholder="Ex : Cinéma Rex — programme de la semaine">
+        <label for="pubTypeInput" style="margin-top:10px">Type</label>
+        <select id="pubTypeInput">
+          <option value="image">Image</option>
+          <option value="video">Vidéo (fichier direct ou lien YouTube)</option>
+        </select>
+        <label for="pubUrlInput" style="margin-top:10px">Lien de l'image ou de la vidéo</label>
+        <input id="pubUrlInput" placeholder="https://…">
+        <label for="pubCibleInput" style="margin-top:10px">Lien cible (facultatif — non utilisé pour l'instant côté joueur)</label>
+        <input id="pubCibleInput" placeholder="https://…">
+        <label for="pubDureeInput" style="margin-top:10px">Durée minimale de visionnage avant de pouvoir récupérer le tour (secondes)</label>
+        <input id="pubDureeInput" type="number" min="5" max="60" value="15">
+        <div class="row"><button id="btnPubAjouter">Ajouter la publicité</button></div>
+        <p class="msg" id="pubFeedback"></p>
+      </div>
+      <div class="card">
+        <p class="tag" id="pubCount">Publicités</p>
+        <div id="pubListe"></div>
       </div>
     </div>
 
@@ -881,6 +913,7 @@ function tab(which){
                                       ["citations","tabCitations","paneCitations"],
                                       ["roue","tabRoue","paneRoue"],
                                       ["musique","tabMusique","paneMusique"],
+                                      ["pub","tabPub","panePub"],
                                       ["classement","tabClassement","paneClassement"],
                                       ["users","tabUsers","paneUsers"],
                                       ["reports","tabReports","paneReports"],
@@ -894,6 +927,7 @@ function tab(which){
   if (which === "citations") loadCitations();
   if (which === "roue"){ loadRoue(); loadVipDemandes(); }
   if (which === "musique") loadMusique();
+  if (which === "pub") loadPublicites();
   if (which === "classement") loadClassement();
   if (which === "users") loadUsers();
   if (which === "reports"){ loadReports(); loadConversations(); }
@@ -906,6 +940,7 @@ $("tabSugg").onclick = () => tab("sugg");
 $("tabCitations").onclick = () => tab("citations");
 $("tabRoue").onclick = () => tab("roue");
 $("tabMusique").onclick = () => tab("musique");
+$("tabPub").onclick = () => tab("pub");
 $("tabClassement").onclick = () => tab("classement");
 $("tabUsers").onclick = () => tab("users");
 $("tabReports").onclick = () => tab("reports");
@@ -1646,6 +1681,66 @@ async function loadReports(){
         $("musFeedback").className = "msg err";
       }
       $("btnMusAjouterFichier").disabled = false;
+    };
+
+    /* ---------- Publicités (roue) ---------- */
+    async function loadPublicites() {
+      $("pubCount").textContent = "Publicités — chargement…";
+      const res = await api("/api/admin/publicites");
+      if (!res.ok) { $("pubCount").textContent = "Publicités — échec du chargement."; return; }
+      const liste = await res.json();
+      $("pubCount").textContent = `Publicités (${liste.length} annonce${liste.length > 1 ? "s" : ""})`;
+      $("pubListe").innerHTML = liste.length ? liste.map((p) => `
+        <div class="item" data-item="${esc(p.id)}">
+          <div>
+            <strong>${esc(p.titre)}</strong> ${p.actif === false ? "<span class='tag' style='color:var(--muted)'>désactivée</span>" : "<span class='tag' style='color:var(--teal)'>active</span>"}<br>
+            <small>${p.type === "video" ? "🎬 vidéo" : "🖼️ image"} · ${p.duree || 15}s min · <a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.url)}</a></small>
+            ${p.cible ? `<br><small>Lien cible : ${esc(p.cible)}</small>` : ""}
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="ghost" data-toggle="${esc(p.id)}" data-actif="${p.actif !== false}">${p.actif === false ? "Activer" : "Désactiver"}</button>
+            <button class="ghost danger" data-delpub="${esc(p.id)}">Supprimer</button>
+          </div>
+        </div>
+      `).join("") : "<p class='msg'>Aucune publicité configurée — ajoutez-en une ci-dessus.</p>";
+
+      $("pubListe").querySelectorAll("[data-toggle]").forEach((btn) => {
+        btn.onclick = async () => {
+          const actifActuel = btn.dataset.actif === "true";
+          const res = await api(`/api/admin/publicites/${encodeURIComponent(btn.dataset.toggle)}`, {
+            method: "PUT", body: JSON.stringify({ actif: !actifActuel }) });
+          if (res.ok) loadPublicites(); else alert("Modification impossible.");
+        };
+      });
+      $("pubListe").querySelectorAll("[data-delpub]").forEach((btn) => {
+        btn.onclick = async () => {
+          if (!confirm("Supprimer cette publicité ?")) return;
+          const res = await api(`/api/admin/publicites/${encodeURIComponent(btn.dataset.delpub)}`, { method: "DELETE" });
+          if (res.ok) loadPublicites(); else alert("Suppression impossible.");
+        };
+      });
+    }
+
+    $("btnPubAjouter").onclick = async () => {
+      const titre = $("pubTitreInput").value.trim();
+      const type = $("pubTypeInput").value;
+      const url = $("pubUrlInput").value.trim();
+      const cible = $("pubCibleInput").value.trim();
+      const duree = Number($("pubDureeInput").value) || 15;
+      if (!url) { $("pubFeedback").textContent = "Indiquez un lien vers l'image ou la vidéo."; $("pubFeedback").className = "msg err"; return; }
+      $("btnPubAjouter").disabled = true;
+      const res = await api("/api/admin/publicites", { method: "POST",
+        body: JSON.stringify({ titre, type, url, cible, duree }) });
+      $("btnPubAjouter").disabled = false;
+      if (res.ok) {
+        $("pubTitreInput").value = ""; $("pubUrlInput").value = ""; $("pubCibleInput").value = ""; $("pubDureeInput").value = "15";
+        $("pubFeedback").textContent = "Publicité ajoutée !";
+        $("pubFeedback").className = "msg ok";
+        loadPublicites();
+      } else {
+        $("pubFeedback").textContent = "Lien invalide ou refusé.";
+        $("pubFeedback").className = "msg err";
+      }
     };
 
     /* ---------- Partie classée ---------- */
