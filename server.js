@@ -170,6 +170,30 @@ const CONFIG = {
   ROOM_VIDE_GRACE_MS: 90 * 1000,
 };
 
+/* ------------------------------------------------------------------ */
+/* Bots (duel)                                                         */
+/*                                                                     */
+/* Un joueur seul en duel peut défier un bot plutôt que d'attendre     */
+/* un adversaire. Le bot « répond » via un minuteur côté serveur, avec */
+/* une précision et un délai de réflexion qui varient selon le niveau  */
+/* choisi — il n'y a pas de réelle intelligence, juste assez de hasard */
+/* pour donner l'impression d'un adversaire crédible et amusant.       */
+/* ------------------------------------------------------------------ */
+
+const BOT_NIVEAUX = {
+  facile:   { precision: 0.35, delaiMin: 5000, delaiMax: 11000, emoji: "🙂", label: "Facile" },
+  moyen:    { precision: 0.62, delaiMin: 2500, delaiMax: 7000,  emoji: "😎", label: "Moyen" },
+  hardcore: { precision: 0.90, delaiMin: 700,  delaiMax: 2200,  emoji: "🔥", label: "Hardcore" },
+};
+
+const BOT_NOMS = [
+  "CinéPhilippe", "PopcornMaster", "Bobine Express", "Le Projectionniste Fou", "Grosminet Ciné",
+  "Madame Sous-titres", "Capitaine Spoiler", "Nanar Attitude", "Vieux Fauteuil Rouge", "Toto la Pellicule",
+  "Zorro du Zapping", "Reine du Rembobinage", "Doudou Blockbuster", "Papy Western", "Mémé Nanar",
+  "Turbo Ticket", "Choupinet Cinéma", "L'Ouvreuse Masquée", "Sacha Scénario", "Bulle de Pop-corn",
+];
+const nomBotAleatoire = () => BOT_NOMS[Math.floor(Math.random() * BOT_NOMS.length)];
+
 /**
  * Mot de passe d'administration.
  *
@@ -1059,7 +1083,7 @@ app.get("/api/signets", (req, res) => {
     const films = mesIds
         .map((id) => movies.find((m) => m.id === id))
         .filter(Boolean)
-        .map((m) => ({ id: m.id, title: m.title, poster: m.poster, year: m.year }))
+        .map((m) => ({ id: m.id, title: m.title, poster: m.poster, year: m.year, tmdbId: m.tmdbId }))
         .reverse();   // le plus récemment ajouté en premier
     res.json(films);
 });
@@ -1078,6 +1102,73 @@ app.post("/api/signets/:movieId/toggle", (req, res) => {
     saveSignets();
     res.json({ ok: true, signet });
 });
+
+/* ------------------------------------------------------------------ */
+/* Pépites                                                              */
+/*                                                                      */
+/* Un « top 5 » personnel, plus exclusif que les signets (illimités) :  */
+/* chaque joueur ne peut mettre en avant que 5 films au maximum. Les    */
+/* pépites de tout le monde sont agrégées pour faire remonter les films */
+/* les plus plébiscités (visible par tous, et depuis la console admin). */
+/* ------------------------------------------------------------------ */
+
+const PEPITES_FILE = new URL("./pepites.json", import.meta.url);
+let pepites = {};   // userId -> [movieId, ...] (le plus récent en dernier), 5 maximum
+const savePepites = () => sauver("pepites", pepites, PEPITES_FILE);
+const MAX_PEPITES = 5;
+
+const filmsDepuisIds = (ids) => ids
+    .map((id) => movies.find((m) => m.id === id))
+    .filter(Boolean)
+    .map((m) => ({ id: m.id, title: m.title, poster: m.poster, year: m.year, tmdbId: m.tmdbId }));
+
+app.get("/api/pepites", (req, res) => {
+    const user = exigeCompte(req, res);
+    if (!user) return;
+    res.json({ films: filmsDepuisIds(pepites[user.id] || []).reverse(), max: MAX_PEPITES });
+});
+
+app.post("/api/pepites/:movieId/toggle", (req, res) => {
+    const user = exigeCompte(req, res);
+    if (!user) return;
+    const movieId = Number(req.params.movieId);
+    if (!movies.find((m) => m.id === movieId)) return res.status(404).json({ error: "MOVIE_NOT_FOUND" });
+
+    const mesIds = pepites[user.id] || (pepites[user.id] = []);
+    const i = mesIds.indexOf(movieId);
+    let pepite;
+    if (i === -1) {
+        if (mesIds.length >= MAX_PEPITES) return res.status(400).json({ error: "MAX_PEPITES_ATTEINT", max: MAX_PEPITES });
+        mesIds.push(movieId);
+        pepite = true;
+    } else {
+        mesIds.splice(i, 1);
+        pepite = false;
+    }
+    savePepites();
+    res.json({ ok: true, pepite, restantes: MAX_PEPITES - mesIds.length });
+});
+
+/** Classement des films les plus mis en pépite, tous joueurs confondus. */
+function topPepites(limite = 10) {
+    const compte = new Map();
+    for (const ids of Object.values(pepites)) for (const id of ids) compte.set(id, (compte.get(id) || 0) + 1);
+    return [...compte.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, limite)
+        .map(([id, n]) => {
+            const m = movies.find((x) => x.id === id);
+            return m ? { id: m.id, title: m.title, poster: m.poster, year: m.year, tmdbId: m.tmdbId, pepites: n } : null;
+        })
+        .filter(Boolean);
+}
+
+app.get("/api/pepites/top", (req, res) => {
+    const user = exigeCompte(req, res);
+    if (user) res.json(topPepites());
+});
+
+app.get("/api/admin/pepites/top", requireAdmin, (_req, res) => res.json(topPepites(20)));
 
 app.get("/api/reports", requireModerateur, (_req, res) =>
   res.json(reports.slice().reverse())
@@ -1209,27 +1300,64 @@ app.post("/api/sondages/:id/voter", (req, res) => {
   const cote = req.body.cote;
   if (!["A", "B"].includes(cote)) return res.status(400).json({ error: "COTE_INVALIDE" });
   s.votes = s.votes || {};
+  // La récompense individuelle n'est donnée qu'à la toute première participation, jamais en
+  // changeant d'avis ensuite — sinon il suffirait de re-voter en boucle pour farmer des tickets.
+  const premierVote = !s.votes[user.id];
   s.votes[user.id] = cote;
   saveSondages();
   io.emit("sondage:maj", sondageAggrege(s));   // diffusé à tous, sans jamais dire qui a voté quoi
-  res.json(sondagePersonnel(s, user.id));
+
+  let recompenseGagnee = null;
+  if (premierVote && s.recompense?.actif && !s.recompense.collectif) {
+    recompenseGagnee = { tickets: s.recompense.tickets || 0, xp: s.recompense.xp || 0 };
+    if (recompenseGagnee.tickets) {
+      grantCredits(user.id, recompenseGagnee.tickets);
+      enregistrerTransaction(user.id, recompenseGagnee.tickets, "credits", `Sondage « ${s.question} »`);
+    }
+    if (recompenseGagnee.xp) ajouterXp(user.id, recompenseGagnee.xp, reglagesNiveau());
+  }
+
+  res.json({ ...sondagePersonnel(s, user.id), recompenseGagnee });
 });
 
 app.get("/api/admin/sondages", requireAdmin, (_req, res) =>
   res.json(sondages.map((s) => sondageAggrege(s))));
 
+/** Construit une option de sondage à partir d'un film du catalogue (pour les battles). */
+function optionDepuisFilm(filmId, texteRepli, emojiRepli) {
+  const film = filmId ? movies.find((m) => m.id === Number(filmId)) : null;
+  if (film) return { texte: film.title.slice(0, 40), emoji: "🎬", filmId: film.id, poster: film.poster || "" };
+  const texte = String(texteRepli || "").trim();
+  if (!texte) return null;
+  return { texte: texte.slice(0, 40), emoji: String(emojiRepli || "🅰️").slice(0, 8) };
+}
+
+/** Nettoie et borne la configuration de récompense envoyée par l'admin. */
+function recompenseDepuisRequete(r) {
+  if (!r || !r.actif) return { actif: false, tickets: 0, xp: 0, collectif: false };
+  return {
+    actif: true,
+    tickets: Math.max(0, Math.min(50, Number(r.tickets) || 0)),
+    xp: Math.max(0, Math.min(500, Number(r.xp) || 0)),
+    collectif: Boolean(r.collectif),
+  };
+}
+
 app.post("/api/admin/sondages", requireAdmin, (req, res) => {
-  const texteA = String(req.body.optionA?.texte || "").trim();
-  const texteB = String(req.body.optionB?.texte || "").trim();
-  if (!texteA || !texteB) return res.status(400).json({ error: "OPTIONS_MANQUANTES" });
+  // Option « battle de films » : filmA/filmB (identifiants du catalogue) remplacent le texte
+  // libre — le titre, l'affiche et l'emoji 🎬 sont repris automatiquement du film.
+  const optionA = optionDepuisFilm(req.body.filmA, req.body.optionA?.texte, req.body.optionA?.emoji);
+  const optionB = optionDepuisFilm(req.body.filmB, req.body.optionB?.texte, req.body.optionB?.emoji);
+  if (!optionA || !optionB) return res.status(400).json({ error: "OPTIONS_MANQUANTES" });
   const s = {
     id: crypto.randomUUID(),
     question: String(req.body.question || "").trim().slice(0, 120),
-    optionA: { texte: texteA.slice(0, 40), emoji: String(req.body.optionA?.emoji || "🅰️").slice(0, 8) },
-    optionB: { texte: texteB.slice(0, 40), emoji: String(req.body.optionB?.emoji || "🅱️").slice(0, 8) },
+    optionA, optionB,
     actif: true,
     creeLe: new Date().toISOString(),
     votes: {},
+    recompense: recompenseDepuisRequete(req.body.recompense),
+    recompenseDistribuee: false,
   };
   sondages.unshift(s);
   saveSondages();
@@ -1239,8 +1367,27 @@ app.post("/api/admin/sondages", requireAdmin, (req, res) => {
 app.put("/api/admin/sondages/:id", requireAdmin, (req, res) => {
   const s = sondages.find((x) => x.id === req.params.id);
   if (!s) return res.status(404).json({ error: "NOT_FOUND" });
+  const cloture = typeof req.body.actif === "boolean" && req.body.actif === false && s.actif === true;
   if (typeof req.body.actif === "boolean") s.actif = req.body.actif;
   if (typeof req.body.question === "string") s.question = req.body.question.trim().slice(0, 120);
+
+  // Récompense collective : distribuée une seule fois, au moment où l'admin clôt le sondage
+  // (désactivation), à tous les joueurs ayant voté — quel que soit leur camp, pour que la
+  // « battle » reste un moment positif à plusieurs plutôt qu'une compétition avec des perdants.
+  if (cloture && s.recompense?.actif && s.recompense.collectif && !s.recompenseDistribuee) {
+    const votants = Object.keys(s.votes || {});
+    for (const userId of votants) {
+      if (s.recompense.tickets) {
+        grantCredits(userId, s.recompense.tickets);
+        enregistrerTransaction(userId, s.recompense.tickets, "credits", `Sondage « ${s.question} » (récompense collective)`);
+      }
+      if (s.recompense.xp) ajouterXp(userId, s.recompense.xp, reglagesNiveau());
+      notifier(userId, { type: "recompense_sondage", question: s.question,
+        tickets: s.recompense.tickets, xp: s.recompense.xp });
+    }
+    s.recompenseDistribuee = true;
+  }
+
   saveSondages();
   io.emit("sondage:maj", sondageAggrege(s));   // active/désactive en direct sur les écrans ouverts
   res.json(sondageAggrege(s));
@@ -2332,6 +2479,13 @@ app.get("/api/players/:id/fiche", (req, res) => {
   if (fiche.relation === "ami") {
     Object.assign(fiche, joueurEnPartie(fiche.id));
   }
+  // Progression dans le niveau actuel (reste/requis), pour afficher une vraie barre dans la
+  // fiche de profil — fichePublique() ne renvoie que le niveau brut, sans ce détail.
+  const progression = infoNiveau(fiche.id, reglagesNiveau());
+  if (progression) { fiche.reste = progression.reste; fiche.requis = progression.requis; }
+  // Les pépites sont volontairement publiques (comme le reste de la fiche) : chacun peut
+  // voir le « top 5 » d'un autre joueur, exactement comme demandé.
+  fiche.pepites = filmsDepuisIds(pepites[fiche.id] || []).reverse();
   res.json(fiche);
 });
 
@@ -3470,7 +3624,7 @@ function publicState(room) {
     players: [...room.players.values()].map((p) => ({
       id: p.id, userId: p.userId, pseudo: p.pseudo, avatar: p.avatar, score: p.score,
       team: p.team, hasAnswered: p.hasAnswered, online: p.online !== false,
-      fondateur: Boolean(p.fondateur),
+      fondateur: Boolean(p.fondateur), bot: Boolean(p.bot),
       // Diffusés à tout le salon (pas seulement au joueur concerné) pour permettre
       // l'affichage permanent des cœurs des adversaires en duel / équipes.
       coeurs: p.coeurs, coeursMax: p.coeursMax,
@@ -3533,6 +3687,63 @@ function joueurEnPartie(userId) {
 /* Boucle de jeu                                                       */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Programme la réponse d'un bot pour la manche en cours : délai de réflexion aléatoire
+ * (borné à la durée de la manche) puis clic simulé, correct ou non selon sa précision.
+ */
+function planifierReponseBot(room, bot) {
+  const config = BOT_NIVEAUX[bot.botNiveau] || BOT_NIVEAUX.moyen;
+  const correct = Math.random() < config.precision;
+  const autres = room.choices.filter((c) => c.id !== room.currentMovie.id);
+  const choiceId = (correct || !autres.length)
+    ? room.currentMovie.id
+    : autres[Math.floor(Math.random() * autres.length)].id;
+  const delaiBrut = config.delaiMin + Math.random() * (config.delaiMax - config.delaiMin);
+  const delai = Math.max(400, Math.min(delaiBrut, CONFIG.ROUND_DURATION_MS - 1200));
+  const manche = room.roundIndex;   // pour ignorer ce minuteur si la manche a déjà changé
+  clearTimeout(bot.timerReponse);
+  bot.timerReponse = setTimeout(() => {
+    if (room.roundIndex !== manche || room.status !== "playing") return;
+    traiterReponseBot(room, bot, choiceId);
+  }, delai);
+}
+
+/**
+ * Fait « répondre » un bot après son délai de réflexion — reprend exactement la même logique
+ * de score/cœurs/fin de manche que answer:submit en mode « par clic », sans passer par un
+ * socket puisque le bot n'en a pas.
+ */
+function traiterReponseBot(room, bot, choiceId) {
+  if (!room || !bot || room.status !== "playing" || bot.hasAnswered || bot.coeurs === 0) return;
+  const correct = Number(choiceId) === room.currentMovie.id;
+
+  if (!correct) {
+    bot.hasAnswered = true;
+    bot.coeurs = Math.max(0, (bot.coeurs ?? bot.coeursMax) - 1);
+    io.to(room.code).emit("player:answered", { id: bot.id, pseudo: bot.pseudo, team: bot.team, points: 0,
+      coeurs: bot.coeurs, coeursMax: bot.coeursMax });
+    io.to(room.code).emit("room:update", publicState(room));
+    if ([...room.players.values()].every((p) => p.hasAnswered)) endRound(room);
+    return;
+  }
+
+  bot.hasAnswered = true;
+  let points = computeScore({ elapsedMs: Date.now() - room.startedAt, hintsUsed: bot.paidHints });
+  points = Math.max(30, Math.round(points * CONFIG.CHOICE_RATIO));
+  bot.score += points;
+  io.to(room.code).emit("player:answered", { id: bot.id, pseudo: bot.pseudo, team: bot.team, points,
+    coeurs: bot.coeurs, coeursMax: bot.coeursMax });
+
+  const tousTrouve = [...room.players.values()].every((p) => p.hasAnswered || p.coeurs === 0);
+  if (tousTrouve) return endRound(room);
+
+  if (!room.graceTimer) {
+    room.graceDebut = Date.now();
+    room.graceTimer = setTimeout(() => endRound(room), CONFIG.GRACE_AFTER_FIRST_MS);
+    io.to(room.code).emit("round:grace", { ms: CONFIG.GRACE_AFTER_FIRST_MS, pseudo: bot.pseudo });
+  }
+}
+
 function startRound(room) {
   clearTimeout(room.graceTimer);
   room.graceTimer = null;
@@ -3578,6 +3789,12 @@ function startRound(room) {
 
   clearTimeout(room.timer);
   room.timer = setTimeout(() => endRound(room), CONFIG.ROUND_DURATION_MS);
+
+  // Les bots encore en jeu « réfléchissent » puis répondent tout seuls, avec un délai et une
+  // précision qui dépendent du niveau choisi par l'hôte.
+  for (const p of room.players.values()) {
+    if (p.bot && p.coeurs > 0) planifierReponseBot(room, p);
+  }
 
   // Remet à jour l'état public (cœurs inclus) pour l'affichage permanent des
   // adversaires en duel / équipes, dès le début de la manche.
@@ -3851,6 +4068,43 @@ io.on("connection", (socket) => {
     const room = rooms.get(code);
     if (!room || !estHote(room, socket.data.user.id) || room.status !== "lobby") return;
     startRound(room);
+  });
+
+  /** Ajoute un bot au salon (duel uniquement) : pratique quand personne d'autre n'est
+   *  disponible pour rejoindre. Réservé à l'hôte, avant le lancement de la partie. */
+  socket.on("room:add-bot", ({ code, niveau }, cb) => {
+    const room = rooms.get(code);
+    if (!room) return cb?.({ ok: false, error: "ROOM_NOT_FOUND" });
+    if (room.mode !== "duel") return cb?.({ ok: false, error: "MODE_INVALIDE" });
+    if (room.status !== "lobby") return cb?.({ ok: false, error: "DEJA_COMMENCE" });
+    if (!estHote(room, socket.data.user.id)) return cb?.({ ok: false, error: "PAS_HOTE" });
+    if (room.players.size >= 2) return cb?.({ ok: false, error: "SALON_COMPLET" });
+
+    const niveauBot = BOT_NIVEAUX[niveau] ? niveau : "moyen";
+    const botId = `bot-${crypto.randomUUID()}`;
+    room.players.set(botId, {
+      id: botId, userId: botId, pseudo: nomBotAleatoire(), avatar: BOT_NIVEAUX[niveauBot].emoji,
+      photo: null, fondateur: false, team: null,
+      score: 0, hints: [], paidHints: [], hasAnswered: false,
+      coeursMax: REGLAGES.coeurs, coeurs: REGLAGES.coeurs,
+      freeHintsRemaining: 0, allHintsFree: false,
+      online: true, bot: true, botNiveau: niveauBot,
+    });
+    io.to(room.code).emit("room:update", publicState(room));
+    cb?.({ ok: true, state: publicState(room) });
+  });
+
+  /** Retire le bot du salon (avant le lancement), au cas où l'hôte change d'avis. */
+  socket.on("room:remove-bot", ({ code }, cb) => {
+    const room = rooms.get(code);
+    if (!room) return cb?.({ ok: false, error: "ROOM_NOT_FOUND" });
+    if (room.status !== "lobby") return cb?.({ ok: false, error: "DEJA_COMMENCE" });
+    if (!estHote(room, socket.data.user.id)) return cb?.({ ok: false, error: "PAS_HOTE" });
+    for (const [id, p] of room.players) {
+      if (p.bot) { clearTimeout(p.timerReponse); room.players.delete(id); }
+    }
+    io.to(room.code).emit("room:update", publicState(room));
+    cb?.({ ok: true, state: publicState(room) });
   });
 
   socket.on("hint:buy", ({ code, type }, cb) => {
@@ -4155,12 +4409,16 @@ io.on("connection", (socket) => {
       }
       socket.leave(room.code);
 
-      const activePlayers = [...room.players.values()].filter(x => x.online !== false);
+      // Les bots ne comptent jamais comme un joueur « actif » pour ces vérifications : sinon
+      // un salon où il ne reste qu'un bot (l'humain parti) ne serait jamais nettoyé, puisque
+      // le bot reste toujours online.
+      const activePlayers = [...room.players.values()].filter(x => x.online !== false && !x.bot);
       clearTimeout(room.emptyTimer);
       room.emptyTimer = null;
 
       if (activePlayers.length === 0) {
         clearTimeout(room.timer); clearTimeout(room.nextTimer); clearTimeout(room.graceTimer);
+        for (const p of room.players.values()) clearTimeout(p.timerReponse);
         diffuserSpectateurs(room, "regarder:termine", { abandon: true });
         // Salon vide : on ne le détruit pas immédiatement. Une coupure réseau ou une
         // mise en veille de quelques secondes ne doit pas faire perdre la partie —
@@ -4168,7 +4426,7 @@ io.on("connection", (socket) => {
         const code = room.code;
         room.emptyTimer = setTimeout(() => {
           const r = rooms.get(code);
-          if (r && [...r.players.values()].every((x) => x.online === false)) rooms.delete(code);
+          if (r && [...r.players.values()].every((x) => x.online === false || x.bot)) rooms.delete(code);
         }, CONFIG.ROOM_VIDE_GRACE_MS);
       } else {
         // Un départ VOLONTAIRE de l'hôte transfère vraiment la main à un autre joueur
@@ -4281,6 +4539,8 @@ publicites = await charger("publicites", PUBLICITES_FILE, []);
 if (!Array.isArray(publicites)) publicites = [];
 signets = await charger("signets", SIGNETS_FILE, {});
 if (!signets || typeof signets !== "object") signets = {};
+pepites = await charger("pepites", PEPITES_FILE, {});
+if (!pepites || typeof pepites !== "object") pepites = {};
 aideConfig = await charger("aide", AIDE_FILE, aideConfig);
 if (!aideConfig || typeof aideConfig !== "object") aideConfig = { actif: false, titre: "Comment jouer ? 🎬🎵", message: "" };
 roue = await charger("roue", ROUE_FILE, null);
