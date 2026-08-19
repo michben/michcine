@@ -116,6 +116,27 @@
     </div>
 
     <div class="card">
+      <p class="tag">🌍 Importer des films par pays (TMDB)</p>
+      <p style="color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6">
+        Choisissez un pays d'origine : la recherche propose les films populaires de ce pays
+        qui ne sont pas encore dans le catalogue, prêts à ajouter — synopsis, affiche,
+        réalisateur et acteurs déjà remplis. Chaque film importé est automatiquement classé
+        « France » ou « international » selon le pays choisi, pour un tirage bien équilibré.
+        Nécessite une clé TMDB renseignée dans l'onglet Réglages.
+      </p>
+      <div class="row">
+        <select id="rTmdbPays" style="flex:1 1 auto"></select>
+        <button id="btnTmdbPaysChercher">Chercher</button>
+        <button class="ghost" id="btnTmdbPaysTout" disabled>Tout cocher / décocher</button>
+      </div>
+      <p class="msg" id="tmdbPaysMsg"></p>
+      <div id="tmdbPaysListe"></div>
+      <div class="row hidden" id="tmdbPaysAjouterRow">
+        <button id="btnTmdbPaysAjouter">Ajouter la sélection au catalogue</button>
+      </div>
+    </div>
+
+    <div class="card">
       <p class="tag">Sélection du catalogue</p>
       <p class="msg" id="stats"></p>
       <div class="grid">
@@ -978,6 +999,101 @@ $("btnTmdbKidsAjouter").onclick = async () => {
 
   const liste = await api("/api/movies");
   if (liste.ok){ movies = await liste.json(); render(); }
+  loadStats();
+};
+
+/* ---------- Import de films par pays depuis TMDB ---------- */
+const PAYS_IMPORT_TMDB = {
+  FR: "France", US: "États-Unis", GB: "Royaume-Uni", CA: "Canada", IT: "Italie", ES: "Espagne",
+  DE: "Allemagne", BE: "Belgique", CH: "Suisse", JP: "Japon", KR: "Corée du Sud", CN: "Chine",
+  HK: "Hong Kong", IN: "Inde", BR: "Brésil", MX: "Mexique", AU: "Australie", SE: "Suède",
+  DK: "Danemark", NO: "Norvège", NL: "Pays-Bas", RU: "Russie", PL: "Pologne", TR: "Turquie",
+  IR: "Iran", TH: "Thaïlande", EG: "Égypte", SN: "Sénégal", MA: "Maroc", DZ: "Algérie",
+  TN: "Tunisie", AR: "Argentine", CO: "Colombie", ZA: "Afrique du Sud", NG: "Nigeria",
+};
+$("rTmdbPays").innerHTML = Object.entries(PAYS_IMPORT_TMDB)
+  .map(([code, nom]) => `<option value="${code}">${nom}</option>`).join("");
+
+let tmdbPaysSuggestions = [];
+
+$("btnTmdbPaysChercher").onclick = async () => {
+  const pays = $("rTmdbPays").value;
+  $("tmdbPaysMsg").textContent = "Recherche en cours sur TMDB…";
+  $("tmdbPaysMsg").className = "msg";
+  $("tmdbPaysListe").innerHTML = "";
+  $("tmdbPaysAjouterRow").classList.add("hidden");
+  $("btnTmdbPaysTout").disabled = true;
+
+  const res = await api(`/api/admin/movies/tmdb-pays-suggestions?pays=${pays}&pages=2&limite=24`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok){
+    $("tmdbPaysMsg").textContent = data.error === "NO_KEY"
+      ? "Aucune clé TMDB configurée : renseignez-la dans l'onglet Réglages."
+      : "Échec de la recherche TMDB.";
+    $("tmdbPaysMsg").className = "msg err";
+    return;
+  }
+
+  tmdbPaysSuggestions = data.movies || [];
+  if (!tmdbPaysSuggestions.length){
+    $("tmdbPaysMsg").textContent = "Aucun nouveau film trouvé pour ce pays — le catalogue est déjà à jour, ou aucun résultat.";
+    $("tmdbPaysMsg").className = "msg";
+    return;
+  }
+
+  $("tmdbPaysMsg").textContent =
+    `${tmdbPaysSuggestions.length} film${tmdbPaysSuggestions.length>1?"s":""} trouvé${tmdbPaysSuggestions.length>1?"s":""} (${data.paysNom||""}). Décochez ceux à exclure, puis ajoutez la sélection.`;
+  $("tmdbPaysMsg").className = "msg ok";
+
+  $("tmdbPaysListe").innerHTML = tmdbPaysSuggestions.map((m, i) => `
+    <div class="item">
+      <input type="checkbox" data-tmdb-pays="${i}" checked style="width:auto;flex:0 0 auto">
+      <img src="${m.poster||""}" alt="" onerror="this.style.visibility='hidden'">
+      <div>
+        <strong>${esc(m.title)}<span class="lvl">${m.difficulty||"?"}</span></strong>
+        <small>${m.year||"—"} · ${m.rating ? m.rating+"/10 · " : ""}${esc(m.director||"réalisateur non renseigné")}</small>
+      </div>
+    </div>`).join("");
+
+  $("btnTmdbPaysTout").disabled = false;
+  $("tmdbPaysAjouterRow").classList.remove("hidden");
+};
+
+$("btnTmdbPaysTout").onclick = () => {
+  const cases = $("tmdbPaysListe").querySelectorAll("[data-tmdb-pays]");
+  const toutesCochees = [...cases].every(c => c.checked);
+  cases.forEach(c => { c.checked = !toutesCochees; });
+};
+
+$("btnTmdbPaysAjouter").onclick = async () => {
+  const choisis = [...$("tmdbPaysListe").querySelectorAll("[data-tmdb-pays]")]
+    .filter(c => c.checked)
+    .map(c => tmdbPaysSuggestions[Number(c.dataset.tmdbPays)]);
+  if (!choisis.length){
+    $("tmdbPaysMsg").textContent = "Cochez au moins un film à ajouter.";
+    $("tmdbPaysMsg").className = "msg err"; return;
+  }
+  $("tmdbPaysMsg").textContent = "Ajout en cours…";
+  $("tmdbPaysMsg").className = "msg";
+
+  const res = await api("/api/admin/movies/tmdb-pays-importer", {method:"POST", body: JSON.stringify({movies: choisis})});
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok){
+    $("tmdbPaysMsg").textContent = "Échec de l'ajout.";
+    $("tmdbPaysMsg").className = "msg err"; return;
+  }
+
+  $("tmdbPaysMsg").textContent =
+    `${data.ajoutes} film${data.ajoutes>1?"s":""} ajouté${data.ajoutes>1?"s":""} au catalogue` +
+    (data.ignores ? ` (${data.ignores} déjà présent${data.ignores>1?"s":""}, ignoré${data.ignores>1?"s":""}).` : ".");
+  $("tmdbPaysMsg").className = "msg ok";
+  $("tmdbPaysListe").innerHTML = "";
+  $("tmdbPaysAjouterRow").classList.add("hidden");
+  $("btnTmdbPaysTout").disabled = true;
+  tmdbPaysSuggestions = [];
+
+  const liste2 = await api("/api/movies");
+  if (liste2.ok){ movies = await liste2.json(); render(); }
   loadStats();
 };
 

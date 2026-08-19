@@ -309,6 +309,9 @@
   .coeurs span{transition:transform .3s ease,opacity .3s ease}
   .coeurs span.perdu{opacity:.22;transform:scale(.8)}
   .coeurs span.casse{animation:brise .6s ease}
+  .coeurs.mini{font-size:12px;gap:1px;margin-left:2px}
+  #adversairesCoeurs{margin:10px 0 0}
+  #adversairesCoeurs li.off{opacity:.5}
   @keyframes brise{0%{transform:scale(1)}30%{transform:scale(1.4) rotate(-12deg)}100%{transform:scale(.8);opacity:.22}}
   .clock{font-family:'JetBrains Mono',monospace;font-size:26px;color:var(--beam);min-width:44px;
     text-align:center;font-variant-numeric:tabular-nums}
@@ -1001,6 +1004,9 @@ html.mode-enfant-actif .wrap{padding-top:48px}
     <div class="card">
       <p class="tag" style="text-align:center">Partagez ce code</p>
       <div class="marquee" id="marquee"></div>
+      <div class="row" style="justify-content:center;margin-top:10px">
+        <button class="ghost" id="btnInviterLobby">🎮 Inviter des amis</button>
+      </div>
       <div id="teamPicker" class="row hidden">
         <button class="ghost" data-team="A">Équipe jaune</button>
         <button class="ghost" data-team="B">Équipe turquoise</button>
@@ -1009,6 +1015,7 @@ html.mode-enfant-actif .wrap{padding-top:48px}
       <ul class="players" id="lobbyPlayers"></ul>
       <div class="row"><button id="btnStart">Lancer la partie</button></div>
       <p class="note" id="hostNote">En attente que l'hôte lance la partie.</p>
+      <div class="row"><button class="ghost" id="btnQuitLobby">Quitter le salon</button></div>
     </div>
   </section>
 
@@ -1022,6 +1029,7 @@ html.mode-enfant-actif .wrap{padding-top:48px}
         <div class="dots" id="dots"></div>
         <span class="roomcode hidden" id="roomCode"></span>
       </div>
+      <ul class="players hidden" id="adversairesCoeurs"></ul>
       <p class="tag" id="roundLabel">Question 1</p>
       <p class="synopsis" id="synopsis"></p>
       <div class="barreLecture">
@@ -1060,6 +1068,21 @@ html.mode-enfant-actif .wrap{padding-top:48px}
       </div>
       <div class="modal-body">
         <div id="historiqueListe"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODALE : INVITER DES AMIS DEPUIS LE SALON -->
+  <div class="modal-overlay" id="inviterLobbyModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>🎮 Inviter des amis</h2>
+        <button class="close-btn" id="closeInviterLobbyBtn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="note" style="margin-top:0">Invitez un ami en ligne à rejoindre ce salon — code <b id="inviterLobbyCode"></b>.</p>
+        <div id="inviterLobbyListe"></div>
+        <p class="feedback" id="inviterLobbyMsg"></p>
       </div>
     </div>
   </div>
@@ -2673,10 +2696,23 @@ socket.on("invite:recue", ({code, mode, de, avatar, joueurs}) => {
   el.querySelector("[data-non]").onclick = fermer;
   el.querySelector("[data-oui]").onclick = () => {
     fermer();
+    // Si le joueur a déjà un salon ouvert (le sien, ou un autre en cours), rejoindre
+    // cette invitation le lui ferait quitter d'un coup, sans prévenir : on demande
+    // confirmation avant, plutôt que de fermer sa partie en cours subitement.
+    const dansUnAutreSalon = state.code && state.code !== code &&
+      ["lobby","round","between","waiting"].some(id => !$(id).classList.contains("hidden"));
+    if (dansUnAutreSalon && !confirm(
+      "Vous avez déjà un salon ouvert. Rejoindre cette invitation le fermera pour vous. Continuer ?"
+    )) return;
     socket.emit("room:join", {code}, res => {
       if (!res?.ok) return;
       state.code = res.code; state.mode = res.state.mode;
       setChatVisible(true);
+      if (res.waiting){
+        $("waitingInfo").textContent = `Vous entrerez en jeu à la manche ${res.roundIndex + 2} sur ${res.total}.`;
+        $("waitingCode").textContent = res.code;
+        return show("waiting");
+      }
       renderLobby(res.state);
       show("lobby");
     });
@@ -4409,14 +4445,75 @@ function renderLobby(s){
   $("lobbyPlayers").querySelectorAll("[data-joueur]").forEach(li => li.onclick = () =>
     ouvrirJoueur(li.dataset.joueur, li.dataset.pseudo, li.dataset.avatar, li.dataset.photo || null));
   $("teamPicker").classList.toggle("hidden", s.mode !== "teams");
-  state.isHost = s.hostId === socket.id;
+  state.isHost = s.hostId === me?.id;
   $("btnStart").classList.toggle("hidden", !state.isHost);
   $("hostNote").classList.toggle("hidden", state.isHost);
 }
 document.querySelectorAll("[data-team]").forEach(b =>
   b.onclick = () => socket.emit("team:choose", {code:state.code, team:b.dataset.team}));
 $("btnStart").onclick = () => socket.emit("game:start", {code:state.code});
-socket.on("room:update", renderLobby);
+$("btnQuitLobby").onclick = () => {
+  socket.emit("room:leave");
+  state.code = null;
+  setChatVisible(false);
+  show("menu");
+};
+socket.on("room:update", s => { renderLobby(s); renderCoeursJoueurs(s.players); });
+
+/** Inviter des amis directement depuis le salon, sans passer par l'écran Amis. */
+$("btnInviterLobby").onclick = async () => {
+  $("inviterLobbyCode").textContent = state.code || "";
+  $("inviterLobbyMsg").textContent = "";
+  $("inviterLobbyMsg").className = "feedback";
+  $("inviterLobbyListe").innerHTML = `<p class="note" style="margin:0">Chargement…</p>`;
+  $("inviterLobbyModal").classList.add("active");
+
+  const r = await fetch("/api/friends").then(x => x.json()).catch(() => null);
+  const amisEnLigne = (r?.amis || []).filter(a => a.online);
+  if (!amisEnLigne.length){
+    $("inviterLobbyListe").innerHTML = "";
+    $("inviterLobbyMsg").textContent = "Aucun ami en ligne pour l'instant.";
+    return;
+  }
+  $("inviterLobbyListe").innerHTML = amisEnLigne.map(a => `
+    <div class="amiLigne">
+      <span class="dot on"></span>
+      <span class="nom">${vignette(a)} ${esc(a.pseudo)}</span>
+      <button class="ghost" data-inviter-lobby="${esc(a.id)}" style="padding:6px 10px;font-size:15px">🎮 Inviter</button>
+    </div>`).join("");
+  $("inviterLobbyListe").querySelectorAll("[data-inviter-lobby]").forEach(b => b.onclick = () => {
+    socket.emit("invite:send", {code: state.code, amiId: b.dataset.inviterLobby}, res => {
+      if (!res?.ok){
+        $("inviterLobbyMsg").textContent = "Invitation impossible.";
+        $("inviterLobbyMsg").className = "feedback bad";
+        return;
+      }
+      b.textContent = res.livree ? "Invité ✓" : "Hors ligne";
+      b.disabled = true;
+    });
+  });
+};
+$("closeInviterLobbyBtn").onclick = () => $("inviterLobbyModal").classList.remove("active");
+$("inviterLobbyModal").onclick = e => { if (e.target.id === "inviterLobbyModal") $("inviterLobbyModal").classList.remove("active"); };
+
+/**
+ * Cœurs des adversaires visibles en permanence pendant la manche (duel, équipes,
+ * tous contre tous à plusieurs) : sans ça, seuls ses propres cœurs étaient visibles,
+ * ce qui rendait le suivi d'un duel ou d'une équipe illisible.
+ */
+function renderCoeursJoueurs(players){
+  const zone = $("adversairesCoeurs");
+  if (!zone) return;
+  if (!players || players.length < 2){ zone.innerHTML = ""; zone.classList.add("hidden"); return; }
+  zone.classList.remove("hidden");
+  zone.innerHTML = players.map(p => {
+    const max = p.coeursMax ?? 3;
+    const restants = p.coeurs ?? max;
+    const coeurs = Array.from({length: max}, (_, i) => `<span class="${i < restants ? "" : "perdu"}">❤️</span>`).join("");
+    const moi = p.userId === me?.id ? " (vous)" : "";
+    return `<li class="${p.team||""} ${p.online === false ? "off" : ""}">${vignette(p)} ${esc(p.pseudo)}${moi}<span class="coeurs mini">${coeurs}</span></li>`;
+  }).join("");
+}
 
 /* ---------- Manche ---------- */
 socket.on("round:start", ({roundIndex,total,synopsis,duration,hintCosts,hintCredits,choices,posterStyle,hintLabels,vitesseSynopsis,coeursMax}) => {
@@ -4432,7 +4529,7 @@ socket.on("round:start", ({roundIndex,total,synopsis,duration,hintCosts,hintCred
   $("btnSkip").classList.toggle("hidden", !["solo","ranked"].includes(state.mode));
   $("emojiBar").classList.toggle("hidden", ["solo","ranked"].includes(state.mode));
   $("btnPause").classList.toggle("hidden",
-    !SANS_RESEAU.includes(state.mode) && state.hostId !== socket.id);
+    !SANS_RESEAU.includes(state.mode) && state.hostId !== me?.id);
   state.hintCredits = hintCredits || {};
   state.posterStyle = posterStyle;
   state.vitesseSynopsis = vitesseSynopsis;
@@ -4570,7 +4667,7 @@ socket.on("round:end", ({answer, movieId, poster, year, scores, isHost, mode}) =
 
   $("interRank").innerHTML = rankHtml(scores);
   // en multijoueur, seul l'hôte décide d'enchaîner
-  const peutEnchainer = ["solo","ranked"].includes(mode) || isHost === socket.id;
+  const peutEnchainer = ["solo","ranked"].includes(mode) || isHost === me?.id;
   $("btnNext").disabled = false;
   $("btnNext").classList.toggle("hidden", !peutEnchainer);
   $("nextNote").textContent = peutEnchainer
@@ -4604,7 +4701,49 @@ socket.on("connect_error", err => {
 socket.on("connect", () => {
   $("authError").textContent = "";
   if (me && me.pseudoChosen && $("landing").classList.contains("hidden") === false) show("menu");
+  resynchroniserSalon();
 });
+
+/**
+ * Après toute reconnexion Socket.IO (coupure wifi, téléphone qui se réveille,
+ * changement de réseau…), le navigateur reçoit un nouvel identifiant de connexion
+ * mais l'écran reste sur l'ancien salon. Sans ce ré-alignement, le joueur reste
+ * bloqué sur un écran figé, désynchronisé du salon côté serveur — c'est la cause
+ * la plus fréquente de "on ne voit plus le bouton pour lancer la partie" et des
+ * décalages entre joueurs pendant une partie à plusieurs.
+ */
+function resynchroniserSalon(){
+  if (!state.code) return;
+  socket.emit("room:join", {code: state.code}, res => {
+    if (!res?.ok){
+      // Le salon a disparu pendant la coupure (partie terminée, abandon...) :
+      // mieux vaut revenir proprement au menu qu'un écran bloqué sans explication.
+      state.code = null;
+      setChatVisible(false);
+      clearInterval(state.timerId);
+      if (me && me.pseudoChosen) show("menu");
+      return;
+    }
+    state.mode = res.state.mode;
+    state.hostId = res.state.hostId;
+    setChatVisible(true);
+    if (res.state.status === "finished"){
+      state.code = null;
+      setChatVisible(false);
+      if (me && me.pseudoChosen) show("menu");
+      return;
+    }
+    if (res.waiting){
+      $("waitingInfo").textContent = `Vous entrerez en jeu à la manche ${res.roundIndex + 2} sur ${res.total}.`;
+      $("waitingCode").textContent = res.code;
+      return show("waiting");
+    }
+    if (res.state.status === "lobby"){ renderLobby(res.state); return show("lobby"); }
+    // "playing" ou "intermission" : le serveur ré-émet juste après round:start ou
+    // round:end, qui remettent l'écran de jeu à jour tout seuls.
+    renderCoeursJoueurs(res.state.players);
+  });
+}
 
 socket.on("game:end", ({ranking, mode, teams, credits: solde, points: cagnotte, bilan}) => {
   afficherBilan(bilan);
@@ -4636,7 +4775,13 @@ socket.on("game:end", ({ranking, mode, teams, credits: solde, points: cagnotte, 
 
 /* La couleur d'équipe suit le joueur jusqu'au classement final. */
 const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
-  .map(p => `<li class="${p.team||""}">${vignette(p)} ${esc(p.pseudo)}<b>${p.score} pts</b></li>`).join("");
+  .map(p => {
+    const coeurs = p.coeursMax
+      ? `<span class="coeurs mini">${Array.from({length:p.coeursMax}, (_,i) =>
+          `<span class="${i < (p.coeurs ?? p.coeursMax) ? "" : "perdu"}">❤️</span>`).join("")}</span>`
+      : "";
+    return `<li class="${p.team||""}">${vignette(p)} ${esc(p.pseudo)}${coeurs}<b>${p.score} pts</b></li>`;
+  }).join("");
 </script>
 
   </div>
