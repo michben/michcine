@@ -583,6 +583,14 @@ app.get("/api/admin/etat", requireAdmin, (_req, res) =>
 
 app.get("/api/movies", requireAdmin, (_req, res) => res.json(movies));
 
+// Nombre de films actifs dans le jeu — affiché en petit dans le menu des joueurs, pas besoin
+// d'être admin pour le consulter (aucune donnée sensible, juste un compteur).
+app.get("/api/movies/total", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (!user) return;
+  res.json({ total: movies.filter((m) => m.enabled).length });
+});
+
 /** Active ou désactive des films en lot, selon niveau et note minimale. */
 app.post("/api/admin/movies/bulk", requireAdmin, (req, res) => {
   const { difficulty, minRating, enabled } = req.body;
