@@ -867,6 +867,7 @@ html.mode-enfant-actif .wrap{padding-top:48px}
       <div class="row hidden" id="rowRoueRegarderPub">
         <button class="ghost" id="btnRoueRegarderPub" style="border-color:var(--teal); color:var(--teal)">🎬 Regarder une pub pour un tour gratuit</button>
       </div>
+      <p class="note hidden" id="roueVerrouPub" style="text-align:center;color:var(--muted)"></p>
 
       <div id="roueGagnants" style="margin-top:18px">
         <p class="tag" style="margin:0 0 6px">🏆 Derniers gagnants</p>
@@ -2898,7 +2899,7 @@ async function chargerRoue(){
     : dispo
       ? `Votre tour <b style="color:var(--teal)">gratuit</b> du jour vous attend !`
       : d.tirPayantDisponible
-        ? `Tour gratuit déjà utilisé aujourd'hui. Prochain tour : <b style="color:var(--beam)">${d.coutTour} 🎟️</b> (vous avez ${d.credits} 🎟️) — ou regardez une pub ci-dessous pour tourner gratuitement.`
+        ? `Tour gratuit déjà utilisé aujourd'hui. Prochain tour : <b style="color:var(--beam)">${d.coutTour} 🎟️</b> (vous avez ${d.credits} 🎟️)${d.tirPubDisponible ? " — ou regardez une pub ci-dessous pour tourner gratuitement." : "."}`
         : `Vous avez atteint la limite de ${d.tirsPayantsMax} tours payants aujourd'hui — rendez-vous à la prochaine roue, à 18h !`;
   $("roueStock").textContent = `${d.lotsRestants} lot${d.lotsRestants>1?"s":""} restant${d.lotsRestants>1?"s":""} dans la roue d'aujourd'hui — réapprovisionnée chaque jour à 18h.`;
   $("btnTournerRoue").textContent = dispo ? "Tourner (gratuit)" : `Tourner (${d.coutTour} 🎟️)`;
@@ -2906,10 +2907,31 @@ async function chargerRoue(){
     || (!dispo && (!d.tirPayantDisponible || d.credits < d.coutTour));
 
   // Le bouton « Regarder une pub » n'a de sens que quand le tour gratuit est déjà consommé
-  // (sinon autant utiliser celui-ci) et tant que le quota quotidien de tours-pub n'est pas atteint.
+  // (sinon autant utiliser celui-ci) et tant que le joueur n'a pas atteint la limite de 5 pubs,
+  // qui verrouille l'option pendant 12h (délai glissant, pas remis à zéro à minuit).
   const proposerPub = !dispo && !d.gainEnAttente && d.lotsRestants > 0 && d.tirPubDisponible;
   $("rowRoueRegarderPub").classList.toggle("hidden", !proposerPub);
   $("btnRoueRegarderPub").disabled = false;
+
+  const verrouEl = $("roueVerrouPub");
+  if (!dispo && !d.gainEnAttente && !d.tirPubDisponible && d.pubVerrouJusqua) {
+    const restant = new Date(d.pubVerrouJusqua).getTime() - Date.now();
+    verrouEl.textContent = restant > 0
+      ? `Limite de ${d.tirsPubMax} pubs atteinte — réessayez dans ${formatDureeHM(restant)}.`
+      : `Limite de ${d.tirsPubMax} pubs atteinte — réessayez dans un instant.`;
+    verrouEl.classList.remove("hidden");
+  } else {
+    verrouEl.classList.add("hidden");
+  }
+}
+
+/** Formate une durée en millisecondes en "Xh Ymin" (ou juste "Ymin" si moins d'une heure),
+ *  utilisé pour afficher le temps restant avant le déverrouillage des pubs de la roue. */
+function formatDureeHM(ms){
+  const totalMin = Math.max(1, Math.ceil(ms / 60000));
+  const h = Math.floor(totalMin / 60);
+  const min = totalMin % 60;
+  return h > 0 ? `${h}h ${min}min` : `${min}min`;
 }
 
 $("btnRoue").onclick = () => { chargerRoue(); show("roue"); };
@@ -2939,7 +2961,7 @@ async function lancerTourRoue(via){
     const d = await res.json().catch(() => ({}));
     $("roueInfo").textContent = d.error === "CREDITS_INSUFFISANTS" ? "Pas assez de tickets pour ce tour."
       : d.error === "LIMITE_TIRS_PAYANTS" ? `Limite de ${d.max} tours payants par jour atteinte.`
-      : d.error === "LIMITE_TIRS_PUB" ? `Limite de ${d.max} tours gagnés par pub aujourd'hui atteinte.`
+      : d.error === "LIMITE_TIRS_PUB" ? `Limite de ${d.max} pubs atteinte — réessayez dans ${d.jusqua ? formatDureeHM(new Date(d.jusqua).getTime() - Date.now()) : "quelques heures"}.`
       : d.error === "GAIN_EN_ATTENTE" ? "Réclamez d'abord votre gain précédent."
       : "Impossible de tourner la roue pour le moment.";
     roueEnCours = false; chargerRoue();
@@ -4645,6 +4667,13 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
                 <h2>📍 Cinémas à proximité</h2>
                 <button class="close-btn" id="closeCinemasBtn">&times;</button>
             </div>
+            <div class="row" style="padding:0 20px;margin-top:10px;align-items:center;justify-content:space-between">
+                <label style="display:flex;align-items:center;gap:8px;margin:0;text-transform:none;letter-spacing:0;font-size:14px;color:var(--chalk);cursor:pointer">
+                    <input type="checkbox" id="toggleGeoloc" style="width:auto;cursor:pointer">
+                    Activer la géolocalisation
+                </label>
+            </div>
+            <p class="note" id="geolocStatut" style="text-align:center;margin:6px 0 0"></p>
             <div class="row" style="padding:0 20px;margin-top:10px">
                 <button class="ghost" id="btnCinemasRelancer" style="border-color: var(--ticket); color: var(--ticket);">🎯 Relancer ma localisation</button>
             </div>
@@ -4945,16 +4974,70 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
         const btnCinemasRelancer = document.getElementById("btnCinemasRelancer");
         const cinemasModal = document.getElementById("cinemasModal");
         const closeCinemasBtn = document.getElementById("closeCinemasBtn");
+        const toggleGeoloc = document.getElementById("toggleGeoloc");
+        const geolocStatut = document.getElementById("geolocStatut");
         const ENSEIGNE_COULEUR = {
             "UGC": "var(--ticket)", "MK2": "var(--teal)", "Gaumont": "var(--beam)",
             "Pathé": "#a78bfa", "CGR": "#60a5fa", "Cinéville": "#f472b6",
             "Kinepolis": "#34d399", "Megarama": "#fb923c",
         };
+
+        // Préférence propre à l'application (indépendante de l'autorisation du navigateur, que
+        // le site ne peut pas activer/désactiver lui-même) : mémorisée sur cet appareil, activée
+        // par défaut pour ne rien changer au comportement existant tant qu'on n'y touche pas.
+        const GEOLOC_PREF_CLE = "mcq_geoloc_activee";
+        const geolocPrefActivee = () => {
+            try { const v = localStorage.getItem(GEOLOC_PREF_CLE); return v === null ? true : v === "1"; }
+            catch(e) { return true; }
+        };
+        const definirGeolocPref = (actif) => {
+            try { localStorage.setItem(GEOLOC_PREF_CLE, actif ? "1" : "0"); } catch(e) {}
+        };
+
+        /** Met à jour le message de statut, en combinant la préférence de l'appli et, quand le
+         *  navigateur l'expose (API Permissions, pas supportée partout), l'autorisation réelle. */
+        async function majStatutGeoloc(){
+            const active = geolocPrefActivee();
+            toggleGeoloc.checked = active;
+            if (!active){
+                geolocStatut.textContent = "📍 Géolocalisation désactivée ici — activez-la ci-dessus pour rechercher des cinémas.";
+                geolocStatut.style.color = "var(--muted)";
+                return;
+            }
+            let etatNavigateur = null;
+            try {
+                if (navigator.permissions?.query)
+                    etatNavigateur = (await navigator.permissions.query({ name: "geolocation" })).state;
+            } catch(e) { /* API non supportée sur ce navigateur — on se contente de la préférence */ }
+            if (etatNavigateur === "denied"){
+                geolocStatut.textContent = "📍 Géolocalisation activée ici, mais bloquée par votre navigateur — autorisez l'accès à la position dans ses réglages.";
+                geolocStatut.style.color = "var(--ticket)";
+            } else if (etatNavigateur === "granted"){
+                geolocStatut.textContent = "📍 Géolocalisation active — autorisée par votre navigateur.";
+                geolocStatut.style.color = "var(--teal)";
+            } else {
+                geolocStatut.textContent = "📍 Géolocalisation active — votre navigateur va vous demander l'autorisation.";
+                geolocStatut.style.color = "var(--teal)";
+            }
+        }
+        toggleGeoloc.addEventListener("change", () => {
+            definirGeolocPref(toggleGeoloc.checked);
+            majStatutGeoloc();
+            if (toggleGeoloc.checked) lancerRechercheCinemas();
+            else document.getElementById("cinemasList").innerHTML =
+                "<p class='note' style='text-align:center'>Géolocalisation désactivée — activez-la ci-dessus pour voir les cinémas près de vous.</p>";
+        });
+
         /** Relance la géolocalisation puis la recherche des cinémas — utilisé à l'ouverture de la
          *  fenêtre et par le bouton « Relancer ma localisation » (position refusée, changement de
-         *  lieu, échec temporaire du service…) sans avoir à fermer/rouvrir la fenêtre. */
+         *  lieu, échec temporaire du service…) sans avoir à fermer/rouvrir la fenêtre. Ne fait
+         *  rien si le joueur a désactivé la géolocalisation dans l'application. */
         function lancerRechercheCinemas(){
             const liste = document.getElementById("cinemasList");
+            if (!geolocPrefActivee()){
+                liste.innerHTML = "<p class='note' style='text-align:center'>Géolocalisation désactivée — activez-la ci-dessus pour voir les cinémas près de vous.</p>";
+                return;
+            }
             if (!navigator.geolocation){
                 liste.innerHTML = "<p class='note' style='color:var(--ticket)'>La géolocalisation n'est pas disponible sur cet appareil ou ce navigateur.</p>";
                 return;
@@ -5013,6 +5096,7 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
         if (btnCinemasProches){
             btnCinemasProches.addEventListener("click", () => {
                 cinemasModal.classList.add("active");
+                majStatutGeoloc();
                 lancerRechercheCinemas();
             });
             if (btnCinemasRelancer) btnCinemasRelancer.addEventListener("click", lancerRechercheCinemas);
