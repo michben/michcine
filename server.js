@@ -91,6 +91,9 @@ const REGLAGES_DEFAUT = {
   tmdbApiKey: "",
   geoapifyApiKey: "",   // « Cinéma le plus proche » — clé gratuite (3000 requêtes/jour) sur geoapify.com,
                         // utilisée en priorité pour la fiabilité (Overpass/OSM sert de repli sans clé).
+  adsterraApiKey: "",   // Réservée pour un usage futur (ex. récupération de statistiques via l'API
+                        // éditeur Adsterra) — non nécessaire pour diffuser une publicité « Lien
+                        // direct » Adsterra, qui se configure uniquement via l'onglet Publicités.
   creditsDepart: 12,
   creditsParPartie: 4,
   pointsParTicket: 250,
@@ -420,6 +423,7 @@ app.put("/api/admin/reglages", requireAdmin, (req, res) => {
   REGLAGES.transfertParJour = borne(r.transfertParJour, 0, 500000, REGLAGES.transfertParJour);
   if (typeof r.tmdbApiKey === 'string') REGLAGES.tmdbApiKey = r.tmdbApiKey;
   if (typeof r.geoapifyApiKey === 'string') REGLAGES.geoapifyApiKey = r.geoapifyApiKey;
+  if (typeof r.adsterraApiKey === 'string') REGLAGES.adsterraApiKey = r.adsterraApiKey;
   REGLAGES.animationsAvancees = r.animationsAvancees !== false;
   REGLAGES.coeurs           = borne(r.coeurs, 1, 10, REGLAGES.coeurs);
   REGLAGES.xpBase           = borne(r.xpBase, 10, 10000, REGLAGES.xpBase);
