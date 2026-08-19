@@ -104,6 +104,9 @@ const REGLAGES_DEFAUT = {
   // le nom du cinéma (UGC / MK2 / Gaumont) ou l'image "indépendant" par défaut pour les autres
   // salles. Chaque valeur est soit "" (rien d'uploadé), soit une image encodée en base64.
   logosCinema: { ugc: "", mk2: "", gaumont: "", independant: "" },
+  // Un ami peut-il regarder la partie d'un autre ami en direct (lecture seule) ? Désactivé par
+  // défaut — réglable depuis la console admin (onglet Réglages).
+  autoriserSpectateur: false,
   creditsDepart: 12,
   creditsParPartie: 4,
   pointsParTicket: 250,
@@ -469,6 +472,7 @@ app.put("/api/admin/reglages", requireAdmin, (req, res) => {
   REGLAGES.pubMaxParCycle   = borne(r.pubMaxParCycle, 1, 50, REGLAGES.pubMaxParCycle);
   REGLAGES.pubHeureRecharge = borne(r.pubHeureRecharge, 0, 23, REGLAGES.pubHeureRecharge);
   if (typeof r.afficherRadio === "boolean") REGLAGES.afficherRadio = r.afficherRadio;
+  if (typeof r.autoriserSpectateur === "boolean") REGLAGES.autoriserSpectateur = r.autoriserSpectateur;
   REGLAGES.animationsAvancees = r.animationsAvancees !== false;
   REGLAGES.coeurs           = borne(r.coeurs, 1, 10, REGLAGES.coeurs);
   REGLAGES.xpBase           = borne(r.xpBase, 10, 10000, REGLAGES.xpBase);
@@ -973,6 +977,21 @@ app.put("/api/admin/users/:id/role", requireAdmin, (req, res) => {
   const user = definirRole(req.params.id, req.body.role);
   if (!user) return res.status(400).json({ error: "ROLE_INVALIDE" });
   res.json(user);
+});
+
+/**
+ * Redonne manuellement une (ou plusieurs) partie(s) classée(s) à un joueur, sans entamer son
+ * quota quotidien normal — pensé pour compenser une déconnexion subie (coupure réseau, ou un
+ * redéploiement du serveur qui a coupé toutes les parties en cours sans prévenir), plutôt que de
+ * devoir attendre la recharge du lendemain. Réutilise le même compteur « bonus » que le lot de
+ * la roue du jour : les deux se cumulent normalement.
+ */
+app.post("/api/admin/users/:id/ranked-bonus", requireAdmin, (req, res) => {
+  const user = adminUpdateUser(req.params.id, {});
+  if (!user) return res.status(404).json({ error: "NOT_FOUND" });
+  const n = Math.max(1, Math.min(20, Math.round(Number(req.body.n)) || 1));
+  accorderPartiesClasseesBonus(req.params.id, n);
+  res.json({ ok: true, partiesRestantes: partiesRestantes(req.params.id) });
 });
 
 /** Renvoie l'utilisateur connecté, ou termine la requête en 401. */
@@ -2626,6 +2645,41 @@ async function cinemasViaGeoapify(lat, lon, rayonMetres) {
   }
 }
 
+/**
+ * Communes correspondant à un code postal de France métropolitaine — utilisé pour chercher des
+ * cinémas sans dépendre du GPS (adresse saisie à la main). S'appuie sur l'API officielle
+ * gratuite « geo.api.gouv.fr » (aucune clé requise) : un code postal peut couvrir plusieurs
+ * communes (ex. Paris), d'où le retour d'une liste plutôt que d'une seule position.
+ */
+app.get("/api/communes", async (req, res) => {
+  try {
+    const cp = String(req.query.codePostal || "").trim();
+    // Métropole uniquement (01xxx à 95xxx), comme demandé : les DROM (97x/98x) et la Corse restent
+    // hors du champ de cette recherche pour l'instant, mais sont bien sûr toujours trouvables via GPS.
+    if (!/^(0[1-9]|[1-8]\d|9[0-5])\d{3}$/.test(cp))
+      return res.status(400).json({ error: "CODE_POSTAL_INVALIDE", communes: [] });
+
+    const controleur = new AbortController();
+    const minuteur = setTimeout(() => controleur.abort(), 8000);
+    try {
+      const url = `https://geo.api.gouv.fr/communes?codePostal=${cp}&fields=nom,code,centre,codesPostaux&format=json`;
+      const r = await fetch(url, { signal: controleur.signal });
+      if (!r.ok) return res.status(502).json({ error: "SERVICE_INDISPONIBLE", communes: [] });
+      const data = await r.json();
+      const communes = (Array.isArray(data) ? data : [])
+        .filter((c) => c.centre?.coordinates?.length === 2)
+        .map((c) => ({ nom: c.nom, code: c.code, lat: c.centre.coordinates[1], lon: c.centre.coordinates[0] }))
+        .sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
+      res.json({ communes });
+    } finally {
+      clearTimeout(minuteur);
+    }
+  } catch (err) {
+    console.error("Erreur communes:", err);
+    res.status(500).json({ error: "INTERNAL_ERROR", communes: [] });
+  }
+});
+
 app.get("/api/cinemas/proches", async (req, res) => {
   try {
     const lat = Number(req.query.lat);
@@ -2715,6 +2769,7 @@ app.get("/api/birthdays", async (req, res) => {
 app.get("/api/config", (_req, res) => res.json({
   tipUrl: CONFIG.TIP_URL, maxPlayers: CONFIG.MAX_PLAYERS, pointsParTicket: CONFIG.POINTS_PAR_TICKET, animationsAvancees: REGLAGES.animationsAvancees,
   afficherRadio: REGLAGES.afficherRadio,
+  autoriserSpectateur: REGLAGES.autoriserSpectateur,
   theme: REGLAGES.theme,
 }));
 
@@ -3646,6 +3701,8 @@ io.on("connection", (socket) => {
    * scores en temps réel, mais aucune réponse possible. Réservé aux amis.
    */
   socket.on("room:regarder", ({ amiId }, cb) => {
+    if (!REGLAGES.autoriserSpectateur)
+      return cb?.({ ok: false, error: "SPECTATEUR_DESACTIVE" });
     if (!amiId || statutRelation(user.id, amiId) !== "ami")
       return cb?.({ ok: false, error: "PAS_AMI" });
 
