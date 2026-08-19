@@ -476,6 +476,49 @@
         <div class="row" style="margin-top:14px"><button id="btnSdCreer">Publier le sondage</button></div>
         <p class="msg" id="sdMsg"></p>
       </div>
+
+      <div class="card">
+        <p class="tag">⚔️ Battle de films (VS)</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 10px;line-height:1.6">
+          Oppose deux films du catalogue au vote des joueurs — titre repris automatiquement, pas
+          besoin de le retaper. Vous pouvez y attacher une petite récompense : donnée aussitôt à
+          chaque joueur qui vote (individuelle), ou offerte à tous les votants d'un coup quand vous
+          clôturez la battle avec « Désactiver » ci-dessous (collective).
+        </p>
+        <div id="sdPepitesBloc" class="hidden" style="margin-bottom:10px">
+          <label style="margin-bottom:6px">💎 Suggestions — films les plus mis en pépite par les joueurs</label>
+          <div class="row" id="sdPepitesListe" style="flex-wrap:wrap"></div>
+        </div>
+        <label for="sdBattleQuestion">Question (facultatif)</label>
+        <input id="sdBattleQuestion" placeholder="Quel film mérite sa place au panthéon ?" maxlength="120">
+        <div class="row" style="margin-top:12px">
+          <input id="sdFilmA" list="sdFilmsListe" placeholder="Film A — commencez à taper un titre">
+        </div>
+        <div class="row" style="margin-top:10px">
+          <input id="sdFilmB" list="sdFilmsListe" placeholder="Film B — commencez à taper un titre">
+        </div>
+        <datalist id="sdFilmsListe"></datalist>
+        <p class="msg" id="sdBattleFilmsMsg" style="margin-top:6px"></p>
+
+        <label style="margin-top:14px;display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="sdRecompenseActif" style="width:auto"> Ajouter une récompense
+        </label>
+        <div id="sdRecompenseBloc" class="hidden" style="margin-top:8px">
+          <div class="row">
+            <input id="sdRecompenseTickets" type="number" min="0" max="50" placeholder="🎟️ tickets" value="2">
+            <input id="sdRecompenseXp" type="number" min="0" max="500" placeholder="⚡ xp" value="20">
+          </div>
+          <label for="sdRecompenseType" style="margin-top:10px">Quand la récompense est-elle donnée ?</label>
+          <select id="sdRecompenseType">
+            <option value="individuelle">🙋 Individuelle — à chaque joueur, dès qu'il vote</option>
+            <option value="collective">🤝 Collective — à tous les votants, à la clôture de la battle</option>
+          </select>
+        </div>
+
+        <div class="row" style="margin-top:14px"><button id="btnSdBattleCreer">⚔️ Lancer la battle</button></div>
+        <p class="msg" id="sdBattleMsg"></p>
+      </div>
+
       <div class="card">
         <p class="tag" id="sdListeTag">Sondages</p>
         <div id="sdListe"></div>
@@ -1219,7 +1262,7 @@ function tab(which){
   if (which === "reglages"){ etatSecurite(); chargerReglages(); chargerAide(); }
   if (which === "sorties") loadSorties();
   if (which === "nowplaying") loadNowPlaying();
-  if (which === "sondages") loadSondages();
+  if (which === "sondages") { loadSondages(); remplirFilmsListe(); chargerSuggestionsPepites(); }
 }
 $("tabMovies").onclick = () => tab("movies");
 $("tabSugg").onclick = () => tab("sugg");
@@ -2424,15 +2467,23 @@ async function loadSondages(){
   renderSondagesAdmin();
 }
 
+/** Petit résumé de la récompense associée, affiché dans la liste admin. */
+function recompenseResume(s){
+  if (!s.recompense?.actif) return "";
+  const quand = s.recompense.collectif ? "collective à la clôture" : "individuelle à chaque vote";
+  const distribuee = s.recompense.collectif && s.recompenseDistribuee ? " — déjà distribuée" : "";
+  return ` · 🎁 ${s.recompense.tickets || 0} tickets + ${s.recompense.xp || 0} xp (${quand})${distribuee}`;
+}
+
 function renderSondagesAdmin(){
   $("sdListeTag").textContent = `Sondages — ${sondages.length}`;
   $("sdListe").innerHTML = sondages.length ? sondages.map(s => `
     <div class="item" data-sondage="${s.id}" style="flex-wrap:wrap">
       <div style="flex:1 1 100%">
-        <strong>${s.question ? esc(s.question) : `${s.optionA.emoji} ${esc(s.optionA.texte)} / ${s.optionB.emoji} ${esc(s.optionB.texte)}`}</strong>
+        <strong>${(s.optionA.filmId || s.optionB.filmId) ? "⚔️ " : ""}${s.question ? esc(s.question) : `${s.optionA.emoji} ${esc(s.optionA.texte)} / ${s.optionB.emoji} ${esc(s.optionB.texte)}`}</strong>
         <span class="lvl">${s.actif ? "actif" : "désactivé"}</span>
         <small>${s.total} vote${s.total>1?"s":""} · ${s.optionA.emoji} ${esc(s.optionA.texte)} ${s.pourcentA}%
-          — ${s.pourcentB}% ${esc(s.optionB.texte)} ${s.optionB.emoji}</small>
+          — ${s.pourcentB}% ${esc(s.optionB.texte)} ${s.optionB.emoji}${recompenseResume(s)}</small>
       </div>
       <button class="ghost" data-sd-toggle="${s.id}">${s.actif ? "Désactiver" : "Réactiver"}</button>
       <button class="danger" data-sd-del="${s.id}">Supprimer</button>
@@ -2467,6 +2518,70 @@ $("btnSdCreer").onclick = async () => {
   $("sdMsg").className = "msg ok";
   $("sdQuestion").value = ""; $("sdOptionAEmoji").value = ""; $("sdOptionATexte").value = "";
   $("sdOptionBEmoji").value = ""; $("sdOptionBTexte").value = "";
+  loadSondages();
+};
+
+/* ---------- Battle de films (VS) ---------- */
+/** Le datalist se reconstruit à chaque ouverture de l'onglet : la liste des films
+ *  peut avoir changé (import, ajout manuel...) depuis la dernière visite. */
+function remplirFilmsListe(){
+  $("sdFilmsListe").innerHTML = movies.map(m => `<option value="${esc(m.title)}">`).join("");
+}
+
+/** Suggestions de battle : les films que les joueurs mettent le plus souvent en pépite —
+ *  un raccourci pour préremplir Film A / Film B sans avoir à chercher un titre au hasard. */
+async function chargerSuggestionsPepites(){
+  const res = await api("/api/admin/pepites/top");
+  if (!res.ok) { $("sdPepitesBloc").classList.add("hidden"); return; }
+  const liste = await res.json();
+  $("sdPepitesBloc").classList.toggle("hidden", !liste.length);
+  $("sdPepitesListe").innerHTML = liste.map(f => `
+    <button type="button" class="ghost" data-pepite-titre="${esc(f.title)}" style="padding:6px 12px;font-size:13px">
+      💎 ${esc(f.title)} <small>(${f.pepites})</small>
+    </button>`).join("");
+  $("sdPepitesListe").querySelectorAll("[data-pepite-titre]").forEach(b => b.onclick = () => {
+    if (!$("sdFilmA").value.trim()) $("sdFilmA").value = b.dataset.pepiteTitre;
+    else $("sdFilmB").value = b.dataset.pepiteTitre;
+  });
+}
+
+$("sdRecompenseActif").onchange = () => {
+  $("sdRecompenseBloc").classList.toggle("hidden", !$("sdRecompenseActif").checked);
+};
+
+$("btnSdBattleCreer").onclick = async () => {
+  const titreA = $("sdFilmA").value.trim();
+  const titreB = $("sdFilmB").value.trim();
+  const filmA = movies.find(m => m.title === titreA);
+  const filmB = movies.find(m => m.title === titreB);
+  if (!filmA || !filmB){
+    $("sdBattleFilmsMsg").textContent = "Choisissez deux films existants dans la liste (un titre par champ).";
+    $("sdBattleFilmsMsg").className = "msg err";
+    return;
+  }
+  $("sdBattleFilmsMsg").textContent = "";
+  $("sdBattleFilmsMsg").className = "msg";
+
+  const recompense = $("sdRecompenseActif").checked ? {
+    actif: true,
+    tickets: Number($("sdRecompenseTickets").value) || 0,
+    xp: Number($("sdRecompenseXp").value) || 0,
+    collectif: $("sdRecompenseType").value === "collective",
+  } : { actif: false };
+
+  const res = await api("/api/admin/sondages", {method:"POST", body: JSON.stringify({
+    question: $("sdBattleQuestion").value.trim(),
+    filmA: filmA.id, filmB: filmB.id,
+    recompense,
+  })});
+  if (!res.ok){
+    $("sdBattleMsg").textContent = "Échec de la création.";
+    $("sdBattleMsg").className = "msg err"; return;
+  }
+  $("sdBattleMsg").textContent = "Battle lancée — visible immédiatement par tous les joueurs.";
+  $("sdBattleMsg").className = "msg ok";
+  $("sdBattleQuestion").value = ""; $("sdFilmA").value = ""; $("sdFilmB").value = "";
+  $("sdRecompenseActif").checked = false; $("sdRecompenseBloc").classList.add("hidden");
   loadSondages();
 };
 

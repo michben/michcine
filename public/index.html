@@ -72,6 +72,14 @@
      combien de joueurs chaque mode demande. */
   .mode .capacite{flex:0 0 auto;font-family:var(--font-code);font-size:12px;color:var(--muted);
     background:rgba(0,0,0,.28);padding:5px 10px;border-radius:999px;white-space:nowrap}
+  /* Bulle d'aide affichée après une pression longue (souris ou tactile) sur un élément
+     marqué data-bulle — voir activerBullesAide() dans le script. */
+  .bulleAide{position:fixed;z-index:400;max-width:250px;background:var(--velvet);color:var(--chalk);
+    font-size:12.5px;line-height:1.45;padding:10px 13px;border-radius:10px;
+    border:1px solid rgba(245,185,66,.35);box-shadow:0 10px 28px rgba(0,0,0,.5);
+    opacity:0;transform:translateY(4px);transition:opacity .15s ease,transform .15s ease;
+    pointer-events:none}
+  .bulleAide.visible{opacity:1;transform:translateY(0)}
   .marquee{display:flex;gap:10px;justify-content:center;margin:6px 0 16px}
   .flap{width:54px;height:70px;display:grid;place-items:center;border-radius:8px;
     background:linear-gradient(180deg,#232A44 0 49%,#1A2034 51% 100%);box-shadow:inset 0 0 0 1px rgba(245,185,66,.25);
@@ -117,6 +125,26 @@
   .barreNiveau.presque{border-color:var(--teal);box-shadow:0 8px 20px rgba(78,205,196,.28),inset 0 1px 0 rgba(255,255,255,.05)}
   body.animations-actives .barreNiveau.presque{animation:presquePulse 1.8s ease-in-out infinite}
   @keyframes presquePulse{0%,100%{box-shadow:0 8px 20px rgba(78,205,196,.22)}50%{box-shadow:0 8px 26px rgba(78,205,196,.45)}}
+  /* Version compacte de la carte de niveau, réutilisée dans le profil (le sien et celui
+     d'un autre joueur) — même langage visuel que .barreNiveau du menu, en plus sobre. */
+  .niveauMini{background:var(--card);border:1px solid rgba(245,185,66,.25);border-radius:12px;
+    padding:12px 14px;margin:14px 0}
+  .niveauMiniTete{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .niveauMiniEmoji{font-size:20px}
+  .niveauMiniTexte{font-size:14px;color:var(--muted)}
+  .niveauMiniTexte b{color:var(--beam);font-family:var(--font-affiche);font-size:16px;
+    letter-spacing:.02em;text-transform:uppercase;font-weight:400}
+  .statutNiveau{color:var(--teal);font-weight:600}
+  .niveauMini .jauge{height:7px;border-radius:99px;background:rgba(0,0,0,.32);margin:0 0 5px}
+  .niveauMini .jauge i{background:linear-gradient(90deg,var(--ticket),var(--beam),var(--teal));border-radius:99px}
+  .niveauMiniXp{margin:0;font-size:11px;color:var(--muted);font-family:var(--font-code)}
+  /* Rangée de petites affiches pour le top 5 pépites d'une fiche de profil. */
+  .pepitesMini{margin:14px 0}
+  .pepitesMiniRow{display:flex;gap:8px;flex-wrap:wrap}
+  .pepitesMiniItem{width:52px;height:78px;border-radius:8px;overflow:hidden;background:var(--card);
+    border:1px solid rgba(245,185,66,.3);flex:0 0 auto;display:grid;place-items:center}
+  .pepitesMiniItem img{width:100%;height:100%;object-fit:cover;display:block}
+  .pepitesMiniEmoji{font-size:20px}
   .quete{display:flex;gap:12px;align-items:center;padding:14px 0;border-top:1px solid rgba(237,232,220,.1);flex-wrap:wrap}
   .quete .infos{flex:1;min-width:150px}
   .quete .infos b{display:block;font-size:15px}
@@ -331,6 +359,10 @@
     justify-content:center;font-size:16px;background:var(--velvet)}
   .sondageAnneau.anneauA{box-shadow:0 0 0 3px var(--beam)}
   .sondageAnneau.anneauB{box-shadow:0 0 0 3px var(--teal)}
+  /* Battle de films : la petite affiche remplace l'emoji dans le bouton de vote. */
+  .sondagePoster{display:block;width:100%;aspect-ratio:2/3;object-fit:cover;border-radius:8px;margin:0 0 8px}
+  .sondageRecompense{display:inline-block;margin-top:12px;font-size:12px;color:var(--beam);
+    background:rgba(0,0,0,.28);padding:4px 10px;border-radius:999px}
   .note{color:var(--muted);font-size:13px;margin-top:14px;line-height:1.5}
   footer{margin-top:34px;padding-top:20px;border-top:1px solid rgba(237,232,220,.1);text-align:center}
   footer p{color:var(--muted);font-size:13px;margin:0 0 12px}
@@ -790,6 +822,8 @@ html.mode-enfant-actif .wrap{padding-top:48px}
           <img id="grandePhoto" alt="Votre photo de profil">
         </div>
         <p class="bienvenue" id="motProfil"></p>
+        <div id="profilNiveauBloc"></div>
+        <div id="profilPepitesBloc"></div>
         <div class="ficheStats" id="mesStatsDetaillees" style="margin: 16px 0; text-align: left;"></div>
         <div class="row" style="justify-content:center" id="dlPhotoRow">
           <button id="btnTelechargerPhoto" class="ghost">⬇ Enregistrer ma photo</button>
@@ -1013,11 +1047,16 @@ html.mode-enfant-actif .wrap{padding-top:48px}
       </div>
     </div>
     <div class="modes" data-module="modes">
-      <button class="mode" data-mode="solo"><span class="ic">🎬</span><span class="details"><b>Solo</b><small>Contre le chrono, pour s'entraîner</small></span><span class="capacite">👤 1</span></button>
-      <button class="mode" data-mode="duel"><span class="ic">⚔️</span><span class="details"><b>Duel</b><small>Deux joueurs, face à face</small></span><span class="capacite">👥 2</span></button>
-      <button class="mode" data-mode="ffa"><span class="ic">🍿</span><span class="details"><b>Chacun pour soi</b><small>De 2 à 16 joueurs, classement individuel</small></span><span class="capacite">👥 2-16</span></button>
-      <button class="mode" data-mode="teams"><span class="ic">🏆</span><span class="details"><b>En équipes</b><small>Deux équipes, scores cumulés</small></span><span class="capacite">🤝 2 équipes</span></button>
-      <button class="mode" data-mode="ranked"><span class="ic">📈</span><span class="details"><b>Partie classée</b><small id="rankedSous">Vos points comptent au classement de la saison</small></span><span class="capacite">🏆 solo</span></button>
+      <button class="mode" data-mode="solo" data-bulle="🎬 Solo : affrontez le chronomètre à votre rythme, seul face aux films. Idéal pour vous entraîner sans pression ni adversaire.">
+        <span class="ic">🎬</span><span class="details"><b>Solo</b><small>Contre le chrono, pour s'entraîner</small></span><span class="capacite">👤 1</span></button>
+      <button class="mode" data-mode="duel" data-bulle="⚔️ Duel : un contre un, le plus rapide et le plus juste marque le point. Personne sous la main ? Vous pouvez défier un bot depuis le salon !">
+        <span class="ic">⚔️</span><span class="details"><b>Duel</b><small>Deux joueurs, face à face</small></span><span class="capacite">👥 2</span></button>
+      <button class="mode" data-mode="ffa" data-bulle="🍿 Chacun pour soi : de 2 à 16 joueurs dans le même salon, chacun pour sa pomme — un classement individuel s'affiche à la fin.">
+        <span class="ic">🍿</span><span class="details"><b>Chacun pour soi</b><small>De 2 à 16 joueurs, classement individuel</small></span><span class="capacite">👥 2-16</span></button>
+      <button class="mode" data-mode="teams" data-bulle="🏆 En équipes : deux équipes s'affrontent, les scores de chaque camp sont additionnés — l'esprit d'équipe fait la différence.">
+        <span class="ic">🏆</span><span class="details"><b>En équipes</b><small>Deux équipes, scores cumulés</small></span><span class="capacite">🤝 2 équipes</span></button>
+      <button class="mode" data-mode="ranked" data-bulle="📈 Partie classée : jouez seul, vos points comptent pour le classement de la saison. Un nombre limité de parties par jour — visez la précision plus que la quantité.">
+        <span class="ic">📈</span><span class="details"><b>Partie classée</b><small id="rankedSous">Vos points comptent au classement de la saison</small></span><span class="capacite">🏆 solo</span></button>
     </div>
     <div class="row" data-module="actions">
       <button class="ghost" id="btnExchange">Espace échange</button>
@@ -1026,6 +1065,7 @@ html.mode-enfant-actif .wrap{padding-top:48px}
       <button class="ghost" id="btnSondages">🍿 Sondages <span id="badgeSondages" class="pastille hidden">0</span></button>
       <button class="ghost" id="btnFriends">Amis <span id="badgeAmis" class="pastille hidden">0</span></button>
       <button class="ghost" id="btnSignets">🔖 Mes signets</button>
+      <button class="ghost" id="btnPepites">💎 Mes pépites <span id="badgePepites" class="pastille hidden">0</span></button>
       <button class="ghost" id="btnKidMode" aria-pressed="false" title="Mode enfant : uniquement des films pour enfants">🐻</button>
       <button class="ghost" id="btnProfile">Profil</button>
     </div>
@@ -1061,6 +1101,19 @@ html.mode-enfant-actif .wrap{padding-top:48px}
       </div>
       <p class="tag" style="margin-top:18px" id="lobbyCount">Joueurs</p>
       <ul class="players" id="lobbyPlayers"></ul>
+      <div id="botBloc" class="hidden" style="margin-top:14px">
+        <p class="tag" style="margin:0 0 8px">🤖 Personne pour l'instant ?</p>
+        <div class="row" id="botChoixNiveau">
+          <button class="ghost" data-bot-niveau="facile">🙂 Facile</button>
+          <button class="ghost" data-bot-niveau="moyen">😎 Moyen</button>
+          <button class="ghost" data-bot-niveau="hardcore">🔥 Hardcore</button>
+        </div>
+        <p class="feedback" id="botMsg"></p>
+      </div>
+      <div id="botPresentBloc" class="hidden" style="margin-top:14px">
+        <p class="note" style="margin:0" id="botPresentTexte"></p>
+        <div class="row" style="margin-top:8px"><button class="ghost" id="btnRetirerBot">Retirer le bot</button></div>
+      </div>
       <div class="row"><button id="btnStart">Lancer la partie</button></div>
       <p class="note" id="hostNote">En attente que l'hôte lance la partie.</p>
       <div class="row"><button class="ghost" id="btnQuitLobby">Quitter le salon</button></div>
@@ -1176,9 +1229,27 @@ html.mode-enfant-actif .wrap{padding-top:48px}
         <button class="close-btn" id="closeSignetsBtn">&times;</button>
       </div>
       <div class="modal-body">
-        <p class="note" style="margin:0 0 10px">Les films que vous avez mis de côté pour les regarder plus tard.</p>
+        <p class="note" style="margin:0 0 10px">Les films que vous avez mis de côté pour les regarder plus tard. Touchez un film pour voir sa bande-annonce.</p>
         <div id="signetsListe"></div>
         <p class="note hidden" id="signetsVide">Aucun signet pour l'instant — mettez un film de côté à la fin d'une question !</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODALE : PÉPITES (top 5 personnel) -->
+  <div class="modal-overlay" id="pepitesModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>💎 Mes pépites</h2>
+        <button class="close-btn" id="closePepitesBtn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="note" style="margin:0 0 10px" id="pepitesCompteur">
+          Votre top 5 personnel — les films qui vous ont marqué. Touchez un film pour voir sa bande-annonce.
+        </p>
+        <div id="pepitesListe"></div>
+        <p class="note hidden" id="pepitesVide">Aucune pépite pour l'instant — marquez-en une à la fin d'une question !</p>
+        <div class="row" id="pepitesPartageRow" style="margin-top:14px"><button class="ghost" id="btnPartagerPepites">📤 Partager mes pépites</button></div>
       </div>
     </div>
   </div>
@@ -1221,6 +1292,7 @@ html.mode-enfant-actif .wrap{padding-top:48px}
       <div class="row">
         <button id="btnNext" title="Question suivante" aria-label="Question suivante" style="font-size:22px">⏭️</button>
         <button id="btnSignet" class="ghost" style="flex:0 0 auto">🔖 À voir plus tard</button>
+        <button id="btnPepite" class="ghost" style="flex:0 0 auto">💎 Pépite</button>
         <button id="btnReport" class="ghost" style="flex:0 0 auto">⚑ Signaler</button>
       </div>
       <div id="reportBox" class="hidden" style="margin-top:14px">
@@ -1302,6 +1374,8 @@ html.mode-enfant-actif .wrap{padding-top:48px}
         <h3 id="popNom"></h3>
         <p id="popRole"></p>
       </div>
+      <div id="popNiveauBloc"></div>
+      <div id="popPepitesBloc"></div>
       <div class="ficheStats" id="popStats"></div>
       <p id="popEtat"></p>
       <div class="row" style="flex-direction:column" id="popActions"></div>
@@ -1446,6 +1520,7 @@ let historiqueQuestions = [];
 function revelation(titre, affiche, annee, trouve, movieId){
   if (movieId != null) filmCourant = movieId;
   majBoutonSignet();
+  majBoutonPepite();
   $("verdictTag").textContent = trouve === true ? "Bien joué" : trouve === false ? "Raté" : "La réponse était";
   $("verdictTag").className = `tag ${trouve === true ? "juste" : trouve === false ? "rate" : ""}`;
   $("answer").textContent = titre || "";
@@ -1856,6 +1931,7 @@ function appliquerRole(){
   }
   appliquerModeEnfant();
   rafraichirSignets();
+  rafraichirPepites();
   verifierSuggestionsAcceptees();
 }
 
@@ -2859,6 +2935,44 @@ function emojiNiveau(n){
   return "🌱";
 }
 
+/** Titre affiché à côté du niveau, dans les fiches de profil (le sien et celui des autres). */
+function statutNiveau(n){
+  if (n >= 30) return "Légende du cinéma";
+  if (n >= 20) return "Expert";
+  if (n >= 10) return "Confirmé";
+  if (n >= 5) return "Cinéphile";
+  return "Débutant";
+}
+
+/** Bloc compact niveau + statut + barre de progression, réutilisé dans les fiches de profil. */
+function niveauMiniHTML(niveau, reste, requis){
+  if (niveau === undefined || niveau === null) return "";
+  const pct = requis ? Math.min(100, Math.round(reste / requis * 100)) : 0;
+  return `<div class="niveauMini">
+    <div class="niveauMiniTete">
+      <span class="niveauMiniEmoji">${emojiNiveau(niveau)}</span>
+      <span class="niveauMiniTexte">Niveau <b>${niveau}</b> · <span class="statutNiveau">${esc(statutNiveau(niveau))}</span></span>
+    </div>
+    <div class="jauge"><i style="width:${pct}%"></i></div>
+    ${requis ? `<p class="niveauMiniXp">⚡ ${reste} / ${requis} xp</p>` : ""}
+  </div>`;
+}
+
+/** Rangée de petites affiches pour le top 5 pépites d'un profil (le sien ou celui d'un autre). */
+function pepitesMiniHTML(films){
+  if (!films || !films.length) return "";
+  return `<div class="pepitesMini">
+    <p class="tag" style="margin:0 0 8px">💎 Pépites</p>
+    <div class="pepitesMiniRow">
+      ${films.map(f => `
+        <div class="pepitesMiniItem" title="${esc(f.title||"")}${f.tmdbId ? " — voir la bande-annonce" : ""}"
+          ${f.tmdbId ? `onclick="ouvrirTrailer('${esc(String(f.tmdbId))}', '${esc(f.title||"").replace(/'/g,"&#39;")}')" style="cursor:pointer"` : ""}>
+          ${f.poster ? `<img src="${esc(f.poster)}" alt="" onerror="this.remove()">` : `<span class="pepitesMiniEmoji">💎</span>`}
+        </div>`).join("")}
+    </div>
+  </div>`;
+}
+
 function majNiveau(n){
   if (!n) return;
   $("niveauNum").textContent = n.niveau;
@@ -3446,6 +3560,8 @@ async function ouvrirJoueur(id, pseudo, avatar, photoJoueur){
     : `<div class="cadreFiche emoji">${avatar || "🎬"}</div>`;
   $("popNom").textContent = pseudo;
   $("popRole").textContent = "";
+  $("popNiveauBloc").innerHTML = "";
+  $("popPepitesBloc").innerHTML = "";
   $("popStats").innerHTML = "";
   $("popEtat").textContent = "Chargement…";
   $("popActions").innerHTML = "";
@@ -3469,6 +3585,8 @@ async function ouvrirJoueur(id, pseudo, avatar, photoJoueur){
     (f.role !== "joueur" ? ` · <span class="badge-role">${esc(f.role)}</span>` : "");
 
   const rang = (r) => r ? `${r.rang}<sup style="font-size:11px">e</sup>` : "—";
+  $("popNiveauBloc").innerHTML = niveauMiniHTML(f.niveau ?? 0, f.reste, f.requis);
+  $("popPepitesBloc").innerHTML = pepitesMiniHTML(f.pepites);
   $("popStats").innerHTML = `
     <div><small>Points au total</small><b>${f.scoreGlobal}</b></div>
     <div><small>Parties jouées</small><b>${f.partiesGlobales}</b></div>
@@ -3776,6 +3894,66 @@ function bandeauNotif(html, action){
   setTimeout(() => el.remove(), 8000);
 }
 
+/**
+ * Bulle d'aide sur pression longue : tout élément portant data-bulle="texte" affiche ce
+ * texte au bout d'un court instant si on garde le doigt ou le clic dessus, souris comme
+ * tactile. Un relâchement rapide (simple tap/clic) déclenche normalement le bouton ; un
+ * relâchement après affichage de la bulle, lui, n'agit pas — sinon quelqu'un qui voulait
+ * juste lire l'explication se retrouverait lancé dans une partie par surprise.
+ */
+function activerBullesAide(){
+  const SEUIL_MS = 550;
+  let minuteur = null, bulle = null, declenchee = false;
+
+  function positionner(el, b){
+    const r = el.getBoundingClientRect();
+    const largeur = b.offsetWidth, hauteur = b.offsetHeight;
+    let gauche = r.left + r.width / 2 - largeur / 2;
+    gauche = Math.max(8, Math.min(gauche, window.innerWidth - largeur - 8));
+    let haut = r.top - hauteur - 10;
+    if (haut < 8) haut = r.bottom + 10;
+    b.style.left = `${gauche}px`;
+    b.style.top = `${haut}px`;
+  }
+  function masquer(){ if (bulle){ bulle.remove(); bulle = null; } }
+  function afficher(el){
+    const texte = el.dataset.bulle;
+    if (!texte) return;
+    masquer();
+    bulle = document.createElement("div");
+    bulle.className = "bulleAide";
+    bulle.textContent = texte;
+    document.body.append(bulle);
+    positionner(el, bulle);
+    requestAnimationFrame(() => bulle?.classList.add("visible"));
+    declenchee = true;
+  }
+  function demarrer(e){
+    const el = e.target.closest?.("[data-bulle]");
+    if (!el) return;
+    declenchee = false;
+    clearTimeout(minuteur);
+    minuteur = setTimeout(() => afficher(el), SEUIL_MS);
+  }
+  function relacher(){
+    clearTimeout(minuteur);
+    if (bulle) setTimeout(masquer, 2600);
+  }
+  document.addEventListener("mousedown", demarrer);
+  document.addEventListener("touchstart", demarrer, {passive:true});
+  document.addEventListener("mouseup", relacher);
+  document.addEventListener("touchend", relacher);
+  document.addEventListener("touchcancel", () => { clearTimeout(minuteur); masquer(); });
+  document.addEventListener("scroll", masquer, true);
+  // Empêche le clic normal de suivre une bulle qui vient de s'afficher (voir commentaire ci-dessus).
+  document.addEventListener("click", (e) => {
+    if (declenchee && e.target.closest?.("[data-bulle]")){
+      e.preventDefault(); e.stopPropagation(); declenchee = false;
+    }
+  }, true);
+}
+activerBullesAide();
+
 socket.on("notif", (notif) => {
   const {type, de, avatar, photo} = notif;
   majBadgeAmis();
@@ -3820,6 +3998,13 @@ socket.on("notif", (notif) => {
     bandeauNotif(`<span style="font-size:24px">🎬</span><span><b>Votre suggestion a été retenue !</b>
       <small>« ${esc(notif.titre || "")} » — touchez pour la publier</small></span>`,
       () => proposerRepost({ id: notif.id, titre: notif.titre }));
+
+  if (type === "recompense_sondage"){
+    setCredits(credits + (notif.tickets || 0));
+    chargerQuetes();
+    bandeauNotif(`<span style="font-size:24px">🎁</span><span><b>+${notif.tickets || 0} tickets · +${notif.xp || 0} xp</b>
+      <small>Récompense collective — « ${esc(notif.question || "")} »</small></span>`);
+  }
 });
 
 /* ---------- Modération ---------- */
@@ -3885,15 +4070,20 @@ async function afficherSignets(){
   const liste = await rafraichirSignets();
   $("signetsVide").classList.toggle("hidden", liste.length > 0);
   $("signetsListe").innerHTML = liste.map(f => `
-    <div class="histoItem">
+    <div class="histoItem" data-trailer="${f.tmdbId||""}" data-titre="${esc(f.title||"")}" style="${f.tmdbId ? "cursor:pointer" : ""}" title="${f.tmdbId ? "Voir la bande-annonce" : ""}">
       ${f.poster ? `<img src="${esc(f.poster)}" alt="" onerror="this.remove()">` : ""}
       <div class="info">
         <b>${esc(f.title || "")}${f.year ? ` (${f.year})` : ""}</b>
       </div>
       <button class="ghost" style="flex:0 0 auto" data-id="${f.id}">Retirer</button>
     </div>`).join("");
+  $("signetsListe").querySelectorAll("[data-trailer]").forEach(el => {
+    if (!el.dataset.trailer) return;
+    el.onclick = (e) => { if (e.target.closest("button")) return; ouvrirTrailer(el.dataset.trailer, el.dataset.titre); };
+  });
   $("signetsListe").querySelectorAll("button[data-id]").forEach(b => {
-    b.onclick = async () => {
+    b.onclick = async (e) => {
+      e.stopPropagation();
       const id = Number(b.dataset.id);
       await fetch(`/api/signets/${id}/toggle`, { method: "POST" }).catch(() => {});
       mesSignetsIds.delete(id);
@@ -3903,15 +4093,113 @@ async function afficherSignets(){
   });
 }
 
+/* ---------- Pépites (top 5 personnel) ---------- */
+let mesPepitesIds = new Set();
+
+async function rafraichirPepites(){
+  if (!me){ mesPepitesIds = new Set(); return []; }
+  const d = await fetch("/api/pepites").then(r => r.ok ? r.json() : null).catch(() => null);
+  const liste = d?.films || [];
+  mesPepitesIds = new Set(liste.map(f => f.id));
+  $("badgePepites").textContent = liste.length;
+  $("badgePepites").classList.toggle("hidden", liste.length === 0);
+  return liste;
+}
+
+function majBoutonPepite(){
+  const btn = $("btnPepite");
+  if (!btn) return;
+  const actif = filmCourant != null && mesPepitesIds.has(filmCourant);
+  btn.textContent = actif ? "💎 Ajoutée !" : "💎 Pépite";
+  btn.setAttribute("aria-pressed", String(!!actif));
+}
+
+$("btnPepite").onclick = async () => {
+  if (!me){ alert("Connectez-vous pour marquer des pépites."); return; }
+  if (filmCourant == null) return;
+  const btn = $("btnPepite");
+  btn.disabled = true;
+  const res = await fetch(`/api/pepites/${encodeURIComponent(filmCourant)}/toggle`, { method: "POST" });
+  const data = await res.json().catch(() => null);
+  btn.disabled = false;
+  if (!res.ok){
+    if (data?.error === "MAX_PEPITES_ATTEINT")
+      alert(`Vous avez déjà vos ${data.max} pépites — retirez-en une dans « Mes pépites » pour en ajouter une autre.`);
+    return;
+  }
+  if (data.pepite) mesPepitesIds.add(filmCourant); else mesPepitesIds.delete(filmCourant);
+  $("badgePepites").textContent = mesPepitesIds.size;
+  $("badgePepites").classList.toggle("hidden", mesPepitesIds.size === 0);
+  majBoutonPepite();
+};
+
+async function afficherPepites(){
+  $("pepitesListe").innerHTML = "<p class='note'>Chargement…</p>";
+  const liste = await rafraichirPepites();
+  $("pepitesVide").classList.toggle("hidden", liste.length > 0);
+  $("pepitesCompteur").textContent =
+    `Votre top ${liste.length} sur 5 — les films qui vous ont marqué. Touchez un film pour voir sa bande-annonce.`;
+  $("pepitesListe").innerHTML = liste.map(f => `
+    <div class="histoItem" data-trailer="${f.tmdbId||""}" data-titre="${esc(f.title||"")}" style="${f.tmdbId ? "cursor:pointer" : ""}" title="${f.tmdbId ? "Voir la bande-annonce" : ""}">
+      ${f.poster ? `<img src="${esc(f.poster)}" alt="" onerror="this.remove()">` : ""}
+      <div class="info">
+        <b>💎 ${esc(f.title || "")}${f.year ? ` (${f.year})` : ""}</b>
+      </div>
+      <button class="ghost" style="flex:0 0 auto" data-id="${f.id}">Retirer</button>
+    </div>`).join("");
+  $("pepitesListe").querySelectorAll("[data-trailer]").forEach(el => {
+    if (!el.dataset.trailer) return;
+    el.onclick = (e) => { if (e.target.closest("button")) return; ouvrirTrailer(el.dataset.trailer, el.dataset.titre); };
+  });
+  $("pepitesListe").querySelectorAll("button[data-id]").forEach(b => {
+    b.onclick = async (e) => {
+      e.stopPropagation();
+      const id = Number(b.dataset.id);
+      await fetch(`/api/pepites/${id}/toggle`, { method: "POST" }).catch(() => {});
+      mesPepitesIds.delete(id);
+      if (filmCourant === id) majBoutonPepite();
+      afficherPepites();
+    };
+  });
+  $("pepitesPartageRow").classList.toggle("hidden", liste.length === 0);
+}
+
+$("btnPepites").onclick = () => { $("pepitesModal").classList.add("active"); afficherPepites(); };
+$("closePepitesBtn").onclick = () => $("pepitesModal").classList.remove("active");
+$("pepitesModal").onclick = e => { if (e.target.id === "pepitesModal") $("pepitesModal").classList.remove("active"); };
+
+$("btnPartagerPepites").onclick = async () => {
+  const liste = [...mesPepitesIds].length
+    ? await fetch("/api/pepites").then(r => r.json()).then(d => d.films) : [];
+  if (!liste.length) return;
+  const texte = `💎 Mes pépites cinéma sur MichBen Ciné Quizz : ${liste.map(f => f.title).join(", ")} !`;
+  if (navigator.share){
+    navigator.share({ text: texte }).catch(() => {});
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(texte);
+    $("pepitesCompteur").textContent = "Copié ! Collez-le où vous voulez pour le partager.";
+    setTimeout(() => afficherPepites(), 2500);
+  } catch { alert(texte); }
+};
+
 $("btnSignets").onclick = () => { $("signetsModal").classList.add("active"); afficherSignets(); };
 $("closeSignetsBtn").onclick = () => $("signetsModal").classList.remove("active");
 
 /* ---------- Sondages "vs" (pop-corn salé ou sucré ?, etc.) ---------- */
 let sondagesActifs = [];
 
+/** Petite affiche de film pour les battles, ou l'emoji seul pour les sondages classiques. */
+const sondageVignette = (o) => o.poster
+  ? `<img src="${esc(o.poster)}" alt="" class="sondagePoster">` : `<span>${o.emoji}</span>`;
+
 function sondageHtml(s){
   const monVote = s.monVote;
   const total = s.total || 0;
+  const estBattle = Boolean(s.optionA.filmId || s.optionB.filmId);
+  const recompenseTag = s.recompense?.actif
+    ? `<span class="sondageRecompense">🎁 ${s.recompense.tickets || 0} tickets · ⚡ ${s.recompense.xp || 0} xp</span>` : "";
   const boutonsOuResultat = monVote
     ? `<div class="sondageBarre"><div class="a" style="width:${s.pourcentA}%"></div><div class="b" style="width:${s.pourcentB}%"></div></div>
        <div class="sondageResultat">
@@ -3924,12 +4212,13 @@ function sondageHtml(s){
          · ${total} vote${total>1?"s":""} au total
        </div>`
     : `<div class="sondageChoix">
-         <button class="voteA" data-sondage-vote="${s.id}" data-cote="A">${s.optionA.emoji}<br>${esc(s.optionA.texte)}</button>
-         <button class="voteB" data-sondage-vote="${s.id}" data-cote="B">${s.optionB.emoji}<br>${esc(s.optionB.texte)}</button>
+         <button class="voteA" data-sondage-vote="${s.id}" data-cote="A">${sondageVignette(s.optionA)}<br>${esc(s.optionA.texte)}</button>
+         <button class="voteB" data-sondage-vote="${s.id}" data-cote="B">${sondageVignette(s.optionB)}<br>${esc(s.optionB.texte)}</button>
        </div>`;
   return `<div class="sondageCard" data-sondage-id="${s.id}">
-    ${s.question ? `<p class="sondageQuestion">${esc(s.question)}</p>` : ""}
+    ${s.question ? `<p class="sondageQuestion">${estBattle ? "⚔️ " : ""}${esc(s.question)}</p>` : ""}
     ${boutonsOuResultat}
+    ${recompenseTag}
   </div>`;
 }
 
@@ -3951,6 +4240,13 @@ function renderSondages(){
     if (i >= 0) sondagesActifs[i] = s; else sondagesActifs.push(s);
     renderSondages();
     majBadgeSondages();
+    // Récompense individuelle : donnée immédiatement par le serveur, on l'affiche aussitôt.
+    if (s.recompenseGagnee && (s.recompenseGagnee.tickets || s.recompenseGagnee.xp)){
+      setCredits(credits + (s.recompenseGagnee.tickets || 0));
+      chargerQuetes();
+      bandeauNotif(`<span style="font-size:24px">🎁</span><span><b>+${s.recompenseGagnee.tickets || 0} tickets · +${s.recompenseGagnee.xp || 0} xp</b>
+        <small>Merci d'avoir voté !</small></span>`);
+    }
   });
 }
 
@@ -4139,19 +4435,22 @@ async function remplirCarteProfil(){
       : `${me?.pseudo}, fidèle au poste`;
 
   $("mesStatsDetaillees").innerHTML = "<p class='note' style='grid-column:1/-1;text-align:center;'>Chargement de vos statistiques...</p>";
+  $("profilNiveauBloc").innerHTML = "";
+  $("profilPepitesBloc").innerHTML = "";
   $("photoMsg").textContent = "";
 
   const f = await fetch(`/api/players/${encodeURIComponent(me.id)}/fiche`).then(r => r.ok ? r.json() : null).catch(() => null);
 
   if (f) {
     const rang = (r) => r ? `${r.rang}<sup style="font-size:11px">e</sup>` : "—";
+    $("profilNiveauBloc").innerHTML = niveauMiniHTML(f.niveau ?? me.niveau ?? 0, f.reste, f.requis);
+    $("profilPepitesBloc").innerHTML = pepitesMiniHTML(f.pepites);
     $("mesStatsDetaillees").innerHTML = `
       <div><small>Points au total</small><b>${f.scoreGlobal}</b></div>
       <div><small>Parties jouées</small><b>${f.partiesGlobales}</b></div>
       <div><small>Moyenne par partie</small><b>${f.moyenne}</b></div>
       <div><small>Amis</small><b>${f.amis}</b></div>
       <div><small>Tickets bonus</small><b>${me.credits ?? 0}</b></div>
-      <div><small>Niveau</small><b>${me.niveau || 0}</b></div>
       <div class="large"><small>Rang global · rang de la saison</small>
         <b>${rang(f.rangGlobal)} · ${rang(f.rangSaison)}</b></div>`;
   } else {
@@ -4630,19 +4929,41 @@ $("btnJoin").onclick = () => {
 function renderLobby(s){
   state.mode = s.mode;
   state.hostId = s.hostId;
+  state.isHost = s.hostId === me?.id;
   $("marquee").innerHTML = s.code.split("").map(c => `<span class="flap">${c}</span>`).join("");
   $("lobbyCount").textContent = `${MODE_NAMES[s.mode]} — ${s.players.length} joueur${s.players.length>1?"s":""}`;
   $("lobbyPlayers").innerHTML = s.players.map(p =>
-    `<li class="${p.team||""} ${p.online === false ? "off" : ""}" data-joueur="${esc(p.userId||"")}" data-pseudo="${esc(p.pseudo)}"
-       data-avatar="${p.avatar||"🎬"}" data-photo="${p.photo||""}" style="cursor:pointer; ${p.online === false ? "opacity:0.5;" : ""}" title="${p.online === false ? "Déconnecté" : "Voir ce joueur"}">
-       <span class="dot ${p.online !== false ? "on" : ""}"></span>${vignette(p)} ${esc(p.pseudo)} ${insigneFondateur(p)}</li>`).join("");
+    `<li class="${p.team||""} ${p.online === false ? "off" : ""}" ${p.bot ? "" : `data-joueur="${esc(p.userId||"")}" data-pseudo="${esc(p.pseudo)}" data-avatar="${p.avatar||"🎬"}" data-photo="${p.photo||""}"`}
+       style="${p.bot ? "" : "cursor:pointer;"} ${p.online === false ? "opacity:0.5;" : ""}" title="${p.bot ? "Bot" : p.online === false ? "Déconnecté" : "Voir ce joueur"}">
+       <span class="dot ${p.online !== false ? "on" : ""}"></span>${p.bot ? p.avatar : vignette(p)} ${esc(p.pseudo)} ${p.bot ? "" : insigneFondateur(p)}</li>`).join("");
   $("lobbyPlayers").querySelectorAll("[data-joueur]").forEach(li => li.onclick = () =>
     ouvrirJoueur(li.dataset.joueur, li.dataset.pseudo, li.dataset.avatar, li.dataset.photo || null));
   $("teamPicker").classList.toggle("hidden", s.mode !== "teams");
-  state.isHost = s.hostId === me?.id;
   $("btnStart").classList.toggle("hidden", !state.isHost);
   $("hostNote").classList.toggle("hidden", state.isHost);
+
+  // Défier un bot : proposé à l'hôte seul dans un salon en duel, tant que personne
+  // d'autre (humain ou bot) ne l'a encore rejoint.
+  const aBot = s.players.some(p => p.bot);
+  $("botBloc").classList.toggle("hidden", !(s.mode === "duel" && state.isHost && s.players.length === 1));
+  $("botPresentBloc").classList.toggle("hidden", !aBot);
+  if (aBot) $("botPresentTexte").textContent = `🤖 ${s.players.find(p => p.bot).pseudo} a rejoint la partie.`;
+  $("btnRetirerBot").classList.toggle("hidden", !aBot || !state.isHost);
 }
+$("botChoixNiveau").querySelectorAll("[data-bot-niveau]").forEach(b => b.onclick = () => {
+  $("botMsg").textContent = "";
+  socket.emit("room:add-bot", {code: state.code, niveau: b.dataset.botNiveau}, res => {
+    if (!res?.ok){
+      $("botMsg").textContent = "Impossible d'ajouter un bot pour l'instant.";
+      $("botMsg").className = "feedback bad";
+      return;
+    }
+    renderLobby(res.state);
+  });
+});
+$("btnRetirerBot").onclick = () => {
+  socket.emit("room:remove-bot", {code: state.code}, res => { if (res?.ok) renderLobby(res.state); });
+};
 document.querySelectorAll("[data-team]").forEach(b =>
   b.onclick = () => socket.emit("team:choose", {code:state.code, team:b.dataset.team}));
 $("btnStart").onclick = () => socket.emit("game:start", {code:state.code});
@@ -4704,8 +5025,8 @@ function renderCoeursJoueurs(players){
     const max = p.coeursMax ?? 3;
     const restants = p.coeurs ?? max;
     const coeurs = Array.from({length: max}, (_, i) => `<span class="${i < restants ? "" : "perdu"}">❤️</span>`).join("");
-    const moi = p.userId === me?.id ? " (vous)" : "";
-    return `<li class="${p.team||""} ${p.online === false ? "off" : ""}">${vignette(p)} ${esc(p.pseudo)}${moi}<span class="coeurs mini">${coeurs}</span></li>`;
+    const moi = p.userId === me?.id ? " (vous)" : p.bot ? " 🤖" : "";
+    return `<li class="${p.team||""} ${p.online === false ? "off" : ""}">${p.bot ? p.avatar : vignette(p)} ${esc(p.pseudo)}${moi}<span class="coeurs mini">${coeurs}</span></li>`;
   }).join("");
 }
 
