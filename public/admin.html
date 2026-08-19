@@ -91,6 +91,7 @@
       <button id="tabRoue" aria-selected="false">Roue</button>
       <button id="tabMusique" aria-selected="false">Musique</button>
       <button id="tabPub" aria-selected="false">Publicités</button>
+      <button id="tabApparence" aria-selected="false">Apparence</button>
       <button id="tabClassement" aria-selected="false">Partie classée</button>
     </div>
 
@@ -348,7 +349,9 @@
           Une fois son tour gratuit quotidien utilisé, le joueur peut soit payer en tickets, soit
           regarder l'une de ces publicités (tirée au hasard parmi celles activées) pour obtenir un
           tour gratuit à la place — jusqu'à 5 fois par jour. Image : une affiche fixe pendant la durée
-          indiquée. Vidéo : un lien direct (mp4/webm) ou un lien YouTube.
+          indiquée. Vidéo : un lien direct (mp4/webm) ou un lien YouTube. Lien direct : compatible
+          avec les régies publicitaires (Adsterra « Direct Link » et équivalents) — pas d'aperçu
+          intégré possible, le lien s'ouvre dans un nouvel onglet pendant le décompte.
         </p>
         <label for="pubTitreInput">Titre / nom du sponsor</label>
         <input id="pubTitreInput" placeholder="Ex : Cinéma Rex — programme de la semaine">
@@ -356,9 +359,11 @@
         <select id="pubTypeInput">
           <option value="image">Image</option>
           <option value="video">Vidéo (fichier direct ou lien YouTube)</option>
+          <option value="lien">Lien direct (régie publicitaire type Adsterra)</option>
         </select>
-        <label for="pubUrlInput" style="margin-top:10px">Lien de l'image ou de la vidéo</label>
+        <label for="pubUrlInput" id="pubUrlLabel" style="margin-top:10px">Lien de l'image ou de la vidéo</label>
         <input id="pubUrlInput" placeholder="https://…">
+        <p style="color:var(--muted);font-size:12px;margin:-6px 0 10px" id="pubUrlAide"></p>
         <label for="pubCibleInput" style="margin-top:10px">Lien cible (facultatif — non utilisé pour l'instant côté joueur)</label>
         <input id="pubCibleInput" placeholder="https://…">
         <label for="pubDureeInput" style="margin-top:10px">Durée minimale de visionnage avant de pouvoir récupérer le tour (secondes)</label>
@@ -370,6 +375,34 @@
         <p class="tag" id="pubCount">Publicités</p>
         <div id="pubListe"></div>
       </div>
+    </div>
+
+    <div id="paneApparence" class="hidden">
+      <div class="card">
+        <p class="tag">🎨 Couleurs</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6">
+          S'appliquent à l'ensemble du site, au prochain chargement de page pour chaque joueur
+          (pas en temps réel pendant une partie en cours).
+        </p>
+        <div id="apparenceCouleurs" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px 16px"></div>
+      </div>
+      <div class="card">
+        <p class="tag">🔤 Polices</p>
+        <div id="apparencePolices"></div>
+      </div>
+      <div class="card">
+        <p class="tag">↕️ Ordre des modules du menu</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6">
+          Change l'ordre d'affichage des blocs du menu principal (boutons, roue, modes de jeu…).
+          Utilisez ▲▼ pour déplacer un module.
+        </p>
+        <div id="apparenceOrdre"></div>
+      </div>
+      <div class="row">
+        <button id="btnApparenceSave">Enregistrer l'apparence</button>
+        <button class="ghost" id="btnApparenceReset">Réinitialiser l'apparence</button>
+      </div>
+      <p class="msg" id="apparenceMsg"></p>
     </div>
 
     <div id="paneClassement" class="hidden">
@@ -914,6 +947,7 @@ function tab(which){
                                       ["roue","tabRoue","paneRoue"],
                                       ["musique","tabMusique","paneMusique"],
                                       ["pub","tabPub","panePub"],
+                                      ["apparence","tabApparence","paneApparence"],
                                       ["classement","tabClassement","paneClassement"],
                                       ["users","tabUsers","paneUsers"],
                                       ["reports","tabReports","paneReports"],
@@ -928,6 +962,7 @@ function tab(which){
   if (which === "roue"){ loadRoue(); loadVipDemandes(); }
   if (which === "musique") loadMusique();
   if (which === "pub") loadPublicites();
+  if (which === "apparence") loadApparence();
   if (which === "classement") loadClassement();
   if (which === "users") loadUsers();
   if (which === "reports"){ loadReports(); loadConversations(); }
@@ -941,6 +976,7 @@ $("tabCitations").onclick = () => tab("citations");
 $("tabRoue").onclick = () => tab("roue");
 $("tabMusique").onclick = () => tab("musique");
 $("tabPub").onclick = () => tab("pub");
+$("tabApparence").onclick = () => tab("apparence");
 $("tabClassement").onclick = () => tab("classement");
 $("tabUsers").onclick = () => tab("users");
 $("tabReports").onclick = () => tab("reports");
@@ -1694,7 +1730,7 @@ async function loadReports(){
         <div class="item" data-item="${esc(p.id)}">
           <div>
             <strong>${esc(p.titre)}</strong> ${p.actif === false ? "<span class='tag' style='color:var(--muted)'>désactivée</span>" : "<span class='tag' style='color:var(--teal)'>active</span>"}<br>
-            <small>${p.type === "video" ? "🎬 vidéo" : "🖼️ image"} · ${p.duree || 15}s min · <a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.url)}</a></small>
+            <small>${p.type === "video" ? "🎬 vidéo" : p.type === "lien" ? "🔗 lien direct" : "🖼️ image"} · ${p.duree || 15}s min · <a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.url)}</a></small>
             ${p.cible ? `<br><small>Lien cible : ${esc(p.cible)}</small>` : ""}
           </div>
           <div style="display:flex;gap:6px">
@@ -1721,6 +1757,18 @@ async function loadReports(){
       });
     }
 
+    const PUB_AIDE = {
+      image: "Lien direct vers un fichier image (jpg, png, webp…).",
+      video: "Lien vers un fichier vidéo (mp4, webm…) ou une URL YouTube.",
+      lien: "Collez ici l'URL fournie par votre régie (ex : le « Direct Link » généré depuis votre tableau de bord Adsterra). Elle s'ouvrira dans un nouvel onglet pendant le décompte, sans aperçu intégré.",
+    };
+    function majPubAide(){
+      $("pubUrlLabel").textContent = $("pubTypeInput").value === "lien" ? "Lien direct (URL de la régie publicitaire)" : "Lien de l'image ou de la vidéo";
+      $("pubUrlAide").textContent = PUB_AIDE[$("pubTypeInput").value] || "";
+    }
+    $("pubTypeInput").onchange = majPubAide;
+    majPubAide();
+
     $("btnPubAjouter").onclick = async () => {
       const titre = $("pubTitreInput").value.trim();
       const type = $("pubTypeInput").value;
@@ -1741,6 +1789,92 @@ async function loadReports(){
         $("pubFeedback").textContent = "Lien invalide ou refusé.";
         $("pubFeedback").className = "msg err";
       }
+    };
+
+    /* ---------- Apparence (couleurs, polices, ordre des modules) ---------- */
+    const APPARENCE_COULEURS = [
+      ["ink", "Fond principal"], ["velvet", "Fond des sections"], ["card", "Fond des cartes"],
+      ["beam", "Accent principal (boutons, prix)"], ["ticket", "Accent rouge (alertes, tickets)"],
+      ["teal", "Accent turquoise (secondaire)"], ["chalk", "Texte principal"], ["muted", "Texte discret"],
+    ];
+    const APPARENCE_POLICES = {
+      affiche: { label: "Titres / affiche", options: ["Anton","Bebas Neue","Bangers","Archivo Black","Oswald","Montserrat"] },
+      corps: { label: "Corps de texte", options: ["Inter","Roboto","Poppins","Montserrat","Nunito"] },
+      etiquette: { label: "Étiquettes / petits libellés", options: ["Oswald","Barlow Condensed","Teko","Rajdhani","Bebas Neue","Montserrat"] },
+    };
+    const APPARENCE_MODULES = {
+      sorties: "🍿 Sorties Ciné / Actuellement au cinéma",
+      cinemas: "📍 Cinéma le plus proche",
+      niveau: "🏅 Barre de niveau",
+      quotidien: "🎂 Nés aujourd'hui / 🎡 Roue du jour",
+      modes: "🎮 Modes de jeu (Solo, Duel, Chacun pour soi…)",
+      actions: "🔗 Espace échange, Classement, Quêtes, Amis…",
+      admin: "⚙️ Modération, Administration, Suggestions",
+      repost: "🎉 Bandeau « suggestion à publier »",
+      rejoindre: "🔑 Rejoindre un salon",
+    };
+    let ordreMenuActuel = [];
+
+    function rendreOrdreModules(){
+      $("apparenceOrdre").innerHTML = ordreMenuActuel.map((id, i) => `
+        <div class="item" data-item="${esc(id)}">
+          <div>${esc(APPARENCE_MODULES[id] || id)}</div>
+          <div style="display:flex;gap:6px">
+            <button class="ghost" data-move-mod="${esc(id)}" data-dir="haut" ${i === 0 ? "disabled" : ""}>▲</button>
+            <button class="ghost" data-move-mod="${esc(id)}" data-dir="bas" ${i === ordreMenuActuel.length - 1 ? "disabled" : ""}>▼</button>
+          </div>
+        </div>`).join("");
+      $("apparenceOrdre").querySelectorAll("[data-move-mod]").forEach((btn) => {
+        btn.onclick = () => {
+          const i = ordreMenuActuel.indexOf(btn.dataset.moveMod);
+          const j = btn.dataset.dir === "haut" ? i - 1 : i + 1;
+          if (j < 0 || j >= ordreMenuActuel.length) return;
+          [ordreMenuActuel[i], ordreMenuActuel[j]] = [ordreMenuActuel[j], ordreMenuActuel[i]];
+          rendreOrdreModules();
+        };
+      });
+    }
+
+    async function loadApparence(){
+      await chargerReglages();
+      const theme = reglages?.theme || {};
+      $("apparenceCouleurs").innerHTML = APPARENCE_COULEURS.map(([cle, label]) => `
+        <label style="margin:0">
+          <span style="display:block;margin-bottom:4px">${esc(label)}</span>
+          <input type="color" data-couleur="${cle}" value="${esc(theme.couleurs?.[cle] || "#000000")}" style="width:100%;height:38px;padding:2px;cursor:pointer">
+        </label>`).join("");
+
+      $("apparencePolices").innerHTML = Object.entries(APPARENCE_POLICES).map(([role, def]) => `
+        <label style="margin-top:10px">${esc(def.label)}</label>
+        <select data-police="${role}">
+          ${def.options.map((f) => `<option value="${esc(f)}" ${theme.polices?.[role] === f ? "selected" : ""} style="font-family:'${esc(f)}'">${esc(f)}</option>`).join("")}
+        </select>`).join("");
+
+      const modulesConnus = Object.keys(APPARENCE_MODULES);
+      const sauve = Array.isArray(theme.ordre?.menu) ? theme.ordre.menu.filter((id) => modulesConnus.includes(id)) : [];
+      ordreMenuActuel = [...sauve, ...modulesConnus.filter((id) => !sauve.includes(id))];
+      rendreOrdreModules();
+    }
+
+    $("btnApparenceSave").onclick = async () => {
+      const couleurs = {};
+      $("apparenceCouleurs").querySelectorAll("[data-couleur]").forEach((el) => { couleurs[el.dataset.couleur] = el.value; });
+      const polices = {};
+      $("apparencePolices").querySelectorAll("[data-police]").forEach((el) => { polices[el.dataset.police] = el.value; });
+      const res = await api("/api/admin/theme", { method: "PUT",
+        body: JSON.stringify({ couleurs, polices, ordre: { menu: ordreMenuActuel } }) });
+      $("apparenceMsg").textContent = res.ok
+        ? "Apparence enregistrée. Elle s'appliquera au prochain chargement de page pour chaque joueur."
+        : "Enregistrement refusé.";
+      $("apparenceMsg").className = res.ok ? "msg ok" : "msg err";
+    };
+
+    $("btnApparenceReset").onclick = async () => {
+      if (!confirm("Rétablir les couleurs, polices et l'ordre des modules d'origine ?")) return;
+      await api("/api/admin/theme/defaut", { method: "POST" });
+      await loadApparence();
+      $("apparenceMsg").textContent = "Apparence remise à ses valeurs d'origine.";
+      $("apparenceMsg").className = "msg ok";
     };
 
     /* ---------- Partie classée ---------- */

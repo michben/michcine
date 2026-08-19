@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#0A0C16">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MichBen Ciné Quizz — devinez le film</title>
-<link href="https://fonts.googleapis.com/css2?family=Anton&family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Bebas+Neue&family=Bangers&family=Archivo+Black&family=Oswald:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=Poppins:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&family=Barlow+Condensed:wght@400;500;600;700&family=Teko:wght@400;500;600;700&family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
 <style>
   :root{--ink:#0A0C16;--velvet:#151A2E;--card:#1C2238;--beam:#F5B942;--ticket:#E4586E;--teal:#4ECDC4;--chalk:#EDE8DC;--muted:#7C819B;
     --font-affiche:'Anton',sans-serif; --font-corps:'Inter',system-ui,sans-serif; --font-etiquette:'Oswald','Inter',system-ui,sans-serif; --font-code:'JetBrains Mono',monospace}
@@ -499,6 +499,10 @@ html.mode-enfant-actif .wrap{padding-top:48px}
 /* --- LA FENÊTRE MODALE --- */
 .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.85); display: none; justify-content: center; align-items: center; z-index: 1001; opacity: 0; transition: opacity 0.3s ease; }
 .modal-overlay.active { display: flex; opacity: 1; }
+/* La bande-annonce peut s'ouvrir par-dessus une autre fenêtre déjà affichée (Sorties Ciné,
+   Actuellement au cinéma) : elle doit toujours passer au-dessus, quel que soit son ordre dans
+   le document, sans quoi elle peut se retrouver masquée derrière la fenêtre qui l'a ouverte. */
+#trailerModal.active { z-index: 1002; }
 .modal-content { background-color: #1a1a1a; border: 1px solid #333; border-radius: 12px; width: 90%; max-width: 600px; max-height: 80vh; overflow-y: auto; position: relative; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7); transform: translateY(-20px); transition: transform 0.3s ease; color: #fff;}
 .modal-overlay.active .modal-content { transform: translateY(0); }
 .modal-header { background: #111; padding: 20px; border-bottom: 2px solid #222; border-radius: 12px 12px 0 0; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; }
@@ -925,15 +929,15 @@ html.mode-enfant-actif .wrap{padding-top:48px}
     <h2 id="hello">Bonjour</h2>
     <p class="wallet" id="walletMenu" style="cursor:pointer" title="Voir l'historique de vos tickets et points">🎟️ <b>0</b> crédits</p>
     <p class="online" id="btnOnlineUsers" style="cursor:pointer" title="Voir vos amis en ligne"><span class="dot on"></span><b id="onlineNb">—</b><span id="onlineCount">amis en ligne</span></p>
-    <div class="row" style="margin-bottom: 14px; gap: 10px;">
+    <div class="row" style="margin-bottom: 14px; gap: 10px;" data-module="sorties">
       <button id="btnUpcomingMovies" style="flex:1; padding: 10px 16px; background: var(--beam); color: #0A0C16; font-weight: bold; border: 0; border-radius: 999px; cursor: pointer;">🍿 Sorties Ciné</button>
       <button id="btnNowPlaying" style="flex:1; padding: 10px 16px; background: var(--teal); color: #0A0C16; font-weight: bold; border: 0; border-radius: 999px; cursor: pointer;">🎥 Actuellement au cinéma</button>
     </div>
-    <div class="row" style="margin-bottom: 14px;">
+    <div class="row" style="margin-bottom: 14px;" data-module="cinemas">
       <button id="btnCinemasProches" class="ghost" style="border-color: var(--ticket); color: var(--ticket);">📍 Cinéma le plus proche</button>
     </div>
 
-    <div class="barreNiveau" id="barreNiveau">
+    <div class="barreNiveau" id="barreNiveau" data-module="niveau">
       <div class="niveauTete">
         <span class="pastilleNiveau" id="niveauNum">0</span>
         <span class="niveauTexte">🏅 Niveau <b id="niveauLabel">0</b></span>
@@ -941,19 +945,21 @@ html.mode-enfant-actif .wrap{padding-top:48px}
       </div>
       <div class="jauge"><i id="niveauJauge" style="width:0%"></i></div>
     </div>
-    <p class="tag" style="margin-top:18px">Choisissez votre partie</p>
-    <div class="row" style="margin-bottom: 14px;">
-      <button id="btnBirthdays" class="ghost" style="border-color: var(--teal); color: var(--teal);">🎂 Nés aujourd'hui</button>
-      <button id="btnRoue" class="ghost" style="border-color: var(--beam); color: var(--beam);">🎡 Roue du jour <span id="badgeRoue" class="pastille hidden">GRATUIT</span></button>
+    <div data-module="quotidien">
+      <p class="tag" style="margin-top:18px">Choisissez votre partie</p>
+      <div class="row" style="margin-bottom: 14px;">
+        <button id="btnBirthdays" class="ghost" style="border-color: var(--teal); color: var(--teal);">🎂 Nés aujourd'hui</button>
+        <button id="btnRoue" class="ghost" style="border-color: var(--beam); color: var(--beam);">🎡 Roue du jour <span id="badgeRoue" class="pastille hidden">GRATUIT</span></button>
+      </div>
     </div>
-    <div class="modes">
+    <div class="modes" data-module="modes">
       <button class="mode" data-mode="solo"><span class="ic">🎬</span><span><b>Solo</b><small>Contre le chrono, pour s'entraîner</small></span></button>
       <button class="mode" data-mode="duel"><span class="ic">⚔️</span><span><b>Duel</b><small>Deux joueurs, face à face</small></span></button>
       <button class="mode" data-mode="ffa"><span class="ic">🍿</span><span><b>Chacun pour soi</b><small>De 2 à 16 joueurs, classement individuel</small></span></button>
       <button class="mode" data-mode="teams"><span class="ic">🏆</span><span><b>En équipes</b><small>Deux équipes, scores cumulés</small></span></button>
       <button class="mode" data-mode="ranked"><span class="ic">📈</span><span><b>Partie classée</b><small id="rankedSous">Vos points comptent au classement de la saison</small></span></button>
     </div>
-    <div class="row">
+    <div class="row" data-module="actions">
       <button class="ghost" id="btnExchange">Espace échange</button>
       <button class="ghost" id="btnBoard">Classement</button>
       <button class="ghost" id="btnQuetes">Quêtes <span id="badgeQuetes" class="pastille hidden">0</span></button>
@@ -962,17 +968,17 @@ html.mode-enfant-actif .wrap{padding-top:48px}
       <button class="ghost" id="btnKidMode" aria-pressed="false" title="Mode enfant : uniquement des films pour enfants">🐻</button>
       <button class="ghost" id="btnProfile">Profil</button>
     </div>
-        <div class="row"><button class="ghost hidden" id="btnModeration">Modération</button>
+        <div class="row" data-module="admin"><button class="ghost hidden" id="btnModeration">Modération</button>
       <button class="ghost hidden" id="btnAdminAccess" style="border-color:var(--beam); color:var(--beam)">⚙️ Administration</button>
       <button class="ghost" id="btnSuggestion" style="border-color:var(--teal); color:var(--teal)">💡 Suggérer un film</button>
       <button class="ghost" id="btnFilmsSuggeres" style="border-color:var(--ticket); color:var(--ticket)">🎟️ Suggestions retenues</button>
     </div>
-    <div class="row">
+    <div class="row" data-module="repost">
       <button class="ghost hidden" id="btnSuggARepost" style="border-color:var(--beam); color:var(--beam)">
         🎉 Suggestion retenue à publier <span id="badgeSuggARepost" class="pastille hidden">0</span>
       </button>
     </div>
-    <div class="card">
+    <div class="card" data-module="rejoindre">
       <label for="joinCode">Rejoindre un salon existant</label>
       <input id="joinCode" maxlength="4" placeholder="ABCD" autocomplete="off">
       <div class="row"><button id="btnJoin" class="ghost">Rejoindre</button></div>
@@ -2015,8 +2021,50 @@ async function chargerMesSuggestionsProfil(){
   });
 }
 
+/** Chaîne de secours (fallback) à ajouter après le nom de la police choisie, par rôle —
+ *  reprend les mêmes filets que les valeurs par défaut d'origine. */
+const POLICE_FALLBACK = {
+  affiche: "sans-serif",
+  corps: "system-ui, sans-serif",
+  etiquette: "'Inter', system-ui, sans-serif",
+};
+
+/** Applique la personnalisation graphique choisie en console admin (couleurs, polices, ordre
+ *  des modules du menu) — appelée une seule fois au chargement, avant l'affichage du menu.
+ *  Sans configuration ou en cas d'erreur, l'apparence d'origine du site reste inchangée. */
+function appliquerTheme(theme){
+  if (!theme) return;
+  try {
+    const racine = document.documentElement.style;
+    if (theme.couleurs) {
+      for (const [cle, valeur] of Object.entries(theme.couleurs)) {
+        if (/^#[0-9a-fA-F]{6}$/.test(valeur || "")) racine.setProperty(`--${cle}`, valeur);
+      }
+    }
+    if (theme.polices) {
+      for (const [role, nom] of Object.entries(theme.polices)) {
+        if (nom && POLICE_FALLBACK[role]) racine.setProperty(`--font-${role}`, `'${nom}', ${POLICE_FALLBACK[role]}`);
+      }
+    }
+    const ordreMenu = theme.ordre?.menu;
+    if (Array.isArray(ordreMenu)) {
+      const conteneur = document.getElementById("menu");
+      ordreMenu.forEach(id => {
+        const el = conteneur?.querySelector(`[data-module="${id}"]`);
+        if (el) conteneur.appendChild(el);
+      });
+    }
+  } catch (e) {
+    console.error("Personnalisation graphique ignorée :", e);
+  }
+}
+
 fetch("/api/config").then(r => r.json())
-  .then(c => { $("tipLink").href = c.tipUrl; tauxTicket = c.pointsParTicket || tauxTicket; if (c.animationsAvancees !== false) document.body.classList.add("animations-actives"); })
+  .then(c => {
+    $("tipLink").href = c.tipUrl; tauxTicket = c.pointsParTicket || tauxTicket;
+    if (c.animationsAvancees !== false) document.body.classList.add("animations-actives");
+    appliquerTheme(c.theme);
+  })
   .catch(() => $("tipLink").classList.add("hidden"));
 
 /* ---------- Session ---------- */
@@ -2298,9 +2346,13 @@ $("msgSignaler").onclick = async () => {
 
 /** Pastille des messages non lus, cumulée avec celle des demandes d'amis. */
 let messagesNonLus = 0;
+// Détail par ami (id -> nombre de messages non lus de sa part), pour afficher directement
+// dans la liste d'amis qui a écrit, sans devoir ouvrir chaque conversation une par une.
+let messagesNonLusParAmi = {};
 async function majBadgeMessages(){
   const r = await fetch("/api/messages").then(x => x.json()).catch(() => null);
   messagesNonLus = r?.total ?? 0;
+  messagesNonLusParAmi = r?.parAmi ?? {};
   majBadgeAmis();
   return messagesNonLus;
 }
@@ -2962,7 +3014,11 @@ async function ouvrirPub(){
   $("pubTitre").textContent = `🎬 ${pub.titre || "Publicité"}`;
 
   const idYoutube = pub.type === "video" ? idYoutubeDepuisUrl(pub.url) : null;
-  if (pub.type === "image"){
+  if (pub.type === "lien"){
+    // Format « lien direct » (compatible régies type Adsterra Direct Link) : pas d'aperçu
+    // intégré possible, on ouvre le sponsor dans un nouvel onglet et on affiche le décompte ici.
+    window.open(pub.url, "_blank", "noopener");
+  } else if (pub.type === "image"){
     $("pubZoneImage").classList.remove("hidden");
     $("pubImage").src = pub.url;
   } else if (idYoutube){
@@ -2976,7 +3032,10 @@ async function ouvrirPub(){
 
   const duree = Math.max(3, Number(pub.duree) || 15);
   let restant = duree;
-  $("pubMsg").textContent = `Merci de patienter ${restant} s avant de récupérer votre tour gratuit…`;
+  const msgAttente = () => pub.type === "lien"
+    ? `Le sponsor s'est ouvert dans un nouvel onglet — revenez ici, votre tour se débloque dans ${restant} s…`
+    : `Merci de patienter ${restant} s avant de récupérer votre tour gratuit…`;
+  $("pubMsg").textContent = msgAttente();
   if (minuteurPub) clearInterval(minuteurPub);
   minuteurPub = setInterval(() => {
     restant -= 1;
@@ -2987,7 +3046,7 @@ async function ouvrirPub(){
       $("btnPubContinuer").disabled = false;
       $("btnPubContinuer").textContent = "🎁 Récupérer mon tour gratuit";
     } else {
-      $("pubMsg").textContent = `Merci de patienter ${restant} s avant de récupérer votre tour gratuit…`;
+      $("pubMsg").textContent = msgAttente();
     }
   }, 1000);
 }
@@ -3271,17 +3330,28 @@ $("btnFriends").onclick = () => { chargerAmis(); majBadgeAmis(); show("friends")
 $("btnAmisBack").onclick = () => show("menu");
 
 function ligneJoueur(j, boutons){
+  // Nombre de messages non lus envoyés par ce joueur précis (0 si aucun) — permet de voir
+  // d'un coup d'œil qui a écrit, sans ouvrir chaque conversation une par une.
+  const nonLus = messagesNonLusParAmi[j.id] || 0;
   return `<div class="amiLigne">
     <span class="dot ${j.online ? "on" : ""}"></span>
     <span class="nom" data-fiche="${esc(j.id)}" data-pseudo="${esc(j.pseudo)}"
       data-avatar="${j.avatar||"🎬"}" data-photo="${esc(j.photo||"")}"
-      style="cursor:pointer">${vignette(j)} ${esc(j.pseudo)} ${insigneFondateur(j)}</span>
+      style="cursor:pointer">${vignette(j)} ${esc(j.pseudo)} ${insigneFondateur(j)}${
+        nonLus ? ` <span class="pastille" title="${nonLus} message${nonLus>1?"s":""} non lu${nonLus>1?"s":""}">${nonLus}</span>` : ""
+      }</span>
     ${j.enPartie ? `<button class="ghost" data-act="regarder" data-id="${esc(j.id)}"
        title="Regarder sa partie en direct" style="padding:6px 10px; font-size:15px;
        background:#3DDC84; color:#0A2015; border-color:#3DDC84">👁️ en direct</button>` : ""}
     <div style="display:flex; gap:6px; flex-wrap:wrap;">
-    ${boutons.map(([a, l]) =>
-      `<button class="ghost" data-act="${a}" data-id="${esc(j.id)}" title="${a}" style="padding:6px 10px; font-size:15px;">${l}</button>`).join("")}
+    ${boutons.map(([a, l]) => {
+      const alerte = a === "message" && nonLus > 0;
+      const style = alerte
+        ? "padding:6px 10px; font-size:15px; border-color:var(--ticket); color:var(--ticket); font-weight:bold;"
+        : "padding:6px 10px; font-size:15px;";
+      const titre = alerte ? `${nonLus} message${nonLus>1?"s":""} non lu${nonLus>1?"s":""} de ${esc(j.pseudo)}` : a;
+      return `<button class="ghost" data-act="${a}" data-id="${esc(j.id)}" title="${titre}" style="${style}">${l}</button>`;
+    }).join("")}
     </div>
   </div>`;
 }
@@ -3313,7 +3383,12 @@ function brancher(){
 }
 
 async function chargerAmis(){
-  const brut = await fetch("/api/friends").then(x => x.json()).catch(() => null);
+  // Les deux appels sont indépendants : on les lance en parallèle plutôt que d'attendre l'un
+  // puis l'autre, pour que la liste d'amis avec les pastilles « qui a écrit » reste rapide.
+  const [brut] = await Promise.all([
+    fetch("/api/friends").then(x => x.json()).catch(() => null),
+    ongletAmis === "amis" ? majBadgeMessages() : Promise.resolve(),
+  ]);
   const r = { amis: [], recues: [], envoyees: [], bloques: [], ...(brut || {}) };
   // le bloc d'invitation n'a de sens qu'avec au moins un ami, et en multijoueur
   $("inviterBloc").classList.toggle("hidden",
@@ -4570,6 +4645,9 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
                 <h2>📍 Cinémas à proximité</h2>
                 <button class="close-btn" id="closeCinemasBtn">&times;</button>
             </div>
+            <div class="row" style="padding:0 20px;margin-top:10px">
+                <button class="ghost" id="btnCinemasRelancer" style="border-color: var(--ticket); color: var(--ticket);">🎯 Relancer ma localisation</button>
+            </div>
             <div class="modal-body" id="cinemasList" style="max-height: 60vh; overflow-y: auto;">
                 <p class="note" style="text-align:center">Localisation en cours…</p>
             </div>
@@ -4862,8 +4940,9 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
         trailerModal.addEventListener("click", (e) => { if (e.target === trailerModal) fermerTrailer(); });
 
         /* Cinémas à proximité : géolocalisation du navigateur puis recherche des salles les plus
-           proches (OpenStreetMap, gratuit) avec identification des grandes enseignes. */
+           proches (OpenStreetMap, gratuit, rayon de 50 km) avec identification des grandes enseignes. */
         const btnCinemasProches = document.getElementById("btnCinemasProches");
+        const btnCinemasRelancer = document.getElementById("btnCinemasRelancer");
         const cinemasModal = document.getElementById("cinemasModal");
         const closeCinemasBtn = document.getElementById("closeCinemasBtn");
         const ENSEIGNE_COULEUR = {
@@ -4871,52 +4950,72 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
             "Pathé": "#a78bfa", "CGR": "#60a5fa", "Cinéville": "#f472b6",
             "Kinepolis": "#34d399", "Megarama": "#fb923c",
         };
+        /** Relance la géolocalisation puis la recherche des cinémas — utilisé à l'ouverture de la
+         *  fenêtre et par le bouton « Relancer ma localisation » (position refusée, changement de
+         *  lieu, échec temporaire du service…) sans avoir à fermer/rouvrir la fenêtre. */
+        function lancerRechercheCinemas(){
+            const liste = document.getElementById("cinemasList");
+            if (!navigator.geolocation){
+                liste.innerHTML = "<p class='note' style='color:var(--ticket)'>La géolocalisation n'est pas disponible sur cet appareil ou ce navigateur.</p>";
+                return;
+            }
+            liste.innerHTML = "<p class='note' style='text-align:center'>Localisation en cours…</p>";
+            navigator.geolocation.getCurrentPosition(async (pos) => {
+                liste.innerHTML = "<p class='note' style='text-align:center'>Recherche des cinémas dans un rayon de 50 km… (peut prendre jusqu'à 20 secondes)</p>";
+                // Le service de recherche (Overpass) peut être lent : on borne l'attente pour
+                // ne jamais laisser le joueur face à un écran figé sans explication.
+                const controleur = new AbortController();
+                const minuteur = setTimeout(() => controleur.abort(), 22000);
+                try {
+                    const { latitude, longitude } = pos.coords;
+                    const res = await fetch(`/api/cinemas/proches?lat=${latitude}&lon=${longitude}`, { signal: controleur.signal });
+                    clearTimeout(minuteur);
+                    if (!res.ok){
+                        liste.innerHTML = "<p class='note' style='color:var(--ticket)'>Le service de recherche de cinémas est momentanément indisponible — réessayez dans quelques instants.</p>";
+                        return;
+                    }
+                    const data = await res.json();
+                    if (!data.cinemas || !data.cinemas.length){
+                        liste.innerHTML = "<p class='note'>Aucun cinéma trouvé dans un rayon de 50 km — essayez « Relancer ma localisation » si vous avez changé de lieu.</p>";
+                        return;
+                    }
+                    liste.innerHTML = `<p class="note" style="text-align:center;margin-bottom:10px">${data.cinemas.length} cinéma${data.cinemas.length>1?"s":""} trouvé${data.cinemas.length>1?"s":""} dans un rayon de 50 km</p>` +
+                        data.cinemas.map(c => {
+                        const couleur = ENSEIGNE_COULEUR[c.enseigne] || "var(--muted)";
+                        return `
+                        <div class="bday-item" style="border-left-color: ${couleur}; align-items:flex-start;">
+                            <div style="width:44px;height:44px;border-radius:8px;background:#222;display:flex;align-items:center;justify-content:center;font-size:20px;flex:0 0 auto;">🎥</div>
+                            <div class="info" style="flex:1;">
+                                <b>${esc(c.nom)}</b>
+                                <div style="display:flex;gap:6px;margin:6px 0;flex-wrap:wrap;align-items:center;">
+                                    <span style="font-size:11px;background:${couleur};padding:2px 8px;border-radius:4px;color:#161207;font-weight:bold;">${esc(c.enseigne)}</span>
+                                    <span style="font-size:12px;color:var(--muted)">📍 ${c.distanceKm} km</span>
+                                </div>
+                                <small>${esc([c.adresse, c.codePostal, c.ville].filter(Boolean).join(", ") || "Adresse non renseignée")}</small>
+                                <div class="row" style="margin-top:8px">
+                                    <a href="https://www.google.com/maps/dir/?api=1&destination=${c.lat},${c.lon}" target="_blank" rel="noopener" style="display:block;text-align:center;text-decoration:none;padding:8px 12px;font-size:13px;border-radius:8px;border:1px solid rgba(237,232,220,.22);color:var(--chalk)">🗺️ Itinéraire (GPS)</a>
+                                </div>
+                            </div>
+                        </div>`;
+                    }).join("");
+                } catch(e){
+                    clearTimeout(minuteur);
+                    liste.innerHTML = e?.name === "AbortError"
+                        ? "<p class='note' style='color:var(--ticket)'>La recherche a pris trop de temps — réessayez dans quelques instants.</p>"
+                        : "<p class='note' style='color:var(--ticket)'>Erreur lors de la recherche des cinémas.</p>";
+                }
+            }, (err) => {
+                liste.innerHTML = (err && err.code === err.PERMISSION_DENIED)
+                    ? "<p class='note' style='color:var(--ticket)'>Localisation refusée — autorisez l'accès à votre position (dans les réglages du navigateur ou du téléphone) puis cliquez sur « Relancer ma localisation ».</p>"
+                    : "<p class='note' style='color:var(--ticket)'>Impossible d'obtenir votre position — vérifiez que le GPS est activé puis cliquez sur « Relancer ma localisation ».</p>";
+            }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 });
+        }
         if (btnCinemasProches){
             btnCinemasProches.addEventListener("click", () => {
                 cinemasModal.classList.add("active");
-                const liste = document.getElementById("cinemasList");
-                if (!navigator.geolocation){
-                    liste.innerHTML = "<p class='note' style='color:var(--ticket)'>La géolocalisation n'est pas disponible sur cet appareil ou ce navigateur.</p>";
-                    return;
-                }
-                liste.innerHTML = "<p class='note' style='text-align:center'>Localisation en cours…</p>";
-                navigator.geolocation.getCurrentPosition(async (pos) => {
-                    liste.innerHTML = "<p class='note' style='text-align:center'>Recherche des cinémas à proximité…</p>";
-                    try {
-                        const { latitude, longitude } = pos.coords;
-                        const res = await fetch(`/api/cinemas/proches?lat=${latitude}&lon=${longitude}`);
-                        const data = await res.json();
-                        if (!data.cinemas || !data.cinemas.length){
-                            liste.innerHTML = "<p class='note'>Aucun cinéma trouvé à proximité.</p>";
-                            return;
-                        }
-                        liste.innerHTML = data.cinemas.map(c => {
-                            const couleur = ENSEIGNE_COULEUR[c.enseigne] || "var(--muted)";
-                            return `
-                            <div class="bday-item" style="border-left-color: ${couleur}; align-items:flex-start;">
-                                <div style="width:44px;height:44px;border-radius:8px;background:#222;display:flex;align-items:center;justify-content:center;font-size:20px;flex:0 0 auto;">🎥</div>
-                                <div class="info" style="flex:1;">
-                                    <b>${esc(c.nom)}</b>
-                                    <div style="display:flex;gap:6px;margin:6px 0;flex-wrap:wrap;align-items:center;">
-                                        <span style="font-size:11px;background:${couleur};padding:2px 8px;border-radius:4px;color:#161207;font-weight:bold;">${esc(c.enseigne)}</span>
-                                        <span style="font-size:12px;color:var(--muted)">📍 ${c.distanceKm} km</span>
-                                    </div>
-                                    <small>${esc([c.adresse, c.codePostal, c.ville].filter(Boolean).join(", ") || "Adresse non renseignée")}</small>
-                                    <div class="row" style="margin-top:8px">
-                                        <a href="https://www.google.com/maps/dir/?api=1&destination=${c.lat},${c.lon}" target="_blank" rel="noopener" style="display:block;text-align:center;text-decoration:none;padding:8px 12px;font-size:13px;border-radius:8px;border:1px solid rgba(237,232,220,.22);color:var(--chalk)">🗺️ Itinéraire</a>
-                                    </div>
-                                </div>
-                            </div>`;
-                        }).join("");
-                    } catch(e){
-                        liste.innerHTML = "<p class='note' style='color:var(--ticket)'>Erreur lors de la recherche des cinémas.</p>";
-                    }
-                }, (err) => {
-                    liste.innerHTML = (err && err.code === err.PERMISSION_DENIED)
-                        ? "<p class='note' style='color:var(--ticket)'>Localisation refusée — autorisez l'accès à votre position pour trouver les cinémas proches.</p>"
-                        : "<p class='note' style='color:var(--ticket)'>Impossible d'obtenir votre position.</p>";
-                }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 });
+                lancerRechercheCinemas();
             });
+            if (btnCinemasRelancer) btnCinemasRelancer.addEventListener("click", lancerRechercheCinemas);
             closeCinemasBtn.addEventListener("click", () => cinemasModal.classList.remove("active"));
             cinemasModal.addEventListener("click", (e) => { if (e.target === cinemasModal) cinemasModal.classList.remove("active"); });
         }
