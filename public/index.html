@@ -461,7 +461,12 @@
   .bulle small{display:block;font-size:11px;opacity:.6;margin-top:3px}
   #popJoueur{position:fixed;inset:0;background:rgba(10,12,22,.72);display:grid;place-items:center;z-index:70;padding:18px}
   #popJoueur .boite{background:var(--velvet);border:1px solid rgba(237,232,220,.14);border-radius:14px;
-    padding:22px;max-width:340px;width:100%;text-align:center;position:relative}
+    padding:22px;max-width:340px;width:100%;text-align:center;position:relative;
+    /* La fiche peut être haute (stats, niveau, pépites, plusieurs boutons d'action) : sans cette
+       limite elle dépassait l'écran et le bas (bouton Fermer, dernières actions) restait coupé,
+       surtout sur mobile. On la limite à la hauteur de l'écran et on fait défiler le contenu à
+       l'intérieur plutôt que de le laisser déborder. */
+    max-height:calc(100vh - 36px);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
   #popJoueur .close-btn{position:absolute;top:6px;right:10px;font-size:28px}
   .ficheEntete{margin-bottom:16px}
   .cadreFiche{width:88px;height:88px;margin:0 auto 12px;border-radius:50%;padding:3px;
@@ -632,8 +637,8 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
   background:var(--ticket);display:flex;align-items:center;justify-content:center;font-size:11px;border:2px solid var(--ink)}
 .vocalParticipant .vocalNom{font-size:11.5px;color:var(--chalk);line-height:1.2;word-break:break-word}
 .vocalParticipant .vocalRoleTag{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
-#btnVocalParler{transition:transform .1s ease}
-#btnVocalParler.actif{background:var(--teal);color:#0A2015;transform:scale(.97)}
+#btnVocalMute{transition:background .15s ease,color .15s ease}
+#btnVocalMute.micro-ouvert{background:var(--teal);color:#0A2015;border-color:var(--teal)}
 #vocalDemandesListe .urowVocal,#vocalConsoleParticipants .urowVocal{display:flex;align-items:center;gap:10px;
   padding:10px 0;border-top:1px solid rgba(237,232,220,.1);flex-wrap:wrap}
 #vocalDemandesListe .urowVocal .qui,#vocalConsoleParticipants .urowVocal .qui{display:flex;align-items:center;gap:8px;flex:1 1 140px}
@@ -1224,8 +1229,7 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
 
       <div class="card" id="vocalControles">
         <div class="row">
-          <button id="btnVocalParler" class="hidden" style="flex:2">🎙️ Maintenir pour parler</button>
-          <button id="btnVocalMute" class="ghost hidden">🔇 Couper mon micro</button>
+          <button id="btnVocalMute" class="hidden">🎙️ Activer mon micro</button>
           <button id="btnVocalDemander" class="ghost hidden">✋ Demander à intervenir</button>
         </div>
         <p class="note" id="vocalDemandeEnvoyee" style="margin:8px 0 0" hidden>Votre demande a été envoyée à l'hôte.</p>
@@ -4590,25 +4594,32 @@ function renderSondages(){
 
 /* ---------- Salon vocal ---------- */
 let vocalSalonActuel = null;   // dernier état reçu du serveur (payload publicVocal), ou null si pas dans un salon
-let vocalEnParle = false;      // état local du bouton "maintenir pour parler"
 let vocalMusiquePourRadio = []; // catalogue /api/musique, chargé une seule fois pour le sélecteur radio
 
 /* ----- Son réel entre les joueurs (WebRTC, connexion directe pair-à-pair) -----
  * Le serveur ne fait que relayer les messages de négociation ("vocal:rtc-signal") — le son ne
  * transite jamais par lui. Sans service de relais payant (TURN), la connexion directe échoue
  * parfois sur les réseaux les plus restrictifs : dans ce cas, seul l'indicateur visuel (anneau qui
- * pulse) continue de fonctionner pour la personne concernée, le reste du salon n'est pas affecté. */
+ * pulse) continue de fonctionner pour la personne concernée, le reste du salon n'est pas affecté.
+ * Pas de bouton "maintenir pour parler" : un seul bouton ouvre ou ferme le micro, et l'anneau qui
+ * pulse se déclenche tout seul quand du son est réellement détecté (voir vocalDemarrerVAD). */
 const VOCAL_ICE_SERVERS = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
 ];
 let vocalPeers = new Map();       // userId -> RTCPeerConnection
-let vocalLocalStream = null;      // notre micro, demandé au tout premier appui sur "parler"
+let vocalLocalStream = null;      // notre micro, demandé au tout premier clic sur "activer mon micro"
 let vocalMicIndisponible = false; // évite de redemander le micro en boucle après un refus
+let vocalMicOuvert = false;       // état local du bouton (miroir de moi.mute côté serveur, inversé)
+let vocalVadFrame = null;
+let vocalAudioCtx = null;
 
 /** Crée (si besoin) la connexion audio directe vers un participant du salon. Ne fait rien si elle
  *  existe déjà. Reste "vide" (sans son) tant que personne n'y a ajouté de piste micro — c'est
- *  l'ajout d'une piste (voir vocalDemanderMicro) qui déclenche automatiquement la négociation. */
+ *  l'ajout d'une piste (voir vocalDemanderMicro) qui déclenche automatiquement la négociation.
+ *  Utilise des offres/réponses explicites (createOffer/createAnswer) plutôt que le raccourci
+ *  setLocalDescription() sans argument : ce raccourci n'est pas fiable partout (notamment sur
+ *  certaines versions de Safari/iOS), ce qui pouvait laisser le son coupé sans aucune erreur visible. */
 function vocalCreerPeer(peerId){
   if (vocalPeers.has(peerId)) return vocalPeers.get(peerId);
   const pc = new RTCPeerConnection({ iceServers: VOCAL_ICE_SERVERS });
@@ -4619,7 +4630,8 @@ function vocalCreerPeer(peerId){
   pc.onnegotiationneeded = async () => {
     try {
       pc._makingOffer = true;
-      await pc.setLocalDescription();
+      const offre = await pc.createOffer();
+      await pc.setLocalDescription(offre);
       vocalEmettreSignal(peerId, { type: "offer", sdp: pc.localDescription });
     } catch {} finally { pc._makingOffer = false; }
   };
@@ -4640,6 +4652,8 @@ function vocalFermerPeer(peerId){
 function vocalFermerToutesLesConnexions(){
   for (const peerId of [...vocalPeers.keys()]) vocalFermerPeer(peerId);
   if (vocalLocalStream){ vocalLocalStream.getTracks().forEach(t => t.stop()); vocalLocalStream = null; }
+  vocalArreterVAD();
+  vocalMicOuvert = false;
   $("vocalAudioDistant").innerHTML = "";
 }
 
@@ -4671,17 +4685,51 @@ function assurerPeersVocal(salon){
   for (const id of [...vocalPeers.keys()]) if (!presents.has(id)) vocalFermerPeer(id);
 }
 
-/** Demande le micro au tout premier appui sur "parler" (geste utilisateur, indispensable pour que
- *  le navigateur affiche la demande d'autorisation), puis ajoute la piste à toutes les connexions
- *  déjà ouvertes. En cas de refus ou d'appareil sans micro, le salon reste utilisable : seul le
- *  son ne passera pas pour cette personne, l'indicateur visuel continue de fonctionner. */
+/** Détection de voix très simple (niveau sonore du micro) : fait pulser l'anneau autour de notre
+ *  propre photo chez les autres, sans jamais avoir besoin d'appuyer sur un bouton pour "parler" —
+ *  le micro, lui, reste ouvert en continu une fois activé. */
+function vocalDemarrerVAD(stream){
+  try {
+    vocalAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const source = vocalAudioCtx.createMediaStreamSource(stream);
+    const analyseur = vocalAudioCtx.createAnalyser();
+    analyseur.fftSize = 512;
+    source.connect(analyseur);
+    const donnees = new Uint8Array(analyseur.frequencyBinCount);
+    let parleActuellement = false;
+    const SEUIL = 0.02;
+    const boucle = () => {
+      analyseur.getByteTimeDomainData(donnees);
+      let somme = 0;
+      for (let i = 0; i < donnees.length; i++){ const v = (donnees[i] - 128) / 128; somme += v * v; }
+      const niveau = Math.sqrt(somme / donnees.length);
+      const parleMaintenant = vocalMicOuvert && niveau > SEUIL;
+      if (parleMaintenant !== parleActuellement){
+        parleActuellement = parleMaintenant;
+        if (vocalSalonActuel) socket.emit("vocal:parler", { code: vocalSalonActuel.code, parle: parleMaintenant });
+      }
+      vocalVadFrame = requestAnimationFrame(boucle);
+    };
+    boucle();
+  } catch {} // pas grave si l'analyse échoue : le micro continue de fonctionner, juste sans anneau animé
+}
+function vocalArreterVAD(){
+  if (vocalVadFrame) cancelAnimationFrame(vocalVadFrame);
+  vocalVadFrame = null;
+  if (vocalAudioCtx){ vocalAudioCtx.close().catch(() => {}); vocalAudioCtx = null; }
+}
+
+/** Demande le micro au tout premier clic sur "activer mon micro" (geste utilisateur, indispensable
+ *  pour que le navigateur affiche la demande d'autorisation), puis ajoute la piste à toutes les
+ *  connexions déjà ouvertes. En cas de refus ou d'appareil sans micro, le salon reste utilisable :
+ *  seul le son ne passera pas pour cette personne, l'indicateur visuel continue de fonctionner. */
 async function vocalDemanderMicro(){
   if (vocalLocalStream || vocalMicIndisponible) return vocalLocalStream;
   try {
     vocalLocalStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    vocalLocalStream.getAudioTracks().forEach(t => t.enabled = false); // muet tant qu'on n'appuie pas
     for (const pc of vocalPeers.values())
       vocalLocalStream.getTracks().forEach(t => pc.addTrack(t, vocalLocalStream));
+    vocalDemarrerVAD(vocalLocalStream);
     $("vocalMicMsg").textContent = "";
   } catch {
     vocalMicIndisponible = true;
@@ -4752,7 +4800,7 @@ $("btnVocalRejoindre").onclick = () => {
 $("btnVocalQuitter").onclick = () => {
   if (vocalSalonActuel) socket.emit("vocal:quitter", { code: vocalSalonActuel.code }, () => {});
   vocalSalonActuel = null;
-  vocalEnParle = false;
+  vocalMicOuvert = false;
   $("vocalAudio").pause();
   vocalFermerToutesLesConnexions();
   afficherVocalListe();
@@ -4796,10 +4844,12 @@ function renderVocalSalon(salon){
   const monRole = moi?.role || null;
   const peutParler = ["hote","cohote","intervenant"].includes(monRole);
 
-  $("btnVocalParler").classList.toggle("hidden", !peutParler);
   $("btnVocalMute").classList.toggle("hidden", !peutParler);
-  $("btnVocalParler").disabled = Boolean(moi?.mute);
-  $("btnVocalMute").textContent = moi?.mute ? "🎙️ Réactiver mon micro" : "🔇 Couper mon micro";
+  vocalMicOuvert = peutParler && !moi?.mute;
+  if (!vocalMicOuvert && vocalLocalStream) vocalLocalStream.getAudioTracks().forEach(t => t.enabled = false);
+  else if (vocalMicOuvert && vocalLocalStream) vocalLocalStream.getAudioTracks().forEach(t => t.enabled = true);
+  $("btnVocalMute").textContent = vocalMicOuvert ? "🔴 Couper mon micro" : "🎙️ Activer mon micro";
+  $("btnVocalMute").classList.toggle("micro-ouvert", vocalMicOuvert);
 
   const demandeEnvoyee = monRole === "auditeur" && salon.demandesMontee.includes(me?.id);
   $("btnVocalDemander").classList.toggle("hidden", monRole !== "auditeur" || demandeEnvoyee);
@@ -4882,39 +4932,21 @@ $("btnVocalDemander").onclick = () => {
   });
 };
 
-$("btnVocalMute").onclick = () => {
-  const moi = vocalSalonActuel?.participants.find(p => p.userId === me?.id);
-  const futurMute = !moi?.mute;
-  if (futurMute && vocalLocalStream) vocalLocalStream.getAudioTracks().forEach(t => t.enabled = false);
-  socket.emit("vocal:mute", { code: vocalSalonActuel.code, mute: futurMute });
+// Un seul bouton, pas de "maintenir pour parler" : un clic ouvre le micro (il reste ouvert en
+// continu), un second clic le referme. L'anneau qui pulse chez les autres se déclenche tout seul
+// selon le son détecté (voir vocalDemarrerVAD), sans rien avoir à maintenir enfoncé.
+$("btnVocalMute").onclick = async () => {
+  if (!vocalSalonActuel) return;
+  const ouvrir = !vocalMicOuvert;
+  if (ouvrir){
+    const stream = await vocalDemanderMicro();
+    if (!stream) return; // micro refusé/indisponible : le message d'erreur est déjà affiché, on ne change rien côté serveur
+    stream.getAudioTracks().forEach(t => t.enabled = true);
+  } else if (vocalLocalStream) {
+    vocalLocalStream.getAudioTracks().forEach(t => t.enabled = false);
+  }
+  socket.emit("vocal:mute", { code: vocalSalonActuel.code, mute: !ouvrir });
 };
-
-// Bouton "maintenir pour parler" façon talkie-walkie : appui = parle (micro ouvert), relâche =
-// silence. Couvre souris et tactile, y compris si le doigt/curseur quitte le bouton en cours
-// d'appui. Le tout premier appui demande le micro (geste utilisateur requis par le navigateur).
-async function vocalCommencerParler(){
-  if (vocalEnParle || !vocalSalonActuel || $("btnVocalParler").disabled) return;
-  vocalEnParle = true;
-  $("btnVocalParler").classList.add("actif");
-  socket.emit("vocal:parler", { code: vocalSalonActuel.code, parle: true });
-  const stream = await vocalDemanderMicro();
-  // Un relâchement a pu survenir pendant l'attente de l'autorisation micro — on ne réactive pas
-  // le son dans ce cas, seul l'indicateur visuel aura bougé le temps de la demande.
-  if (stream && vocalEnParle) stream.getAudioTracks().forEach(t => t.enabled = true);
-}
-function vocalArreterParler(){
-  if (!vocalEnParle || !vocalSalonActuel) return;
-  vocalEnParle = false;
-  $("btnVocalParler").classList.remove("actif");
-  socket.emit("vocal:parler", { code: vocalSalonActuel.code, parle: false });
-  if (vocalLocalStream) vocalLocalStream.getAudioTracks().forEach(t => t.enabled = false);
-}
-$("btnVocalParler").addEventListener("mousedown", vocalCommencerParler);
-$("btnVocalParler").addEventListener("touchstart", e => { e.preventDefault(); vocalCommencerParler(); });
-$("btnVocalParler").addEventListener("mouseup", vocalArreterParler);
-$("btnVocalParler").addEventListener("mouseleave", vocalArreterParler);
-$("btnVocalParler").addEventListener("touchend", vocalArreterParler);
-$("btnVocalParler").addEventListener("touchcancel", vocalArreterParler);
 
 $("btnVocalRadioDiffuser").onclick = () => {
   const pisteId = $("vocalRadioSelect").value;
@@ -4933,7 +4965,7 @@ socket.on("vocal:update", (salon) => {
 socket.on("vocal:ferme", (info) => {
   if (!vocalSalonActuel) return;
   vocalSalonActuel = null;
-  vocalEnParle = false;
+  vocalMicOuvert = false;
   $("vocalAudio").pause();
   vocalFermerToutesLesConnexions();
   if (!$("vocal").classList.contains("hidden")){
@@ -4945,7 +4977,7 @@ socket.on("vocal:ferme", (info) => {
 });
 socket.on("vocal:exclu", () => {
   vocalSalonActuel = null;
-  vocalEnParle = false;
+  vocalMicOuvert = false;
   $("vocalAudio").pause();
   vocalFermerToutesLesConnexions();
   if (!$("vocal").classList.contains("hidden")){
@@ -5022,7 +5054,12 @@ socket.on("vocal:rtc-signal", async ({ from, signal }) => {
       if (collision && !pc._poli) return;
       await pc.setRemoteDescription(signal.sdp);
       if (signal.type === "offer"){
-        await pc.setLocalDescription();
+        // Création explicite de la réponse (createAnswer) plutôt que la forme raccourcie
+        // setLocalDescription() sans argument : cette forme n'est pas fiable sur tous les
+        // navigateurs (notamment certaines versions de Safari/iOS), ce qui pouvait faire
+        // échouer la connexion en silence — c'était très probablement la cause du son absent.
+        const reponse = await pc.createAnswer();
+        await pc.setLocalDescription(reponse);
         vocalEmettreSignal(from, { type: "answer", sdp: pc.localDescription });
       }
     } else if (signal.type === "ice"){
