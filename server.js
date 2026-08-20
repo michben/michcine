@@ -2352,6 +2352,76 @@ app.put("/api/admin/aide", requireAdmin, (req, res) => {
 });
 
 /* ------------------------------------------------------------------ */
+/* Bandeau défilant : annonce développeur (avant une mise à jour, par  */
+/* exemple) + petits événements diffusés en direct à tous les joueurs  */
+/* connectés (gain à la roue, victoire d'équipe...). Le mode maintenance */
+/* bloque juste la création de nouveaux salons, le temps d'un déploiement. */
+/* ------------------------------------------------------------------ */
+
+const ANNONCE_FILE = new URL("./annonce.json", import.meta.url);
+let annonceConfig = { actif: false, texte: "", maintenance: false };
+const saveAnnonce = () => sauver("annonce", annonceConfig, ANNONCE_FILE);
+
+/** Diffuse un message dans le bandeau défilant de tous les joueurs actuellement connectés.
+ *  type : "roue" | "equipe" | "info" — sert uniquement à la couleur affichée côté client. */
+function diffuserAnnonce(texte, type = "info") {
+    io.emit("annonce:nouvelle", { texte, type, date: Date.now() });
+}
+
+app.get("/api/annonce-dev", (req, res) => {
+    res.json(annonceConfig.actif ? { actif: true, texte: annonceConfig.texte } : { actif: false });
+});
+
+app.get("/api/admin/annonce-dev", requireAdmin, (req, res) => {
+    res.json(annonceConfig);
+});
+
+app.put("/api/admin/annonce-dev", requireAdmin, (req, res) => {
+    const { actif, texte } = req.body || {};
+    annonceConfig = {
+        ...annonceConfig,
+        actif: Boolean(actif),
+        texte: String(texte || "").trim().slice(0, 220),
+    };
+    saveAnnonce();
+    io.emit("annonce:dev", { actif: annonceConfig.actif, texte: annonceConfig.texte });
+    res.json({ ok: true, annonce: annonceConfig });
+});
+
+/** État du mode maintenance + un état des lieux des parties en cours, pour que l'administration
+ *  sache en un coup d'œil s'il est prudent de déployer maintenant. */
+app.get("/api/admin/maintenance", requireAdmin, (req, res) => {
+    const actives = [...rooms.values()].filter((r) => r.status === "playing");
+    res.json({
+        maintenance: annonceConfig.maintenance,
+        partiesEnCours: actives.length,
+        partiesEnPause: actives.filter((r) => r.pauseA).length,
+    });
+});
+
+app.put("/api/admin/maintenance", requireAdmin, (req, res) => {
+    annonceConfig = { ...annonceConfig, maintenance: Boolean(req.body?.maintenance) };
+    saveAnnonce();
+    res.json({ ok: true, maintenance: annonceConfig.maintenance });
+});
+
+/** Met en pause (ou reprend) toutes les parties en cours d'un coup — pratique juste avant un
+ *  déploiement, plutôt que de compter sur chaque hôte pour le faire de son côté. */
+app.post("/api/admin/maintenance/pause-toutes", requireAdmin, (req, res) => {
+    let n = 0;
+    for (const room of rooms.values())
+        if (pauserSalon(room, "l'administrateur (maintenance)")) n++;
+    res.json({ ok: true, misesEnPause: n });
+});
+
+app.post("/api/admin/maintenance/reprendre-toutes", requireAdmin, (req, res) => {
+    let n = 0;
+    for (const room of rooms.values())
+        if (reprendreSalon(room)) n++;
+    res.json({ ok: true, reprises: n });
+});
+
+/* ------------------------------------------------------------------ */
 /* Porte-monnaie : historique horodaté des transactions (tickets et    */
 /* points), avec la provenance de chaque mouvement.                    */
 /* ------------------------------------------------------------------ */
@@ -2570,15 +2640,20 @@ app.post("/api/roue/reclamer", (req, res) => {
     if (gain.type === "credits") {
         grantCredits(user.id, gain.valeur);
         enregistrerTransaction(user.id, gain.valeur, "credits", gain.gratuit ? "Roue du jour (tour gratuit)" : "Roue du jour");
+        // Seuls les gros gains passent dans le bandeau de tout le monde — les petits tickets à
+        // chaque tour rendraient le défilé bien trop bavard.
+        if (gain.valeur >= 100) diffuserAnnonce(`🎉 ${user.pseudo} vient de gagner ${gain.valeur} tickets à la roue !`, "roue");
         return res.json({ ok: true, type: "credits", valeur: gain.valeur, credits: getCredits(user.id) });
     }
 
     if (gain.type === "ranked") {
         accorderPartiesClasseesBonus(user.id, gain.valeur);
+        diffuserAnnonce(`🎉 ${user.pseudo} vient de gagner ${gain.valeur} partie${gain.valeur > 1 ? "s" : ""} classée${gain.valeur > 1 ? "s" : ""} bonus à la roue !`, "roue");
         return res.json({ ok: true, type: "ranked", valeur: gain.valeur, partiesRestantes: partiesRestantes(user.id) });
     }
 
     // Code VIP : pas de génération automatique — une demande part vers l'administrateur.
+    diffuserAnnonce(`👑 ${user.pseudo} a décroché un Code VIP à la roue !`, "roue");
     const demande = {
         id: demandesVip.length ? Math.max(...demandesVip.map((d) => d.id)) + 1 : 1,
         userId: user.id, pseudo: user.pseudo, avatar: user.avatar, photo: user.photo || null,
@@ -3900,6 +3975,40 @@ function teamScores(room) {
 }
 
 /**
+ * Cœur de la mise en pause / reprise d'un salon en cours de partie — utilisé à la fois par
+ * l'hôte (pause manuelle depuis son écran) et par l'administration (pause groupée avant un
+ * déploiement, voir /api/admin/maintenance/pause-toutes). Renvoie true si l'action a bien eu
+ * lieu, false si le salon n'était pas dans le bon état (déjà en pause, partie non lancée...).
+ */
+function pauserSalon(room, par) {
+  if (!room || room.status !== "playing" || room.pauseA) return false;
+  room.pauseA = Date.now();
+  clearTimeout(room.timer);
+  if (room.graceTimer) {
+    room.graceRestant = Math.max(0, CONFIG.GRACE_AFTER_FIRST_MS - (Date.now() - (room.graceDebut || 0)));
+    clearTimeout(room.graceTimer);
+  }
+  const reste = Math.max(0, CONFIG.ROUND_DURATION_MS - (room.pauseA - room.startedAt));
+  io.to(room.code).emit("game:paused", { enPause: true, reste, par });
+  return true;
+}
+
+function reprendreSalon(room) {
+  if (!room || !room.pauseA) return false;
+  const duree = Date.now() - room.pauseA;
+  room.startedAt += duree;
+  room.pauseA = null;
+  const reste = CONFIG.ROUND_DURATION_MS - (Date.now() - room.startedAt);
+  room.timer = setTimeout(() => endRound(room), Math.max(0, reste));
+  if (room.graceRestant) {
+    room.graceTimer = setTimeout(() => endRound(room), room.graceRestant);
+    room.graceRestant = null;
+  }
+  io.to(room.code).emit("game:paused", { enPause: false, reste });
+  return true;
+}
+
+/**
  * Diffuse un événement aux seuls spectateurs d'une partie (ceux qui la
  * regardent en direct), sur des noms d'événements dédiés — jamais les mêmes
  * que ceux des joueurs, pour ne jamais interférer avec leur écran de jeu.
@@ -4126,6 +4235,12 @@ function endGame(room) {
       credits: getCredits(p.userId), points: getPoints(p.userId), bilan: p.bilan });
   // Diffusion à ceux qui regardaient en direct (pas de gains, juste la fin de partie).
   diffuserSpectateurs(room, "regarder:termine", { ranking, mode: room.mode, teams: state.teams });
+  // Petite fanfare dans le bandeau défilant de tout le monde quand une équipe l'emporte
+  // (rien à annoncer en cas d'égalité parfaite).
+  if (room.mode === "teams" && state.teams && state.teams.A !== state.teams.B) {
+    const gagnante = state.teams.A > state.teams.B ? "🟡 L'équipe jaune" : "🔷 L'équipe turquoise";
+    diffuserAnnonce(`${gagnante} remporte la partie ! 🏆`, "equipe");
+  }
   // TODO : persister la partie et créditer les récompenses
 }
 
@@ -4187,6 +4302,10 @@ io.on("connection", (socket) => {
   });
 
   socket.on("room:create", ({ rounds, mode, kids }, cb) => {
+    // Mode maintenance : on bloque uniquement la CRÉATION de nouveaux salons (les parties déjà
+    // lancées continuent normalement) — le temps qu'un déploiement se termine sans perdre de partie.
+    if (annonceConfig.maintenance) return cb?.({ ok: false, error: "MAINTENANCE" });
+
     // Un compte ne doit jamais se retrouver hôte de deux salons à la fois : un salon
     // abandonné sans départ propre (page rechargée, onglet fermé sans clic "quitter")
     // créerait sinon une partie fantôme en double. On nettoie d'abord son ancien salon.
@@ -4555,31 +4674,8 @@ io.on("connection", (socket) => {
   socket.on("game:pause", ({ code, reprendre }) => {
     const room = rooms.get(code);
     if (!room || !estHote(room, socket.data.user.id) || room.status !== "playing") return;
-
-    if (reprendre) {
-      if (!room.pauseA) return;
-      const duree = Date.now() - room.pauseA;
-      room.startedAt += duree;
-      room.pauseA = null;
-      const reste = CONFIG.ROUND_DURATION_MS - (Date.now() - room.startedAt);
-      room.timer = setTimeout(() => endRound(room), Math.max(0, reste));
-      if (room.graceRestant) {
-        room.graceTimer = setTimeout(() => endRound(room), room.graceRestant);
-        room.graceRestant = null;
-      }
-      io.to(room.code).emit("game:paused", { enPause: false, reste });
-      return;
-    }
-
-    if (room.pauseA) return;
-    room.pauseA = Date.now();
-    clearTimeout(room.timer);
-    if (room.graceTimer) {
-      room.graceRestant = Math.max(0, CONFIG.GRACE_AFTER_FIRST_MS - (Date.now() - room.graceDebut || 0));
-      clearTimeout(room.graceTimer);
-    }
-    const reste = Math.max(0, CONFIG.ROUND_DURATION_MS - (room.pauseA - room.startedAt));
-    io.to(room.code).emit("game:paused", { enPause: true, reste, par: socket.data.user.pseudo });
+    if (reprendre) reprendreSalon(room);
+    else pauserSalon(room, socket.data.user.pseudo);
   });
 
   /** Réactions émoji pendant la partie, relayées à tout le salon (liste EMOJIS commune, définie
@@ -4854,6 +4950,8 @@ pepites = await charger("pepites", PEPITES_FILE, {});
 if (!pepites || typeof pepites !== "object") pepites = {};
 aideConfig = await charger("aide", AIDE_FILE, aideConfig);
 if (!aideConfig || typeof aideConfig !== "object") aideConfig = { actif: false, titre: "Comment jouer ? 🎬🎵", message: "" };
+annonceConfig = await charger("annonce", ANNONCE_FILE, annonceConfig);
+if (!annonceConfig || typeof annonceConfig !== "object") annonceConfig = { actif: false, texte: "", maintenance: false };
 roue = await charger("roue", ROUE_FILE, null);
 assurerRoueDuJour();
 gainsEnAttente = await charger("roueGains", GAINS_ROUE_FILE, {});
