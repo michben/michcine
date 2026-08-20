@@ -4868,8 +4868,10 @@ io.on("connection", (socket) => {
       creeLe: Date.now(),
     };
     salon.participants.set(user.id, {
+      // Micro fermé par défaut : c'est le premier clic sur "activer mon micro" qui l'ouvre —
+      // jamais automatique, pour ne surprendre personne avec un micro déjà ouvert.
       userId: user.id, pseudo: user.pseudo, avatar: user.avatar, photo: user.photo || null,
-      role: "hote", mute: false, parle: false,
+      role: "hote", mute: true, parle: false,
     });
     salonsVocaux.set(code, salon);
     socket.join(`vocal:${code}`);
@@ -4883,7 +4885,7 @@ io.on("connection", (socket) => {
     quitterSalonVocal(socket);
     salon.participants.set(user.id, {
       userId: user.id, pseudo: user.pseudo, avatar: user.avatar, photo: user.photo || null,
-      role: "auditeur", mute: false, parle: false,
+      role: "auditeur", mute: true, parle: false,
     });
     socket.join(`vocal:${salon.code}`);
     diffuserVocal(salon);
@@ -4895,9 +4897,9 @@ io.on("connection", (socket) => {
     cb?.({ ok: true });
   });
 
-  /** Bouton "parler" façon talkie-walkie : ne fait que mettre à jour l'état affiché aux autres
-   *  (anneau qui pulse autour de la photo) — le micro lui-même est coupé/activé côté client, en
-   *  parallèle, sur la connexion audio directe. Réservé à ceux qui ont la parole. */
+  /** Met à jour l'anneau qui pulse autour de la photo — déclenché automatiquement côté client par
+   *  la détection de voix pendant que le micro est ouvert (pas besoin d'appuyer sur un bouton).
+   *  Réservé à ceux qui ont la parole, et seulement micro ouvert. */
   socket.on("vocal:parler", ({ code, parle }) => {
     const salon = salonsVocaux.get(code);
     const moi = salon?.participants.get(user.id);
@@ -4906,6 +4908,8 @@ io.on("connection", (socket) => {
     diffuserVocal(salon);
   });
 
+  /** Ouvre ou ferme le micro — c'est le seul contrôle du salon (plus de bouton "maintenir pour
+   *  parler" : une fois ouvert, le micro reste ouvert jusqu'à ce qu'on le referme soi-même). */
   socket.on("vocal:mute", ({ code, mute }) => {
     const salon = salonsVocaux.get(code);
     const moi = salon?.participants.get(user.id);
@@ -4938,6 +4942,7 @@ io.on("connection", (socket) => {
     const cible = salon.participants.get(userId);
     if (!cible || cible.role !== "auditeur") return cb?.({ ok: false });
     cible.role = "intervenant";
+    cible.mute = true; // micro fermé par défaut, même après une promotion — jamais une surprise
     salon.demandesMontee.delete(userId);
     diffuserVocal(salon);
     cb?.({ ok: true });
@@ -4952,6 +4957,7 @@ io.on("connection", (socket) => {
     if (!cible || cible.role !== "intervenant") return cb?.({ ok: false });
     cible.role = "auditeur";
     cible.parle = false;
+    cible.mute = true; // redescendu = plus le droit de parler, micro refermé au cas où
     diffuserVocal(salon);
     cb?.({ ok: true });
   });
