@@ -1970,7 +1970,7 @@ async function loadReports(){
       $("roueVipListe").innerHTML = d.demandes.length ? d.demandes.map((x) => `
         <div class="item">
           <div>
-            <strong>${esc(x.pseudo)}</strong>
+            <strong>${esc(x.pseudo)}</strong>${x.origine ? ` <small>(${esc(x.origine)})</small>` : ""}
             <small style="display:block">${new Date(x.date).toLocaleString()}</small>
             ${x.statut === "envoye"
               ? `<small style="display:block;color:var(--ok,#3ecf8e)">Envoyé : ${esc(x.code)}</small>`

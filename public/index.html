@@ -635,6 +635,15 @@ html.mode-enfant-actif .wrap{padding-top:48px}
   .progression-step.bonus.done { background: var(--teal); border-color: var(--ticket); }
   .progression-step.claimable { animation: pulseBonus 1s infinite; cursor: pointer; background: var(--ticket); color: #fff; box-shadow: 0 0 15px var(--ticket); z-index: 6; }
   .progression-step.fog { background: #111; border-color: #1a1a1a; color: transparent; text-shadow: 0 0 0 #444; transform: scale(0.9); }
+  .progression-step.chest { border-color: var(--teal); background: #0f2e2b; }
+  .progression-step.chest.done { background: var(--teal); border-color: #fff; color: #000; }
+  .progression-step.chest.claimable { background: var(--teal); color: #04201c; box-shadow: 0 0 15px var(--teal); animation: pulseBonus 1s infinite; }
+  .coffre-anim { font-size: 64px; margin: 6px 0 14px; animation: coffreBounce 1.2s ease-in-out infinite; }
+  @keyframes coffreBounce { 0%,100%{transform:translateY(0) rotate(0deg)} 25%{transform:translateY(-6px) rotate(-4deg)} 75%{transform:translateY(-6px) rotate(4deg)} }
+  .coffre-anim.ouvert { animation: coffreOuvre .6s ease forwards; }
+  @keyframes coffreOuvre { 0%{transform:scale(1) rotate(0)} 40%{transform:scale(1.3) rotate(-10deg)} 70%{transform:scale(1.45) rotate(10deg)} 100%{transform:scale(1.6) rotate(0)} }
+  .coffre-reveal { font-size: 56px; animation: coffreRevealPop .5s ease; }
+  @keyframes coffreRevealPop { 0%{transform:scale(0);opacity:0} 60%{transform:scale(1.25);opacity:1} 100%{transform:scale(1)} }
   
   @keyframes pulseBonus { 0%, 100% { transform: scale(1.2); } 50% { transform: scale(1.4); box-shadow: 0 0 30px var(--ticket); } }
 
@@ -834,6 +843,11 @@ html.mode-enfant-actif .wrap{padding-top:48px}
       <input id="pseudo" maxlength="20" autocomplete="nickname">
       <label style="margin-top:16px">Avatar</label>
       <div class="avatars" id="avatars"></div>
+      <label class="row" style="align-items:center;gap:10px;margin-top:16px;cursor:pointer"
+        data-bulle="Une fois activé, vos amis en ligne pourront cliquer sur « Regarder en direct » pendant que vous jouez. Personne d'autre ne peut voir votre partie.">
+        <input type="checkbox" id="partageJeuCheck" style="width:auto;margin:0">
+        <span>📡 Activer le partage du jeu <small style="display:block;color:var(--muted)">Vos amis en ligne pourront regarder vos parties en direct</small></span>
+      </label>
       <div class="row">
         <button id="btnSaveProfile">Enregistrer</button>
         <button id="btnToMenu" class="ghost">Retour à l'accueil</button>
@@ -1114,7 +1128,11 @@ html.mode-enfant-actif .wrap{padding-top:48px}
         <p class="note" style="margin:0" id="botPresentTexte"></p>
         <div class="row" style="margin-top:8px"><button class="ghost" id="btnRetirerBot">Retirer le bot</button></div>
       </div>
+      <div class="row" style="margin-top:14px">
+        <button class="ghost" id="btnPret" data-bulle="Confirmez que vous êtes prêt à jouer. L'hôte ne peut lancer la partie que lorsque tout le monde a cliqué ici — ça évite qu'une partie démarre avec quelqu'un pas encore installé.">✅ Je suis prêt</button>
+      </div>
       <div class="row"><button id="btnStart">Lancer la partie</button></div>
+      <p class="feedback" id="lobbyMsg"></p>
       <p class="note" id="hostNote">En attente que l'hôte lance la partie.</p>
       <div class="row"><button class="ghost" id="btnQuitLobby">Quitter le salon</button></div>
     </div>
@@ -3600,7 +3618,7 @@ async function ouvrirJoueur(id, pseudo, avatar, photoJoueur){
   $("popEtat").textContent = f.enPartie
     ? `${ETATS[relation] || ""} En train de jouer${MODE_NAMES[f.modeSalon] ? ` (${MODE_NAMES[f.modeSalon]})` : ""}.`.trim()
     : (ETATS[relation] || "");
-  const regarderBtn = (f.enPartie && autoriserSpectateurGlobal)
+  const regarderBtn = (f.enPartie && autoriserSpectateurGlobal && f.partageActif)
     ? `<button data-act="regarder" style="background:#3DDC84;color:#0A2015">👁️ Regarder en direct</button>` : "";
   $("popActions").innerHTML = regarderBtn + (ACTIONS_AMI[relation] || []).map(([a, libelle]) =>
     `<button class="${a === "bloquer" ? "ghost danger" : ""}" data-act="${a}">${libelle}</button>`).join("");
@@ -3650,7 +3668,7 @@ function ligneJoueur(j, boutons){
       style="cursor:pointer">${vignette(j)} ${esc(j.pseudo)} ${insigneFondateur(j)}${
         nonLus ? ` <span class="pastille" title="${nonLus} message${nonLus>1?"s":""} non lu${nonLus>1?"s":""}">${nonLus}</span>` : ""
       }</span>
-    ${(j.enPartie && autoriserSpectateurGlobal) ? `<button class="ghost" data-act="regarder" data-id="${esc(j.id)}"
+    ${(j.enPartie && autoriserSpectateurGlobal && j.partageActif) ? `<button class="ghost" data-act="regarder" data-id="${esc(j.id)}"
        title="Regarder sa partie en direct" style="padding:6px 10px; font-size:15px;
        background:#3DDC84; color:#0A2015; border-color:#3DDC84">👁️ en direct</button>` : ""}
     <div style="display:flex; gap:6px; flex-wrap:wrap;">
@@ -3891,7 +3909,7 @@ function bandeauNotif(html, action){
   el.innerHTML = html;
   el.onclick = () => { el.remove(); action?.(); };
   document.body.append(el);
-  setTimeout(() => el.remove(), 8000);
+  setTimeout(() => el.remove(), 4000);
 }
 
 /**
@@ -4503,6 +4521,7 @@ $("btnProfile").onclick = () => {
   }
   $("avatars").querySelectorAll("[data-a]").forEach(b =>
     b.setAttribute("aria-pressed", b.dataset.a === me.avatar));
+  $("partageJeuCheck").checked = me.partageJeu === true;
   $("profileMsg").textContent = "";
   show("profile");
 };
@@ -4513,8 +4532,9 @@ $("btnSaveProfile").onclick = async () => {
     $("profileMsg").className = "feedback bad"; return;
   }
   const avatar = ($("avatars").querySelector('[aria-pressed="true"]') || {}).dataset?.a || me.avatar;
+  const partageJeu = $("partageJeuCheck").checked;
   const res = await fetch("/api/profile", {method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({pseudo, avatar})});
+    body: JSON.stringify({pseudo, avatar, partageJeu})});
   if (!res.ok){
     const err = await res.json().catch(() => ({}));
     $("profileMsg").textContent = err.error === "PSEUDO_TAKEN"
@@ -4935,12 +4955,27 @@ function renderLobby(s){
   $("lobbyPlayers").innerHTML = s.players.map(p =>
     `<li class="${p.team||""} ${p.online === false ? "off" : ""}" ${p.bot ? "" : `data-joueur="${esc(p.userId||"")}" data-pseudo="${esc(p.pseudo)}" data-avatar="${p.avatar||"🎬"}" data-photo="${p.photo||""}"`}
        style="${p.bot ? "" : "cursor:pointer;"} ${p.online === false ? "opacity:0.5;" : ""}" title="${p.bot ? "Bot" : p.online === false ? "Déconnecté" : "Voir ce joueur"}">
-       <span class="dot ${p.online !== false ? "on" : ""}"></span>${p.bot ? p.avatar : vignette(p)} ${esc(p.pseudo)} ${p.bot ? "" : insigneFondateur(p)}</li>`).join("");
+       <span class="dot ${p.online !== false ? "on" : ""}"></span>${p.bot ? p.avatar : vignette(p)} ${esc(p.pseudo)} ${p.bot ? "" : insigneFondateur(p)}
+       <span title="${p.pret ? "Prêt" : "Pas encore prêt"}" style="margin-left:6px">${p.pret ? "✅" : "⏳"}</span></li>`).join("");
   $("lobbyPlayers").querySelectorAll("[data-joueur]").forEach(li => li.onclick = () =>
     ouvrirJoueur(li.dataset.joueur, li.dataset.pseudo, li.dataset.avatar, li.dataset.photo || null));
   $("teamPicker").classList.toggle("hidden", s.mode !== "teams");
   $("btnStart").classList.toggle("hidden", !state.isHost);
   $("hostNote").classList.toggle("hidden", state.isHost);
+
+  // Statut "prêt" du joueur courant, pour que le bouton reflète son propre état
+  // même après une reconnexion (le serveur reste la seule source de vérité).
+  const moiDansSalon = s.players.find(p => p.userId === me?.id);
+  state.jeSuisPret = Boolean(moiDansSalon?.pret);
+  $("btnPret").textContent = state.jeSuisPret ? "✅ Prêt !" : "☑️ Je suis prêt";
+  $("btnPret").setAttribute("aria-pressed", String(state.jeSuisPret));
+  const tousPrets = s.players.filter(p => !p.bot).every(p => p.pret);
+  $("lobbyMsg").textContent = "";
+  if (state.isHost){
+    $("btnStart").disabled = !tousPrets;
+    $("btnStart").title = tousPrets ? "" : "En attente que tout le monde clique sur « Je suis prêt ».";
+    $("btnStart").style.opacity = tousPrets ? "1" : ".55";
+  }
 
   // Défier un bot : proposé à l'hôte seul dans un salon en duel, tant que personne
   // d'autre (humain ou bot) ne l'a encore rejoint.
@@ -4966,7 +5001,15 @@ $("btnRetirerBot").onclick = () => {
 };
 document.querySelectorAll("[data-team]").forEach(b =>
   b.onclick = () => socket.emit("team:choose", {code:state.code, team:b.dataset.team}));
-$("btnStart").onclick = () => socket.emit("game:start", {code:state.code});
+$("btnPret").onclick = () => {
+  socket.emit("room:pret", {code: state.code, pret: !state.jeSuisPret});
+};
+$("btnStart").onclick = () => socket.emit("game:start", {code:state.code}, res => {
+  if (!res?.ok && res?.error === "JOUEURS_PAS_PRETS"){
+    $("lobbyMsg").textContent = `En attente : ${res.manquants.join(", ")}.`;
+    $("lobbyMsg").className = "feedback bad";
+  }
+});
 $("btnQuitLobby").onclick = () => {
   socket.emit("room:leave");
   state.code = null;
@@ -5498,6 +5541,31 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
         </div>
     </div>
 
+    <!-- MODALE COFFRE DE NIVEAU (tous les 15 niveaux) -->
+    <div class="modal-overlay" id="coffreModal">
+        <div class="modal-content" style="max-width:380px;text-align:center">
+            <div class="modal-header" style="border-bottom-color: var(--teal);">
+                <h2>🎁 Coffre du niveau <span id="coffreNiveau"></span></h2>
+                <button class="close-btn" id="closeCoffreBtn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="coffreAnim" class="coffre-anim">📦</div>
+                <div id="coffreChoixBloc">
+                    <p class="note" id="coffreTexte">Ce coffre est débloqué ! Choisissez votre récompense :</p>
+                    <div id="coffreChoix" class="row" style="flex-direction:column;gap:10px">
+                        <button data-choix="pepite">💎 Emplacement pépite en plus</button>
+                        <button data-choix="roue">🎡 Tour de roue gratuit</button>
+                        <button data-choix="vip">👑 Code VIP</button>
+                    </div>
+                </div>
+                <div id="coffreResultat" class="hidden">
+                    <div class="coffre-reveal" id="coffreRevealIcone">🎉</div>
+                    <p id="coffreRevealTexte" style="font-weight:bold"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- COIN "REGARDÉ PAR" : liste des amis qui suivent la partie en direct, visible
          seulement pendant une partie et seulement s'il y a au moins un spectateur. -->
     <div id="spectateursCorner" class="hidden"></div>
@@ -5921,14 +5989,18 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
                     }
                     
                     document.getElementById("bdayList").innerHTML = data.actors.map(a => `
-                        <div class="bday-item">
+                        <div class="bday-item"${a.url ? ` data-wiki="${esc(a.url)}" style="cursor:pointer" title="Voir la fiche Wikipédia"` : ""}>
                             ${a.thumbnail ? `<img src="${a.thumbnail}" alt="">` : `<div style="width:50px;height:50px;border-radius:50%;background:#333;display:flex;align-items:center;justify-content:center;font-size:24px">🎬</div>`}
                             <div class="info">
-                                <b>${a.name}</b>
+                                <b>${a.name}${a.age != null ? ` <span style="color:var(--beam);font-weight:normal;font-size:13px">· ${a.age} ans</span>` : ""}</b>
                                 <small>${a.year} — ${a.description}</small>
+                                ${a.url ? `<small style="color:var(--teal)">📖 Voir sur Wikipédia</small>` : ""}
                             </div>
                         </div>
                     `).join("");
+                    document.getElementById("bdayList").querySelectorAll("[data-wiki]").forEach(el => {
+                        el.addEventListener("click", () => window.open(el.dataset.wiki, "_blank", "noopener"));
+                    });
                 } catch (e) {
                     document.getElementById("bdayList").innerHTML = "<p class='note' style='color:var(--ticket)'>Impossible de charger les données.</p>";
                 }
@@ -6031,45 +6103,54 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
                 const res = await fetch("/api/progression");
                 const data = await res.json();
                 
-                const { currentLevel, claimedBonuses, nextBonus, maxLevel } = data;
-                
+                const { currentLevel, claimedBonuses, claimedChests, nextBonus, nextChest, maxLevel } = data;
+                const chestsFaits = claimedChests || [];
+
                 if (nextBonus) {
                     const diff = nextBonus - currentLevel;
                     document.getElementById("nextBonusText").innerHTML = `Encore <b style="color:var(--beam)">${diff} niveau${diff>1?'x':''}</b> avant le prochain coffre 🎁 !`;
                 } else {
                     document.getElementById("nextBonusText").textContent = "Vous avez atteint le sommet ! Félicitations !";
                 }
-                
+
                 let html = "";
                 // On affiche jusqu'à 8 niveaux au-dessus pour le brouillard
                 const visMax = Math.min(maxLevel, currentLevel + 8);
-                
+
                 for (let i = 1; i <= visMax; i++) {
                     const isBonus = i === 5 || (i > 0 && i % 10 === 0);
+                    const isChest = i > 0 && i % 15 === 0;
                     const isDone = i < currentLevel;
                     const isCurrent = i === currentLevel;
-                    const isFog = i > currentLevel + 2; 
-                    
+                    const isFog = i > currentLevel + 2;
+
                     let classes = "progression-step";
                     if (isDone) classes += " done";
                     if (isCurrent) classes += " current";
                     if (isBonus) classes += " bonus";
-                    if (isFog && !isBonus) classes += " fog";
-                    
-                    const claimable = isBonus && i <= currentLevel && !claimedBonuses.includes(i);
-                    if (claimable) classes += " claimable";
-                    
+                    if (isChest) classes += " chest";
+                    if (isFog && !isBonus && !isChest) classes += " fog";
+
+                    const claimableBonus = isBonus && i <= currentLevel && !claimedBonuses.includes(i);
+                    const claimableChest = isChest && i <= currentLevel && !chestsFaits.includes(i);
+                    if (claimableBonus || claimableChest) classes += " claimable";
+
                     let content = i;
-                    if (isBonus) {
+                    if (isChest) {
+                        if (chestsFaits.includes(i)) content = "🔓";
+                        else if (claimableChest) content = "🗝️";
+                        else content = "🔒";
+                    } else if (isBonus) {
                         if (claimedBonuses.includes(i)) content = "✅";
-                        else if (claimable) content = "🎁";
+                        else if (claimableBonus) content = "🎁";
                         else content = "📦";
                     }
-                    if (isFog && !isBonus) content = "☁️";
-                    
-                    const clickAttr = claimable
-                        ? `onclick="claimBonus(${i})"`
-                        : (isDone || isCurrent) ? `onclick="voirCitationNiveau(${i})" style="cursor:pointer"` : "";
+                    if (isFog && !isBonus && !isChest) content = "☁️";
+
+                    let clickAttr = "";
+                    if (claimableChest) clickAttr = `onclick="ouvrirCoffre(${i})"`;
+                    else if (claimableBonus) clickAttr = `onclick="claimBonus(${i})"`;
+                    else if (isDone || isCurrent) clickAttr = `onclick="voirCitationNiveau(${i})" style="cursor:pointer"`;
                     const line = i > 1 ? `<div class="progression-line ${isDone || isCurrent ? 'done' : ''}"></div>` : "";
 
                     html += `
@@ -6105,15 +6186,72 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
             });
             const data = await res.json();
             if (data.ok) {
-                bandeauNotif(`<span style="font-size:24px">🎉</span><span><b style="color:var(--beam)">Bonus récupéré !</b><small>+${data.reward.credits} tickets et +${data.reward.xp} xp</small></span>`);
+                const extra = data.reward.pepite
+                    ? ` · <b style="color:var(--teal)">+1 emplacement pépite 💎</b> (jusqu'à ${data.pepiteMax})`
+                    : "";
+                bandeauNotif(`<span style="font-size:24px">🎉</span><span><b style="color:var(--beam)">Bonus récupéré !</b><small>+${data.reward.credits} tickets et +${data.reward.xp} xp${extra}</small></span>`);
                 if (typeof setCredits === "function") setCredits(data.credits);
                 if (data.niveau && typeof majNiveau === "function") majNiveau(data.niveau);
+                if (data.pepiteMax && typeof rafraichirPepites === "function") rafraichirPepites();
                 openProgression(); // Refresh map
             } else {
                 alert("Erreur lors de la récupération du bonus.");
             }
         };
 
+        /* ---------- Coffre de niveau (tous les 15 niveaux) : choix + animation d'ouverture ---------- */
+        let coffreNiveauCourant = null;
+        const coffreModal = document.getElementById("coffreModal");
+        const coffreAnim = document.getElementById("coffreAnim");
+
+        window.ouvrirCoffre = (lvl) => {
+            coffreNiveauCourant = lvl;
+            document.getElementById("coffreNiveau").textContent = lvl;
+            document.getElementById("coffreChoixBloc").classList.remove("hidden");
+            document.getElementById("coffreResultat").classList.add("hidden");
+            coffreAnim.textContent = "📦";
+            coffreAnim.className = "coffre-anim";
+            coffreModal.classList.add("active");
+        };
+        document.getElementById("closeCoffreBtn").onclick = () => coffreModal.classList.remove("active");
+        coffreModal.addEventListener("click", (e) => { if (e.target === coffreModal) coffreModal.classList.remove("active"); });
+
+        document.getElementById("coffreChoix").querySelectorAll("[data-choix]").forEach(b => b.addEventListener("click", async () => {
+            const choix = b.dataset.choix;
+            document.getElementById("coffreChoixBloc").classList.add("hidden");
+            coffreAnim.classList.add("ouvert");
+
+            let data = null;
+            try {
+                const res = await fetch("/api/progression/claim-coffre", {
+                    method: "POST", headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({level: coffreNiveauCourant, choix})
+                });
+                data = await res.json();
+            } catch(e) { data = { ok: false }; }
+
+            setTimeout(() => {
+                coffreAnim.textContent = "✨";
+                document.getElementById("coffreResultat").classList.remove("hidden");
+                const icone = document.getElementById("coffreRevealIcone");
+                const texte = document.getElementById("coffreRevealTexte");
+                if (!data?.ok) {
+                    icone.textContent = "😕";
+                    texte.textContent = "Ce coffre n'est plus disponible.";
+                } else if (choix === "pepite") {
+                    icone.textContent = "💎";
+                    texte.textContent = `Un emplacement pépite en plus ! (jusqu'à ${data.pepiteMax} désormais)`;
+                    if (typeof rafraichirPepites === "function") rafraichirPepites();
+                } else if (choix === "roue") {
+                    icone.textContent = "🎡";
+                    texte.textContent = "Un tour de roue gratuit vous attend — direction la roue de la fortune !";
+                } else {
+                    icone.textContent = "👑";
+                    texte.textContent = "Votre demande de code VIP a été envoyée à l'administrateur, vous serez prévenu(e) dès son envoi.";
+                }
+                openProgression();
+            }, 600);
+        }));
 </script>
 
 </body>
