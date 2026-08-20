@@ -189,6 +189,9 @@ const BOT_NIVEAUX = {
   hardcore: { precision: 0.90, delaiMin: 700,  delaiMax: 2200,  emoji: "🔥", label: "Hardcore" },
 };
 
+/** Nombre maximum de bots que l'on peut ajouter en même temps dans une partie "chacun pour soi". */
+const MAX_BOTS_FFA = 7;
+
 const BOT_NOMS = [
   "CinéPhilippe", "PopcornMaster", "Bobine Express", "Le Projectionniste Fou", "Grosminet Ciné",
   "Madame Sous-titres", "Capitaine Spoiler", "Nanar Attitude", "Vieux Fauteuil Rouge", "Toto la Pellicule",
@@ -196,6 +199,85 @@ const BOT_NOMS = [
   "Turbo Ticket", "Choupinet Cinéma", "L'Ouvreuse Masquée", "Sacha Scénario", "Bulle de Pop-corn",
 ];
 const nomBotAleatoire = () => BOT_NOMS[Math.floor(Math.random() * BOT_NOMS.length)];
+
+/** Emojis disponibles pour les réactions rapides (joueurs humains ET bots — voir plus bas). */
+const EMOJIS = ["👋", "❤️", "💯", "🩸", "😂", "😭"];
+
+/**
+ * Petites piques et taquineries envoyées par les bots pendant la partie, pour qu'ils paraissent
+ * un peu plus « vivants » qu'un simple curseur qui répond dans le vide. Le ton monte avec le
+ * niveau de difficulté (facile = sympa et un peu benêt, hardcore = fier et taquin) mais reste
+ * toujours bon enfant — jamais méchant, jamais grossier.
+ */
+const BOT_PHRASES = {
+  facile: {
+    intro: ["Salut ! Je vais faire de mon mieux 🙂", "Coucou tout le monde, soyez indulgents avec moi !", "C'est parti, j'ai un peu le trac 😅"],
+    bonneReponse: ["Ah, je l'ai eu ! 🙂", "Oh, une bonne réponse, ça arrive même à moi !", "Youpi, j'ai trouvé !"],
+    mauvaiseReponse: ["Zut, raté...", "Ah non, pas celui-là 😅", "Je n'avais aucune idée pour celui-ci."],
+    adversaireReussit: ["Bien joué !", "Chapeau, tu connais tes films 👏", "Wahou, trouvé si vite !"],
+    adversaireRate: ["Pas grave, on se rattrape au prochain !", "Ça arrive à tout le monde 🙂", "Oh, dommage pour toi aussi !"],
+    victoire: ["J'ai gagné ?! Incroyable 😄", "Waouh, première place, je n'y crois pas !", "Merci d'avoir joué avec moi, c'était sympa !"],
+    defaite: ["Bien joué, tu as mérité ta victoire !", "GG, c'était une belle partie 🙂", "Je ferai mieux la prochaine fois !"],
+  },
+  moyen: {
+    intro: ["Prêt à jouer ? On va voir ce que tu vaux 😎", "Salut ! J'espère que t'as révisé tes films.", "C'est parti, accroche-toi un peu quand même."],
+    bonneReponse: ["Facile 😎", "Encore une pour moi.", "Je commence à prendre le rythme !"],
+    mauvaiseReponse: ["Bon, celui-là je le laisse passer.", "Ok, celle-ci était un piège.", "Pas ma meilleure manche..."],
+    adversaireReussit: ["Pas mal, pas mal 👀", "Ok tu connais un peu tes classiques.", "Tiens, une bonne réponse, ça change !"],
+    adversaireRate: ["Ah ah, celle-là était pour moi 😏", "Dommage, je t'attendais au tournant.", "Même pas déçu pour toi."],
+    victoire: ["GG, je m'en doutais un peu 😎", "Bien joué quand même, tu t'es battu.", "Belle partie, on remet ça ?"],
+    defaite: ["Ok, bien joué... cette fois-ci 😏", "GG, mais la revanche arrive vite.", "Pas mal du tout, respect."],
+  },
+  hardcore: {
+    intro: ["Prépare-toi, ça va être rapide 🔥", "J'espère que t'es venu prêt, parce que moi oui.", "On y va, essaie de suivre le rythme 😏"],
+    bonneReponse: ["Trop facile 🔥", "C'est même pas un défi pour moi.", "Encaisse celle-là 😏"],
+    mauvaiseReponse: ["Bon, ok, personne n'est parfait.", "Rare, mais ça arrive même à moi.", "Je note et je passe à la suivante."],
+    adversaireReussit: ["Ok, jolie réponse... pour une fois.", "Pas mal, mais je reste devant 😏", "Tu m'impressionnes presque là."],
+    adversaireRate: ["Ah ah, sans commentaire 😂", "Je m'y attendais un peu, avoue.", "Tu peux mieux faire, allez !"],
+    victoire: ["GG, comme prévu 🔥", "Bien essayé, mais c'était couru d'avance 😏", "Une victoire de plus pour moi, merci pour le match !"],
+    defaite: ["Ok... bien joué, je le reconnais 👏", "GG, tu m'as eu cette fois, chapeau.", "Alerte info : le bot aussi peut perdre. Bien joué !"],
+  },
+};
+
+/**
+ * Fait « parler » un bot : soit une petite phrase piochée dans BOT_PHRASES selon son niveau et
+ * la catégorie de l'instant, soit une simple réaction emoji — avec un léger délai aléatoire pour
+ * ne pas donner l'impression d'un message instantané et robotique. `probabilite` évite que le bot
+ * commente absolument chaque événement (ce serait vite fatigant) : il ne parle qu'une fois sur N.
+ */
+function botDire(room, bot, categorie, probabilite = 0.4) {
+  if (!room || !bot || !bot.bot) return;
+  if (Math.random() > probabilite) return;
+
+  const delai = 500 + Math.random() * 1600;
+  setTimeout(() => {
+    // Le salon peut avoir disparu (partie terminée, tout le monde parti) entre-temps.
+    if (rooms.get(room.code) !== room || !room.players.has(bot.userId)) return;
+
+    const enEmoji = Math.random() < 0.4;
+    if (enEmoji) {
+      const emoji = EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
+      io.to(room.code).emit("reaction", { emoji, pseudo: bot.pseudo, avatar: bot.avatar });
+      return;
+    }
+
+    const banque = BOT_PHRASES[bot.botNiveau] || BOT_PHRASES.moyen;
+    const phrases = banque[categorie];
+    if (!phrases || !phrases.length) return;
+    const texte = phrases[Math.floor(Math.random() * phrases.length)];
+    for (const autre of room.players.values()) {
+      if (autre.bot) continue;   // inutile d'envoyer à des sockets de bots, qui n'existent pas
+      io.to(autre.id).emit("chat:message", { pseudo: bot.pseudo, avatar: bot.avatar, text: texte, at: Date.now() });
+    }
+  }, delai);
+}
+
+/** Un bot pris au hasard parmi ceux du salon (utile quand plusieurs bots jouent en même temps
+ *  en mode « chacun pour soi » : on n'en fait réagir qu'un seul à la fois, pas tous en chœur). */
+function botAuHasard(room) {
+  const bots = [...room.players.values()].filter((p) => p.bot);
+  return bots.length ? bots[Math.floor(Math.random() * bots.length)] : null;
+}
 
 /**
  * Mot de passe d'administration.
@@ -3848,6 +3930,7 @@ function traiterReponseBot(room, bot, choiceId) {
     io.to(room.code).emit("player:answered", { id: bot.id, pseudo: bot.pseudo, team: bot.team, points: 0,
       coeurs: bot.coeurs, coeursMax: bot.coeursMax });
     io.to(room.code).emit("room:update", publicState(room));
+    botDire(room, bot, "mauvaiseReponse");
     if ([...room.players.values()].every((p) => p.hasAnswered)) endRound(room);
     return;
   }
@@ -3858,6 +3941,7 @@ function traiterReponseBot(room, bot, choiceId) {
   bot.score += points;
   io.to(room.code).emit("player:answered", { id: bot.id, pseudo: bot.pseudo, team: bot.team, points,
     coeurs: bot.coeurs, coeursMax: bot.coeursMax });
+  botDire(room, bot, "bonneReponse");
 
   const tousTrouve = [...room.players.values()].every((p) => p.hasAnswered || p.coeurs === 0);
   if (tousTrouve) return endRound(room);
@@ -3979,6 +4063,8 @@ function endGame(room) {
     p.bilan = { xp, niveau, vainqueur, ticketsGagnes: REGLAGES.creditsParPartie };
 
     verifierCodeParrain(p.userId);
+    // Petit mot de la fin pour les bots — fier s'ils gagnent, beau joueur sinon.
+    if (p.bot) botDire(room, p, vainqueur ? "victoire" : "defaite", 0.7);
   }
   for (const p of room.players.values())
     io.to(p.id).emit("game:end", { ranking, mode: room.mode, teams: state.teams,
@@ -4210,38 +4296,57 @@ io.on("connection", (socket) => {
     cb?.({ ok: true });
   });
 
-  /** Ajoute un bot au salon (duel uniquement) : pratique quand personne d'autre n'est
-   *  disponible pour rejoindre. Réservé à l'hôte, avant le lancement de la partie. */
+  /** Ajoute un bot au salon (duel ou chacun-pour-soi) : pratique quand personne d'autre
+   *  n'est disponible pour rejoindre. Réservé à l'hôte, avant le lancement de la partie. */
   socket.on("room:add-bot", ({ code, niveau }, cb) => {
     const room = rooms.get(code);
     if (!room) return cb?.({ ok: false, error: "ROOM_NOT_FOUND" });
-    if (room.mode !== "duel") return cb?.({ ok: false, error: "MODE_INVALIDE" });
+    // Duel : un seul bot (adversaire unique). Chacun pour soi : plusieurs bots pour remplir la
+    // partie quand personne d'autre n'est dispo, jusqu'à MAX_BOTS_FFA à la fois.
+    if (!["duel", "ffa"].includes(room.mode)) return cb?.({ ok: false, error: "MODE_INVALIDE" });
     if (room.status !== "lobby") return cb?.({ ok: false, error: "DEJA_COMMENCE" });
     if (!estHote(room, socket.data.user.id)) return cb?.({ ok: false, error: "PAS_HOTE" });
-    if (room.players.size >= 2) return cb?.({ ok: false, error: "SALON_COMPLET" });
+    const limiteSalon = room.mode === "duel" ? 2 : CONFIG.MAX_PLAYERS;
+    if (room.players.size >= limiteSalon) return cb?.({ ok: false, error: "SALON_COMPLET" });
+    if (room.mode === "ffa") {
+      const nbBotsActuels = [...room.players.values()].filter((p) => p.bot).length;
+      if (nbBotsActuels >= MAX_BOTS_FFA) return cb?.({ ok: false, error: "MAX_BOTS_ATTEINT", max: MAX_BOTS_FFA });
+    }
 
     const niveauBot = BOT_NIVEAUX[niveau] ? niveau : "moyen";
     const botId = `bot-${crypto.randomUUID()}`;
-    room.players.set(botId, {
+    const bot = {
       id: botId, userId: botId, pseudo: nomBotAleatoire(), avatar: BOT_NIVEAUX[niveauBot].emoji,
       photo: null, fondateur: false, team: null,
       score: 0, hints: [], paidHints: [], hasAnswered: false,
       coeursMax: REGLAGES.coeurs, coeurs: REGLAGES.coeurs,
       freeHintsRemaining: 0, allHintsFree: false,
       online: true, bot: true, botNiveau: niveauBot,
-    });
+    };
+    room.players.set(botId, bot);
     io.to(room.code).emit("room:update", publicState(room));
     cb?.({ ok: true, state: publicState(room) });
+    // Petit mot d'ambiance à l'arrivée du bot dans le salon — pas la peine d'attendre le début
+    // de la partie pour lui donner un peu de personnalité.
+    botDire(room, bot, "intro", 0.8);
   });
 
-  /** Retire le bot du salon (avant le lancement), au cas où l'hôte change d'avis. */
-  socket.on("room:remove-bot", ({ code }, cb) => {
+  /** Retire un ou plusieurs bots du salon (avant le lancement), au cas où l'hôte change d'avis.
+   *  En duel il n'y en a qu'un, donc on les retire tous par simplicité (comportement historique).
+   *  En chacun-pour-soi, un `botId` précis ne retire que ce bot-là et laisse les autres jouer ;
+   *  sans `botId` (par exemple un bouton "retirer tous les bots"), on les enlève tous. */
+  socket.on("room:remove-bot", ({ code, botId }, cb) => {
     const room = rooms.get(code);
     if (!room) return cb?.({ ok: false, error: "ROOM_NOT_FOUND" });
     if (room.status !== "lobby") return cb?.({ ok: false, error: "DEJA_COMMENCE" });
     if (!estHote(room, socket.data.user.id)) return cb?.({ ok: false, error: "PAS_HOTE" });
-    for (const [id, p] of room.players) {
-      if (p.bot) { clearTimeout(p.timerReponse); room.players.delete(id); }
+    if (botId) {
+      const p = room.players.get(botId);
+      if (p?.bot) { clearTimeout(p.timerReponse); room.players.delete(botId); }
+    } else {
+      for (const [id, p] of room.players) {
+        if (p.bot) { clearTimeout(p.timerReponse); room.players.delete(id); }
+      }
     }
     io.to(room.code).emit("room:update", publicState(room));
     cb?.({ ok: true, state: publicState(room) });
@@ -4299,6 +4404,10 @@ io.on("connection", (socket) => {
       io.to(room.code).emit("player:answered", { id: player.id, pseudo: player.pseudo, team: player.team, points: 0,
         coeurs: player.coeurs, coeursMax: player.coeursMax });
       io.to(room.code).emit("room:update", publicState(room));   // pour l'affichage permanent des cœurs adverses
+      // Un bot du salon (s'il y en a) peut se moquer gentiment d'une mauvaise réponse — un seul à
+      // la fois, même avec plusieurs bots en « chacun pour soi », pour ne pas noyer le chat.
+      const botTaquin = botAuHasard(room);
+      if (botTaquin) botDire(room, botTaquin, "adversaireRate", 0.3);
       if ([...room.players.values()].every((p) => p.hasAnswered)) endRound(room);
       return cb?.({ ok: true, correct: false, final: true,
                     coeurs: player.coeurs, elimine: player.coeurs === 0 });
@@ -4313,6 +4422,8 @@ io.on("connection", (socket) => {
            coeurs: player.coeurs ?? player.coeursMax });
     io.to(room.code).emit("player:answered", { id: player.id, pseudo: player.pseudo, team: player.team, points,
       coeurs: player.coeurs, coeursMax: player.coeursMax });
+    const botAdmiratif = botAuHasard(room);
+    if (botAdmiratif) botDire(room, botAdmiratif, "adversaireReussit", 0.3);
 
     const tousTrouve = [...room.players.values()]
       .every((p) => p.hasAnswered || p.coeurs === 0);
@@ -4416,8 +4527,8 @@ io.on("connection", (socket) => {
     io.to(room.code).emit("game:paused", { enPause: true, reste, par: socket.data.user.pseudo });
   });
 
-  /** Réactions émoji pendant la partie, relayées à tout le salon. */
-  const EMOJIS = ["👋", "❤️", "💯", "🩸", "😂", "😭"];
+  /** Réactions émoji pendant la partie, relayées à tout le salon (liste EMOJIS commune, définie
+   *  plus haut, aussi utilisée par les bots — voir botDire()). */
   let derniereReaction = 0;
 
   socket.on("reaction", ({ code, emoji }) => {
