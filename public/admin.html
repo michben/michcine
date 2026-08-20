@@ -844,6 +844,29 @@
         </div>
       </div>
 
+      <div class="card">
+        <p class="tag">✉️ Messages des joueurs au développeur</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6">
+          Chaque joueur peut vous écrire depuis le bouton « ✉️ Contacter le développeur » de son menu,
+          sans avoir besoin d'être votre ami. Choisissez ci-dessous quel compte reçoit ces demandes
+          (une petite alerte s'affiche en direct chez lui s'il est connecté à ce moment-là), puis
+          retrouvez tous les messages reçus juste en dessous.
+        </p>
+        <label for="contactDevDestinataire">Compte qui reçoit les messages</label>
+        <select id="contactDevDestinataire"><option value="">— Aucun compte choisi —</option></select>
+        <div class="row">
+          <button id="btnSaveContactDevConfig">Enregistrer</button>
+        </div>
+        <p class="msg" id="contactDevConfigMsg"></p>
+
+        <div style="margin-top:18px;padding-top:16px;border-top:1px solid rgba(237,232,220,.12)">
+          <p class="tag" style="margin-bottom:8px">📬 Boîte de réception
+            <span id="contactDevNonLus" class="hidden" style="background:var(--ticket,#E4586E);color:#fff;font-size:11px;font-weight:700;border-radius:10px;padding:2px 8px;margin-left:6px">0</span>
+          </p>
+          <div id="contactDevListe"><p class="msg">Aucun message pour l'instant.</p></div>
+        </div>
+      </div>
+
       <div class="card" id="alerteMdp" style="border-color:rgba(228,88,110,.5)">
         <p class="tag" style="color:var(--ticket)">Sécurité</p>
         <p style="margin:0;line-height:1.6">Le mot de passe par défaut est encore actif. Toute personne
@@ -1400,7 +1423,7 @@ function tab(which){
   if (which === "classement") loadClassement();
   if (which === "users") { loadUsers(); chargerCompteurEnfant(); }
   if (which === "reports"){ loadReports(); loadConversations(); }
-  if (which === "reglages"){ etatSecurite(); chargerReglages(); chargerAide(); chargerAnnonce(); chargerMaintenance(); }
+  if (which === "reglages"){ etatSecurite(); chargerReglages(); chargerAide(); chargerAnnonce(); chargerMaintenance(); chargerContactDev(); }
   if (which === "sorties") loadSorties();
   if (which === "nowplaying") loadNowPlaying();
   if (which === "sondages") { loadSondages(); remplirFilmsListe(); chargerSuggestionsPepites(); }
@@ -1767,6 +1790,61 @@ $("btnMaintenanceReprendreToutes").onclick = async () => {
   $("maintenanceMsg").className = res.ok ? "msg ok" : "msg err";
   chargerMaintenance();
 };
+
+/* ---------- Messages des joueurs au développeur ---------- */
+async function chargerContactDev(){
+  const [resConfig, resUsers] = await Promise.all([
+    api("/api/admin/contact-developpeur/config"),
+    api("/api/admin/users"),
+  ]);
+  const config = resConfig.ok ? await resConfig.json() : { destinataireId: null };
+  const comptes = resUsers.ok ? await resUsers.json() : [];
+  $("contactDevDestinataire").innerHTML = `<option value="">— Aucun compte choisi —</option>` +
+    comptes.map(u => `<option value="${u.id}">${esc(u.pseudo || u.id)}</option>`).join("");
+  $("contactDevDestinataire").value = config.destinataireId || "";
+  await chargerMessagesContactDev();
+}
+
+$("btnSaveContactDevConfig").onclick = async () => {
+  const res = await api("/api/admin/contact-developpeur/config", {method:"PUT", body: JSON.stringify({
+    destinataireId: $("contactDevDestinataire").value || null,
+  })});
+  $("contactDevConfigMsg").textContent = res.ok ? "Enregistré." : "Échec de l'enregistrement.";
+  $("contactDevConfigMsg").className = res.ok ? "msg ok" : "msg err";
+};
+
+async function chargerMessagesContactDev(){
+  const res = await api("/api/admin/contact-developpeur");
+  if (!res.ok) return;
+  const { messages, nonLus } = await res.json();
+  $("contactDevNonLus").textContent = nonLus;
+  $("contactDevNonLus").classList.toggle("hidden", !nonLus);
+  $("contactDevListe").innerHTML = messages.length ? messages.map(m => `
+    <div class="urow ${m.lu ? "banned" : ""}" data-msg="${m.id}">
+      <div class="who">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+          <span style="font-size:18px">${m.avatar || "🎬"}</span>
+          <b>${esc(m.pseudo || "?")}</b>
+          ${m.lu ? "" : `<span style="background:var(--ticket);color:#fff;font-size:10px;font-weight:700;border-radius:8px;padding:1px 6px">nouveau</span>`}
+        </div>
+        <small>${esc(m.texte)}</small>
+        <small>${new Date(m.at).toLocaleString()}</small>
+      </div>
+      <div class="row" style="flex:0 0 auto">
+        ${m.lu ? "" : `<button class="ghost" data-marquer-lu="${m.id}">✓ Marquer lu</button>`}
+        <button class="ghost danger" data-supprimer-msg="${m.id}">🗑️</button>
+      </div>
+    </div>`).join("") : `<p class="msg">Aucun message pour l'instant.</p>`;
+  $("contactDevListe").querySelectorAll("[data-marquer-lu]").forEach(b => b.onclick = async () => {
+    await api(`/api/admin/contact-developpeur/${encodeURIComponent(b.dataset.marquerLu)}/lu`, {method:"PUT", body: JSON.stringify({lu:true})});
+    chargerMessagesContactDev();
+  });
+  $("contactDevListe").querySelectorAll("[data-supprimer-msg]").forEach(b => b.onclick = async () => {
+    if (!confirm("Supprimer ce message ?")) return;
+    await api(`/api/admin/contact-developpeur/${encodeURIComponent(b.dataset.supprimerMsg)}`, {method:"DELETE"});
+    chargerMessagesContactDev();
+  });
+}
 
 /* ---------- Mot de passe d'administration ---------- */
 async function etatSecurite(){

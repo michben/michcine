@@ -563,7 +563,7 @@
    en haut à droite à la place : jamais affiché pendant une partie (voir aideActive / inGame),
    exactement comme le coin « regardé par », qui occupe cette même place mais uniquement en jeu —
    les deux ne se croisent donc jamais. */
-.help-btn { position: fixed; top: 14px; right: 14px; width: 40px; height: 40px; background: rgba(28, 34, 56, 0.6); color: var(--muted); border: 1px solid rgba(237, 232, 220, 0.15); border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 20px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2); transition: all 0.3s ease; z-index: 1000; backdrop-filter: blur(4px); }
+.help-btn { position: fixed; top: 38px; right: 14px; width: 40px; height: 40px; background: rgba(28, 34, 56, 0.6); color: var(--muted); border: 1px solid rgba(237, 232, 220, 0.15); border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 20px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2); transition: all 0.3s ease; z-index: 1000; backdrop-filter: blur(4px); }
 .help-btn:hover { transform: scale(1.1); color: var(--chalk); border-color: var(--beam); background: rgba(28, 34, 56, 0.9); }
 
 /* --- COIN "REGARDÉ PAR" : qui suit la partie en direct --- */
@@ -594,8 +594,12 @@ html.mode-enfant-actif .wrap{padding-top:48px}
   padding-left:100%;will-change:transform;animation:tickerDefile linear 1;
   font-family:var(--font-etiquette);font-size:12.5px;font-weight:600;letter-spacing:.02em}
 #tickerBanniere .tickerContenu.dev{color:var(--ticket)}
-#tickerBanniere .tickerContenu.roue,#tickerBanniere .tickerContenu.equipe{color:var(--beam)}
+#tickerBanniere .tickerContenu.roue,#tickerBanniere .tickerContenu.equipe,
+#tickerBanniere .tickerContenu.partage,#tickerBanniere .tickerContenu.sondage,
+#tickerBanniere .tickerContenu.classement{color:var(--beam)}
 #tickerBanniere .tickerContenu.bienvenue{color:var(--teal)}
+#tickerBanniere .tickerContenu.cliquable{cursor:pointer}
+#tickerBanniere .tickerPfp{width:18px;height:18px;border-radius:50%;object-fit:cover;flex:0 0 auto}
 @keyframes tickerDefile{ from{ transform:translateX(0); } to{ transform:translateX(-100%); } }
 html.ticker-actif .wrap{padding-top:38px}
 html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
@@ -604,7 +608,35 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
   #tickerBanniere .tickerContenu{font-size:11.5px}
   html.ticker-actif .wrap{padding-top:34px}
   html.ticker-actif.mode-enfant-actif .wrap{padding-top:70px}
+  .help-btn{top:34px}
 }
+/* --- Salon vocal (façon talkie-walkie) --- */
+.vocalGrille{display:flex;flex-wrap:wrap;gap:14px;justify-content:flex-start}
+.vocalGrille:empty::after{content:"Personne ici pour l'instant.";color:var(--muted);font-size:13px}
+.vocalParticipant{display:flex;flex-direction:column;align-items:center;gap:6px;width:74px;text-align:center}
+.vocalParticipant .vocalAvatarWrap{position:relative;width:56px;height:56px;display:flex;align-items:center;justify-content:center}
+.vocalParticipant .vocalAvatarWrap img.pfp{width:52px;height:52px;vertical-align:0}
+.vocalParticipant .vocalAvatarWrap .emoji{font-size:30px;width:52px;height:52px;border-radius:50%;
+  background:var(--card);display:flex;align-items:center;justify-content:center}
+/* L'anneau qui pulse autour de la photo quand la personne "parle" (aucun son réel transmis,
+   juste l'indicateur visuel demandé — façon talkie-walkie). */
+.vocalParticipant.parle .vocalAvatarWrap::before{content:"";position:absolute;inset:-6px;border-radius:50%;
+  border:3px solid var(--teal);animation:vocalPulse 1.1s ease-out infinite}
+.vocalParticipant.parle .vocalAvatarWrap::after{content:"";position:absolute;inset:-6px;border-radius:50%;
+  border:3px solid var(--teal);opacity:.6}
+@keyframes vocalPulse{
+  0%{transform:scale(1);opacity:.9}
+  100%{transform:scale(1.55);opacity:0}
+}
+.vocalParticipant .vocalMute{position:absolute;bottom:-2px;right:-2px;width:20px;height:20px;border-radius:50%;
+  background:var(--ticket);display:flex;align-items:center;justify-content:center;font-size:11px;border:2px solid var(--ink)}
+.vocalParticipant .vocalNom{font-size:11.5px;color:var(--chalk);line-height:1.2;word-break:break-word}
+.vocalParticipant .vocalRoleTag{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+#btnVocalParler{transition:transform .1s ease}
+#btnVocalParler.actif{background:var(--teal);color:#0A2015;transform:scale(.97)}
+#vocalDemandesListe .urowVocal,#vocalConsoleParticipants .urowVocal{display:flex;align-items:center;gap:10px;
+  padding:10px 0;border-top:1px solid rgba(237,232,220,.1);flex-wrap:wrap}
+#vocalDemandesListe .urowVocal .qui,#vocalConsoleParticipants .urowVocal .qui{display:flex;align-items:center;gap:8px;flex:1 1 140px}
 /* --- LA FENÊTRE MODALE --- */
 .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.85); display: none; justify-content: center; align-items: center; z-index: 1001; opacity: 0; transition: opacity 0.3s ease; }
 .modal-overlay.active { display: flex; opacity: 1; }
@@ -1107,6 +1139,8 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
       <button class="ghost" id="btnFriends">Amis <span id="badgeAmis" class="pastille hidden">0</span></button>
       <button class="ghost" id="btnSignets">🔖 Mes signets</button>
       <button class="ghost" id="btnPepites">💎 Mes pépites <span id="badgePepites" class="pastille hidden">0</span></button>
+      <button class="ghost" id="btnVocal" style="border-color:var(--teal);color:var(--teal)">🎙️ Salon vocal</button>
+      <button class="ghost" id="btnContactDev" title="Envoyer un message au développeur">✉️ Contacter le développeur</button>
       <button class="ghost" id="btnKidMode" aria-pressed="false" title="Mode enfant : uniquement des films pour enfants">🐻</button>
       <button class="ghost" id="btnProfile">Profil</button>
     </div>
@@ -1125,6 +1159,81 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
       <input id="joinCode" maxlength="4" placeholder="ABCD" autocomplete="off">
       <div class="row"><button id="btnJoin" class="ghost">Rejoindre</button></div>
       <p class="feedback bad" id="joinError"></p>
+    </div>
+  </section>
+
+  <!-- SALON VOCAL (façon talkie-walkie : pas de son réel, un indicateur visuel de qui parle) -->
+  <section id="vocal" class="hidden">
+    <button class="ghost" id="btnVocalRetourMenu" style="margin-bottom:14px">← Retour au menu</button>
+
+    <div id="vocalListe">
+      <h2>🎙️ Salons vocaux</h2>
+      <p class="note" style="margin:0 0 14px">Aucun vrai micro pour l'instant : un bouton « parler » fait juste pulser
+        votre photo pour les autres, façon talkie-walkie — pratique pour signaler que c'est à vous, sans embêter
+        personne avec du son qui ne marcherait pas toujours bien selon les téléphones.</p>
+      <div class="card">
+        <label for="vocalTitreCreation">Créer un salon</label>
+        <input id="vocalTitreCreation" placeholder="Le titre de votre salon (facultatif)" maxlength="60">
+        <div class="row"><button id="btnVocalCreer">🎙️ Ouvrir mon salon</button></div>
+      </div>
+      <div class="card">
+        <label for="vocalCode">Rejoindre avec un code</label>
+        <input id="vocalCode" maxlength="4" placeholder="ABCD" autocomplete="off">
+        <div class="row"><button id="btnVocalRejoindre" class="ghost">Rejoindre</button></div>
+        <p class="feedback bad" id="vocalErreur"></p>
+      </div>
+      <p class="tag" style="margin-top:18px">Salons ouverts en ce moment</p>
+      <div id="vocalSalonsOuverts"><p class="note">Aucun salon ouvert pour l'instant.</p></div>
+    </div>
+
+    <div id="vocalSalon" class="hidden">
+      <div class="card" style="text-align:center">
+        <p class="tag" id="vocalTitreSalon" style="margin:0 0 4px">Salon</p>
+        <div class="marquee" id="vocalMarquee" style="margin-bottom:10px"></div>
+      </div>
+
+      <div class="card" id="vocalRadioCard">
+        <p class="tag" style="margin:0 0 8px">📻 Radio du salon</p>
+        <p class="note" id="vocalRadioTexte" style="margin:0 0 10px">Aucune piste diffusée pour l'instant.</p>
+        <audio id="vocalAudio" style="width:100%;display:none" controls></audio>
+        <div id="vocalRadioChoix" class="hidden">
+          <select id="vocalRadioSelect"></select>
+          <div class="row">
+            <button id="btnVocalRadioDiffuser" class="ghost">▶️ Diffuser</button>
+            <button id="btnVocalRadioArreter" class="ghost">⏹️ Arrêter</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <p class="tag" style="margin:0 0 10px">🎤 Hôte & cohôtes</p>
+        <div id="vocalListeHote" class="vocalGrille"></div>
+      </div>
+      <div class="card">
+        <p class="tag" style="margin:0 0 10px">🗣️ Intervenants</p>
+        <div id="vocalListeIntervenants" class="vocalGrille"></div>
+      </div>
+      <div class="card">
+        <p class="tag" style="margin:0 0 10px">👂 Auditeurs</p>
+        <div id="vocalListeAuditeurs" class="vocalGrille"></div>
+      </div>
+
+      <div class="card" id="vocalControles">
+        <div class="row">
+          <button id="btnVocalParler" class="hidden" style="flex:2">🎙️ Maintenir pour parler</button>
+          <button id="btnVocalMute" class="ghost hidden">🔇 Couper mon micro</button>
+          <button id="btnVocalDemander" class="ghost hidden">✋ Demander à intervenir</button>
+        </div>
+        <p class="note" id="vocalDemandeEnvoyee" style="margin:8px 0 0" hidden>Votre demande a été envoyée à l'hôte.</p>
+      </div>
+
+      <div class="card hidden" id="vocalConsole">
+        <p class="tag" style="margin:0 0 10px">🎛️ Console de modération</p>
+        <div id="vocalDemandesListe"></div>
+        <div id="vocalConsoleParticipants"></div>
+      </div>
+
+      <div class="row"><button class="ghost" id="btnVocalQuitter">Quitter le salon</button></div>
     </div>
   </section>
 
@@ -1244,6 +1353,23 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
         <p class="note" style="margin-top:0">Votez, et regardez le résultat évoluer en direct — jamais qui a voté quoi.</p>
         <div id="sondagesListe"></div>
         <p class="feedback" id="sondagesMsg"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODALE : CONTACTER LE DÉVELOPPEUR -->
+  <div class="modal-overlay" id="contactDevModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>✉️ Contacter le développeur</h2>
+        <button class="close-btn" id="closeContactDevBtn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="note" style="margin-top:0">Une question, un bug, une idée ? Écrivez ici — votre message part directement à l'équipe.</p>
+        <textarea id="contactDevTexte" maxlength="500" rows="5" placeholder="Votre message…"
+          style="width:100%;resize:vertical;background:var(--card);border:1px solid rgba(237,232,220,.14);color:var(--chalk);border-radius:10px;padding:13px 14px;font:inherit;font-size:16px"></textarea>
+        <div class="row" style="margin-top:10px"><button id="btnContactDevEnvoyer">Envoyer</button></div>
+        <p class="feedback" id="contactDevMsg"></p>
       </div>
     </div>
   </div>
@@ -1977,12 +2103,52 @@ try { state.kidMode = localStorage.getItem("kidMode") === "1"; } catch {}
 /* ---------- Bandeau défilant (annonces développeur, félicitations, messages de bienvenue) ---------- */
 // Message de bienvenue par défaut : complété avec le nombre de comptes une fois connu (voir initTicker).
 let tickerNbJoueurs = null;
-const messagesAccueilTicker = () => [
-  { texte: `Bonjour à tous, merci d'être${tickerNbJoueurs ? ` déjà ${tickerNbJoueurs}` : " si nombreux"} à jouer avec nous ! 🎬`, type: "bienvenue" },
-  { texte: "Salam à tous, bon film et bonne chance à la roue ! 🍿", type: "bienvenue" },
-  { texte: "Merci de faire vivre MichBen Ciné Quizz chaque jour ! ❤️", type: "bienvenue" },
+// Top 5 du classement de la saison, rafraîchi périodiquement (voir rafraichirClassementTicker) —
+// pas de fondateur/spécial ici, juste ce qu'affiche déjà le classement dans board.
+let classementSaisonTicker = [];
+const ENCOURAGEMENTS_TICKER = [
+  "💪 Chaque partie compte : ne lâchez rien, la saison n'est pas terminée !",
+  "🎯 Pas encore dans le top 5 ? Une bonne partie peut tout changer, à vous de jouer !",
+  "🌟 Le classement bouge à chaque partie — le vôtre aussi peut grimper aujourd'hui !",
 ];
-let tickerFile = [];        // messages événementiels en attente (roue, victoire d'équipe...), un seul passage chacun
+/** Va chercher le classement de la saison pour la rotation du bandeau — volontairement peu
+ *  fréquent (voir initTicker) : un classement bouge lentement, inutile de le refaire à chaque
+ *  passage du bandeau. */
+async function rafraichirClassementTicker(){
+  try {
+    const r = await fetch("/api/leaderboard?type=saison").then(x => x.ok ? x.json() : []);
+    classementSaisonTicker = Array.isArray(r) ? r : [];
+  } catch {}
+}
+const messagesAccueilTicker = () => {
+  const base = [
+    { texte: `Bonjour à tous, merci d'être${tickerNbJoueurs ? ` déjà ${tickerNbJoueurs}` : " si nombreux"} à jouer avec nous ! 🎬`, type: "bienvenue" },
+    { texte: "Salam à tous, bon film et bonne chance à la roue ! 🍿", type: "bienvenue" },
+    { texte: "Merci de faire vivre MichBen Ciné Quizz chaque jour ! ❤️", type: "bienvenue" },
+  ];
+  // Battles de films en cours : pourcentages glissés dans la même rotation. sondagesActifs
+  // (défini plus bas dans ce script) est tenu à jour en temps réel par la diffusion socket
+  // "sondage:maj" à chaque vote — ces chiffres sont donc toujours ceux de l'instant présent,
+  // même si ce message n'est composé qu'au moment de son affichage.
+  const battles = (typeof sondagesActifs !== "undefined" ? sondagesActifs : []).map(s => ({
+    texte: `🍿 Battle en cours : ${s.optionA.texte} ${s.pourcentA}% — ${s.pourcentB}% ${s.optionB.texte}` +
+      ` (${s.total} vote${s.total > 1 ? "s" : ""}) — cliquez pour voter !`,
+    type: "sondage",
+  }));
+  // Top 5 de la saison, cliquables vers la fiche de chacun. On préfère des encouragements
+  // génériques plutôt que de désigner nommément qui est en bas du classement devant tout le
+  // monde — ça reste motivant sans jamais mettre quelqu'un mal à l'aise publiquement.
+  const medailles = ["🥇","🥈","🥉","🏅","🏅"];
+  const topSaison = classementSaisonTicker.slice(0, 5).map((u, i) => ({
+    texte: `${medailles[i]} ${u.pseudo} — ${i + 1}${i === 0 ? "er" : "ème"} du classement de la saison avec ${u.totalScore} pts !`,
+    type: "classement",
+    joueurId: u.id, joueurPseudo: u.pseudo, joueurAvatar: u.avatar, joueurPhoto: u.photo || null,
+  }));
+  const encouragements = classementSaisonTicker.length
+    ? ENCOURAGEMENTS_TICKER.map(texte => ({ texte, type: "classement" })) : [];
+  return [...base, ...battles, ...topSaison, ...encouragements];
+};
+let tickerFile = [];        // messages événementiels en attente (roue, victoire d'équipe, partage...), un seul passage chacun
 let tickerMessageDev = null; // message développeur actif (répété tant qu'il l'est), ou null
 let tickerAccueilIdx = 0;
 let tickerDemarre = false;
@@ -2010,8 +2176,21 @@ function tickerJouerSuivant(){
   banniere.classList.remove("hidden");
   document.documentElement.classList.add("ticker-actif");
   positionnerTickerBanniere();
-  banniere.innerHTML = `<span class="tickerContenu ${msg.type}">${esc(msg.texte)}</span>`;
+  // Partage d'un joueur qui a trouvé un film, ou membre du top 5 de la saison : petite photo
+  // + clic vers sa fiche. Battle en cours : clic vers l'onglet Sondages pour voter/voir le détail.
+  const clicJoueur = Boolean(msg.joueurId);
+  const clicSondage = msg.type === "sondage";
+  const cliquable = clicJoueur || clicSondage;
+  const photoHtml = clicJoueur
+    ? (msg.joueurPhoto
+        ? `<img class="tickerPfp" src="${esc(msg.joueurPhoto)}" alt="" onerror="this.remove()">`
+        : `<span>${esc(msg.joueurAvatar || "🎬")}</span>`)
+    : "";
+  banniere.innerHTML = `<span class="tickerContenu ${msg.type}${cliquable ? " cliquable" : ""}"` +
+    (cliquable ? ` title="Cliquez pour en savoir plus"` : "") + `>${photoHtml}${esc(msg.texte)}</span>`;
   const span = banniere.querySelector(".tickerContenu");
+  if (clicJoueur) span.onclick = () => ouvrirJoueur(msg.joueurId, msg.joueurPseudo, msg.joueurAvatar, msg.joueurPhoto);
+  else if (clicSondage) span.onclick = () => { $("sondagesModal").classList.add("active"); chargerSondages(); };
   // Vitesse de défilement constante, quelle que soit la longueur du message.
   requestAnimationFrame(() => {
     const distance = span.scrollWidth + banniere.clientWidth;
@@ -2020,9 +2199,10 @@ function tickerJouerSuivant(){
   span.onanimationend = () => tickerJouerSuivant();
 }
 
-/** File d'attente des événements diffusés à tous (gain à la roue, victoire d'équipe...). */
-function tickerAjouterEvenement(texte, type){
-  tickerFile.push({ texte, type: type || "info" });
+/** File d'attente des événements diffusés à tous (gain à la roue, victoire d'équipe, partage...).
+ *  `meta` peut porter des champs additionnels (ex. joueurId/joueurPhoto pour un partage cliquable). */
+function tickerAjouterEvenement(texte, type, meta){
+  tickerFile.push({ texte, type: type || "info", ...(meta || {}) });
 }
 
 async function initTicker(){
@@ -2034,13 +2214,16 @@ async function initTicker(){
   } catch {}
   fetch("/api/joueurs/total", { credentials: "same-origin" }).then(r => r.ok ? r.json() : null)
     .then(d => { if (d && d.total) tickerNbJoueurs = d.total; }).catch(() => {});
+  rafraichirClassementTicker();
+  // Toutes les 5 minutes : largement assez pour un classement, qui ne bouge pas partie par partie.
+  setInterval(rafraichirClassementTicker, 5 * 60 * 1000);
   if (!tickerDemarre){
     tickerDemarre = true;
     tickerJouerSuivant();
   }
 }
 socket.on("annonce:dev", (d) => { tickerMessageDev = d && d.actif ? d.texte : null; });
-socket.on("annonce:nouvelle", (m) => { if (m && m.texte) tickerAjouterEvenement(m.texte, m.type); });
+socket.on("annonce:nouvelle", (m) => { if (m && m.texte) tickerAjouterEvenement(m.texte, m.type, m); });
 
 /** Applique les conséquences du rôle du compte connecté : bouton admin, mode enfant forcé. */
 function appliquerRole(){
@@ -2083,7 +2266,7 @@ function majSpectateursCorner(){
 }
 
 const show = id => {
-  ["landing","validation","parrainage","profile","board","exchange","friends","quetes","moderation","menu","lobby","waiting","round","between","over","regarder","roue"]
+  ["landing","validation","parrainage","profile","board","exchange","friends","quetes","moderation","menu","vocal","lobby","waiting","round","between","over","regarder","roue"]
     .forEach(s => $(s).classList.toggle("hidden", s !== id));
   window.scrollTo({top: 0, behavior: "instant"});
 
@@ -4385,6 +4568,263 @@ function renderSondages(){
   });
 }
 
+/* ---------- Salon vocal (façon talkie-walkie : pas de son réel transmis) ---------- */
+let vocalSalonActuel = null;   // dernier état reçu du serveur (payload publicVocal), ou null si pas dans un salon
+let vocalEnParle = false;      // état local du bouton "maintenir pour parler"
+let vocalMusiquePourRadio = []; // catalogue /api/musique, chargé une seule fois pour le sélecteur radio
+
+function afficherVocalListe(){
+  $("vocalListe").classList.remove("hidden");
+  $("vocalSalon").classList.add("hidden");
+}
+function afficherVocalSalonVue(){
+  $("vocalListe").classList.add("hidden");
+  $("vocalSalon").classList.remove("hidden");
+}
+
+async function chargerSalonsVocauxOuverts(){
+  const liste = await fetch("/api/vocal/salons").then(r => r.ok ? r.json() : []).catch(() => []);
+  $("vocalSalonsOuverts").innerHTML = liste.length
+    ? liste.map(s => `
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid rgba(237,232,220,.1)">
+          <div><b>${esc(s.titre)}</b><br><small style="color:var(--muted)">Animé par ${esc(s.hote)} · ${s.participants} participant${s.participants>1?"s":""}</small></div>
+          <button class="ghost" data-rejoindre-vocal="${esc(s.code)}">Rejoindre</button>
+        </div>`).join("")
+    : `<p class="note">Aucun salon ouvert pour l'instant.</p>`;
+  $("vocalSalonsOuverts").querySelectorAll("[data-rejoindre-vocal]").forEach(b =>
+    b.onclick = () => rejoindreSalonVocalParCode(b.dataset.rejoindreVocal));
+}
+
+$("btnVocal").onclick = () => {
+  show("vocal");
+  if (vocalSalonActuel) afficherVocalSalonVue();
+  else { afficherVocalListe(); chargerSalonsVocauxOuverts(); }
+};
+$("btnVocalRetourMenu").onclick = () => show("menu");
+
+$("btnVocalCreer").onclick = () => {
+  const titre = $("vocalTitreCreation").value.trim();
+  socket.emit("vocal:creer", { titre }, (res) => {
+    if (!res?.ok) return;
+    chargerMusiqueVocal();
+    renderVocalSalon(res.salon);
+    afficherVocalSalonVue();
+  });
+};
+
+function rejoindreSalonVocalParCode(code){
+  socket.emit("vocal:rejoindre", { code }, (res) => {
+    if (!res?.ok){
+      $("vocalErreur").textContent = res?.error === "SALON_COMPLET" ? "Ce salon est complet."
+        : res?.error === "SALON_INTROUVABLE" ? "Aucun salon avec ce code." : "Impossible de rejoindre ce salon.";
+      return;
+    }
+    $("vocalErreur").textContent = "";
+    chargerMusiqueVocal();
+    renderVocalSalon(res.salon);
+    afficherVocalSalonVue();
+  });
+}
+$("btnVocalRejoindre").onclick = () => {
+  const code = $("vocalCode").value.trim().toUpperCase();
+  if (code.length !== 4){ $("vocalErreur").textContent = "Le code fait 4 caractères."; return; }
+  rejoindreSalonVocalParCode(code);
+};
+
+$("btnVocalQuitter").onclick = () => {
+  if (vocalSalonActuel) socket.emit("vocal:quitter", { code: vocalSalonActuel.code }, () => {});
+  vocalSalonActuel = null;
+  vocalEnParle = false;
+  $("vocalAudio").pause();
+  afficherVocalListe();
+  chargerSalonsVocauxOuverts();
+};
+
+async function chargerMusiqueVocal(){
+  if (vocalMusiquePourRadio.length) return; // déjà chargé, inutile de le refaire à chaque ouverture
+  vocalMusiquePourRadio = await fetch("/api/musique").then(r => r.ok ? r.json() : []).catch(() => []);
+  $("vocalRadioSelect").innerHTML = vocalMusiquePourRadio.map(p => `<option value="${esc(p.id)}">${esc(p.titre)}</option>`).join("");
+}
+
+function carteParticipantVocal(p){
+  const parle = p.parle ? " parle" : "";
+  const photo = p.photo
+    ? `<img class="pfp" src="${esc(p.photo)}" alt="" onerror="this.remove()">`
+    : `<div class="emoji">${esc(p.avatar || "🎬")}</div>`;
+  const roleLabel = { hote: "Hôte", cohote: "Cohôte", intervenant: "Intervenant", auditeur: "Auditeur" }[p.role] || "";
+  return `<div class="vocalParticipant${parle}" title="${esc(p.pseudo)}">
+    <div class="vocalAvatarWrap">${photo}${p.mute ? `<span class="vocalMute">🔇</span>` : ""}</div>
+    <span class="vocalNom">${esc(p.pseudo)}</span>
+    <span class="vocalRoleTag">${roleLabel}</span>
+  </div>`;
+}
+
+function renderVocalSalon(salon){
+  if (!salon) return;
+  vocalSalonActuel = salon;
+  $("vocalTitreSalon").textContent = salon.titre;
+  $("vocalMarquee").textContent = salon.code;
+
+  const hoteCohotes = salon.participants.filter(p => p.role === "hote" || p.role === "cohote");
+  const intervenants = salon.participants.filter(p => p.role === "intervenant");
+  const auditeurs = salon.participants.filter(p => p.role === "auditeur");
+  $("vocalListeHote").innerHTML = hoteCohotes.map(carteParticipantVocal).join("");
+  $("vocalListeIntervenants").innerHTML = intervenants.map(carteParticipantVocal).join("");
+  $("vocalListeAuditeurs").innerHTML = auditeurs.map(carteParticipantVocal).join("");
+
+  const moi = salon.participants.find(p => p.userId === me?.id);
+  const monRole = moi?.role || null;
+  const peutParler = ["hote","cohote","intervenant"].includes(monRole);
+
+  $("btnVocalParler").classList.toggle("hidden", !peutParler);
+  $("btnVocalMute").classList.toggle("hidden", !peutParler);
+  $("btnVocalParler").disabled = Boolean(moi?.mute);
+  $("btnVocalMute").textContent = moi?.mute ? "🎙️ Réactiver mon micro" : "🔇 Couper mon micro";
+
+  const demandeEnvoyee = monRole === "auditeur" && salon.demandesMontee.includes(me?.id);
+  $("btnVocalDemander").classList.toggle("hidden", monRole !== "auditeur" || demandeEnvoyee);
+  $("vocalDemandeEnvoyee").hidden = !demandeEnvoyee;
+
+  // Radio : diffusion en cours (synchronisée sur demarreLe) ou sélecteur pour la lancer (modérateurs seulement).
+  const modo = monRole === "hote" || monRole === "cohote";
+  const audio = $("vocalAudio");
+  if (salon.radio){
+    $("vocalRadioTexte").textContent = `🎶 En cours : ${salon.radio.titre} — cliquez ▶️ si la lecture ne démarre pas toute seule.`;
+    if (audio.dataset.url !== salon.radio.url){
+      audio.src = salon.radio.url;
+      audio.dataset.url = salon.radio.url;
+    }
+    audio.style.display = "";
+    const elapsed = Math.max(0, (Date.now() - salon.radio.demarreLe) / 1000);
+    if (Math.abs((audio.currentTime || 0) - elapsed) > 3) audio.currentTime = elapsed;
+    audio.play().catch(() => {}); // lecture auto parfois bloquée sans geste : les contrôles restent visibles pour lancer à la main
+  } else {
+    $("vocalRadioTexte").textContent = "Aucune piste diffusée pour l'instant.";
+    audio.pause();
+    audio.style.display = "none";
+    audio.removeAttribute("src");
+    audio.dataset.url = "";
+  }
+  $("vocalRadioChoix").classList.toggle("hidden", !modo);
+
+  // Console de modération : hôte et cohôtes seulement.
+  $("vocalConsole").classList.toggle("hidden", !modo);
+  if (modo) renderConsoleVocal(salon, monRole);
+}
+
+function renderConsoleVocal(salon, monRole){
+  const demandeurs = salon.demandesMontee
+    .map(id => salon.participants.find(p => p.userId === id)).filter(Boolean);
+  $("vocalDemandesListe").innerHTML = demandeurs.length
+    ? `<p class="note" style="margin:0 0 6px">Demandes pour intervenir</p>` + demandeurs.map(p => `
+      <div class="urowVocal">
+        <span class="qui">${p.photo ? `<img class="pfp" src="${esc(p.photo)}" alt="">` : esc(p.avatar||"🎬")} ${esc(p.pseudo)}</span>
+        <button class="ghost" data-promouvoir="${esc(p.userId)}">⬆️ Faire monter</button>
+      </div>`).join("")
+    : "";
+
+  const nbCohotes = salon.participants.filter(p => p.role === "cohote").length;
+  $("vocalConsoleParticipants").innerHTML = `<p class="note" style="margin:10px 0 6px">Participants</p>` +
+    salon.participants.filter(p => p.userId !== me?.id).map(p => {
+      const boutons = [];
+      if (p.role === "auditeur") boutons.push(`<button class="ghost" data-promouvoir="${esc(p.userId)}">⬆️ Intervenant</button>`);
+      if (p.role === "intervenant") boutons.push(`<button class="ghost" data-retrograder="${esc(p.userId)}">⬇️ Auditeur</button>`);
+      if (monRole === "hote" && p.role !== "hote" && p.role !== "cohote" && nbCohotes < 3)
+        boutons.push(`<button class="ghost" data-nommer-cohote="${esc(p.userId)}">🎖️ Nommer cohôte</button>`);
+      if (monRole === "hote" && p.role === "cohote")
+        boutons.push(`<button class="ghost" data-retirer-cohote="${esc(p.userId)}">🎖️ Retirer cohôte</button>`);
+      if (p.role !== "hote" && (monRole === "hote" || p.role !== "cohote"))
+        boutons.push(`<button class="ghost danger" data-exclure="${esc(p.userId)}">🚪 Exclure</button>`);
+      return `<div class="urowVocal">
+        <span class="qui">${p.photo ? `<img class="pfp" src="${esc(p.photo)}" alt="">` : esc(p.avatar||"🎬")} ${esc(p.pseudo)}
+          <small style="color:var(--muted)">(${p.role})</small></span>
+        ${boutons.join("")}
+      </div>`;
+    }).join("");
+
+  $("vocalConsole").querySelectorAll("[data-promouvoir]").forEach(b => b.onclick = () =>
+    socket.emit("vocal:promouvoir", { code: vocalSalonActuel.code, userId: b.dataset.promouvoir }, () => {}));
+  $("vocalConsole").querySelectorAll("[data-retrograder]").forEach(b => b.onclick = () =>
+    socket.emit("vocal:retrograder", { code: vocalSalonActuel.code, userId: b.dataset.retrograder }, () => {}));
+  $("vocalConsole").querySelectorAll("[data-nommer-cohote]").forEach(b => b.onclick = () =>
+    socket.emit("vocal:nommer-cohote", { code: vocalSalonActuel.code, userId: b.dataset.nommerCohote }, () => {}));
+  $("vocalConsole").querySelectorAll("[data-retirer-cohote]").forEach(b => b.onclick = () =>
+    socket.emit("vocal:retirer-cohote", { code: vocalSalonActuel.code, userId: b.dataset.retirerCohote }, () => {}));
+  $("vocalConsole").querySelectorAll("[data-exclure]").forEach(b => b.onclick = () => {
+    if (confirm("Exclure ce participant du salon ?"))
+      socket.emit("vocal:exclure", { code: vocalSalonActuel.code, userId: b.dataset.exclure }, () => {});
+  });
+}
+
+$("btnVocalDemander").onclick = () => {
+  socket.emit("vocal:demander-intervenir", { code: vocalSalonActuel.code }, (res) => {
+    if (res?.ok) renderVocalSalon(vocalSalonActuel); // masque aussitôt le bouton, sans attendre le prochain vocal:update
+  });
+};
+
+$("btnVocalMute").onclick = () => {
+  const moi = vocalSalonActuel?.participants.find(p => p.userId === me?.id);
+  socket.emit("vocal:mute", { code: vocalSalonActuel.code, mute: !moi?.mute });
+};
+
+// Bouton "maintenir pour parler" façon talkie-walkie : appui = parle, relâche = silence. Couvre
+// souris et tactile, y compris si le doigt/curseur quitte le bouton en cours d'appui.
+function vocalCommencerParler(){
+  if (vocalEnParle || !vocalSalonActuel || $("btnVocalParler").disabled) return;
+  vocalEnParle = true;
+  $("btnVocalParler").classList.add("actif");
+  socket.emit("vocal:parler", { code: vocalSalonActuel.code, parle: true });
+}
+function vocalArreterParler(){
+  if (!vocalEnParle || !vocalSalonActuel) return;
+  vocalEnParle = false;
+  $("btnVocalParler").classList.remove("actif");
+  socket.emit("vocal:parler", { code: vocalSalonActuel.code, parle: false });
+}
+$("btnVocalParler").addEventListener("mousedown", vocalCommencerParler);
+$("btnVocalParler").addEventListener("touchstart", e => { e.preventDefault(); vocalCommencerParler(); });
+$("btnVocalParler").addEventListener("mouseup", vocalArreterParler);
+$("btnVocalParler").addEventListener("mouseleave", vocalArreterParler);
+$("btnVocalParler").addEventListener("touchend", vocalArreterParler);
+$("btnVocalParler").addEventListener("touchcancel", vocalArreterParler);
+
+$("btnVocalRadioDiffuser").onclick = () => {
+  const pisteId = $("vocalRadioSelect").value;
+  if (!pisteId || !vocalSalonActuel) return;
+  socket.emit("vocal:radio", { code: vocalSalonActuel.code, pisteId }, () => {});
+};
+$("btnVocalRadioArreter").onclick = () => {
+  if (!vocalSalonActuel) return;
+  socket.emit("vocal:radio", { code: vocalSalonActuel.code, pisteId: null }, () => {});
+};
+
+socket.on("vocal:update", (salon) => {
+  if (!vocalSalonActuel || salon.code !== vocalSalonActuel.code) return;
+  renderVocalSalon(salon);
+});
+socket.on("vocal:ferme", (info) => {
+  if (!vocalSalonActuel) return;
+  vocalSalonActuel = null;
+  vocalEnParle = false;
+  $("vocalAudio").pause();
+  if (!$("vocal").classList.contains("hidden")){
+    afficherVocalListe();
+    chargerSalonsVocauxOuverts();
+  }
+  bandeauNotif(`<span style="font-size:24px">🎙️</span><span><b>Salon vocal fermé</b>
+    <small>${info?.raison === "HOTE_PARTI" ? "L'hôte a quitté le salon." : "Le salon est vide."}</small></span>`);
+});
+socket.on("vocal:exclu", () => {
+  vocalSalonActuel = null;
+  vocalEnParle = false;
+  $("vocalAudio").pause();
+  if (!$("vocal").classList.contains("hidden")){
+    afficherVocalListe();
+    chargerSalonsVocauxOuverts();
+  }
+  bandeauNotif(`<span style="font-size:24px">🚪</span><span><b>Vous avez été exclu du salon vocal</b></span>`);
+});
+
 /** Petit compteur affiché en haut du menu : nombre de films actifs dans le jeu. */
 async function chargerNombreFilms(){
   try {
@@ -4433,6 +4873,37 @@ function majBadgeSondages(){
 $("btnSondages").onclick = () => { $("sondagesModal").classList.add("active"); chargerSondages(); };
 $("closeSondagesBtn").onclick = () => $("sondagesModal").classList.remove("active");
 $("sondagesModal").onclick = e => { if (e.target.id === "sondagesModal") $("sondagesModal").classList.remove("active"); };
+
+/* ---------- Contacter le développeur ---------- */
+$("btnContactDev").onclick = () => {
+  $("contactDevTexte").value = "";
+  $("contactDevMsg").textContent = "";
+  $("contactDevModal").classList.add("active");
+};
+$("closeContactDevBtn").onclick = () => $("contactDevModal").classList.remove("active");
+$("contactDevModal").onclick = e => { if (e.target.id === "contactDevModal") $("contactDevModal").classList.remove("active"); };
+$("btnContactDevEnvoyer").onclick = async () => {
+  const texte = $("contactDevTexte").value.trim();
+  if (!texte){
+    $("contactDevMsg").textContent = "Écrivez votre message avant d'envoyer.";
+    $("contactDevMsg").className = "feedback bad";
+    return;
+  }
+  $("btnContactDevEnvoyer").disabled = true;
+  const res = await fetch("/api/contact-developpeur", { method: "POST",
+    headers: { "Content-Type": "application/json" }, body: JSON.stringify({ texte }) })
+    .catch(() => null);
+  $("btnContactDevEnvoyer").disabled = false;
+  if (!res || !res.ok){
+    $("contactDevMsg").textContent = "Message impossible à envoyer pour l'instant, réessayez.";
+    $("contactDevMsg").className = "feedback bad";
+    return;
+  }
+  $("contactDevTexte").value = "";
+  $("contactDevMsg").textContent = "Message envoyé, merci !";
+  $("contactDevMsg").className = "feedback good";
+  setTimeout(() => $("contactDevModal").classList.remove("active"), 1200);
+};
 
 // Résultat en direct : si la modale est ouverte, la barre et les pourcentages bougent
 // tout seuls dès qu'un autre joueur vote, sans jamais révéler qui a voté quoi.
