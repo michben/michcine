@@ -161,6 +161,14 @@ const REGLAGES_DEFAUT = {
       vocal:      { beam: "", teal: "" },
     },
   },
+  // Espace audio (console admin, onglet « Audio ») : réglages liés aux salons vocaux — serveur
+  // TURN (relais audio pour les réseaux les plus restrictifs, voir plus bas), capacité des salons,
+  // délai de grâce avant fermeture. Regroupés ici pour pouvoir accueillir d'autres options à
+  // l'avenir sans avoir à ajouter de nouveaux réglages épars ailleurs.
+  audio: {
+    turnActif: false, turnUrl: "", turnUsername: "", turnCredential: "",
+    maxParticipantsVocal: 40, maxCohotesVocal: 3, fermetureGraceMinutes: 3,
+  },
 };
 
 let REGLAGES = structuredClone(REGLAGES_DEFAUT);
@@ -301,6 +309,22 @@ function botAuHasard(room) {
  */
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || "michben-admin";
 let empreinteAdmin = null;   // chargée au démarrage
+
+/**
+ * Serveur TURN optionnel pour les salons vocaux (WebRTC).
+ *
+ * Sans TURN, seul un serveur STUN gratuit est utilisé pour établir les connexions audio directes
+ * entre participants — cela suffit sur la plupart des réseaux, mais échoue silencieusement sur les
+ * réseaux les plus restrictifs (certaines box d'opérateur, wifi d'entreprise très filtré, NAT dit
+ * "symétrique") : la personne concernée ne peut alors entendre AUCUN participant, même si les
+ * autres s'entendent très bien entre eux. Un serveur TURN relaie l'audio quand la connexion directe
+ * échoue, ce qui règle ce cas — mais ça nécessite un service payant ou un compte gratuit chez un
+ * fournisseur (ex. metered.ca, Twilio, Cloudflare Calls). Si ces trois variables sont renseignées,
+ * elles sont transmises au client via /api/config et ajoutées automatiquement aux serveurs ICE.
+ */
+const TURN_URL = process.env.TURN_URL || "";
+const TURN_USERNAME = process.env.TURN_USERNAME || "";
+const TURN_CREDENTIAL = process.env.TURN_CREDENTIAL || "";
 
 const hacherAdmin = (mdp, sel = crypto.randomBytes(16).toString("hex")) =>
   `${sel}:${crypto.scryptSync(mdp, sel, 64).toString("hex")}`;
@@ -754,6 +778,26 @@ app.get("/api/admin/theme/options", requireAdmin, (_req, res) => {
     couleurs: THEME_COULEURS_CLES, polices: THEME_POLICES, modulesMenu: THEME_MODULES_MENU,
     categories: THEME_CATEGORIES, couleursCategorieCles: THEME_COULEURS_CATEGORIE_CLES,
   });
+});
+
+/**
+ * Espace audio (console admin, onglet « Audio ») : réglages liés aux salons vocaux, regroupés à
+ * un seul endroit pour pouvoir en accueillir d'autres à l'avenir. La lecture se fait via l'onglet
+ * Réglages existant (GET /api/admin/reglages renvoie déjà tout REGLAGES, audio compris) ; seule
+ * l'écriture a besoin de sa propre route, avec sa propre validation.
+ */
+app.put("/api/admin/audio", requireAdmin, (req, res) => {
+  const a = req.body || {};
+  if (!REGLAGES.audio) REGLAGES.audio = structuredClone(REGLAGES_DEFAUT.audio);
+  if (typeof a.turnActif === "boolean") REGLAGES.audio.turnActif = a.turnActif;
+  if (typeof a.turnUrl === "string") REGLAGES.audio.turnUrl = a.turnUrl.trim().slice(0, 200);
+  if (typeof a.turnUsername === "string") REGLAGES.audio.turnUsername = a.turnUsername.trim().slice(0, 120);
+  if (typeof a.turnCredential === "string") REGLAGES.audio.turnCredential = a.turnCredential.trim().slice(0, 200);
+  REGLAGES.audio.maxParticipantsVocal = borneValeur(a.maxParticipantsVocal, 2, 200, REGLAGES.audio.maxParticipantsVocal);
+  REGLAGES.audio.maxCohotesVocal = borneValeur(a.maxCohotesVocal, 1, 10, REGLAGES.audio.maxCohotesVocal);
+  REGLAGES.audio.fermetureGraceMinutes = borneValeur(a.fermetureGraceMinutes, 1, 30, REGLAGES.audio.fermetureGraceMinutes);
+  sauver("reglages", REGLAGES);
+  res.json({ ok: true, audio: REGLAGES.audio });
 });
 
 /** Indique si le mot de passe par défaut est encore en usage. */
@@ -1879,24 +1923,28 @@ app.post("/api/messages/:id", (req, res) => {
   res.json({ ok: true });
 });
 
-/** Nombre de messages non lus, par expéditeur. */
+/** Nombre de messages non lus par expéditeur, et date du dernier message par conversation — cette
+ *  seconde information permet au client de faire remonter en haut de la liste d'amis celui qui
+ *  vient d'écrire, plutôt que de garder l'ordre figé du jour où l'amitié a été nouée. */
 app.get("/api/messages", (req, res) => {
   const user = exigeCompte(req, res);
   if (!user) return;
   const parAmi = {};
+  const dernierMessage = {};
   let total = 0;
   const limit = Date.now() - 24 * 60 * 60 * 1000;
   for (const [cle, conv] of Object.entries(conversations)) {
     // Purge au passage
     conv.messages = conv.messages.filter(m => m.at > limit);
-    
+
     if (!cle.includes(user.id)) continue;
     const autre = cle.split("|").find((x) => x !== user.id);
     const n = conv.messages.filter((m) => m.de === autre && !m.lu).length;
     if (n) { parAmi[autre] = n; total += n; }
+    if (conv.messages.length) dernierMessage[autre] = conv.messages[conv.messages.length - 1].at;
   }
   saveConversations();
-  res.json({ total, parAmi });
+  res.json({ total, parAmi, dernierMessage });
 });
 
 /** Signale une conversation à la modération. */
@@ -3725,6 +3773,12 @@ app.get("/api/config", (_req, res) => res.json({
   afficherRadio: REGLAGES.afficherRadio,
   autoriserSpectateur: REGLAGES.autoriserSpectateur,
   theme: REGLAGES.theme,
+  // Priorité au réglage fait depuis la console admin (onglet Audio) ; les variables d'environnement
+  // TURN_URL / TURN_USERNAME / TURN_CREDENTIAL ne servent plus que de valeur de secours au tout
+  // premier démarrage (voir l'initialisation de REGLAGES.audio plus bas dans ce fichier).
+  turn: REGLAGES.audio?.turnActif && REGLAGES.audio.turnUrl
+    ? { urls: REGLAGES.audio.turnUrl, username: REGLAGES.audio.turnUsername, credential: REGLAGES.audio.turnCredential }
+    : null,
 }));
 
 /**
@@ -3868,8 +3922,17 @@ function generateRoomCode() {
 /* accepté pour garder cette fonctionnalité gratuite.                    */
 /* ------------------------------------------------------------------ */
 
-const MAX_COHOTES_VOCAL = 3;
-const MAX_PARTICIPANTS_VOCAL = 40;
+/** Clamp générique (même logique que le `borne` local utilisé par les routes de réglages, mais
+ *  au niveau du module pour pouvoir servir aux salons vocaux en dehors d'une route). */
+function borneValeur(v, min, max, defaut) {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : defaut;
+}
+
+// Réglables depuis la console admin (onglet Audio, voir REGLAGES.audio et /api/admin/audio) —
+// des valeurs par défaut raisonnables sont utilisées tant que rien n'a été personnalisé.
+const MAX_COHOTES_VOCAL = () => borneValeur(REGLAGES.audio?.maxCohotesVocal, 1, 10, 3);
+const MAX_PARTICIPANTS_VOCAL = () => borneValeur(REGLAGES.audio?.maxParticipantsVocal, 2, 200, 40);
 const salonsVocaux = new Map(); // code -> salon
 
 /** Personnes coupées involontairement (réseau, onglet fermé…) d'un salon vocal toujours actif :
@@ -3901,6 +3964,8 @@ function publicVocal(salon) {
     demandesMontee: [...salon.demandesMontee],
     radio: salon.radio,
     chat: salon.chat || [],
+    prive: Boolean(salon.prive),
+    monteeLibre: Boolean(salon.monteeLibre),
   };
 }
 
@@ -3915,9 +3980,30 @@ function estModoVocal(salon, userId) {
   return salon.hostId === userId || salon.participants.get(userId)?.role === "cohote";
 }
 
+/** Délai laissé à un salon vocal devenu « sans personne pour le tenir » (l'hôte est parti, ou tout
+ *  le monde est parti) avant sa fermeture réelle — le temps d'une coupure wifi ou d'une mise en
+ *  veille de téléphone, pour que la ou les personnes concernées puissent retrouver leur salon (voir
+ *  la bulle de retour rapide) plutôt que de le perdre instantanément. Même logique que
+ *  ROOM_VIDE_GRACE_MS pour les parties de jeu. Pendant ce délai, un cohôte éventuel garde tous ses
+ *  pouvoirs de modération (voir estModoVocal) : le salon n'est donc pas forcément à l'arrêt.
+ *  Durée réglable depuis la console admin (onglet Audio) — 3 minutes par défaut. */
+const VOCAL_SALON_VIDE_GRACE_MS = () => borneValeur(REGLAGES.audio?.fermetureGraceMinutes, 1, 30, 3) * 60 * 1000;
+
+/** Ferme un salon vocal pour de bon : prévient tout le monde et libère le salon. */
+function fermerSalonVocalDefinitivement(salon, raison) {
+  io.to(`vocal:${salon.code}`).emit("vocal:ferme", { raison });
+  for (const p of salon.participants.values()) {
+    const s = [...io.of("/").sockets.values()].find((sk) => sk.data.user?.id === p.userId);
+    if (s) s.leave(`vocal:${salon.code}`);
+  }
+  salonsVocaux.delete(salon.code);
+}
+
 /** Retire un socket de tout salon vocal dont il fait partie (déconnexion, ou changement de salon).
- *  Si l'hôte part, l'animation du salon s'arrête là : les autres sont prévenus et repassent auditeurs
- *  d'un salon fermé plutôt que d'hériter d'un salon fantôme sans personne pour le modérer pleinement.
+ *  Si l'hôte part ou si plus personne n'est présent, le salon n'est pas détruit tout de suite : il
+ *  reste ouvert VOCAL_SALON_VIDE_GRACE_MS, le temps que la personne revienne (voir vocal:rejoindre,
+ *  qui lui redonne directement son rôle d'hôte si elle revient à temps) — sans quoi la moindre
+ *  coupure réseau du côté de l'hôte faisait perdre le salon à tout le monde instantanément.
  *  `involontaire` distingue une vraie coupure (réseau, onglet fermé) d'un départ volontaire (bouton
  *  Quitter) : seule la coupure involontaire laisse une trace pour la bulle de retour rapide. */
 function quitterSalonVocal(socket, { involontaire = false } = {}) {
@@ -3929,13 +4015,19 @@ function quitterSalonVocal(socket, { involontaire = false } = {}) {
     salon.participants.delete(userId);
     salon.demandesMontee.delete(userId);
     socket.leave(`vocal:${salon.code}`);
+    clearTimeout(salon.fermetureTimer);
     if (etaitHote || salon.participants.size === 0) {
-      io.to(`vocal:${salon.code}`).emit("vocal:ferme", { raison: etaitHote ? "HOTE_PARTI" : "SALON_VIDE" });
-      for (const p of salon.participants.values()) {
-        const s = [...io.of("/").sockets.values()].find((sk) => sk.data.user?.id === p.userId);
-        if (s) s.leave(`vocal:${salon.code}`);
+      if (involontaire) {
+        retourVocalDisponible.set(userId, { code: salon.code, titre: salon.titre, at: Date.now() });
       }
-      salonsVocaux.delete(salon.code);
+      // Le salon continue de vivre pour ceux qui y sont encore (s'il en reste) — seule sa
+      // fermeture définitive est programmée, pas immédiate.
+      io.to(`vocal:${salon.code}`).emit("vocal:rtc-peer-left", { userId });
+      diffuserVocal(salon);
+      salon.fermetureTimer = setTimeout(() => {
+        if (salonsVocaux.get(salon.code) === salon)
+          fermerSalonVocalDefinitivement(salon, etaitHote ? "HOTE_PARTI" : "SALON_VIDE");
+      }, VOCAL_SALON_VIDE_GRACE_MS());
     } else {
       // Prévient les autres qu'ils peuvent fermer leur connexion audio (WebRTC) vers ce
       // participant — le salon continue, seul son flux à lui doit s'arrêter.
@@ -3949,15 +4041,26 @@ function quitterSalonVocal(socket, { involontaire = false } = {}) {
   }
 }
 
-/** Liste des salons vocaux ouverts en ce moment, pour proposer d'en rejoindre un sans code. */
+/** Liste des salons vocaux ouverts en ce moment (« Salons en direct »), pour en rejoindre un sans
+ *  code. Un salon privé (voir vocal:reglages) n'apparaît que pour les amis de l'hôte et pour ceux
+ *  qui y sont déjà — jamais pour un inconnu. `hoteEstAmi` permet au client de regrouper « Salons
+ *  d'amis » et « Autres salons » sans avoir à connaître lui-même la liste d'amis du joueur. */
 app.get("/api/vocal/salons", (req, res) => {
   const user = exigeCompte(req, res);
   if (!user) return;
-  res.json([...salonsVocaux.values()].map((s) => ({
-    code: s.code, titre: s.titre,
-    hote: s.participants.get(s.hostId)?.pseudo || "?",
-    participants: s.participants.size,
-  })));
+  res.json([...salonsVocaux.values()]
+    .filter((s) => {
+      if (!s.prive) return true;
+      if (s.participants.has(user.id)) return true;
+      return statutRelation(user.id, s.hostId) === "ami";
+    })
+    .map((s) => ({
+      code: s.code, titre: s.titre,
+      hote: s.participants.get(s.hostId)?.pseudo || "?",
+      hoteEstAmi: statutRelation(user.id, s.hostId) === "ami",
+      participants: s.participants.size,
+      prive: Boolean(s.prive),
+    })));
 });
 
 /** Bulle affichée en haut de la page d'accueil : propose un accès direct à un salon vocal encore
@@ -5138,6 +5241,12 @@ io.on("connection", (socket) => {
       radio: null,
       chat: [], // messages du salon (voir vocal:chat-envoyer) — bornés à VOCAL_CHAT_HISTORIQUE_MAX
       creeLe: Date.now(),
+      // Réglables par l'hôte/les cohôtes à tout moment (voir vocal:reglages) : un salon privé
+      // n'apparaît pas dans la liste publique « Salons en direct » pour les joueurs qui ne sont
+      // pas amis avec l'hôte ; la montée libre laisse un auditeur devenir intervenant sans avoir
+      // à demander (et sans que l'hôte ait à valider) la parole.
+      prive: false,
+      monteeLibre: false,
     };
     salon.participants.set(user.id, {
       // Micro fermé par défaut : c'est le premier clic sur "activer mon micro" qui l'ouvre —
@@ -5153,13 +5262,18 @@ io.on("connection", (socket) => {
   socket.on("vocal:rejoindre", ({ code }, cb) => {
     const salon = salonsVocaux.get(code);
     if (!salon) return cb?.({ ok: false, error: "SALON_INTROUVABLE" });
-    if (salon.participants.size >= MAX_PARTICIPANTS_VOCAL) return cb?.({ ok: false, error: "SALON_COMPLET" });
+    if (salon.participants.size >= MAX_PARTICIPANTS_VOCAL()) return cb?.({ ok: false, error: "SALON_COMPLET" });
     quitterSalonVocal(socket);
     retourVocalDisponible.delete(user.id); // on rejoint un salon : la bulle de retour n'a plus lieu d'être
     salon.invites?.delete(user.id); // l'invitation, s'il y en avait une, est consommée
+    clearTimeout(salon.fermetureTimer); // quelqu'un revient : on annule la fermeture programmée
+    // L'hôte d'origine qui revient à temps (coupure réseau, mise en veille — voir
+    // VOCAL_SALON_VIDE_GRACE_MS) retrouve directement son rôle plutôt que d'atterrir en simple
+    // auditeur dans son propre salon.
+    const redevientHote = salon.hostId === user.id && !salon.participants.has(user.id);
     salon.participants.set(user.id, {
       userId: user.id, pseudo: user.pseudo, avatar: user.avatar, photo: user.photo || null,
-      role: "auditeur", mute: true, parle: false,
+      role: redevientHote ? "hote" : "auditeur", mute: true, parle: false,
     });
     socket.join(`vocal:${salon.code}`);
     diffuserVocal(salon);
@@ -5193,14 +5307,22 @@ io.on("connection", (socket) => {
     diffuserVocal(salon);
   });
 
-  /** Un auditeur signale qu'il aimerait intervenir : l'hôte ou un cohôte décide de le faire monter. */
+  /** Un auditeur signale qu'il aimerait intervenir : l'hôte ou un cohôte décide de le faire monter —
+   *  sauf si la « montée libre » est activée pour ce salon (voir vocal:reglages), auquel cas la
+   *  demande devient inutile : l'auditeur devient intervenant tout de suite, sans validation. */
   socket.on("vocal:demander-intervenir", ({ code }, cb) => {
     const salon = salonsVocaux.get(code);
     const moi = salon?.participants.get(user.id);
     if (!moi || moi.role !== "auditeur") return cb?.({ ok: false });
-    salon.demandesMontee.add(user.id);
+    if (salon.monteeLibre) {
+      moi.role = "intervenant";
+      moi.mute = true; // micro fermé par défaut, même en montée libre — jamais une surprise
+      salon.demandesMontee.delete(user.id);
+    } else {
+      salon.demandesMontee.add(user.id);
+    }
     diffuserVocal(salon);
-    cb?.({ ok: true });
+    cb?.({ ok: true, monteeLibre: Boolean(salon.monteeLibre) });
   });
 
   socket.on("vocal:annuler-demande", ({ code }) => {
@@ -5222,6 +5344,18 @@ io.on("connection", (socket) => {
     cb?.({ ok: true });
   });
 
+  /** L'hôte ou un cohôte choisit si le salon reste privé (absent de la liste publique « Salons en
+   *  direct » pour qui n'est pas ami avec l'hôte — voir /api/vocal/salons) et si la montée est
+   *  libre (un auditeur devient intervenant sans avoir à demander ni à être validé). */
+  socket.on("vocal:reglages", ({ code, prive, monteeLibre }, cb) => {
+    const salon = salonsVocaux.get(code);
+    if (!salon || !estModoVocal(salon, user.id)) return cb?.({ ok: false });
+    if (typeof prive === "boolean") salon.prive = prive;
+    if (typeof monteeLibre === "boolean") salon.monteeLibre = monteeLibre;
+    diffuserVocal(salon);
+    cb?.({ ok: true, prive: salon.prive, monteeLibre: salon.monteeLibre });
+  });
+
   /** Fait redescendre un intervenant en simple auditeur — jamais un hôte ou un cohôte via cette
    *  voie (voir vocal:retirer-cohote pour les cohôtes, l'hôte ne peut être rétrogradé). */
   socket.on("vocal:retrograder", ({ code, userId }, cb) => {
@@ -5241,7 +5375,7 @@ io.on("connection", (socket) => {
     const salon = salonsVocaux.get(code);
     if (!salon || salon.hostId !== user.id) return cb?.({ ok: false, error: "PAS_HOTE" });
     const nbCohotes = [...salon.participants.values()].filter((p) => p.role === "cohote").length;
-    if (nbCohotes >= MAX_COHOTES_VOCAL) return cb?.({ ok: false, error: "MAX_COHOTES_ATTEINT", max: MAX_COHOTES_VOCAL });
+    if (nbCohotes >= MAX_COHOTES_VOCAL()) return cb?.({ ok: false, error: "MAX_COHOTES_ATTEINT", max: MAX_COHOTES_VOCAL() });
     const cible = salon.participants.get(userId);
     if (!cible || cible.role === "hote" || cible.role === "cohote") return cb?.({ ok: false });
     cible.role = "cohote";
@@ -5338,6 +5472,24 @@ io.on("connection", (socket) => {
     cb?.({ ok: true });
   });
 
+  /** Réactions emoji publiques dans un salon vocal — même principe que les réactions volantes en
+   *  partie (voir socket.on("reaction", ...)), mais sous un nom d'événement distinct : les deux
+   *  espaces (partie et salon vocal) ne doivent jamais se marcher dessus. Respecte le blocage,
+   *  comme le chat du salon. */
+  let derniereReactionVocale = 0;
+  socket.on("vocal:reaction", ({ code, emoji }) => {
+    const salon = salonsVocaux.get(code);
+    const moi = salon?.participants.get(user.id);
+    if (!salon || !moi || !EMOJIS.includes(emoji)) return;
+    if (Date.now() - derniereReactionVocale < 700) return; // évite le matraquage
+    derniereReactionVocale = Date.now();
+    for (const p of salon.participants.values()) {
+      if (p.userId !== user.id && estBloque(p.userId, user.id)) continue;
+      const s = [...io.of("/").sockets.values()].find((sk) => sk.data.user?.id === p.userId);
+      if (s) s.emit("vocal:reaction", { emoji, pseudo: user.pseudo, avatar: user.avatar });
+    }
+  });
+
   /** Invite un ami dans le salon vocal en cours — même principe que invite:send pour les parties,
    *  mais vers un salon vocal. Il reçoit une notification avec le code pour le rejoindre. */
   socket.on("vocal:inviter", ({ code, amiId }, cb) => {
@@ -5401,7 +5553,7 @@ io.on("connection", (socket) => {
       socket.join(`vocal:${salonCode}`);
       room.salonsVocauxEquipe[joueur.team] = salonCode;
     } else if (!salon.participants.has(user.id)) {
-      if (salon.participants.size >= MAX_PARTICIPANTS_VOCAL) return cb?.({ ok: false, error: "SALON_COMPLET" });
+      if (salon.participants.size >= MAX_PARTICIPANTS_VOCAL()) return cb?.({ ok: false, error: "SALON_COMPLET" });
       quitterSalonVocal(socket);
       retourVocalDisponible.delete(user.id);
       salon.participants.set(user.id, {
@@ -5723,6 +5875,16 @@ walletHistorique = await charger("wallet", WALLET_FILE, {});
 if (!walletHistorique || typeof walletHistorique !== "object") walletHistorique = {};
 REGLAGES = { ...structuredClone(REGLAGES_DEFAUT), ...(await charger("reglages", null, {})) };
 assurerCouleursCategories();
+// Réglages sauvegardés avant l'ajout de l'espace audio : on les rétablit, puis on reprend les
+// variables d'environnement TURN_* comme valeur de secours au tout premier démarrage seulement
+// (si l'admin n'a encore jamais rien réglé depuis la console) — cela ne les écrase jamais ensuite.
+if (!REGLAGES.audio || typeof REGLAGES.audio !== "object") REGLAGES.audio = structuredClone(REGLAGES_DEFAUT.audio);
+if (!REGLAGES.audio.turnUrl && TURN_URL) {
+  REGLAGES.audio.turnActif = true;
+  REGLAGES.audio.turnUrl = TURN_URL;
+  REGLAGES.audio.turnUsername = TURN_USERNAME;
+  REGLAGES.audio.turnCredential = TURN_CREDENTIAL;
+}
 if (!empreinteAdmin)
   console.warn("⚠️  Mot de passe d'administration par défaut : changez-le depuis /admin.html");
 await chargerUtilisateurs();
