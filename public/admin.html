@@ -39,7 +39,7 @@
   .row{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
   @media(max-width:520px){.grid{grid-template-columns:1fr}}
-  .item{display:flex;gap:14px;align-items:center;padding:14px 0;border-top:1px solid rgba(237,232,220,.1)}
+  .item{display:flex;gap:14px;align-items:center;padding:14px 0;border-top:1px solid rgba(237,232,220,.1);flex-wrap:wrap}
   .item img{width:44px;height:66px;object-fit:cover;border-radius:6px;background:var(--card);flex:0 0 auto}
   .item div{flex:1;min-width:0}
   .item strong{display:block}
@@ -47,9 +47,10 @@
   .msg{margin-top:12px;font-size:14px;min-height:20px}
   .msg.ok{color:var(--beam)}.msg.err{color:var(--ticket)}
   .hidden{display:none !important}
-  .tabs{display:flex;gap:8px;margin-top:18px}
-  .tabs button{flex:1;background:transparent;color:var(--muted);border:1px solid rgba(237,232,220,.16);font-weight:500}
+  .tabs{display:flex;gap:8px;margin-top:18px;flex-wrap:wrap;position:sticky;top:0;background:var(--ink);z-index:5;padding:10px 0 8px}
+  .tabs button{flex:1 1 auto;background:transparent;color:var(--muted);border:1px solid rgba(237,232,220,.16);font-weight:500}
   .tabs button[aria-selected="true"]{background:var(--beam);color:#161207;border-color:var(--beam);font-weight:700}
+  .tabSelect{display:none}
   .urow{display:flex;gap:10px;align-items:center;padding:14px 0;border-top:1px solid rgba(237,232,220,.1);flex-wrap:wrap}
   .urow .who{flex:1;min-width:140px}
   .urow .who strong{display:block}
@@ -64,6 +65,28 @@
   .urow.banned{opacity:.5}
   .chip{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ticket);
     border:1px solid rgba(228,88,110,.5);border-radius:999px;padding:3px 9px;margin-left:6px}
+
+  /* ---------- Téléphone : navigation par menu déroulant, cartes plus compactes ---------- */
+  @media(max-width:680px){
+    .wrap{padding:16px 12px 50px}
+    .card{padding:16px}
+    .tabs{display:none}
+    .tabSelect{display:block;position:sticky;top:0;z-index:5;background:var(--ink);
+      padding:10px 0 8px;margin:0 0 4px;font-weight:700}
+    h1{font-size:22px}
+    .item{gap:10px;padding:12px 0}
+    .item > button{margin-top:4px}
+    .item img{width:52px;height:78px}
+    .urow{gap:8px;padding:12px 0}
+    /* Les indices (case à cocher + libellé modifiable + points + tickets) sont trop serrés sur
+       une seule ligne à cette largeur : le libellé passe seul sur sa ligne, plus lisible. */
+    #listeIndices .urow .who{flex-basis:100%}
+  }
+  @media(max-width:420px){
+    .wrap{padding:14px 10px 46px}
+    .card{padding:14px}
+    button{padding:11px 14px;font-size:14px}
+  }
 </style>
 </head>
 <body>
@@ -95,6 +118,28 @@
       <button id="tabClassement" aria-selected="false">Partie classée</button>
       <button id="tabSondages" aria-selected="false">🍿 Sondages</button>
     </div>
+    <select id="tabSelect" class="tabSelect" aria-label="Choisir une section">
+      <optgroup label="🎬 Contenu du jeu">
+        <option value="movies">Films</option>
+        <option value="sorties">Sorties Ciné</option>
+        <option value="nowplaying">Au Cinéma</option>
+        <option value="sugg">Suggestions</option>
+        <option value="citations">Citations</option>
+        <option value="musique">Musique</option>
+        <option value="sondages">🍿 Sondages</option>
+        <option value="roue">Roue</option>
+      </optgroup>
+      <optgroup label="👥 Communauté">
+        <option value="users">Joueurs</option>
+        <option value="reports">Signalements</option>
+      </optgroup>
+      <optgroup label="⚙️ Configuration">
+        <option value="reglages">Réglages</option>
+        <option value="pub">Publicités</option>
+        <option value="apparence">Apparence</option>
+        <option value="classement">Partie classée</option>
+      </optgroup>
+    </select>
 
     <div id="paneMovies">
     <div class="card">
@@ -223,7 +268,7 @@
         </div>
 
         <p class="tag" style="margin:16px 0 8px">Ce que verra le joueur</p>
-        <div style="width:280px;aspect-ratio:16/9;overflow:hidden;border-radius:10px;background:var(--card)">
+        <div style="width:100%;max-width:280px;aspect-ratio:16/9;overflow:hidden;border-radius:10px;background:var(--card)">
           <img id="fApercu" alt="" style="width:100%;height:100%;object-fit:cover;display:block">
         </div>
         <p class="msg" id="fApercuMsg" style="margin-top:8px"></p>
@@ -331,8 +376,50 @@
           d'être crédité ; les codes VIP ne sont jamais générés automatiquement.
         </p>
         <div id="roueStockAdmin" style="margin-bottom:10px"></div>
-        <div class="row"><button id="btnRoueReappro" class="ghost">Réapprovisionner maintenant</button></div>
         <p class="msg" id="roueAdminFeedback"></p>
+
+        <div style="margin-top:18px;padding-top:16px;border-top:1px solid rgba(237,232,220,.12)">
+          <p class="tag" style="margin-bottom:8px">➕ Ajouter un lot vous-même</p>
+          <p style="color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6">
+            Complète le stock actuel sans y toucher — pratique pour ajouter un lot précis
+            (par exemple un gros lot exceptionnel) sans tout réinitialiser.
+          </p>
+          <div class="grid">
+            <div>
+              <label for="roueAjoutType">Type de lot</label>
+              <select id="roueAjoutType">
+                <option value="credits">🎟️ Tickets</option>
+                <option value="ranked">📈 Partie(s) classée(s) bonus</option>
+                <option value="vip">👑 Code VIP</option>
+              </select>
+            </div>
+            <div id="roueAjoutValeurBloc">
+              <label for="roueAjoutValeur">Valeur (nombre de tickets ou de parties)</label>
+              <input id="roueAjoutValeur" inputmode="numeric" placeholder="100">
+            </div>
+          </div>
+          <div class="grid">
+            <div>
+              <label for="roueAjoutLabel">Libellé affiché (facultatif)</label>
+              <input id="roueAjoutLabel" placeholder="Rempli automatiquement si laissé vide">
+            </div>
+            <div>
+              <label for="roueAjoutQuantite">Combien d'exemplaires ajouter</label>
+              <input id="roueAjoutQuantite" inputmode="numeric" value="1">
+            </div>
+          </div>
+          <div class="row"><button id="btnRoueAjouter">Ajouter à la roue</button></div>
+          <p class="msg" id="roueAjoutFeedback"></p>
+        </div>
+
+        <div style="margin-top:18px;padding-top:16px;border-top:1px solid rgba(237,232,220,.12)">
+          <p class="tag" style="margin-bottom:4px">🔁 Tout réinitialiser</p>
+          <p style="color:var(--muted);font-size:13px;margin:0 0 10px;line-height:1.6">
+            Remplace tout le stock restant par un tirage complet et aléatoire — à utiliser plutôt
+            que l'ajout manuel ci-dessus si vous voulez repartir d'une roue neuve.
+          </p>
+          <div class="row"><button id="btnRoueReappro" class="ghost">Réapprovisionner maintenant</button></div>
+        </div>
       </div>
       <div class="card">
         <p class="tag" id="roueVipTag">🎁 Demandes de code VIP en attente</p>
@@ -581,7 +668,7 @@
           <option value="right">Droite</option>
         </select>
         <p class="tag" style="margin:18px 0 8px">Aperçu</p>
-        <div id="apercuCadre" style="width:260px;aspect-ratio:16/9;overflow:hidden;border-radius:10px;background:var(--card)">
+        <div id="apercuCadre" style="width:100%;max-width:260px;aspect-ratio:16/9;overflow:hidden;border-radius:10px;background:var(--card)">
           <img id="apercuImg" alt="" style="width:100%;height:100%;object-fit:cover;display:block">
         </div>
         <div class="row" style="margin-top:14px">
@@ -1263,6 +1350,9 @@ function tab(which){
     $(onglet).setAttribute("aria-selected", which === nom);
     $(volet).classList.toggle("hidden", which !== nom);
   }
+  // Menu déroulant réservé au téléphone (voir CSS) : garde la même section sélectionnée que
+  // les boutons, quel que soit celui des deux qui a déclenché le changement.
+  if ($("tabSelect").value !== which) $("tabSelect").value = which;
   if (which === "sugg") loadSuggestions();
   if (which === "citations") loadCitations();
   if (which === "roue"){ loadRoue(); loadVipDemandes(); }
@@ -1291,6 +1381,7 @@ $("tabReglages").onclick = () => tab("reglages");
 $("tabSorties").onclick = () => tab("sorties");
 $("tabNowPlaying").onclick = () => tab("nowplaying");
 $("tabSondages").onclick = () => tab("sondages");
+$("tabSelect").onchange = () => tab($("tabSelect").value);
 
 
 $("btnLoadSorties").onclick = loadSorties;
@@ -1960,9 +2051,23 @@ async function loadReports(){
 
       $("roueStockAdmin").innerHTML = (d.catalogue || []).length
         ? d.catalogue.map((c) =>
-            `<span class="chip" style="margin:0 6px 6px 0;display:inline-block;opacity:${c.restants ? 1 : .5}">
-              ${c.emoji} ${esc(c.label)} × ${c.restants}</span>`).join("")
+            `<span class="chip" style="margin:0 6px 6px 0;display:inline-flex;align-items:center;gap:6px;opacity:${c.restants ? 1 : .5}">
+              ${c.emoji} ${esc(c.label)} × ${c.restants}
+              ${c.restants ? `<button class="ghost" data-roue-retirer="${c.type}" data-roue-retirer-valeur="${c.valeur ?? ""}"
+                  title="Retirer un exemplaire" style="padding:1px 8px;font-size:12px;border-radius:999px;line-height:1.4">−1</button>` : ""}
+            </span>`).join("")
         : "<p class='msg'>Stock épuisé — sera réapprovisionné au prochain tour ou à 18h.</p>";
+
+      $("roueStockAdmin").querySelectorAll("[data-roue-retirer]").forEach((btn) => btn.onclick = async () => {
+        btn.disabled = true;
+        const res = await api("/api/admin/roue/retirer", { method: "POST", body: JSON.stringify({
+          type: btn.dataset.roueRetirer,
+          valeur: btn.dataset.roueRetirerValeur === "" ? null : Number(btn.dataset.roueRetirerValeur),
+          quantite: 1,
+        })});
+        if (res.ok) loadRoue();
+        else { btn.disabled = false; alert("Échec du retrait."); }
+      });
 
       $("roueHistorique").innerHTML = d.historique.map(t => `
         <div class="item">
@@ -2325,6 +2430,43 @@ async function loadReports(){
       } else {
         $("roueAdminFeedback").textContent = "Échec du réapprovisionnement.";
         $("roueAdminFeedback").className = "msg err";
+      }
+    };
+
+    /** Le champ « valeur » ne concerne pas le code VIP : autant le masquer pour éviter la confusion. */
+    function majFormRoueAjout(){
+      const vip = $("roueAjoutType").value === "vip";
+      $("roueAjoutValeurBloc").classList.toggle("hidden", vip);
+      $("roueAjoutValeur").placeholder = $("roueAjoutType").value === "ranked" ? "3" : "100";
+    }
+    $("roueAjoutType").addEventListener("change", majFormRoueAjout);
+    majFormRoueAjout();
+
+    $("btnRoueAjouter").onclick = async () => {
+      const type = $("roueAjoutType").value;
+      const valeur = $("roueAjoutValeur").value.trim();
+      const quantite = Number($("roueAjoutQuantite").value) || 1;
+      if (type !== "vip" && (!valeur || Number(valeur) <= 0)) {
+        $("roueAjoutFeedback").textContent = "Indiquez une valeur supérieure à 0.";
+        $("roueAjoutFeedback").className = "msg err";
+        return;
+      }
+      $("btnRoueAjouter").disabled = true;
+      const res = await api("/api/admin/roue/ajouter", { method: "POST", body: JSON.stringify({
+        type, valeur: type === "vip" ? null : Number(valeur),
+        label: $("roueAjoutLabel").value.trim(), quantite,
+      })});
+      $("btnRoueAjouter").disabled = false;
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        $("roueAjoutFeedback").textContent = `${data.ajoutes} exemplaire${data.ajoutes>1?"s":""} ajouté${data.ajoutes>1?"s":""} à la roue !`;
+        $("roueAjoutFeedback").className = "msg ok";
+        $("roueAjoutLabel").value = "";
+        $("roueAjoutQuantite").value = "1";
+        loadRoue();
+      } else {
+        $("roueAjoutFeedback").textContent = "Échec de l'ajout — vérifiez les champs.";
+        $("roueAjoutFeedback").className = "msg err";
       }
     };
 
