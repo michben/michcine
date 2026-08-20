@@ -237,11 +237,13 @@
 
     <div class="card">
       <p class="tag" id="countLabel">Films au catalogue</p>
+      <p class="msg" id="kidsCounter" style="margin-top:-8px"></p>
       <div class="filters" id="filters">
         <button data-f="tous" aria-pressed="true">Tous</button>
         <button data-f="facile" aria-pressed="false">Facile</button>
         <button data-f="moyen" aria-pressed="false">Moyen</button>
         <button data-f="difficile" aria-pressed="false">Difficile</button>
+        <button data-f="kids" aria-pressed="false">🐻 Enfant</button>
         <button data-f="off" aria-pressed="false">Désactivés</button>
       </div>
       <div id="list"></div>
@@ -844,10 +846,21 @@ $("filters").querySelectorAll("[data-f]").forEach(b => b.onclick = () => {
 
 function render(){
   const vus = movies.filter(m =>
-    filtre === "tous" ? true : filtre === "off" ? m.enabled === false : m.difficulty === filtre);
+    filtre === "tous" ? true
+    : filtre === "off" ? m.enabled === false
+    : filtre === "kids" ? m.kids === true
+    : m.difficulty === filtre);
   const actifs = movies.filter(m => m.enabled !== false).length;
   $("countLabel").textContent =
     `${vus.length} affiché${vus.length>1?"s":""} · ${actifs} actifs sur ${movies.length}`;
+
+  // Compteur de films enfants, toujours visible quel que soit le filtre en cours,
+  // pour voir d'un coup d'œil où en est le catalogue « adapté aux enfants ».
+  const kids = movies.filter(m => m.kids === true);
+  const kidsActifs = kids.filter(m => m.enabled !== false).length;
+  $("kidsCounter").textContent = kids.length
+    ? `🐻 ${kidsActifs} film${kidsActifs>1?"s":""} enfant${kidsActifs>1?"s":""} actif${kidsActifs>1?"s":""} sur ${kids.length} au catalogue`
+    : `🐻 Aucun film enfant pour l'instant — utilisez « Chercher des films enfants » ci-dessus, ou cochez la case en créant/modifiant un film.`;
   $("list").innerHTML = vus.map(m => `
     <div class="item ${m.enabled === false ? "off" : ""}">
       <img src="${m.poster||""}" alt="" onerror="this.style.visibility='hidden'">
@@ -1006,7 +1019,7 @@ $("btnTmdbKidsChercher").onclick = async () => {
   $("tmdbKidsAjouterRow").classList.add("hidden");
   $("btnTmdbKidsTout").disabled = true;
 
-  const res = await api("/api/admin/movies/tmdb-kids-suggestions?pages=3&limite=24");
+  const res = await api("/api/admin/movies/tmdb-kids-suggestions?pages=5&limite=40");
   const data = await res.json().catch(() => ({}));
   if (!res.ok){
     $("tmdbKidsMsg").textContent = data.error === "NO_KEY"

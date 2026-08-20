@@ -558,7 +558,12 @@
   @media (prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important}}
 
 /* --- LE BOUTON POINT D'INTERROGATION --- */
-.help-btn { position: fixed; bottom: 20px; left: 20px; width: 40px; height: 40px; background: rgba(28, 34, 56, 0.6); color: var(--muted); border: 1px solid rgba(237, 232, 220, 0.15); border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 20px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2); transition: all 0.3s ease; z-index: 1000; backdrop-filter: blur(4px); }
+/* En bas à gauche, ce bouton se retrouvait sous le clavier / le champ de saisie des messages
+   (chat de partie en plein écran sur mobile, conversations privées) et gênait l'envoi. Placé
+   en haut à droite à la place : jamais affiché pendant une partie (voir aideActive / inGame),
+   exactement comme le coin « regardé par », qui occupe cette même place mais uniquement en jeu —
+   les deux ne se croisent donc jamais. */
+.help-btn { position: fixed; top: 14px; right: 14px; width: 40px; height: 40px; background: rgba(28, 34, 56, 0.6); color: var(--muted); border: 1px solid rgba(237, 232, 220, 0.15); border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 20px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2); transition: all 0.3s ease; z-index: 1000; backdrop-filter: blur(4px); }
 .help-btn:hover { transform: scale(1.1); color: var(--chalk); border-color: var(--beam); background: rgba(28, 34, 56, 0.9); }
 
 /* --- COIN "REGARDÉ PAR" : qui suit la partie en direct --- */
@@ -1117,7 +1122,7 @@ html.mode-enfant-actif .wrap{padding-top:48px}
       <p class="tag" style="margin-top:18px" id="lobbyCount">Joueurs</p>
       <ul class="players" id="lobbyPlayers"></ul>
       <div id="botBloc" class="hidden" style="margin-top:14px">
-        <p class="tag" style="margin:0 0 8px">🤖 Personne pour l'instant ?</p>
+        <p class="tag" style="margin:0 0 8px" id="botBlocTitre">🤖 Personne pour l'instant ?</p>
         <div class="row" id="botChoixNiveau">
           <button class="ghost" data-bot-niveau="facile">🙂 Facile</button>
           <button class="ghost" data-bot-niveau="moyen">😎 Moyen</button>
@@ -1126,8 +1131,8 @@ html.mode-enfant-actif .wrap{padding-top:48px}
         <p class="feedback" id="botMsg"></p>
       </div>
       <div id="botPresentBloc" class="hidden" style="margin-top:14px">
-        <p class="note" style="margin:0" id="botPresentTexte"></p>
-        <div class="row" style="margin-top:8px"><button class="ghost" id="btnRetirerBot">Retirer le bot</button></div>
+        <p class="note" style="margin:0 0 8px" id="botPresentTexte"></p>
+        <ul class="players" id="botPresentListe"></ul>
       </div>
       <div class="row" style="margin-top:14px">
         <button class="ghost" id="btnPret" data-bulle="Confirmez que vous êtes prêt à jouer. L'hôte ne peut lancer la partie que lorsque tout le monde a cliqué ici — ça évite qu'une partie démarre avec quelqu'un pas encore installé.">✅ Je suis prêt</button>
@@ -1528,6 +1533,9 @@ const AVATARS = ["🎬","🍿","🎭","🕶️","👽","🦖","🤖","🧛","�
 const HINT_LABELS = {letters:"Nombre de lettres", year:"Année", director:"Créateur",
                      actors:"Acteurs", poster:"Photo du film"};
 const MODE_NAMES = {solo:"Solo", duel:"Duel", ffa:"Chacun pour soi", teams:"En équipes", ranked:"Partie classée"};
+// Doit rester aligné avec MAX_BOTS_FFA côté serveur : sert uniquement à masquer le bouton
+// "ajouter un bot" une fois le plafond atteint, le serveur restant seul juge final.
+const MAX_BOTS_FFA_CLIENT = 7;
 
 /**
  * Révélation de fin de manche : l'affiche et le titre en grand, quel qu'ait
@@ -4991,6 +4999,7 @@ $("btnJoin").onclick = () => {
 };
 
 /* ---------- Lobby ---------- */
+const BOT_NIVEAU_LABEL = {facile:"Facile", moyen:"Moyen", hardcore:"Hardcore"};
 function renderLobby(s){
   state.mode = s.mode;
   state.hostId = s.hostId;
@@ -5022,28 +5031,44 @@ function renderLobby(s){
     $("btnStart").style.opacity = tousPrets ? "1" : ".55";
   }
 
-  // Défier un bot : proposé à l'hôte seul dans un salon en duel, tant que personne
-  // d'autre (humain ou bot) ne l'a encore rejoint.
-  const aBot = s.players.some(p => p.bot);
-  $("botBloc").classList.toggle("hidden", !(s.mode === "duel" && state.isHost && s.players.length === 1));
-  $("botPresentBloc").classList.toggle("hidden", !aBot);
-  if (aBot) $("botPresentTexte").textContent = `🤖 ${s.players.find(p => p.bot).pseudo} a rejoint la partie.`;
-  $("btnRetirerBot").classList.toggle("hidden", !aBot || !state.isHost);
+  // Défier un ou plusieurs bots : proposé à l'hôte, en duel (un seul adversaire, tant que
+  // personne d'autre n'a rejoint) comme en chacun-pour-soi (plusieurs bots à la fois, pour
+  // remplir la partie quand personne d'autre n'est dispo).
+  const bots = s.players.filter(p => p.bot);
+  const peutEncoreAjouter = s.mode === "duel"
+    ? (state.isHost && s.players.length === 1)
+    : (s.mode === "ffa" && state.isHost && bots.length < MAX_BOTS_FFA_CLIENT);
+  $("botBloc").classList.toggle("hidden", !peutEncoreAjouter);
+  $("botBlocTitre").textContent = s.mode === "ffa" && bots.length
+    ? "🤖 Ajouter encore un bot ?" : "🤖 Personne pour l'instant ?";
+  $("botPresentBloc").classList.toggle("hidden", !bots.length);
+  if (bots.length){
+    $("botPresentTexte").textContent = bots.length > 1
+      ? `🤖 ${bots.length} bots ont rejoint la partie.`
+      : `🤖 ${bots[0].pseudo} a rejoint la partie.`;
+    $("botPresentListe").innerHTML = bots.map(b => `
+      <li>${b.avatar} ${esc(b.pseudo)} <span class="note" style="margin-left:4px">(${BOT_NIVEAU_LABEL[b.botNiveau] || b.botNiveau})</span>
+        ${state.isHost ? `<button class="ghost" data-retirer-bot="${esc(b.userId)}" style="margin-left:8px;padding:4px 10px;font-size:12px">Retirer</button>` : ""}</li>`).join("");
+    $("botPresentListe").querySelectorAll("[data-retirer-bot]").forEach(btn => btn.onclick = () => {
+      socket.emit("room:remove-bot", {code: state.code, botId: btn.dataset.retirerBot}, res => { if (res?.ok) renderLobby(res.state); });
+    });
+  }
 }
 $("botChoixNiveau").querySelectorAll("[data-bot-niveau]").forEach(b => b.onclick = () => {
   $("botMsg").textContent = "";
   socket.emit("room:add-bot", {code: state.code, niveau: b.dataset.botNiveau}, res => {
     if (!res?.ok){
-      $("botMsg").textContent = "Impossible d'ajouter un bot pour l'instant.";
+      $("botMsg").textContent = res?.error === "MAX_BOTS_ATTEINT"
+        ? "Le nombre maximum de bots est déjà atteint pour cette partie."
+        : res?.error === "SALON_COMPLET"
+        ? "Le salon est complet, impossible d'ajouter un bot de plus."
+        : "Impossible d'ajouter un bot pour l'instant.";
       $("botMsg").className = "feedback bad";
       return;
     }
     renderLobby(res.state);
   });
 });
-$("btnRetirerBot").onclick = () => {
-  socket.emit("room:remove-bot", {code: state.code}, res => { if (res?.ok) renderLobby(res.state); });
-};
 document.querySelectorAll("[data-team]").forEach(b =>
   b.onclick = () => socket.emit("team:choose", {code:state.code, team:b.dataset.team}));
 $("btnPret").onclick = () => {
