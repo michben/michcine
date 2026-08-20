@@ -585,6 +585,26 @@ html.mode-enfant-actif body{min-height:100vh}
   text-align:center;font-family:var(--font-etiquette);font-weight:600;font-size:12px;letter-spacing:.14em;
   text-transform:uppercase;padding:6px 10px}
 html.mode-enfant-actif .wrap{padding-top:48px}
+/* --- Bandeau défilant (annonces développeur, félicitations, messages de bienvenue) --- */
+#tickerBanniere{position:fixed;left:0;right:0;top:0;z-index:1150;height:30px;overflow:hidden;
+  background:var(--velvet);border-bottom:1px solid rgba(237,232,220,.14);
+  display:flex;align-items:center;transition:top .2s ease}
+#tickerBanniere.hidden{display:none}
+#tickerBanniere .tickerContenu{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;
+  padding-left:100%;will-change:transform;animation:tickerDefile linear 1;
+  font-family:var(--font-etiquette);font-size:12.5px;font-weight:600;letter-spacing:.02em}
+#tickerBanniere .tickerContenu.dev{color:var(--ticket)}
+#tickerBanniere .tickerContenu.roue,#tickerBanniere .tickerContenu.equipe{color:var(--beam)}
+#tickerBanniere .tickerContenu.bienvenue{color:var(--teal)}
+@keyframes tickerDefile{ from{ transform:translateX(0); } to{ transform:translateX(-100%); } }
+html.ticker-actif .wrap{padding-top:38px}
+html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
+@media(max-width:480px){
+  #tickerBanniere{height:26px}
+  #tickerBanniere .tickerContenu{font-size:11.5px}
+  html.ticker-actif .wrap{padding-top:34px}
+  html.ticker-actif.mode-enfant-actif .wrap{padding-top:70px}
+}
 /* --- LA FENÊTRE MODALE --- */
 .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.85); display: none; justify-content: center; align-items: center; z-index: 1001; opacity: 0; transition: opacity 0.3s ease; }
 .modal-overlay.active { display: flex; opacity: 1; }
@@ -717,6 +737,7 @@ html.mode-enfant-actif .wrap{padding-top:48px}
 </head>
 <body>
 <div class="bandeauEnfant hidden" id="bandeauEnfant">🐻 Mode enfant activé — uniquement des films pour enfants</div>
+<div id="tickerBanniere" class="hidden" aria-live="polite"></div>
 <div class="wrap">
 
   <button id="banner" title="Revenir à l'accueil">
@@ -1934,6 +1955,7 @@ let state = {code:null, mode:"ffa", isHost:false, hintCosts:{}, bought:{}, answe
 function appliquerModeEnfant(){
   document.documentElement.classList.toggle("mode-enfant-actif", state.kidMode);
   $("bandeauEnfant").classList.toggle("hidden", !state.kidMode);
+  positionnerTickerBanniere(); // le bandeau enfant peut apparaître/disparaître : le ticker doit rester juste en dessous
   $("btnKidMode").setAttribute("aria-pressed", String(state.kidMode));
   // un compte enfant ne peut jamais désactiver le mode enfant
   const verrouille = me && me.role === "enfant";
@@ -1951,6 +1973,74 @@ $("btnKidMode").onclick = () => {
 try { state.kidMode = localStorage.getItem("kidMode") === "1"; } catch {}
 // appliquerModeEnfant() n'est appelé qu'après connexion (voir appliquerRole) :
 // avant, `me` n'existe pas encore et le bouton est de toute façon masqué.
+
+/* ---------- Bandeau défilant (annonces développeur, félicitations, messages de bienvenue) ---------- */
+// Message de bienvenue par défaut : complété avec le nombre de comptes une fois connu (voir initTicker).
+let tickerNbJoueurs = null;
+const messagesAccueilTicker = () => [
+  { texte: `Bonjour à tous, merci d'être${tickerNbJoueurs ? ` déjà ${tickerNbJoueurs}` : " si nombreux"} à jouer avec nous ! 🎬`, type: "bienvenue" },
+  { texte: "Salam à tous, bon film et bonne chance à la roue ! 🍿", type: "bienvenue" },
+  { texte: "Merci de faire vivre MichBen Ciné Quizz chaque jour ! ❤️", type: "bienvenue" },
+];
+let tickerFile = [];        // messages événementiels en attente (roue, victoire d'équipe...), un seul passage chacun
+let tickerMessageDev = null; // message développeur actif (répété tant qu'il l'est), ou null
+let tickerAccueilIdx = 0;
+let tickerDemarre = false;
+
+/** Repositionne le bandeau juste sous le bandeau "mode enfant" quand celui-ci est affiché,
+ *  pour que les deux ne se chevauchent jamais. */
+function positionnerTickerBanniere(){
+  const banniere = $("tickerBanniere");
+  const kid = $("bandeauEnfant");
+  banniere.style.top = (kid && !kid.classList.contains("hidden")) ? `${kid.offsetHeight}px` : "0px";
+}
+
+function tickerProchainMessage(){
+  if (tickerMessageDev) return { texte: `📢 ${tickerMessageDev}`, type: "dev" };
+  if (tickerFile.length) return tickerFile.shift();
+  const accueil = messagesAccueilTicker();
+  const m = accueil[tickerAccueilIdx % accueil.length];
+  tickerAccueilIdx++;
+  return m;
+}
+
+function tickerJouerSuivant(){
+  const banniere = $("tickerBanniere");
+  const msg = tickerProchainMessage();
+  banniere.classList.remove("hidden");
+  document.documentElement.classList.add("ticker-actif");
+  positionnerTickerBanniere();
+  banniere.innerHTML = `<span class="tickerContenu ${msg.type}">${esc(msg.texte)}</span>`;
+  const span = banniere.querySelector(".tickerContenu");
+  // Vitesse de défilement constante, quelle que soit la longueur du message.
+  requestAnimationFrame(() => {
+    const distance = span.scrollWidth + banniere.clientWidth;
+    span.style.animationDuration = `${Math.max(6, distance / 90)}s`;
+  });
+  span.onanimationend = () => tickerJouerSuivant();
+}
+
+/** File d'attente des événements diffusés à tous (gain à la roue, victoire d'équipe...). */
+function tickerAjouterEvenement(texte, type){
+  tickerFile.push({ texte, type: type || "info" });
+}
+
+async function initTicker(){
+  // On attend ce premier appel avant de démarrer le défilé : sinon, un message développeur actif
+  // met un tour complet à apparaître (le temps qu'un premier message de bienvenue défile en entier).
+  try {
+    const d = await fetch("/api/annonce-dev").then(r => r.json());
+    tickerMessageDev = d.actif ? d.texte : null;
+  } catch {}
+  fetch("/api/joueurs/total", { credentials: "same-origin" }).then(r => r.ok ? r.json() : null)
+    .then(d => { if (d && d.total) tickerNbJoueurs = d.total; }).catch(() => {});
+  if (!tickerDemarre){
+    tickerDemarre = true;
+    tickerJouerSuivant();
+  }
+}
+socket.on("annonce:dev", (d) => { tickerMessageDev = d && d.actif ? d.texte : null; });
+socket.on("annonce:nouvelle", (m) => { if (m && m.texte) tickerAjouterEvenement(m.texte, m.type); });
 
 /** Applique les conséquences du rôle du compte connecté : bouton admin, mode enfant forcé. */
 function appliquerRole(){
@@ -2318,6 +2408,7 @@ async function loadSession(){
     chargerSondages(); // Pastille des sondages en attente de vote
     chargerNombreFilms(); // Petit compteur de films en haut du menu
     chargerNombreJoueurs(); // Petit compteur de joueurs inscrits en haut du menu
+    initTicker(); // Bandeau défilant : annonces développeur, félicitations, messages de bienvenue
     verifierTicketRoue(); // Prévient si un tour gratuit de la roue n'a pas encore été utilisé
     $("hello").innerHTML = `Bonjour ${esc(me.pseudo)}` +
       (["moderateur","admin"].includes(me.role) ? `<span class="badge-role">${esc(me.role)}</span>` : "");
@@ -3879,7 +3970,8 @@ $("btnSalonAmis").onclick = () => {
   }
   socket.emit("room:create", {mode: modeAmis, kids: state.kidMode}, res => {
     if (!res?.ok) return ($("amisMsg").textContent =
-      res?.error === "NO_MOVIES_KIDS" ? "Aucun film enfant disponible pour le moment." : "Création impossible.");
+      res?.error === "MAINTENANCE" ? "Le jeu est en maintenance : impossible de lancer une nouvelle partie pour l'instant."
+      : res?.error === "NO_MOVIES_KIDS" ? "Aucun film enfant disponible pour le moment." : "Création impossible.");
     state.code = res.code; state.mode = modeAmis; state.hostId = res.state.hostId;
     setChatVisible(true);
     $("amisMsg").textContent = `Salon ${res.code} créé. Invitez vos amis en ligne ci-dessous.`;
@@ -4947,7 +5039,8 @@ async function lancerPartie(mode){
 
   socket.emit("room:create", {mode, kids: state.kidMode}, res => {
     if (!res?.ok) return ($("joinError").textContent =
-      res?.error === "NO_MOVIES_KIDS" ? "Aucun film enfant disponible pour le moment."
+      res?.error === "MAINTENANCE" ? "Le jeu est en maintenance : impossible de lancer une nouvelle partie pour l'instant, réessayez dans quelques minutes."
+      : res?.error === "NO_MOVIES_KIDS" ? "Aucun film enfant disponible pour le moment."
       : "Aucun film disponible pour ce niveau — choisissez-en un autre.");
     state.code = res.code; state.mode = mode;
     setChatVisible(true);

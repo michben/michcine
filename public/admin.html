@@ -806,6 +806,44 @@
         <p class="msg" id="aideMsg"></p>
       </div>
 
+      <div class="card">
+        <p class="tag">📢 Bandeau défilant — annonce développeur & maintenance</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6">
+          Un bandeau défile en haut de l'écran de tous les joueurs connectés. Il sert à prévenir
+          d'une mise à jour à venir (couleur rouge, prioritaire sur tout le reste du bandeau),
+          et diffuse aussi automatiquement de petits événements — gains à la roue, victoires
+          d'équipe — ainsi que des messages de bienvenue quand rien d'autre n'est à annoncer.
+        </p>
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer;font-size:15px;color:var(--chalk);text-transform:none;letter-spacing:0">
+          <input type="checkbox" id="annonceActif" style="width:auto">
+          Afficher mon message dans le bandeau (répété en boucle tant que coché)
+        </label>
+        <label for="annonceTexte">Message développeur</label>
+        <input id="annonceTexte" type="text" maxlength="220" placeholder="Mise à jour en cours dans quelques minutes, les parties en cours ne seront pas coupées.">
+        <div class="row">
+          <button id="btnSaveAnnonce">Enregistrer et diffuser</button>
+        </div>
+        <p class="msg" id="annonceMsg"></p>
+
+        <div style="margin-top:18px;padding-top:16px;border-top:1px solid rgba(237,232,220,.12)">
+          <p class="tag" style="margin-bottom:8px" id="maintenanceTag">🚧 Mode maintenance</p>
+          <p style="color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6">
+            Bloque uniquement la <b>création</b> de nouveaux salons — les parties déjà en cours ne
+            sont jamais interrompues automatiquement. Utilisez le bouton ci-dessous pour les mettre
+            en pause vous-même une fois qu'il n'en reste plus beaucoup, plutôt que d'attendre.
+          </p>
+          <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer;font-size:15px;color:var(--chalk);text-transform:none;letter-spacing:0">
+            <input type="checkbox" id="maintenanceActif" style="width:auto">
+            Bloquer la création de nouvelles parties
+          </label>
+          <div class="row">
+            <button id="btnMaintenancePauseToutes" class="ghost">⏸️ Mettre toutes les parties en pause</button>
+            <button id="btnMaintenanceReprendreToutes" class="ghost">▶️ Reprendre toutes les parties</button>
+          </div>
+          <p class="msg" id="maintenanceMsg"></p>
+        </div>
+      </div>
+
       <div class="card" id="alerteMdp" style="border-color:rgba(228,88,110,.5)">
         <p class="tag" style="color:var(--ticket)">Sécurité</p>
         <p style="margin:0;line-height:1.6">Le mot de passe par défaut est encore actif. Toute personne
@@ -1362,7 +1400,7 @@ function tab(which){
   if (which === "classement") loadClassement();
   if (which === "users") { loadUsers(); chargerCompteurEnfant(); }
   if (which === "reports"){ loadReports(); loadConversations(); }
-  if (which === "reglages"){ etatSecurite(); chargerReglages(); chargerAide(); }
+  if (which === "reglages"){ etatSecurite(); chargerReglages(); chargerAide(); chargerAnnonce(); chargerMaintenance(); }
   if (which === "sorties") loadSorties();
   if (which === "nowplaying") loadNowPlaying();
   if (which === "sondages") { loadSondages(); remplirFilmsListe(); chargerSuggestionsPepites(); }
@@ -1673,6 +1711,61 @@ $("btnSaveAide").onclick = async () => {
     ? ($("aideActif").checked ? "Enregistré et diffusé : les joueurs voient le bouton « ? »." : "Enregistré, bouton masqué pour les joueurs.")
     : "Enregistrement refusé.";
   $("aideMsg").className = res.ok ? "msg ok" : "msg err";
+};
+
+/* ---------- Bandeau développeur & mode maintenance ---------- */
+async function chargerAnnonce(){
+  const res = await api("/api/admin/annonce-dev");
+  if (!res.ok) return;
+  const a = await res.json();
+  $("annonceActif").checked = Boolean(a.actif);
+  $("annonceTexte").value = a.texte || "";
+}
+
+$("btnSaveAnnonce").onclick = async () => {
+  const res = await api("/api/admin/annonce-dev", {method:"PUT", body: JSON.stringify({
+    actif: $("annonceActif").checked,
+    texte: $("annonceTexte").value,
+  })});
+  $("annonceMsg").textContent = res.ok
+    ? ($("annonceActif").checked ? "Diffusé : le bandeau affiche votre message à tous les joueurs connectés." : "Enregistré, bandeau développeur masqué.")
+    : "Enregistrement refusé.";
+  $("annonceMsg").className = res.ok ? "msg ok" : "msg err";
+};
+
+async function chargerMaintenance(){
+  const res = await api("/api/admin/maintenance");
+  if (!res.ok) return;
+  const m = await res.json();
+  $("maintenanceActif").checked = Boolean(m.maintenance);
+  $("maintenanceTag").textContent = `🚧 Mode maintenance — ${m.partiesEnCours} partie${m.partiesEnCours>1?"s":""} en cours` +
+    (m.partiesEnPause ? ` (dont ${m.partiesEnPause} déjà en pause)` : "");
+}
+
+$("maintenanceActif").addEventListener("change", async () => {
+  const res = await api("/api/admin/maintenance", {method:"PUT", body: JSON.stringify({maintenance: $("maintenanceActif").checked})});
+  $("maintenanceMsg").textContent = res.ok
+    ? ($("maintenanceActif").checked ? "Création de nouvelles parties bloquée." : "Création de nouvelles parties de nouveau autorisée.")
+    : "Échec de l'enregistrement.";
+  $("maintenanceMsg").className = res.ok ? "msg ok" : "msg err";
+  chargerMaintenance();
+});
+
+$("btnMaintenancePauseToutes").onclick = async () => {
+  if (!confirm("Mettre en pause toutes les parties en cours ? Chaque hôte verra son chrono suspendu jusqu'à la reprise.")) return;
+  const res = await api("/api/admin/maintenance/pause-toutes", {method:"POST"});
+  const d = await res.json().catch(() => ({}));
+  $("maintenanceMsg").textContent = res.ok ? `${d.misesEnPause} partie(s) mise(s) en pause.` : "Échec.";
+  $("maintenanceMsg").className = res.ok ? "msg ok" : "msg err";
+  chargerMaintenance();
+};
+
+$("btnMaintenanceReprendreToutes").onclick = async () => {
+  const res = await api("/api/admin/maintenance/reprendre-toutes", {method:"POST"});
+  const d = await res.json().catch(() => ({}));
+  $("maintenanceMsg").textContent = res.ok ? `${d.reprises} partie(s) reprise(s).` : "Échec.";
+  $("maintenanceMsg").className = res.ok ? "msg ok" : "msg err";
+  chargerMaintenance();
 };
 
 /* ---------- Mot de passe d'administration ---------- */
