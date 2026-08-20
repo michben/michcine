@@ -115,6 +115,7 @@
       <button id="tabMusique" aria-selected="false">Musique</button>
       <button id="tabPub" aria-selected="false">Publicités</button>
       <button id="tabApparence" aria-selected="false">Apparence</button>
+      <button id="tabAudio" aria-selected="false">🔊 Audio</button>
       <button id="tabClassement" aria-selected="false">Partie classée</button>
       <button id="tabSondages" aria-selected="false">🍿 Sondages</button>
     </div>
@@ -137,6 +138,7 @@
         <option value="reglages">Réglages</option>
         <option value="pub">Publicités</option>
         <option value="apparence">Apparence</option>
+        <option value="audio">🔊 Audio</option>
         <option value="classement">Partie classée</option>
       </optgroup>
     </select>
@@ -530,6 +532,51 @@
         <button class="ghost" id="btnApparenceReset">Réinitialiser l'apparence</button>
       </div>
       <p class="msg" id="apparenceMsg"></p>
+    </div>
+
+    <div id="paneAudio" class="hidden">
+      <div class="card">
+        <p class="tag">🔊 Serveur TURN (relais audio des salons vocaux)</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6">
+          Sans serveur TURN, les salons vocaux utilisent uniquement un serveur STUN gratuit : cela
+          suffit la plupart du temps, mais certains réseaux très restrictifs (wifi d'entreprise
+          filtré, certaines box) empêchent malgré tout la connexion directe entre deux navigateurs
+          — la personne concernée n'entend alors personne, même si les autres s'entendent bien
+          entre eux. Un serveur TURN relaie l'audio dans ce cas précis. Ce n'est pas gratuit, mais
+          certains fournisseurs (metered.ca, Twilio, Cloudflare Calls…) offrent un palier gratuit
+          suffisant pour un petit groupe d'amis.
+        </p>
+        <label style="display:flex;align-items:center;gap:8px;margin:0 0 12px;cursor:pointer">
+          <input type="checkbox" id="audioTurnActif" style="width:auto;cursor:pointer">
+          Activer le serveur TURN ci-dessous
+        </label>
+        <label>Adresse du serveur (ex. turn:relay.exemple.com:3478)</label>
+        <input id="audioTurnUrl" placeholder="turn:...">
+        <label style="margin-top:10px">Identifiant</label>
+        <input id="audioTurnUsername" placeholder="Identifiant fourni par le service TURN">
+        <label style="margin-top:10px">Mot de passe / clé</label>
+        <input id="audioTurnCredential" type="password" placeholder="Clé fournie par le service TURN">
+        <div class="row" style="margin-top:14px">
+          <button id="btnAudioSave">Enregistrer l'espace audio</button>
+        </div>
+        <p class="msg" id="audioMsg"></p>
+      </div>
+      <div class="card">
+        <p class="tag">🎙️ Salons vocaux</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6">
+          Réglages de capacité et de stabilité, communs à tous les salons vocaux du site.
+        </p>
+        <label>Participants maximum par salon</label>
+        <input id="audioMaxParticipants" type="number" min="2" max="200">
+        <label style="margin-top:10px">Cohôtes maximum par salon</label>
+        <input id="audioMaxCohotes" type="number" min="1" max="10">
+        <label style="margin-top:10px">Délai avant fermeture d'un salon resté sans hôte (minutes)</label>
+        <input id="audioGraceMinutes" type="number" min="1" max="30">
+        <p style="color:var(--muted);font-size:13px;margin:8px 0 0;line-height:1.6">
+          Le temps laissé à l'hôte (ou à tout le monde) pour revenir après une coupure réseau ou
+          une mise en veille, avant que le salon ne se ferme pour de bon.
+        </p>
+      </div>
     </div>
 
     <div id="paneClassement" class="hidden">
@@ -1410,6 +1457,7 @@ function tab(which){
                                       ["musique","tabMusique","paneMusique"],
                                       ["pub","tabPub","panePub"],
                                       ["apparence","tabApparence","paneApparence"],
+                                      ["audio","tabAudio","paneAudio"],
                                       ["classement","tabClassement","paneClassement"],
                                       ["users","tabUsers","paneUsers"],
                                       ["reports","tabReports","paneReports"],
@@ -1429,6 +1477,7 @@ function tab(which){
   if (which === "musique") loadMusique();
   if (which === "pub") loadPublicites();
   if (which === "apparence") loadApparence();
+  if (which === "audio") loadAudio();
   if (which === "classement") loadClassement();
   if (which === "users") { loadUsers(); chargerCompteurEnfant(); }
   if (which === "reports"){ loadReports(); loadConversations(); }
@@ -1444,6 +1493,7 @@ $("tabRoue").onclick = () => tab("roue");
 $("tabMusique").onclick = () => tab("musique");
 $("tabPub").onclick = () => tab("pub");
 $("tabApparence").onclick = () => tab("apparence");
+$("tabAudio").onclick = () => tab("audio");
 $("tabClassement").onclick = () => tab("classement");
 $("tabUsers").onclick = () => tab("users");
 $("tabReports").onclick = () => tab("reports");
@@ -2606,6 +2656,36 @@ async function loadReports(){
       await loadApparence();
       $("apparenceMsg").textContent = "Apparence remise à ses valeurs d'origine.";
       $("apparenceMsg").className = "msg ok";
+    };
+
+    /* ---------- Espace audio (TURN, salons vocaux) ---------- */
+    async function loadAudio(){
+      await chargerReglages();
+      const audio = reglages?.audio || {};
+      $("audioTurnActif").checked = audio.turnActif === true;
+      $("audioTurnUrl").value = audio.turnUrl || "";
+      $("audioTurnUsername").value = audio.turnUsername || "";
+      $("audioTurnCredential").value = audio.turnCredential || "";
+      $("audioMaxParticipants").value = audio.maxParticipantsVocal ?? 40;
+      $("audioMaxCohotes").value = audio.maxCohotesVocal ?? 3;
+      $("audioGraceMinutes").value = audio.fermetureGraceMinutes ?? 3;
+    }
+
+    $("btnAudioSave").onclick = async () => {
+      const res = await api("/api/admin/audio", { method: "PUT", body: JSON.stringify({
+        turnActif: $("audioTurnActif").checked,
+        turnUrl: $("audioTurnUrl").value,
+        turnUsername: $("audioTurnUsername").value,
+        turnCredential: $("audioTurnCredential").value,
+        maxParticipantsVocal: Number($("audioMaxParticipants").value),
+        maxCohotesVocal: Number($("audioMaxCohotes").value),
+        fermetureGraceMinutes: Number($("audioGraceMinutes").value),
+      })});
+      $("audioMsg").textContent = res.ok
+        ? "Espace audio enregistré."
+        : "Enregistrement refusé.";
+      $("audioMsg").className = res.ok ? "msg ok" : "msg err";
+      if (res.ok) loadAudio();
     };
 
     /* ---------- Partie classée ---------- */

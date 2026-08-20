@@ -1186,7 +1186,7 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
       <button class="ghost" id="btnFriends">Amis <span id="badgeAmis" class="pastille hidden">0</span></button>
       <button class="ghost" id="btnSignets">🔖 Mes signets</button>
       <button class="ghost" id="btnPepites">💎 Mes pépites <span id="badgePepites" class="pastille hidden">0</span></button>
-      <button class="ghost" id="btnVocal" style="border-color:var(--teal);color:var(--teal)">🎙️ Salon vocal</button>
+      <button class="ghost" id="btnVocal" style="border-color:var(--teal);color:var(--teal)">🔴 Salons en direct</button>
       <button class="ghost" id="btnContactDev" title="Envoyer un message au développeur">✉️ Contacter le développeur</button>
       <button class="ghost" id="btnKidMode" aria-pressed="false" title="Mode enfant : uniquement des films pour enfants">🐻</button>
       <button class="ghost" id="btnProfile">Profil</button>
@@ -1228,8 +1228,10 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
         <div class="row"><button id="btnVocalRejoindre" class="ghost">Rejoindre</button></div>
         <p class="feedback bad" id="vocalErreur"></p>
       </div>
-      <p class="tag" style="margin-top:18px">Salons ouverts en ce moment</p>
-      <div id="vocalSalonsOuverts"><p class="note">Aucun salon ouvert pour l'instant.</p></div>
+      <p class="tag" style="margin-top:18px">🔴 Salons en direct — vos amis</p>
+      <div id="vocalSalonsAmis"><p class="note">Aucun de vos amis n'anime de salon pour l'instant.</p></div>
+      <p class="tag" style="margin-top:18px">Autres salons ouverts</p>
+      <div id="vocalSalonsAutres"><p class="note">Aucun autre salon ouvert pour l'instant.</p></div>
     </div>
 
     <div id="vocalSalon" class="hidden">
@@ -1281,8 +1283,21 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
 
       <div class="card hidden" id="vocalConsole">
         <p class="tag" style="margin:0 0 10px">🎛️ Console de modération</p>
+        <label style="display:flex;align-items:center;gap:8px;margin:0 0 8px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:14px">
+          <input type="checkbox" id="vocalReglagePrive" style="width:auto;cursor:pointer">
+          🔒 Salon privé (invisible dans « Salons en direct » pour qui n'est pas ami avec l'hôte)
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;margin:0 0 10px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:14px">
+          <input type="checkbox" id="vocalReglageMonteeLibre" style="width:auto;cursor:pointer">
+          🙌 Montée libre (les auditeurs deviennent intervenants sans avoir à demander)
+        </label>
         <div id="vocalDemandesListe"></div>
         <div id="vocalConsoleParticipants"></div>
+      </div>
+
+      <div class="card">
+        <p class="tag" style="margin:0 0 10px">👋 Réactions</p>
+        <div id="vocalEmojiBar" class="emojis"></div>
       </div>
 
       <div class="card">
@@ -2667,6 +2682,9 @@ fetch("/api/config").then(r => r.json())
     autoriserSpectateurGlobal = c.autoriserSpectateur === true;
     majVisibiliteRadio();
     appliquerTheme(c.theme);
+    // Serveur TURN optionnel (voir server.js) : s'ajoute aux serveurs STUN pour les salons vocaux,
+    // utile quand la connexion directe échoue sur un réseau très restrictif.
+    if (c.turn && c.turn.urls) VOCAL_ICE_SERVERS.push(c.turn);
   })
   .catch(() => $("tipLink").classList.add("hidden"));
 
@@ -2956,12 +2974,31 @@ let messagesNonLus = 0;
 // Détail par ami (id -> nombre de messages non lus de sa part), pour afficher directement
 // dans la liste d'amis qui a écrit, sans devoir ouvrir chaque conversation une par une.
 let messagesNonLusParAmi = {};
+// id -> date du dernier message échangé avec cet ami (voir triAmisParActivite), pour faire
+// remonter en haut de la liste celui qui vient d'écrire plutôt que de garder l'ordre figé du
+// jour où l'amitié a été nouée.
+let dernierMessageParAmi = {};
 async function majBadgeMessages(){
   const r = await fetch("/api/messages").then(x => x.json()).catch(() => null);
   messagesNonLus = r?.total ?? 0;
   messagesNonLusParAmi = r?.parAmi ?? {};
+  dernierMessageParAmi = r?.dernierMessage ?? {};
   majBadgeAmis();
   return messagesNonLus;
+}
+
+/** Trie une liste d'amis pour faire remonter en premier ceux qui ont un message non lu (le plus
+ *  récent en tête), puis ceux qui ont juste échangé récemment (lu ou non), et enfin les autres
+ *  dans leur ordre d'origine — sans jamais réordonner deux amis qui n'ont ni l'un ni l'autre de
+ *  message récent, pour rester stable et prévisible dans le cas courant. */
+function triAmisParActivite(amis){
+  return [...amis].sort((a, b) => {
+    const nonLuA = messagesNonLusParAmi[a.id] || 0, nonLuB = messagesNonLusParAmi[b.id] || 0;
+    if (Boolean(nonLuA) !== Boolean(nonLuB)) return nonLuA ? -1 : 1;
+    const atA = dernierMessageParAmi[a.id] || 0, atB = dernierMessageParAmi[b.id] || 0;
+    if (atA !== atB) return atB - atA;
+    return 0;
+  });
 }
 
 /* ---------- Don de points ---------- */
@@ -4134,6 +4171,9 @@ async function chargerAmis(){
 
   if (ongletAmis === "amis"){
     const enSalon = Boolean(state.code);
+    // Celui qui vient d'écrire remonte en haut de la liste (voir triAmisParActivite) — sans ça,
+    // un message reçu restait invisible tant qu'on ne pensait pas à ouvrir sa conversation.
+    r.amis = triAmisParActivite(r.amis);
     $("listeAmis").innerHTML = r.amis.map(j => ligneJoueur(j,
       enSalon && j.online
         ? [["bloquer","🚫"], ["retirer","❌"], ["donner","🎁"], ["message","✉️"], ["inviter","🎮 Inviter"]]
@@ -4401,7 +4441,11 @@ socket.on("notif", (notif) => {
       () => { ongletAmis = "demandes"; $("btnFriends").click(); chargerAmis(); });
 
   if (type === "message"){
-    majBadgeMessages();
+    majBadgeMessages().then(() => {
+      // La liste d'amis est déjà à l'écran : on la rafraîchit tout de suite pour que l'auteur du
+      // message remonte en haut sans attendre que le joueur quitte puis revienne sur l'onglet.
+      if (!$("friends").classList.contains("hidden") && ongletAmis === "amis") chargerAmis();
+    });
     // si la conversation est déjà ouverte, on la rafraîchit au lieu d'alerter
     if (convAvec?.id === notif.id) return chargerConversation();
     bandeauNotif(`${image}<span><b>${esc(de)}</b> vous écrit
@@ -4700,6 +4744,25 @@ let vocalMicIndisponible = false; // évite de redemander le micro en boucle apr
 let vocalMicOuvert = false;       // état local du bouton (miroir de moi.mute côté serveur, inversé)
 let vocalVadFrame = null;
 let vocalAudioCtx = null;
+let vocalEtatPeers = new Map();   // userId -> état ICE de la connexion vers ce participant
+
+/** Recalcule si TOUTES les connexions vers les autres participants sont en échec (le symptôme
+ *  précis d'un réseau trop restrictif pour établir la moindre connexion directe : "je n'entends
+ *  personne mais les autres s'entendent très bien") et affiche/efface un message clair en
+ *  conséquence — sans ça, cet échec est totalement silencieux pour la personne concernée. */
+function vocalMajBanniereConnexion(){
+  const msg = $("vocalMicMsg");
+  if (!msg) return;
+  const etats = [...vocalEtatPeers.values()];
+  const enEchecTotal = etats.length > 0 && etats.every(e => e === "failed" || e === "disconnected" || e === "closed");
+  if (enEchecTotal){
+    msg.textContent = "⚠️ Connexion audio impossible avec les autres participants — probablement un réseau trop restrictif (wifi d'entreprise, certaines box). Essayez avec un autre réseau (4G/5G par exemple) si le problème persiste.";
+    msg.className = "feedback bad";
+  } else if (msg.textContent.startsWith("⚠️ Connexion audio impossible")){
+    msg.textContent = "";
+    msg.className = "feedback";
+  }
+}
 
 /** Crée (si besoin) la connexion audio directe vers un participant du salon. Ne fait rien si elle
  *  existe déjà. Reste "vide" (sans son) tant que personne n'y a ajouté de piste micro — c'est
@@ -4724,20 +4787,36 @@ function vocalCreerPeer(peerId){
   };
   pc.onicecandidate = (e) => { if (e.candidate) vocalEmettreSignal(peerId, { type: "ice", candidate: e.candidate }); };
   pc.ontrack = (e) => vocalAttacherAudioDistant(peerId, e.streams[0]);
+  // Suit l'état de la connexion directe vers ce participant : si elle échoue, on tente une reprise
+  // (restartIce) une seule fois, puis on affiche un message clair si ça ne suffit pas — plutôt que
+  // de laisser un silence total sans aucune explication (voir vocalMajBanniereConnexion).
+  pc.oniceconnectionstatechange = () => {
+    vocalEtatPeers.set(peerId, pc.iceConnectionState);
+    if (pc.iceConnectionState === "failed" && !pc._reprisTente){
+      pc._reprisTente = true;
+      try { pc.restartIce?.(); } catch {}
+    }
+    if (pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed") pc._reprisTente = false;
+    vocalMajBanniereConnexion();
+  };
   if (vocalLocalStream) vocalLocalStream.getTracks().forEach(t => pc.addTrack(t, vocalLocalStream));
   vocalPeers.set(peerId, pc);
+  vocalEtatPeers.set(peerId, pc.iceConnectionState);
   return pc;
 }
 
 function vocalFermerPeer(peerId){
   const pc = vocalPeers.get(peerId);
   if (pc){ pc.close(); vocalPeers.delete(peerId); }
+  vocalEtatPeers.delete(peerId);
+  vocalMajBanniereConnexion();
   const audio = document.getElementById(`vocalAudioDistant-${CSS.escape(peerId)}`);
   if (audio) audio.remove();
 }
 
 function vocalFermerToutesLesConnexions(){
   for (const peerId of [...vocalPeers.keys()]) vocalFermerPeer(peerId);
+  vocalEtatPeers.clear();
   if (vocalLocalStream){ vocalLocalStream.getTracks().forEach(t => t.stop()); vocalLocalStream = null; }
   vocalArreterVAD();
   vocalMicOuvert = false;
@@ -4867,16 +4946,25 @@ function afficherVocalSalonVue(){
   $("vocalSalon").classList.remove("hidden");
 }
 
+function carteSalonVocalOuvert(s){
+  return `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid rgba(237,232,220,.1)">
+      <div><b>${s.prive ? "🔒 " : ""}${esc(s.titre)}</b><br><small style="color:var(--muted)">Animé par ${esc(s.hote)} · ${s.participants} participant${s.participants>1?"s":""}</small></div>
+      <button class="ghost" data-rejoindre-vocal="${esc(s.code)}">Rejoindre</button>
+    </div>`;
+}
+
 async function chargerSalonsVocauxOuverts(){
   const liste = await fetch("/api/vocal/salons").then(r => r.ok ? r.json() : []).catch(() => []);
-  $("vocalSalonsOuverts").innerHTML = liste.length
-    ? liste.map(s => `
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid rgba(237,232,220,.1)">
-          <div><b>${esc(s.titre)}</b><br><small style="color:var(--muted)">Animé par ${esc(s.hote)} · ${s.participants} participant${s.participants>1?"s":""}</small></div>
-          <button class="ghost" data-rejoindre-vocal="${esc(s.code)}">Rejoindre</button>
-        </div>`).join("")
-    : `<p class="note">Aucun salon ouvert pour l'instant.</p>`;
-  $("vocalSalonsOuverts").querySelectorAll("[data-rejoindre-vocal]").forEach(b =>
+  const amis = liste.filter(s => s.hoteEstAmi);
+  const autres = liste.filter(s => !s.hoteEstAmi);
+  $("vocalSalonsAmis").innerHTML = amis.length
+    ? amis.map(carteSalonVocalOuvert).join("")
+    : `<p class="note">Aucun de vos amis n'anime de salon pour l'instant.</p>`;
+  $("vocalSalonsAutres").innerHTML = autres.length
+    ? autres.map(carteSalonVocalOuvert).join("")
+    : `<p class="note">Aucun autre salon ouvert pour l'instant.</p>`;
+  $("vocalListe").querySelectorAll("[data-rejoindre-vocal]").forEach(b =>
     b.onclick = () => rejoindreSalonVocalParCode(b.dataset.rejoindreVocal));
 }
 
@@ -5056,7 +5144,27 @@ function envoyerMessageVocal(){
 $("btnVocalChatEnvoyer").onclick = envoyerMessageVocal;
 $("vocalChatInput").addEventListener("keydown", (e) => { if (e.key === "Enter") envoyerMessageVocal(); });
 
+/** Réactions emoji publiques dans le salon vocal — même rendu volant que les réactions de partie
+ *  (afficherReactionVolante), mais sous un événement dédié (vocal:reaction) pour ne jamais se
+ *  confondre avec les réactions envoyées pendant une partie de jeu. */
+$("vocalEmojiBar").innerHTML = EMOJIS_REACTION
+  .map(e => `<button type="button" data-emoji="${e}">${e}</button>`).join("");
+let derniereReactionVocaleEnvoyee = 0;
+$("vocalEmojiBar").querySelectorAll("[data-emoji]").forEach(btn => {
+  btn.onclick = () => {
+    if (!vocalSalonActuel) return;
+    const maintenant = Date.now();
+    if (maintenant - derniereReactionVocaleEnvoyee < 700) return;
+    derniereReactionVocaleEnvoyee = maintenant;
+    socket.emit("vocal:reaction", { code: vocalSalonActuel.code, emoji: btn.dataset.emoji });
+  };
+});
+socket.on("vocal:reaction", ({ emoji, pseudo }) => afficherReactionVolante(emoji, pseudo));
+
 function renderConsoleVocal(salon, monRole){
+  $("vocalReglagePrive").checked = Boolean(salon.prive);
+  $("vocalReglageMonteeLibre").checked = Boolean(salon.monteeLibre);
+
   const demandeurs = salon.demandesMontee
     .map(id => salon.participants.find(p => p.userId === id)).filter(Boolean);
   $("vocalDemandesListe").innerHTML = demandeurs.length
@@ -5104,6 +5212,15 @@ $("btnVocalDemander").onclick = () => {
   socket.emit("vocal:demander-intervenir", { code: vocalSalonActuel.code }, (res) => {
     if (res?.ok) renderVocalSalon(vocalSalonActuel); // masque aussitôt le bouton, sans attendre le prochain vocal:update
   });
+};
+
+$("vocalReglagePrive").onchange = (e) => {
+  if (!vocalSalonActuel) return;
+  socket.emit("vocal:reglages", { code: vocalSalonActuel.code, prive: e.target.checked }, () => {});
+};
+$("vocalReglageMonteeLibre").onchange = (e) => {
+  if (!vocalSalonActuel) return;
+  socket.emit("vocal:reglages", { code: vocalSalonActuel.code, monteeLibre: e.target.checked }, () => {});
 };
 
 // Un seul bouton, pas de "maintenir pour parler" : un clic ouvre le micro (il reste ouvert en
