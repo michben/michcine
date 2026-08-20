@@ -1483,6 +1483,10 @@ app.post("/api/admin/sondages", requireAdmin, (req, res) => {
   };
   sondages.unshift(s);
   saveSondages();
+  // Annoncée dans le bandeau défilant de tout le monde : les statistiques en direct suivront
+  // ensuite toutes seules, l'onglet Sondages affichant déjà les pourcentages en temps réel
+  // (voir socket.on("sondage:maj", ...) côté client, repris aussi par le bandeau — cf. index.html).
+  diffuserAnnonce(`🍿 Nouvelle battle de films : ${optionA.emoji} ${optionA.texte} contre ${optionB.texte} ${optionB.emoji} — venez voter !`, "sondage");
   res.status(201).json(sondageAggrege(s));
 });
 
@@ -1864,6 +1868,66 @@ app.post("/api/admin/conversations/:cle/traiter", requireModerateur, (req, res) 
   if (!conv) return res.status(404).json({ error: "INTROUVABLE" });
   conv.signale = false;
   saveConversations();
+  res.json({ ok: true });
+});
+
+/* ------------------------------------------------------------------ */
+/* Message au développeur : une petite enveloppe accessible à tous les  */
+/* joueurs, sans passer par le système d'amis (contrairement aux         */
+/* messages classiques ci-dessus). L'administration choisit le compte   */
+/* qui doit recevoir ces demandes (par défaut aucun, tant que ce n'est   */
+/* pas configuré).                                                      */
+/* ------------------------------------------------------------------ */
+const CONTACT_DEV_FILE = new URL("./contactDev.json", import.meta.url);
+let contactDevConfig = { destinataireId: null, destinatairePseudo: null };
+const saveContactDevConfig = () => sauver("contactDevConfig", contactDevConfig, CONTACT_DEV_FILE);
+
+const MESSAGES_DEV_FILE = new URL("./messagesDev.json", import.meta.url);
+let messagesDev = [];
+const saveMessagesDev = () => sauver("messagesDev", messagesDev, MESSAGES_DEV_FILE);
+
+app.post("/api/contact-developpeur", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (!user) return;
+  const texte = String(req.body?.texte || "").trim().slice(0, 500);
+  if (!texte) return res.status(400).json({ error: "VIDE" });
+  const msg = {
+    id: crypto.randomUUID(), de: user.id, pseudo: user.pseudo,
+    avatar: user.avatar, photo: user.photo || null,
+    texte, at: Date.now(), lu: false,
+  };
+  messagesDev.unshift(msg);
+  if (messagesDev.length > 500) messagesDev = messagesDev.slice(0, 500);
+  saveMessagesDev();
+  // Petit signal en direct si le compte destinataire est justement connecté — purement
+  // indicatif, la vraie boîte de réception reste la liste ci-dessous côté administration.
+  if (contactDevConfig.destinataireId) notifier(contactDevConfig.destinataireId,
+    { type: "message_dev", de: user.pseudo, avatar: user.avatar, photo: user.photo || null, apercu: texte.slice(0, 60) });
+  res.json({ ok: true });
+});
+
+/** Configuration : quel compte reçoit les messages envoyés au développeur. */
+app.get("/api/admin/contact-developpeur/config", requireAdmin, (_req, res) => res.json(contactDevConfig));
+app.put("/api/admin/contact-developpeur/config", requireAdmin, (req, res) => {
+  const id = req.body?.destinataireId ? String(req.body.destinataireId) : null;
+  contactDevConfig = { destinataireId: id, destinatairePseudo: id ? (pseudoDe(id) || null) : null };
+  saveContactDevConfig();
+  res.json({ ok: true, config: contactDevConfig });
+});
+
+app.get("/api/admin/contact-developpeur", requireAdmin, (_req, res) => {
+  res.json({ messages: messagesDev, nonLus: messagesDev.filter((m) => !m.lu).length });
+});
+app.put("/api/admin/contact-developpeur/:id/lu", requireAdmin, (req, res) => {
+  const m = messagesDev.find((x) => x.id === req.params.id);
+  if (!m) return res.status(404).json({ error: "INTROUVABLE" });
+  m.lu = Boolean(req.body?.lu ?? true);
+  saveMessagesDev();
+  res.json({ ok: true });
+});
+app.delete("/api/admin/contact-developpeur/:id", requireAdmin, (req, res) => {
+  messagesDev = messagesDev.filter((x) => x.id !== req.params.id);
+  saveMessagesDev();
   res.json({ ok: true });
 });
 
@@ -2363,9 +2427,11 @@ let annonceConfig = { actif: false, texte: "", maintenance: false };
 const saveAnnonce = () => sauver("annonce", annonceConfig, ANNONCE_FILE);
 
 /** Diffuse un message dans le bandeau défilant de tous les joueurs actuellement connectés.
- *  type : "roue" | "equipe" | "info" — sert uniquement à la couleur affichée côté client. */
-function diffuserAnnonce(texte, type = "info") {
-    io.emit("annonce:nouvelle", { texte, type, date: Date.now() });
+ *  type : "roue" | "equipe" | "partage" | "sondage" | "info" — sert à la couleur affichée côté
+ *  client. `extra` peut porter des champs additionnels (ex. photo/pseudo d'un joueur pour rendre
+ *  le message cliquable vers sa fiche) qui sont simplement recopiés dans l'événement diffusé. */
+function diffuserAnnonce(texte, type = "info", extra = null) {
+    io.emit("annonce:nouvelle", { texte, type, date: Date.now(), ...(extra || {}) });
 }
 
 app.get("/api/annonce-dev", (req, res) => {
@@ -3638,6 +3704,89 @@ function generateRoomCode() {
   return code;
 }
 
+/* ------------------------------------------------------------------ */
+/* Salons vocaux (façon talkie-walkie) : aucun son n'est réellement     */
+/* transmis entre navigateurs (ça demanderait un service de relais audio */
+/* payant) — seulement un indicateur visuel de qui a la parole, des     */
+/* rôles (hôte, cohôte, intervenant, auditeur) et une piste radio        */
+/* diffusée en synchronisé à partir du catalogue musique existant.       */
+/* ------------------------------------------------------------------ */
+
+const MAX_COHOTES_VOCAL = 3;
+const MAX_PARTICIPANTS_VOCAL = 40;
+const salonsVocaux = new Map(); // code -> salon
+
+function genererCodeVocal() {
+  let code;
+  do {
+    code = Array.from({ length: 4 }, () =>
+      CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)]
+    ).join("");
+  } while (salonsVocaux.has(code));
+  return code;
+}
+
+/** État public d'un salon vocal, envoyé à ses participants à chaque changement. */
+function publicVocal(salon) {
+  return {
+    code: salon.code,
+    titre: salon.titre,
+    hostId: salon.hostId,
+    participants: [...salon.participants.values()].map((p) => ({
+      userId: p.userId, pseudo: p.pseudo, avatar: p.avatar, photo: p.photo,
+      role: p.role, mute: p.mute, parle: p.parle,
+    })),
+    demandesMontee: [...salon.demandesMontee],
+    radio: salon.radio,
+  };
+}
+
+function diffuserVocal(salon) {
+  io.to(`vocal:${salon.code}`).emit("vocal:update", publicVocal(salon));
+}
+
+/** Hôte ou cohôte : les deux ont les pouvoirs de modération, seul l'hôte peut nommer/retirer des cohôtes. */
+function estModoVocal(salon, userId) {
+  return salon.hostId === userId || salon.participants.get(userId)?.role === "cohote";
+}
+
+/** Retire un socket de tout salon vocal dont il fait partie (déconnexion, ou changement de salon).
+ *  Si l'hôte part, l'animation du salon s'arrête là : les autres sont prévenus et repassent auditeurs
+ *  d'un salon fermé plutôt que d'hériter d'un salon fantôme sans personne pour le modérer pleinement. */
+function quitterSalonVocal(socket) {
+  const userId = socket.data.user?.id;
+  if (!userId) return;
+  for (const salon of salonsVocaux.values()) {
+    if (!salon.participants.has(userId)) continue;
+    const etaitHote = salon.hostId === userId;
+    salon.participants.delete(userId);
+    salon.demandesMontee.delete(userId);
+    socket.leave(`vocal:${salon.code}`);
+    if (etaitHote || salon.participants.size === 0) {
+      io.to(`vocal:${salon.code}`).emit("vocal:ferme", { raison: etaitHote ? "HOTE_PARTI" : "SALON_VIDE" });
+      for (const p of salon.participants.values()) {
+        const s = [...io.of("/").sockets.values()].find((sk) => sk.data.user?.id === p.userId);
+        if (s) s.leave(`vocal:${salon.code}`);
+      }
+      salonsVocaux.delete(salon.code);
+    } else {
+      diffuserVocal(salon);
+    }
+    return; // un compte ne peut être que dans un seul salon vocal à la fois
+  }
+}
+
+/** Liste des salons vocaux ouverts en ce moment, pour proposer d'en rejoindre un sans code. */
+app.get("/api/vocal/salons", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (!user) return;
+  res.json([...salonsVocaux.values()].map((s) => ({
+    code: s.code, titre: s.titre,
+    hote: s.participants.get(s.hostId)?.pseudo || "?",
+    participants: s.participants.size,
+  })));
+});
+
 /**
  * Quatre propositions : la bonne, plus trois leurres pris de préférence
  * dans la même décennie — sinon le bon titre saute aux yeux.
@@ -4204,6 +4353,19 @@ function endRound(room) {
     scores: publicState(room).players,
     mode: room.mode,
   });
+  // Petit partage dans le bandeau défilant de tout le monde : qui a trouvé le film en premier,
+  // avec sa photo — cliquer dessus ouvre sa fiche. Diffusé seulement maintenant que la réponse
+  // vient d'être révélée à toute la salle (jamais avant, ça donnerait la solution aux autres).
+  if (room.premierTrouveur) {
+    diffuserAnnonce(`🎬 ${room.premierTrouveur.pseudo} a trouvé « ${room.currentMovie.title} » !`, "partage", {
+      joueurId: room.premierTrouveur.userId,
+      joueurPseudo: room.premierTrouveur.pseudo,
+      joueurAvatar: room.premierTrouveur.avatar,
+      joueurPhoto: room.premierTrouveur.photo,
+      filmTitre: room.currentMovie.title,
+    });
+    room.premierTrouveur = null;
+  }
   room.roundIndex++;
   room.status = "intermission";
   room.nextTimer = setTimeout(() => startRound(room), 12000);   // doublé : laisse plus de temps pour voir la réponse
@@ -4592,6 +4754,12 @@ io.on("connection", (socket) => {
     if (parClic) points = Math.max(30, Math.round(points * CONFIG.CHOICE_RATIO));
     player.score += points;
 
+    // Retenu pour le petit partage dans le bandeau défilant, diffusé seulement à la fin de la
+    // manche (voir endRound) — jamais avant, pour ne pas donner la solution en cours de manche.
+    if (!room.premierTrouveur) {
+      room.premierTrouveur = { userId: player.userId, pseudo: player.pseudo, avatar: player.avatar, photo: player.photo || null };
+    }
+
     cb?.({ ok: true, correct: true, points, movieId: room.currentMovie.id,
            coeurs: player.coeurs ?? player.coeursMax });
     io.to(room.code).emit("player:answered", { id: player.id, pseudo: player.pseudo, team: player.team, points,
@@ -4677,6 +4845,170 @@ io.on("connection", (socket) => {
     if (reprendre) reprendreSalon(room);
     else pauserSalon(room, socket.data.user.pseudo);
   });
+
+  /* -------------------- Salons vocaux -------------------- */
+
+  socket.on("vocal:creer", ({ titre }, cb) => {
+    quitterSalonVocal(socket); // un compte ne peut animer/rejoindre qu'un seul salon vocal à la fois
+    const code = genererCodeVocal();
+    const salon = {
+      code, hostId: user.id,
+      titre: String(titre || "").trim().slice(0, 60) || `Le salon de ${user.pseudo}`,
+      participants: new Map(),
+      demandesMontee: new Set(),
+      radio: null,
+      creeLe: Date.now(),
+    };
+    salon.participants.set(user.id, {
+      userId: user.id, pseudo: user.pseudo, avatar: user.avatar, photo: user.photo || null,
+      role: "hote", mute: false, parle: false,
+    });
+    salonsVocaux.set(code, salon);
+    socket.join(`vocal:${code}`);
+    cb?.({ ok: true, code, salon: publicVocal(salon) });
+  });
+
+  socket.on("vocal:rejoindre", ({ code }, cb) => {
+    const salon = salonsVocaux.get(code);
+    if (!salon) return cb?.({ ok: false, error: "SALON_INTROUVABLE" });
+    if (salon.participants.size >= MAX_PARTICIPANTS_VOCAL) return cb?.({ ok: false, error: "SALON_COMPLET" });
+    quitterSalonVocal(socket);
+    salon.participants.set(user.id, {
+      userId: user.id, pseudo: user.pseudo, avatar: user.avatar, photo: user.photo || null,
+      role: "auditeur", mute: false, parle: false,
+    });
+    socket.join(`vocal:${salon.code}`);
+    diffuserVocal(salon);
+    cb?.({ ok: true, salon: publicVocal(salon) });
+  });
+
+  socket.on("vocal:quitter", ({ code }, cb) => {
+    quitterSalonVocal(socket);
+    cb?.({ ok: true });
+  });
+
+  /** Bouton "parler" façon talkie-walkie : aucun son n'est transmis, seulement l'état affiché
+   *  aux autres (anneau qui pulse autour de la photo). Réservé à ceux qui ont la parole. */
+  socket.on("vocal:parler", ({ code, parle }) => {
+    const salon = salonsVocaux.get(code);
+    const moi = salon?.participants.get(user.id);
+    if (!moi || moi.mute || !["hote", "cohote", "intervenant"].includes(moi.role)) return;
+    moi.parle = Boolean(parle);
+    diffuserVocal(salon);
+  });
+
+  socket.on("vocal:mute", ({ code, mute }) => {
+    const salon = salonsVocaux.get(code);
+    const moi = salon?.participants.get(user.id);
+    if (!moi) return;
+    moi.mute = Boolean(mute);
+    if (moi.mute) moi.parle = false;
+    diffuserVocal(salon);
+  });
+
+  /** Un auditeur signale qu'il aimerait intervenir : l'hôte ou un cohôte décide de le faire monter. */
+  socket.on("vocal:demander-intervenir", ({ code }, cb) => {
+    const salon = salonsVocaux.get(code);
+    const moi = salon?.participants.get(user.id);
+    if (!moi || moi.role !== "auditeur") return cb?.({ ok: false });
+    salon.demandesMontee.add(user.id);
+    diffuserVocal(salon);
+    cb?.({ ok: true });
+  });
+
+  socket.on("vocal:annuler-demande", ({ code }) => {
+    const salon = salonsVocaux.get(code);
+    if (!salon) return;
+    salon.demandesMontee.delete(user.id);
+    diffuserVocal(salon);
+  });
+
+  socket.on("vocal:promouvoir", ({ code, userId }, cb) => {
+    const salon = salonsVocaux.get(code);
+    if (!salon || !estModoVocal(salon, user.id)) return cb?.({ ok: false });
+    const cible = salon.participants.get(userId);
+    if (!cible || cible.role !== "auditeur") return cb?.({ ok: false });
+    cible.role = "intervenant";
+    salon.demandesMontee.delete(userId);
+    diffuserVocal(salon);
+    cb?.({ ok: true });
+  });
+
+  /** Fait redescendre un intervenant en simple auditeur — jamais un hôte ou un cohôte via cette
+   *  voie (voir vocal:retirer-cohote pour les cohôtes, l'hôte ne peut être rétrogradé). */
+  socket.on("vocal:retrograder", ({ code, userId }, cb) => {
+    const salon = salonsVocaux.get(code);
+    if (!salon || !estModoVocal(salon, user.id)) return cb?.({ ok: false });
+    const cible = salon.participants.get(userId);
+    if (!cible || cible.role !== "intervenant") return cb?.({ ok: false });
+    cible.role = "auditeur";
+    cible.parle = false;
+    diffuserVocal(salon);
+    cb?.({ ok: true });
+  });
+
+  /** Nommer/retirer un cohôte est réservé à l'hôte — jusqu'à 3 à la fois, comme demandé. */
+  socket.on("vocal:nommer-cohote", ({ code, userId }, cb) => {
+    const salon = salonsVocaux.get(code);
+    if (!salon || salon.hostId !== user.id) return cb?.({ ok: false, error: "PAS_HOTE" });
+    const nbCohotes = [...salon.participants.values()].filter((p) => p.role === "cohote").length;
+    if (nbCohotes >= MAX_COHOTES_VOCAL) return cb?.({ ok: false, error: "MAX_COHOTES_ATTEINT", max: MAX_COHOTES_VOCAL });
+    const cible = salon.participants.get(userId);
+    if (!cible || cible.role === "hote" || cible.role === "cohote") return cb?.({ ok: false });
+    cible.role = "cohote";
+    salon.demandesMontee.delete(userId);
+    diffuserVocal(salon);
+    cb?.({ ok: true });
+  });
+
+  socket.on("vocal:retirer-cohote", ({ code, userId }, cb) => {
+    const salon = salonsVocaux.get(code);
+    if (!salon || salon.hostId !== user.id) return cb?.({ ok: false, error: "PAS_HOTE" });
+    const cible = salon.participants.get(userId);
+    if (!cible || cible.role !== "cohote") return cb?.({ ok: false });
+    cible.role = "intervenant"; // reste intervenant : seul le pouvoir de modération lui est retiré
+    diffuserVocal(salon);
+    cb?.({ ok: true });
+  });
+
+  /** Exclusion : l'hôte peut exclure n'importe qui (sauf lui-même), un cohôte ne peut exclure
+   *  que des auditeurs ou intervenants — jamais l'hôte ni un autre cohôte. */
+  socket.on("vocal:exclure", ({ code, userId }, cb) => {
+    const salon = salonsVocaux.get(code);
+    if (!salon || !estModoVocal(salon, user.id) || userId === user.id) return cb?.({ ok: false });
+    const cible = salon.participants.get(userId);
+    if (!cible || cible.role === "hote") return cb?.({ ok: false });
+    if (salon.hostId !== user.id && cible.role === "cohote") return cb?.({ ok: false });
+    salon.participants.delete(userId);
+    salon.demandesMontee.delete(userId);
+    const socketCible = [...io.of("/").sockets.values()].find((s) => s.data.user?.id === userId);
+    if (socketCible) {
+      socketCible.leave(`vocal:${salon.code}`);
+      socketCible.emit("vocal:exclu", { code: salon.code });
+    }
+    diffuserVocal(salon);
+    cb?.({ ok: true });
+  });
+
+  /** Diffuse une piste du catalogue radio existant à tout le salon : chacun charge le même
+   *  fichier et se cale sur le temps écoulé depuis `demarreLe`, pour une écoute à peu près
+   *  synchronisée sans avoir besoin de faire transiter le moindre son par le serveur. */
+  socket.on("vocal:radio", ({ code, pisteId }, cb) => {
+    const salon = salonsVocaux.get(code);
+    if (!salon || !estModoVocal(salon, user.id)) return cb?.({ ok: false });
+    if (!pisteId) {
+      salon.radio = null;
+      diffuserVocal(salon);
+      return cb?.({ ok: true });
+    }
+    const piste = playlisteMusique.find((p) => p.id === pisteId);
+    if (!piste) return cb?.({ ok: false, error: "PISTE_INTROUVABLE" });
+    salon.radio = { titre: piste.titre, url: piste.url, demarreLe: Date.now() };
+    diffuserVocal(salon);
+    cb?.({ ok: true });
+  });
+
+  socket.on("disconnect", () => quitterSalonVocal(socket));
 
   /** Réactions émoji pendant la partie, relayées à tout le salon (liste EMOJIS commune, définie
    *  plus haut, aussi utilisée par les bots — voir botDire()). */
@@ -4952,6 +5284,10 @@ aideConfig = await charger("aide", AIDE_FILE, aideConfig);
 if (!aideConfig || typeof aideConfig !== "object") aideConfig = { actif: false, titre: "Comment jouer ? 🎬🎵", message: "" };
 annonceConfig = await charger("annonce", ANNONCE_FILE, annonceConfig);
 if (!annonceConfig || typeof annonceConfig !== "object") annonceConfig = { actif: false, texte: "", maintenance: false };
+contactDevConfig = await charger("contactDevConfig", CONTACT_DEV_FILE, contactDevConfig);
+if (!contactDevConfig || typeof contactDevConfig !== "object") contactDevConfig = { destinataireId: null, destinatairePseudo: null };
+messagesDev = await charger("messagesDev", MESSAGES_DEV_FILE, []);
+if (!Array.isArray(messagesDev)) messagesDev = [];
 roue = await charger("roue", ROUE_FILE, null);
 assurerRoueDuJour();
 gainsEnAttente = await charger("roueGains", GAINS_ROUE_FILE, {});
