@@ -903,6 +903,9 @@ export function adminDeleteUser(id) {
   return true;
 }
 
+/** Nombre total de comptes créés depuis le début — pour le petit indicateur du menu. */
+export const nombreComptes = () => Object.keys(users).length;
+
 /** Crédite tout le monde d'un coup (cadeau, compensation). */
 export function grantAll(amount) {
   for (const u of Object.values(users)) u.credits = (u.credits ?? 0) + amount;

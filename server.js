@@ -36,7 +36,7 @@ import { mountAuth, userFromCookie, addRankedPoints,
          roueTirsPubCycle, roueProchaineRechargePub,
          pepiteSlotsBonus, accorderPepiteSlotBonus,
          tourRoueBonusDisponible, accorderTourRoueBonus, consommerTourRoueBonus,
-         marquerCoffreReclame } from "./auth-x.js";
+         marquerCoffreReclame, nombreComptes } from "./auth-x.js";
 
 const app = express();
 app.use(express.json({ limit: '15mb' })); // Limite augmentée pour l'upload d'images et de musique
@@ -324,31 +324,55 @@ function emojiLot(l) {
   return "🎁";
 }
 
+/** Catégories possibles de lots de la roue — cette LISTE reste stable (c'est elle que la console
+ * admin utilise pour afficher le stock restant de chacune), mais leur présence et leur quantité
+ * varient à chaque réapprovisionnement (voir stockRoueDefaut()) : deux jours ne se ressemblent
+ * jamais tout à fait. */
+const CATEGORIES_ROUE_BASE = [
+  { type: "vip", label: "Code VIP — parrainage offert" },
+  { type: "credits", label: "1000 tickets", valeur: 1000 },
+  { type: "credits", label: "500 tickets", valeur: 500 },
+  { type: "credits", label: "200 tickets", valeur: 200 },
+  { type: "credits", label: "100 tickets", valeur: 100 },
+  { type: "credits", label: "50 tickets", valeur: 50 },
+  { type: "credits", label: "20 tickets", valeur: 20 },
+  { type: "ranked", label: "1 partie classée bonus", valeur: 1 },
+  { type: "ranked", label: "3 parties classées bonus", valeur: 3 },
+];
+
 /** Catalogue complet des lots de la roue (toujours les mêmes catégories), avec le stock restant de chacune. */
 function catalogueRoue(lots) {
-  const categories = [];
-  const vus = new Set();
-  for (const l of stockRoueDefaut()) {
-    const cle = `${l.type}:${l.valeur || "vip"}`;
-    if (vus.has(cle)) continue;
-    vus.add(cle);
-    categories.push({ type: l.type, label: l.label, valeur: l.valeur || null, emoji: emojiLot(l) });
-  }
-  return categories.map((c) => ({
+  return CATEGORIES_ROUE_BASE.map((c) => ({
     ...c,
-    restants: lots.filter((l) => l.type === c.type && (l.valeur || null) === c.valeur).length,
+    valeur: c.valeur || null,
+    emoji: emojiLot(c),
+    restants: lots.filter((l) => l.type === c.type && (l.valeur || null) === (c.valeur || null)).length,
   }));
 }
 
-/** Stock d'un plein réapprovisionnement : beaucoup de petits lots, peu de gros. */
+/**
+ * Stock d'un plein réapprovisionnement : deux fois plus de lots qu'avant (base doublée par
+ * rapport à l'ancien stock fixe : 1 VIP→2, 3×500→6, 5×100→10, 10×50→20, 2×classé→4), et surtout
+ * un tirage qui varie vraiment d'un réapprovisionnement à l'autre — quantités aléatoires autour
+ * de cette base, et quelques catégories bonus qui n'apparaissent qu'un jour sur deux, pour que la
+ * roue n'ait jamais deux fois la même tête.
+ */
 function stockRoueDefaut() {
   const lots = [];
-  lots.push({ type: "vip", label: "Code VIP — parrainage offert" });
-  for (let i = 0; i < 3; i++) lots.push({ type: "credits", label: "500 tickets", valeur: 500 });
-  for (let i = 0; i < 5; i++) lots.push({ type: "credits", label: "100 tickets", valeur: 100 });
-  for (let i = 0; i < 10; i++) lots.push({ type: "credits", label: "50 tickets", valeur: 50 });
-  // Lot « partie classée bonus » : deux exemplaires pour commencer, en test.
-  for (let i = 0; i < 2; i++) lots.push({ type: "ranked", label: "1 partie classée bonus", valeur: 1 });
+  // Quantité aléatoire autour d'une base, jamais négative.
+  const varie = (base, ecart) => Math.max(0, base + Math.floor(Math.random() * (ecart * 2 + 1)) - ecart);
+  const ajouter = (n, type, label, valeur) => { for (let i = 0; i < n; i++) lots.push({ type, label, valeur }); };
+
+  ajouter(varie(2, 1), "vip", "Code VIP — parrainage offert");                          // avant : 1 fixe
+  if (Math.random() < 0.5) ajouter(1, "credits", "1000 tickets", 1000);                 // gros lot rare, un jour sur deux
+  ajouter(varie(6, 2), "credits", "500 tickets", 500);                                  // avant : 3 fixe
+  if (Math.random() < 0.6) ajouter(varie(3, 2), "credits", "200 tickets", 200);         // catégorie bonus, pas systématique
+  ajouter(varie(10, 3), "credits", "100 tickets", 100);                                 // avant : 5 fixe
+  ajouter(varie(20, 5), "credits", "50 tickets", 50);                                   // avant : 10 fixe
+  if (Math.random() < 0.7) ajouter(varie(8, 4), "credits", "20 tickets", 20);           // petite catégorie bonus
+  ajouter(varie(4, 2), "ranked", "1 partie classée bonus", 1);                          // avant : 2 fixe
+  if (Math.random() < 0.4) ajouter(varie(2, 1), "ranked", "3 parties classées bonus", 3); // catégorie bonus rare
+
   // Un identifiant unique par lot pour pouvoir le retirer précisément du stock.
   return lots.map((l, i) => ({ ...l, id: i + 1 }));
 }
@@ -616,6 +640,14 @@ app.get("/api/movies/total", (req, res) => {
   const user = exigeCompte(req, res);
   if (!user) return;
   res.json({ total: movies.filter((m) => m.enabled).length });
+});
+
+// Nombre total de joueurs inscrits depuis le début — petit indicateur du menu, lui aussi
+// public une fois connecté (pas de donnée sensible, juste un chiffre).
+app.get("/api/joueurs/total", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (!user) return;
+  res.json({ total: nombreComptes() });
 });
 
 /** Active ou désactive des films en lot, selon niveau et note minimale. */
