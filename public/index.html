@@ -257,6 +257,21 @@
   .dot.on{background:#3DDC84;box-shadow:0 0 8px rgba(61,220,132,.7)}
   .online{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--muted);margin-top:10px}
   .online b{color:#3DDC84;font-family:'JetBrains Mono',monospace;font-size:16px}
+  /* Bulle en haut de l'accueil : accès rapide à un salon vocal dont on a été coupé, ou auquel
+     on a été invité et pas encore rejoint. */
+  .retourVocalBulle{display:flex;align-items:center;gap:10px;background:var(--card);
+    border:1px solid var(--teal);border-radius:14px;padding:12px 14px;margin:0 0 16px;
+    animation:apparitionBulle .3s ease both}
+  @keyframes apparitionBulle{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
+  .retourVocalBulle .ic{font-size:24px;flex:0 0 auto}
+  .retourVocalBulle .txt{flex:1;min-width:0}
+  .retourVocalBulle .txt b{display:block;font-size:14px;font-weight:600}
+  .retourVocalBulle .txt small{display:block;color:var(--muted);font-size:12px;margin-top:2px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .retourVocalBulle button{flex:0 0 auto;padding:8px 14px;font-size:13px;background:var(--teal);
+    color:#0A2015;border:0;border-radius:999px;font-weight:600;cursor:pointer}
+  .retourVocalBulle .retourVocalFermer{background:transparent;color:var(--muted);font-size:20px;
+    font-weight:400;padding:0 2px;line-height:1}
   /* Tête d'affiche : bandeau des joueurs en ligne, mis en avant en haut du menu. */
   .teteAffiche{margin:0 0 16px}
   .listeTeteAffiche{display:flex;gap:12px;overflow-x:auto;padding:2px 2px 8px;scrollbar-width:thin}
@@ -1092,6 +1107,15 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
 
   <!-- CHOIX DU MODE -->
   <section id="menu" class="hidden">
+    <div id="retourVocalBulle" class="retourVocalBulle hidden">
+      <span class="ic">🎙️</span>
+      <span class="txt">
+        <b id="retourVocalTitre"></b>
+        <small id="retourVocalSousTitre"></small>
+      </span>
+      <button id="btnRetourVocalRejoindre">Rejoindre</button>
+      <button id="btnRetourVocalIgnorer" class="retourVocalFermer" aria-label="Ignorer" title="Ignorer">&times;</button>
+    </div>
     <div id="teteAffiche" class="teteAffiche hidden">
       <p class="tag" style="margin:0 0 8px">🟢 Vos amis en ligne</p>
       <div id="listeTeteAffiche" class="listeTeteAffiche"></div>
@@ -2303,7 +2327,7 @@ const show = id => {
   majSpectateursCorner();
   // On revérifie discrètement (sans popup) à chaque passage par le menu si une suggestion
   // vient d'être acceptée, pour que le bouton/pastille reste à jour même sans se reconnecter.
-  if (id === "menu") rafraichirSuggestionsARepost();
+  if (id === "menu") { rafraichirSuggestionsARepost(); verifierRetourVocal(); }
   // La page Profil affiche le détail (statut de chaque suggestion) et sa propre pastille.
   if (id === "profile") chargerMesSuggestionsProfil();
 };
@@ -4797,7 +4821,37 @@ $("btnVocalRejoindre").onclick = () => {
   rejoindreSalonVocalParCode(code);
 };
 
+/** Bulle en haut de l'accueil : propose un accès direct à un salon vocal encore actif, soit parce
+ *  qu'on en a été coupé involontairement (réseau, onglet fermé…), soit parce qu'on y a été invité
+ *  et qu'on ne l'a pas encore rejoint — sans avoir à retrouver le salon ou retaper le code. */
+let retourVocalCourant = null;
+async function verifierRetourVocal(){
+  const r = await fetch("/api/vocal/retour").then(x => x.ok ? x.json() : null).catch(() => null);
+  retourVocalCourant = r?.retour || null;
+  const bulle = $("retourVocalBulle");
+  if (!retourVocalCourant){ bulle.classList.add("hidden"); return; }
+  $("retourVocalTitre").textContent = retourVocalCourant.motif === "invite"
+    ? `${retourVocalCourant.de} vous invite dans son salon vocal`
+    : "Vous avez été déconnecté d'un salon vocal encore actif";
+  $("retourVocalSousTitre").textContent = `${retourVocalCourant.titre} · rejoignez-le en un clic`;
+  bulle.classList.remove("hidden");
+}
+$("btnRetourVocalRejoindre").onclick = () => {
+  if (!retourVocalCourant) return;
+  const code = retourVocalCourant.code;
+  $("retourVocalBulle").classList.add("hidden");
+  retourVocalCourant = null;
+  show("vocal");
+  rejoindreSalonVocalParCode(code);
+};
+$("btnRetourVocalIgnorer").onclick = async () => {
+  $("retourVocalBulle").classList.add("hidden");
+  retourVocalCourant = null;
+  await fetch("/api/vocal/retour/ignorer", { method: "POST" }).catch(() => {});
+};
+
 $("btnVocalQuitter").onclick = () => {
+  if (vocalSalonActuel && !confirm("Voulez-vous vraiment quitter le salon vocal ?")) return;
   if (vocalSalonActuel) socket.emit("vocal:quitter", { code: vocalSalonActuel.code }, () => {});
   vocalSalonActuel = null;
   vocalMicOuvert = false;
