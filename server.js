@@ -2605,6 +2605,61 @@ app.post("/api/admin/roue/reapprovisionner", requireAdmin, (req, res) => {
     res.json({ ok: true, lotsRestants: roue.lots.length });
 });
 
+/** Ajoute manuellement un ou plusieurs exemplaires d'un lot à la roue du jour, sans toucher au
+ *  reste du stock — pour compléter (ou corriger) le tirage automatique aléatoire au lieu de tout
+ *  réinitialiser. Les trois types possibles restent ceux que /api/roue/reclamer sait distribuer. */
+app.post("/api/admin/roue/ajouter", requireAdmin, (req, res) => {
+    assurerRoueDuJour();
+    const type = String(req.body?.type || "");
+    if (!["vip", "credits", "ranked"].includes(type)) return res.status(400).json({ error: "TYPE_INVALIDE" });
+
+    let valeur = null;
+    if (type === "credits" || type === "ranked") {
+        valeur = Math.round(Number(req.body?.valeur));
+        if (!Number.isFinite(valeur) || valeur <= 0) return res.status(400).json({ error: "VALEUR_INVALIDE" });
+    }
+
+    const quantite = Math.max(1, Math.min(200, Math.round(Number(req.body?.quantite)) || 1));
+
+    let label = String(req.body?.label || "").trim().slice(0, 80);
+    if (!label) {
+        label = type === "vip" ? "Code VIP — parrainage offert"
+              : type === "credits" ? `${valeur} tickets`
+              : `${valeur} partie${valeur > 1 ? "s" : ""} classée${valeur > 1 ? "s" : ""} bonus`;
+    }
+
+    let prochainId = roue.lots.reduce((max, l) => Math.max(max, Number(l.id) || 0), 0);
+    const ajoutes = [];
+    for (let i = 0; i < quantite; i++) {
+        const lot = { id: ++prochainId, type, label, valeur };
+        roue.lots.push(lot);
+        ajoutes.push(lot);
+    }
+    roue.lots = melangerLots(roue.lots);
+    saveRoue();
+
+    res.json({ ok: true, ajoutes: ajoutes.length, lotsRestants: roue.lots.length, catalogue: catalogueRoue(roue.lots) });
+});
+
+/** Retire manuellement jusqu'à N exemplaires d'un lot précis (même type + même valeur) — pour
+ *  corriger le stock sans devoir tout réapprovisionner. */
+app.post("/api/admin/roue/retirer", requireAdmin, (req, res) => {
+    assurerRoueDuJour();
+    const type = String(req.body?.type || "");
+    const valeur = req.body?.valeur === null || req.body?.valeur === undefined || req.body?.valeur === ""
+        ? null : Math.round(Number(req.body.valeur));
+    const quantite = Math.max(1, Math.min(200, Math.round(Number(req.body?.quantite)) || 1));
+
+    let retires = 0;
+    for (let i = roue.lots.length - 1; i >= 0 && retires < quantite; i--) {
+        const l = roue.lots[i];
+        if (l.type === type && (l.valeur || null) === valeur) { roue.lots.splice(i, 1); retires++; }
+    }
+    saveRoue();
+
+    res.json({ ok: true, retires, lotsRestants: roue.lots.length, catalogue: catalogueRoue(roue.lots) });
+});
+
 app.get("/api/admin/roue/vip", requireAdmin, (req, res) => {
     res.json({ demandes: [...demandesVip].reverse().slice(0, 100) });
 });
