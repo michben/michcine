@@ -505,6 +505,15 @@
         <div id="apparenceCouleurs" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px 16px"></div>
       </div>
       <div class="card">
+        <p class="tag">🎨 Couleurs par module</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6">
+          Donnez à chaque module sa propre identité visuelle (accent principal et secondaire).
+          Laissez une pastille vide (ou cliquez sur « Réinitialiser ce module ») pour qu'il
+          reprenne les couleurs globales ci-dessus.
+        </p>
+        <div id="apparenceCategories" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px"></div>
+      </div>
+      <div class="card">
         <p class="tag">🔤 Polices</p>
         <div id="apparencePolices"></div>
       </div>
@@ -751,8 +760,8 @@
         <p class="tag">Logos « Cinéma le plus proche »</p>
         <p style="color:var(--muted);font-size:13px;margin:0 0 16px;line-height:1.5">
           Uploadez un logo pour chaque enseigne détectée automatiquement dans le nom du cinéma
-          (UGC, MK2, Gaumont), et une image générique pour tous les autres cinémas
-          (« indépendants » — CGR, Pathé, Cinéville, salles locales…). Le logo s'affiche sur la
+          (UGC, MK2, Gaumont, Pathé), et une image générique pour tous les autres cinémas
+          (« indépendants » — CGR, Cinéville, Kinepolis, salles locales…). Le logo s'affiche sur la
           fiche du cinéma dans « Cinéma le plus proche ». Formats acceptés : PNG, JPG, WEBP, SVG,
           GIF — 1 Mo maximum par image.
         </p>
@@ -1881,6 +1890,7 @@ const LOGOS_CINEMA_DEFS = [
   { cle: "ugc", libelle: "UGC" },
   { cle: "mk2", libelle: "MK2" },
   { cle: "gaumont", libelle: "Gaumont" },
+  { cle: "pathe", libelle: "Pathé" },
   { cle: "independant", libelle: "Cinémas indépendants" },
 ];
 
@@ -2475,6 +2485,44 @@ async function loadReports(){
       corps: { label: "Corps de texte", options: ["Inter","Roboto","Poppins","Montserrat","Nunito"] },
       etiquette: { label: "Étiquettes / petits libellés", options: ["Oswald","Barlow Condensed","Teko","Rajdhani","Bebas Neue","Montserrat"] },
     };
+    const APPARENCE_CATEGORIES = {
+      echange: "💬 Espace échanges", classement: "🏆 Classement", quetes: "🎯 Quêtes",
+      sondages: "🗳️ Sondages", amis: "🧑‍🤝‍🧑 Amis", vocal: "🎙️ Salon vocal",
+    };
+    const APPARENCE_CATEGORIE_CLES = [["beam", "Principal"], ["teal", "Secondaire"]];
+
+    function rendreApparenceCategories(theme){
+      const cc = theme.couleursCategories || {};
+      $("apparenceCategories").innerHTML = Object.entries(APPARENCE_CATEGORIES).map(([cat, label]) => {
+        const valeurs = cc[cat] || {};
+        const personnalise = APPARENCE_CATEGORIE_CLES.some(([cle]) => valeurs[cle]);
+        return `
+        <div style="border:1px solid var(--card);border-radius:12px;padding:12px;background:var(--velvet)">
+          <label style="display:flex;align-items:center;gap:6px;margin:0 0 10px;font-size:13px;font-weight:600;color:var(--chalk)">
+            <input type="checkbox" data-cat-toggle="${cat}" ${personnalise ? "checked" : ""} style="width:auto;cursor:pointer">
+            ${label}
+          </label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px" data-cat-colors="${cat}">
+            ${APPARENCE_CATEGORIE_CLES.map(([cle, libelle]) => `
+              <label style="margin:0">
+                <span style="display:block;font-size:12px;margin-bottom:4px;color:var(--muted)">${libelle}</span>
+                <input type="color" data-cat="${cat}" data-cle="${cle}"
+                  value="${esc(valeurs[cle] || theme.couleurs?.[cle] || "#000000")}"
+                  style="width:100%;height:34px;padding:2px;cursor:pointer">
+              </label>`).join("")}
+          </div>
+        </div>`;
+      }).join("");
+      $("apparenceCategories").querySelectorAll("[data-cat-toggle]").forEach((chk) => {
+        const maj = () => {
+          const bloc = $("apparenceCategories").querySelector(`[data-cat-colors="${chk.dataset.catToggle}"]`);
+          if (bloc) bloc.style.opacity = chk.checked ? "1" : ".4";
+        };
+        chk.addEventListener("change", maj);
+        maj();
+      });
+    }
+
     const APPARENCE_MODULES = {
       sorties: "🍿 Sorties Ciné / Actuellement au cinéma",
       cinemas: "📍 Cinéma le plus proche",
@@ -2523,6 +2571,8 @@ async function loadReports(){
           ${def.options.map((f) => `<option value="${esc(f)}" ${theme.polices?.[role] === f ? "selected" : ""} style="font-family:'${esc(f)}'">${esc(f)}</option>`).join("")}
         </select>`).join("");
 
+      rendreApparenceCategories(theme);
+
       const modulesConnus = Object.keys(APPARENCE_MODULES);
       const sauve = Array.isArray(theme.ordre?.menu) ? theme.ordre.menu.filter((id) => modulesConnus.includes(id)) : [];
       ordreMenuActuel = [...sauve, ...modulesConnus.filter((id) => !sauve.includes(id))];
@@ -2534,8 +2584,16 @@ async function loadReports(){
       $("apparenceCouleurs").querySelectorAll("[data-couleur]").forEach((el) => { couleurs[el.dataset.couleur] = el.value; });
       const polices = {};
       $("apparencePolices").querySelectorAll("[data-police]").forEach((el) => { polices[el.dataset.police] = el.value; });
+      const couleursCategories = {};
+      Object.keys(APPARENCE_CATEGORIES).forEach((cat) => {
+        const actif = $("apparenceCategories").querySelector(`[data-cat-toggle="${cat}"]`)?.checked;
+        couleursCategories[cat] = {};
+        $("apparenceCategories").querySelectorAll(`[data-cat="${cat}"]`).forEach((el) => {
+          couleursCategories[cat][el.dataset.cle] = actif ? el.value : "";
+        });
+      });
       const res = await api("/api/admin/theme", { method: "PUT",
-        body: JSON.stringify({ couleurs, polices, ordre: { menu: ordreMenuActuel } }) });
+        body: JSON.stringify({ couleurs, polices, ordre: { menu: ordreMenuActuel }, couleursCategories }) });
       $("apparenceMsg").textContent = res.ok
         ? "Apparence enregistrée. Elle s'appliquera au prochain chargement de page pour chaque joueur."
         : "Enregistrement refusé.";

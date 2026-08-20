@@ -153,6 +153,7 @@
   .quete .gain{font-size:13px;color:var(--beam);white-space:nowrap}
   .quete.finie .infos b{color:var(--teal)}
   .quete button{padding:9px 14px;font-size:14px}
+  .quete .surprise{font-size:12px;color:var(--ticket);white-space:normal;display:block;margin-top:2px}
   .badgeFondateur{display:inline-block;font-size:.85em;filter:drop-shadow(0 0 2px rgba(255,196,0,.6))}
   .montee{position:fixed;left:50%;top:11%;transform:translateX(-50%);z-index:86;text-align:center;
     max-width:min(420px,88vw);pointer-events:none;animation:monteeNiveau 6s ease-out forwards}
@@ -543,6 +544,15 @@
   #chatForm{display:flex;gap:8px}
   #chatForm input{padding:10px 12px;font-size:15px}
   #chatForm button{padding:10px 14px}
+  /* Discussion écrite propre à chaque salon vocal — pas flottante comme le chat de partie,
+     intégrée directement dans la carte de l'écran du salon. */
+  .vocalChatMessages{max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;
+    font-size:14px;padding-right:2px}
+  .vocalChatMessages p{margin:0;line-height:1.4;display:flex;align-items:flex-start;gap:7px}
+  .vocalChatMessages .pfp{width:22px;height:22px;border-radius:50%;object-fit:cover;flex:0 0 auto}
+  .vocalChatMessages .emoji{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;
+    background:var(--card);font-size:13px;flex:0 0 auto}
+  .vocalChatMessages b{color:var(--beam);font-weight:700}
   #banner{display:block;width:100%;background:transparent;border:0;padding:0;text-align:left;cursor:pointer;color:inherit}
   #banner:hover h1 em{color:var(--ticket)}
   .xbtn{display:block;text-align:center;text-decoration:none;font-weight:700;font-size:16px;
@@ -796,6 +806,7 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
     <h1>MichBen <em>Ciné Quizz</em></h1>
   </button>
   <button id="btnQuitGame" class="ghost hidden" style="position:absolute; top:20px; right:18px; font-size:22px; padding:4px 8px; z-index:50;" title="Quitter la partie">🏠</button>
+  <button id="btnVocalEquipe" class="ghost hidden" style="position:absolute; top:20px; left:18px; font-size:12px; padding:6px 10px; z-index:50; border-color:var(--teal); color:var(--teal); max-width:calc(50vw - 26px)" title="Ouvrir rapidement un salon vocal avec votre équipe">🎙️ Vocal équipe</button>
 
   <!-- RADIO D'AMBIANCE : disponible dès la page d'accueil, continue de jouer jusqu'à la sortie du site. -->
   <div class="radioBar" id="radioBar">
@@ -1008,12 +1019,19 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
   <!-- QUÊTES -->
   <section id="quetes" class="hidden">
     <div class="card">
-      <p class="tag">Quêtes du jour</p>
+      <p class="tag">🎯 Quêtes du jour</p>
       <p class="note" style="margin-top:0">Renouvelées chaque jour à minuit.
         Réclamez vos récompenses avant qu'elles ne disparaissent.</p>
-      <div id="listeQuetes"></div>
-      <div class="row"><button class="ghost" id="btnQuetesBack">Retour à l'accueil</button></div>
+      <div id="listeQuetesJour"></div>
     </div>
+    <div class="card">
+      <p class="tag">🏆 Quêtes globales</p>
+      <p class="note" style="margin-top:0">Des défis de fond, jamais remis à zéro : leur progression
+        s'accumule au fil de vos parties. Chacune ne se réclame qu'une fois, et cache toujours
+        une petite surprise en plus des tickets et de l'xp affichés.</p>
+      <div id="listeQuetesGlobales"></div>
+    </div>
+    <div class="row"><button class="ghost" id="btnQuetesBack">Retour à l'accueil</button></div>
   </section>
 
   <!-- ROUE QUOTIDIENNE -->
@@ -1197,9 +1215,8 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
 
     <div id="vocalListe">
       <h2>🎙️ Salons vocaux</h2>
-      <p class="note" style="margin:0 0 14px">Aucun vrai micro pour l'instant : un bouton « parler » fait juste pulser
-        votre photo pour les autres, façon talkie-walkie — pratique pour signaler que c'est à vous, sans embêter
-        personne avec du son qui ne marcherait pas toujours bien selon les téléphones.</p>
+      <p class="note" style="margin:0 0 14px">Un micro pour de vrai, en plus d'un petit chat écrit propre à chaque
+        salon — pratique pour ceux qui préfèrent taper, ou compléter la voix par un mot ou un lien.</p>
       <div class="card">
         <label for="vocalTitreCreation">Créer un salon</label>
         <input id="vocalTitreCreation" placeholder="Le titre de votre salon (facultatif)" maxlength="60">
@@ -1235,8 +1252,10 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
         </div>
       </div>
 
-      <!-- Sons reçus des autres participants (WebRTC) — invisible, un <audio> par personne connectée -->
-      <div id="vocalAudioDistant" style="display:none"></div>
+      <!-- Sons reçus des autres participants (WebRTC) — invisible, un <audio> par personne connectée.
+           position:absolute + taille 0 plutôt que display:none : certains navigateurs mobiles sont
+           moins fiables pour lire un <audio> totalement retiré du rendu. -->
+      <div id="vocalAudioDistant" style="position:absolute;width:0;height:0;overflow:hidden"></div>
 
       <div class="card">
         <p class="tag" style="margin:0 0 10px">🎤 Hôte & cohôtes</p>
@@ -1264,6 +1283,15 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
         <p class="tag" style="margin:0 0 10px">🎛️ Console de modération</p>
         <div id="vocalDemandesListe"></div>
         <div id="vocalConsoleParticipants"></div>
+      </div>
+
+      <div class="card">
+        <p class="tag" style="margin:0 0 10px">💬 Discussion du salon</p>
+        <div id="vocalChatMessages" class="vocalChatMessages"></div>
+        <div class="row" style="margin-top:10px">
+          <input id="vocalChatInput" placeholder="Écrire un message…" maxlength="300" autocomplete="off" style="flex:1">
+          <button id="btnVocalChatEnvoyer" style="flex:0 0 auto">➤</button>
+        </div>
       </div>
 
       <div class="row"><button class="ghost" id="btnVocalQuitter">Quitter le salon</button></div>
@@ -2320,6 +2348,10 @@ const show = id => {
 
   const inGame = ["round", "between", "lobby", "waiting"].includes(id);
   $("btnQuitGame").classList.toggle("hidden", !inGame);
+  // Accès rapide à un salon vocal d'équipe : seulement en partie « en équipes », dès le salon
+  // d'attente et jusqu'à la fin de la manche en cours (pas besoin d'attendre que la partie démarre
+  // pour commencer à se coordonner avec ses coéquipiers).
+  $("btnVocalEquipe").classList.toggle("hidden", !(inGame && state.mode === "teams"));
   // Le bouton d'aide "?" reste masqué tant que l'administration ne l'a pas activé (voir chargerAide()),
   // et aussi pendant une partie pour ne jamais recouvrir la rangée de boutons du bas.
   $("helpBtn")?.classList.toggle("hidden", inGame || !aideActive);
@@ -2581,6 +2613,10 @@ const POLICE_FALLBACK = {
 /** Applique la personnalisation graphique choisie en console admin (couleurs, polices, ordre
  *  des modules du menu) — appelée une seule fois au chargement, avant l'affichage du menu.
  *  Sans configuration ou en cas d'erreur, l'apparence d'origine du site reste inchangée. */
+const THEME_CATEGORIE_CONTENEURS = {
+  echange: "exchange", classement: "board", quetes: "quetes",
+  sondages: "sondagesModal", amis: "friends", vocal: "vocal",
+};
 function appliquerTheme(theme){
   if (!theme) return;
   try {
@@ -2602,6 +2638,21 @@ function appliquerTheme(theme){
         const el = conteneur?.querySelector(`[data-module="${id}"]`);
         if (el) conteneur.appendChild(el);
       });
+    }
+    // Couleurs propres à chaque module (espace échanges, classement, quêtes, sondages, amis,
+    // salon vocal) : posées directement sur le conteneur du module, qui prend le dessus sur les
+    // couleurs globales (--beam/--teal) pour tout ce qu'il contient, sans toucher au reste du site.
+    if (theme.couleursCategories) {
+      for (const [cat, id] of Object.entries(THEME_CATEGORIE_CONTENEURS)) {
+        const el = document.getElementById(id);
+        if (!el) continue;
+        const couleurs = theme.couleursCategories[cat] || {};
+        for (const cle of ["beam", "teal"]) {
+          const v = couleurs[cle];
+          if (/^#[0-9a-fA-F]{6}$/.test(v || "")) el.style.setProperty(`--${cle}`, v);
+          else el.style.removeProperty(`--${cle}`);
+        }
+      }
     }
   } catch (e) {
     console.error("Personnalisation graphique ignorée :", e);
@@ -3368,6 +3419,25 @@ window.voirCitationNiveau = function(n){
   panneau.innerHTML = `<p class="tag" style="margin:0 0 6px">Niveau ${n}</p>${citationHTML(n)}`;
 };
 
+/** Construit le HTML d'une carte de quête (jour ou globale), factorisé pour les deux listes. */
+function carteQuete(q){
+  return `
+    <div class="quete ${q.accomplie ? "finie" : ""}">
+      <div class="infos">
+        <b>${q.accomplie ? "✅ " : (q.type === "globale" ? "🏆 " : "🎯 ")}${esc(q.titre)}</b>
+        <small>${q.avancement} sur ${q.cible}</small>
+        <div class="jauge"><i style="width:${q.avancement / q.cible * 100}%"></i></div>
+      </div>
+      <span class="gain">🎟️ ${q.tickets} · ⚡ ${q.xp} xp
+        ${q.type === "globale" && !q.reclamee ? '<span class="surprise">✨ + une surprise</span>' : ""}</span>
+      ${q.reclamee
+        ? '<span class="note" style="margin:0">👌 Réclamée</span>'
+        : q.accomplie
+          ? `<button data-quete="${q.cle}">🎁 Réclamer</button>`
+          : '<span class="note" style="margin:0">⏳ En cours</span>'}
+    </div>`;
+}
+
 async function chargerQuetes(){
   const d = await fetch("/api/quetes").then(r => r.json()).catch(() => null);
   if (!d) return;
@@ -3378,32 +3448,25 @@ async function chargerQuetes(){
   $("badgeQuetes").textContent = aReclamer;
   $("badgeQuetes").classList.toggle("hidden", aReclamer === 0);
 
-  $("listeQuetes").innerHTML = mesQuetes.map(q => `
-    <div class="quete ${q.accomplie ? "finie" : ""}">
-      <div class="infos">
-        <b>${q.accomplie ? "✅ " : "🎯 "}${esc(q.titre)}</b>
-        <small>${q.avancement} sur ${q.cible}</small>
-        <div class="jauge"><i style="width:${q.avancement / q.cible * 100}%"></i></div>
-      </div>
-      <span class="gain">🎟️ ${q.tickets} · ⚡ ${q.xp} xp</span>
-      ${q.reclamee
-        ? '<span class="note" style="margin:0">👌 Réclamée</span>'
-        : q.accomplie
-          ? `<button data-quete="${q.cle}">🎁 Réclamer</button>`
-          : '<span class="note" style="margin:0">⏳ En cours</span>'}
-    </div>`).join("");
+  $("listeQuetesJour").innerHTML = mesQuetes.filter(q => q.type === "jour").map(carteQuete).join("");
+  $("listeQuetesGlobales").innerHTML = mesQuetes.filter(q => q.type === "globale").map(carteQuete).join("");
 
-  $("listeQuetes").querySelectorAll("[data-quete]").forEach(b => b.onclick = async () => {
-    b.disabled = true;
-    const res = await fetch(`/api/quetes/${b.dataset.quete}/reclamer`, {method:"POST"});
-    if (!res.ok) return chargerQuetes();
-    const d = await res.json();
-    setCredits(d.credits);
-    majNiveau(d.niveau);
-    if (d.niveau?.monte) annoncerNiveau(d.niveau.niveau);
-    bandeauNotif(`<span style="font-size:24px">🎁</span><span><b>${d.tickets} tickets et ${d.xp} xp</b>
-      <small>Récompense récupérée</small></span>`);
-    chargerQuetes();
+  [$("listeQuetesJour"), $("listeQuetesGlobales")].forEach(liste => {
+    liste.querySelectorAll("[data-quete]").forEach(b => b.onclick = async () => {
+      b.disabled = true;
+      const res = await fetch(`/api/quetes/${b.dataset.quete}/reclamer`, {method:"POST"});
+      if (!res.ok) return chargerQuetes();
+      const d = await res.json();
+      setCredits(d.credits);
+      majNiveau(d.niveau);
+      if (d.niveau?.monte) annoncerNiveau(d.niveau.niveau);
+      bandeauNotif(d.surprise
+        ? `<span style="font-size:24px">🎁</span><span><b>${d.tickets} tickets et ${d.xp} xp</b>
+            <small>Récompense récupérée — et une surprise : ${d.surprise.libelle} !</small></span>`
+        : `<span style="font-size:24px">🎁</span><span><b>${d.tickets} tickets et ${d.xp} xp</b>
+            <small>Récompense récupérée</small></span>`);
+      chargerQuetes();
+    });
   });
 }
 
@@ -4693,11 +4756,43 @@ function vocalAttacherAudioDistant(peerId, stream){
     audio = document.createElement("audio");
     audio.id = id;
     audio.autoplay = true;
+    audio.setAttribute("playsinline", ""); // évite un comportement plein écran inattendu sur iOS
     $("vocalAudioDistant").appendChild(audio);
   }
   if (audio.srcObject !== stream) audio.srcObject = stream;
-  audio.play().catch(() => {}); // lecture auto parfois bloquée sans geste récent : sans gravité, ça reprend au prochain geste sur la page
+  vocalTenterLectureAudio(audio);
 }
+
+/** De nombreux navigateurs mobiles (Safari/iOS en tête) bloquent silencieusement la lecture
+ *  automatique du son tant qu'aucun geste récent n'a eu lieu sur la page. Sans ce filet, le son
+ *  restait bloqué indéfiniment : trompeur, car l'anneau qui pulse chez l'interlocuteur continue de
+ *  fonctionner (il vient du réseau, pas du son lui-même) — on "voit" que la personne parle, mais on
+ *  ne l'entend jamais. On retente donc au moindre geste sur la page tant que le son reste bloqué. */
+let vocalAudioBloque = false;
+function vocalTenterLectureAudio(audio){
+  audio.play().catch(() => {
+    vocalAudioBloque = true;
+    if ($("vocal") && !$("vocal").classList.contains("hidden") && $("vocalMicMsg")){
+      $("vocalMicMsg").textContent = "🔈 Touchez l'écran pour activer le son du salon.";
+      $("vocalMicMsg").className = "feedback bad";
+    }
+  });
+}
+function vocalDebloquerAudioSiBesoin(){
+  if (!vocalAudioBloque) return;
+  let succes = true;
+  document.querySelectorAll("#vocalAudioDistant audio").forEach(a => {
+    a.play().catch(() => { succes = false; });
+  });
+  if (!succes) return;
+  vocalAudioBloque = false;
+  if ($("vocalMicMsg")?.textContent.includes("Touchez l'écran")){
+    $("vocalMicMsg").textContent = "";
+    $("vocalMicMsg").className = "feedback";
+  }
+}
+document.addEventListener("click", vocalDebloquerAudioSiBesoin);
+document.addEventListener("touchstart", vocalDebloquerAudioSiBesoin, { passive: true });
 
 /** S'assure qu'une connexion existe vers chaque autre participant actuellement dans le salon, et
  *  referme celles qui ne correspondent plus à personne (filet de sécurité, en plus des événements
@@ -4893,6 +4988,7 @@ function renderVocalSalon(salon){
   $("vocalListeHote").innerHTML = hoteCohotes.map(carteParticipantVocal).join("");
   $("vocalListeIntervenants").innerHTML = intervenants.map(carteParticipantVocal).join("");
   $("vocalListeAuditeurs").innerHTML = auditeurs.map(carteParticipantVocal).join("");
+  renderVocalChat(salon);
 
   const moi = salon.participants.find(p => p.userId === me?.id);
   const monRole = moi?.role || null;
@@ -4935,6 +5031,30 @@ function renderVocalSalon(salon){
   $("vocalConsole").classList.toggle("hidden", !modo);
   if (modo) renderConsoleVocal(salon, monRole);
 }
+
+/** Discussion écrite propre au salon vocal : un historique court (voir VOCAL_CHAT_HISTORIQUE_MAX
+ *  côté serveur) est renvoyé à chaque mise à jour du salon, pour qu'un participant qui rejoint en
+ *  cours de route retrouve un peu de contexte plutôt que de partir d'une page blanche. */
+function renderVocalChat(salon){
+  const box = $("vocalChatMessages");
+  if (!box) return;
+  const messages = salon.chat || [];
+  const dejaEnBas = box.scrollTop + box.clientHeight >= box.scrollHeight - 20; // ne force pas le défilement si on relit plus haut
+  box.innerHTML = messages.length
+    ? messages.map(m => `<p>${m.photo ? `<img class="pfp" src="${esc(m.photo)}" alt="">` : `<span class="emoji">${esc(m.avatar || "🎬")}</span>`}
+        <span><b>${esc(m.pseudo)}</b> ${esc(m.texte)}</span></p>`).join("")
+    : `<p class="note" style="margin:0">Aucun message pour l'instant — dites bonjour !</p>`;
+  if (dejaEnBas) box.scrollTop = box.scrollHeight;
+}
+function envoyerMessageVocal(){
+  const champ = $("vocalChatInput");
+  const texte = champ.value.trim();
+  if (!texte || !vocalSalonActuel) return;
+  champ.value = "";
+  socket.emit("vocal:chat-envoyer", { code: vocalSalonActuel.code, texte }, () => {});
+}
+$("btnVocalChatEnvoyer").onclick = envoyerMessageVocal;
+$("vocalChatInput").addEventListener("keydown", (e) => { if (e.key === "Enter") envoyerMessageVocal(); });
 
 function renderConsoleVocal(salon, monRole){
   const demandeurs = salon.demandesMontee
@@ -5120,6 +5240,40 @@ socket.on("vocal:rtc-signal", async ({ from, signal }) => {
       await pc.addIceCandidate(signal.candidate);
     }
   } catch {} // connexion WebRTC déjà refermée ou message arrivé trop tard : sans conséquence
+});
+
+/** Ouvre rapidement (ou rejoint, si un coéquipier l'a déjà fait) un salon vocal réservé à toute son
+ *  équipe pendant une partie « en équipes » — tous les coéquipiers présents dans la salle de jeu
+ *  sont invités d'un coup, sans avoir besoin d'être amis. Le salon continue de vivre en arrière-plan
+ *  même si on ne va pas voir l'écran « Salon vocal » tout de suite : pas besoin d'interrompre la
+ *  partie en cours pour que la connexion s'établisse. */
+$("btnVocalEquipe").onclick = () => {
+  if (!state.code) return;
+  const libelleInitial = $("btnVocalEquipe").textContent;
+  $("btnVocalEquipe").disabled = true;
+  socket.emit("vocal:equipe-ouvrir", { code: state.code }, (res) => {
+    $("btnVocalEquipe").disabled = false;
+    if (!res?.ok){
+      $("btnVocalEquipe").textContent = "❌ Indisponible";
+      setTimeout(() => { $("btnVocalEquipe").textContent = libelleInitial; }, 2500);
+      return;
+    }
+    $("btnVocalEquipe").textContent = res.invites
+      ? `✅ ${res.invites} coéquipier${res.invites > 1 ? "s" : ""} invité${res.invites > 1 ? "s" : ""}`
+      : "✅ Salon ouvert";
+    setTimeout(() => { $("btnVocalEquipe").textContent = libelleInitial; }, 3000);
+  });
+};
+
+/** Fin de partie « en équipes » : les deux salons vocaux d'équipe (s'ils existaient) viennent
+ *  d'être réunis en un seul côté serveur pour un bilan convivial. On met à jour notre état local et
+ *  on reconnecte l'audio (WebRTC) vers les personnes qui n'y étaient pas encore — sans forcer la
+ *  navigation vers l'écran du salon, pour ne pas couper la lecture de l'écran de résultats. */
+socket.on("vocal:fusionne", ({ salon }) => {
+  renderVocalSalon(salon);
+  bandeauNotif(`<span style="font-size:24px">🎉</span><span><b>Les salons vocaux d'équipe sont réunis</b>
+    <small>Retrouvez tout le monde en vocal pour le bilan de fin de partie.</small></span>`,
+    () => { show("vocal"); afficherVocalSalonVue(); });
 });
 
 /** Petit compteur affiché en haut du menu : nombre de films actifs dans le jeu. */
@@ -6399,6 +6553,9 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
                 </label>
                 <label style="display:flex;align-items:center;gap:5px;margin:0;text-transform:none;letter-spacing:0;font-size:13px;color:var(--chalk);cursor:pointer">
                     <input type="checkbox" data-enseigne="Gaumont" class="cinemaFiltre" style="width:auto;cursor:pointer">Gaumont
+                </label>
+                <label style="display:flex;align-items:center;gap:5px;margin:0;text-transform:none;letter-spacing:0;font-size:13px;color:var(--chalk);cursor:pointer">
+                    <input type="checkbox" data-enseigne="Pathé" class="cinemaFiltre" style="width:auto;cursor:pointer">Pathé
                 </label>
                 <label style="display:flex;align-items:center;gap:5px;margin:0;text-transform:none;letter-spacing:0;font-size:13px;color:var(--chalk);cursor:pointer">
                     <input type="checkbox" data-enseigne="Cinéma indépendant" class="cinemaFiltre" style="width:auto;cursor:pointer">Cinéma indépendant
