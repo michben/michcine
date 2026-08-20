@@ -106,7 +106,7 @@ const REGLAGES_DEFAUT = {
   // Logos affichés sur les fiches de « Cinéma le plus proche », selon l'enseigne détectée dans
   // le nom du cinéma (UGC / MK2 / Gaumont) ou l'image "indépendant" par défaut pour les autres
   // salles. Chaque valeur est soit "" (rien d'uploadé), soit une image encodée en base64.
-  logosCinema: { ugc: "", mk2: "", gaumont: "", independant: "" },
+  logosCinema: { ugc: "", mk2: "", gaumont: "", pathe: "", independant: "" },
   // Un ami peut-il regarder la partie d'un autre ami en direct (lecture seule) ? Désactivé par
   // défaut — réglable depuis la console admin (onglet Réglages).
   autoriserSpectateur: false,
@@ -147,6 +147,19 @@ const REGLAGES_DEFAUT = {
                 ticket: "#E4586E", teal: "#4ECDC4", chalk: "#EDE8DC", muted: "#7C819B" },
     polices: { affiche: "Anton", corps: "Inter", etiquette: "Oswald" },
     ordre: { menu: ["sorties", "cinemas", "niveau", "quotidien", "modes", "actions", "admin", "repost", "rejoindre"] },
+    // Couleurs propres à chaque grand module (espace échanges, classement, quêtes, sondages,
+    // amis, salon vocal) : "" = pas de personnalisation, le module garde les couleurs globales
+    // ci-dessus. Volontairement limité à l'accent principal et secondaire (et non les 8 couleurs
+    // globales) pour rester simple à régler depuis la console tout en donnant à chaque module
+    // sa propre identité visuelle.
+    couleursCategories: {
+      echange:    { beam: "", teal: "" },
+      classement: { beam: "", teal: "" },
+      quetes:     { beam: "", teal: "" },
+      sondages:   { beam: "", teal: "" },
+      amis:       { beam: "", teal: "" },
+      vocal:      { beam: "", teal: "" },
+    },
   },
 };
 
@@ -569,12 +582,12 @@ app.post("/api/admin/favicon", requireAdmin, (req, res) => {
  * REGLAGES (comme le reste de la config) plutôt qu'en fichier sur disque : contrairement au
  * favicon, ça survit à un redéploiement même sans disque persistant sur l'hébergeur.
  */
-const LOGOS_CINEMA_CLES = ["ugc", "mk2", "gaumont", "independant"];
+const LOGOS_CINEMA_CLES = ["ugc", "mk2", "gaumont", "pathe", "independant"];
 app.post("/api/admin/logos-cinema", requireAdmin, (req, res) => {
   try {
     const { cle, image } = req.body || {};
     if (!LOGOS_CINEMA_CLES.includes(cle)) return res.status(400).json({ error: "CLE_INVALIDE" });
-    if (!REGLAGES.logosCinema) REGLAGES.logosCinema = { ugc: "", mk2: "", gaumont: "", independant: "" };
+    if (!REGLAGES.logosCinema) REGLAGES.logosCinema = { ugc: "", mk2: "", gaumont: "", pathe: "", independant: "" };
     if (!image) {
       // image vide/absente = on retire le logo pour cette enseigne
       REGLAGES.logosCinema[cle] = "";
@@ -676,8 +689,25 @@ const THEME_POLICES = {
   etiquette: ["Oswald", "Barlow Condensed", "Teko", "Rajdhani", "Bebas Neue", "Montserrat"],
 };
 const THEME_MODULES_MENU = ["sorties", "cinemas", "niveau", "quotidien", "modes", "actions", "admin", "repost", "rejoindre"];
+// Modules personnalisables individuellement (accent principal + secondaire uniquement — voir
+// REGLAGES_DEFAUT.theme.couleursCategories pour le détail du choix).
+const THEME_CATEGORIES = {
+  echange: "Espace échanges", classement: "Classement", quetes: "Quêtes",
+  sondages: "Sondages", amis: "Amis", vocal: "Salon vocal",
+};
+const THEME_COULEURS_CATEGORIE_CLES = ["beam", "teal"];
+
+/** Rétablit couleursCategories si absent (réglages sauvegardés avant l'ajout de cette fonctionnalité). */
+function assurerCouleursCategories() {
+  if (!REGLAGES.theme) REGLAGES.theme = structuredClone(REGLAGES_DEFAUT.theme);
+  if (!REGLAGES.theme.couleursCategories || typeof REGLAGES.theme.couleursCategories !== "object")
+    REGLAGES.theme.couleursCategories = structuredClone(REGLAGES_DEFAUT.theme.couleursCategories);
+  for (const cat of Object.keys(THEME_CATEGORIES))
+    if (!REGLAGES.theme.couleursCategories[cat]) REGLAGES.theme.couleursCategories[cat] = { beam: "", teal: "" };
+}
 
 app.put("/api/admin/theme", requireAdmin, (req, res) => {
+  assurerCouleursCategories();
   const t = req.body || {};
   for (const cle of THEME_COULEURS_CLES) {
     const v = t.couleurs?.[cle];
@@ -695,6 +725,20 @@ app.put("/api/admin/theme", requireAdmin, (req, res) => {
     const manquants = THEME_MODULES_MENU.filter((id) => !filtre.includes(id));
     REGLAGES.theme.ordre.menu = [...filtre, ...manquants];
   }
+  const couleursCategories = t.couleursCategories;
+  if (couleursCategories && typeof couleursCategories === "object") {
+    for (const cat of Object.keys(THEME_CATEGORIES)) {
+      const source = couleursCategories[cat];
+      if (!source || typeof source !== "object") continue;
+      for (const cle of THEME_COULEURS_CATEGORIE_CLES) {
+        const v = source[cle];
+        // chaîne vide = on retire la personnalisation de ce module (retour à la couleur
+        // globale) ; sinon la valeur doit être un code hexadécimal strict, jamais injecté tel quel.
+        if (v === "" || (typeof v === "string" && /^#[0-9a-fA-F]{6}$/.test(v)))
+          REGLAGES.theme.couleursCategories[cat][cle] = v;
+      }
+    }
+  }
   sauver("reglages", REGLAGES);
   res.json({ ok: true, theme: REGLAGES.theme });
 });
@@ -706,7 +750,10 @@ app.post("/api/admin/theme/defaut", requireAdmin, (_req, res) => {
 });
 
 app.get("/api/admin/theme/options", requireAdmin, (_req, res) => {
-  res.json({ couleurs: THEME_COULEURS_CLES, polices: THEME_POLICES, modulesMenu: THEME_MODULES_MENU });
+  res.json({
+    couleurs: THEME_COULEURS_CLES, polices: THEME_POLICES, modulesMenu: THEME_MODULES_MENU,
+    categories: THEME_CATEGORIES, couleursCategorieCles: THEME_COULEURS_CATEGORIE_CLES,
+  });
 });
 
 /** Indique si le mot de passe par défaut est encore en usage. */
@@ -1728,7 +1775,15 @@ app.post("/api/solo/next", (req, res) => {
   parties.delete(user.id);
   if (p.mode === "ranked") {
     addRankedPoints(user.id, p.score);
-    consommerPartieClassee(user.id);
+    if (p.coeurs > 0) {
+      // Victoire (terminée sans perdre tous ses cœurs) : comptée sur le quota de base, jamais sur
+      // le bonus, pour que celui-ci puisse vraiment s'accumuler jusqu'à 3 (voir les commentaires
+      // sur enregistrerParticipationClassee et recompenserVictoireClassee).
+      enregistrerParticipationClassee(user.id);
+      recompenserVictoireClassee(user.id);
+    } else {
+      consommerPartieClassee(user.id);
+    }
   }
   grantPoints(user.id, p.score);
   grantCredits(user.id, REGLAGES.creditsParPartie);
@@ -1743,6 +1798,8 @@ app.post("/api/solo/next", (req, res) => {
   if (bonnes) avancerQuete(user.id, "bonnes10", bonnes);
   if (p.sansIndice) avancerQuete(user.id, "sansIndice", p.sansIndice);
   if (p.coeurs === REGLAGES.coeurs) avancerQuete(user.id, "sansFaute");
+  avancerQueteGlobale(user.id, "jouerParties");
+  if (p.coeurs === REGLAGES.coeurs) avancerQueteGlobale(user.id, "sansFauteGlobal");
 
   const codeObtenu = verifierCodeParrain(user.id);
   res.json({
@@ -2908,10 +2965,15 @@ app.post("/api/friends/:action", (req, res) => {
 });
 
 /* ------------------------------------------------------------------ */
-/* Quêtes quotidiennes                                                 */
+/* Quêtes                                                              */
 /*                                                                     */
-/* Trois objectifs simples, renouvelés chaque jour. Ils donnent une     */
-/* raison de revenir sans exiger de longues sessions.                  */
+/* Deux familles : les quêtes du jour (simples, renouvelées chaque     */
+/* minuit — une raison de revenir sans exiger de longues sessions) et  */
+/* les quêtes globales (des défis plus ambitieux, jamais réinitialisés,*/
+/* qui ne se réclament qu'une fois) dont la récompense inclut toujours */
+/* une « surprise » tirée au sort parmi le même vocabulaire de gains   */
+/* que la roue du jour et les coffres de niveau — tickets, xp, pépite, */
+/* partie classée bonus ou tour de roue bonus.                        */
 /* ------------------------------------------------------------------ */
 
 const QUETES = {
@@ -2921,8 +2983,21 @@ const QUETES = {
   sansFaute:   { titre: "Terminer une partie sans faute", cible: 1, tickets: 6, xp: 120 },
 };
 
-let progression = {};   // userId -> { jour, compteurs, reclamees }
+// Défis de fond, valables tant qu'ils ne sont pas réclamés (aucune remise à zéro quotidienne).
+// `compteur` indique la clé de progression à incrémenter : plusieurs quêtes peuvent partager le
+// même compteur (ex. jouer50/jouer200 comptent toutes deux les parties jouées, tous modes confondus)
+// pour offrir des paliers successifs sans dupliquer le suivi de progression.
+const QUETES_GLOBALES = {
+  jouer50:  { titre: "Jouer 50 parties, tous modes confondus", compteur: "jouerParties", cible: 50, tickets: 40, xp: 400 },
+  jouer200: { titre: "Jouer 200 parties, tous modes confondus", compteur: "jouerParties", cible: 200, tickets: 150, xp: 1200 },
+  sansFauteGlobal:    { titre: "Terminer 10 parties sans perdre le moindre cœur", compteur: "sansFauteGlobal", cible: 10, tickets: 80, xp: 600 },
+  battreHardcoreDuel: { titre: "Battre un adversaire IA de niveau Hardcore en duel", compteur: "battreHardcoreDuel", cible: 1, tickets: 60, xp: 500 },
+};
+
+let progression = {};        // userId -> { jour, compteurs, reclamees }  (quêtes du jour)
+let progressionGlobale = {}; // userId -> { compteurs, reclamees }        (quêtes globales, sans remise à zéro)
 const saveProgression = () => sauver("quetes", progression);
+const saveProgressionGlobale = () => sauver("quetesGlobales", progressionGlobale);
 const jourCourant = () => new Date().toISOString().slice(0, 10);
 
 function quetesDu(userId) {
@@ -2932,21 +3007,93 @@ function quetesDu(userId) {
   return progression[userId];
 }
 
+function quetesGlobalesDe(userId) {
+  if (!progressionGlobale[userId]) progressionGlobale[userId] = { compteurs: {}, reclamees: [] };
+  return progressionGlobale[userId];
+}
+
 function avancerQuete(userId, cle, pas = 1) {
   const p = quetesDu(userId);
   p.compteurs[cle] = (p.compteurs[cle] || 0) + pas;
   saveProgression();
 }
 
+/** Fait avancer un compteur de quête globale (voir le champ `compteur` de QUETES_GLOBALES). */
+function avancerQueteGlobale(userId, compteur, pas = 1) {
+  const p = quetesGlobalesDe(userId);
+  p.compteurs[compteur] = (p.compteurs[compteur] || 0) + pas;
+  saveProgressionGlobale();
+}
+
 const etatQuetes = (userId) => {
-  const p = quetesDu(userId);
-  return Object.entries(QUETES).map(([cle, q]) => ({
-    cle, ...q,
-    avancement: Math.min(p.compteurs[cle] || 0, q.cible),
-    accomplie: (p.compteurs[cle] || 0) >= q.cible,
-    reclamee: p.reclamees.includes(cle),
+  const pj = quetesDu(userId);
+  const pg = quetesGlobalesDe(userId);
+  const jour = Object.entries(QUETES).map(([cle, q]) => ({
+    cle, type: "jour", ...q,
+    avancement: Math.min(pj.compteurs[cle] || 0, q.cible),
+    accomplie: (pj.compteurs[cle] || 0) >= q.cible,
+    reclamee: pj.reclamees.includes(cle),
   }));
+  const globales = Object.entries(QUETES_GLOBALES).map(([cle, q]) => {
+    const n = pg.compteurs[q.compteur || cle] || 0;
+    return {
+      cle, type: "globale", ...q,
+      avancement: Math.min(n, q.cible),
+      accomplie: n >= q.cible,
+      reclamee: pg.reclamees.includes(cle),
+    };
+  });
+  return [...jour, ...globales];
 };
+
+/**
+ * Surprise tirée au sort à la réclamation d'une quête globale (jamais pour les quêtes du jour,
+ * qui restent prévisibles). Même vocabulaire de récompense que la roue du jour et les coffres de
+ * niveau : rien de nouveau à administrer, juste un tirage pondéré parmi des gains déjà éprouvés.
+ */
+const SURPRISES_QUETES = [
+  { type: "credits", poids: 40, min: 150, max: 500 },
+  { type: "xp",      poids: 25, min: 150, max: 450 },
+  { type: "pepite",  poids: 15 },
+  { type: "ranked",  poids: 10 },
+  { type: "roue",    poids: 10 },
+];
+
+function tirerSurpriseQuete() {
+  const total = SURPRISES_QUETES.reduce((s, l) => s + l.poids, 0);
+  let r = Math.random() * total;
+  for (const lot of SURPRISES_QUETES) {
+    r -= lot.poids;
+    if (r <= 0) return lot;
+  }
+  return SURPRISES_QUETES[0];
+}
+
+/** Applique une surprise de quête globale et renvoie un résumé (type, montant, libellé) pour le client. */
+function appliquerSurpriseQuete(userId) {
+  const lot = tirerSurpriseQuete();
+  if (lot.type === "credits") {
+    const montant = Math.round(lot.min + Math.random() * (lot.max - lot.min));
+    grantCredits(userId, montant);
+    enregistrerTransaction(userId, montant, "credits", "Surprise de quête");
+    return { type: "credits", montant, libelle: `🎟️ ${montant} tickets bonus` };
+  }
+  if (lot.type === "xp") {
+    const montant = Math.round(lot.min + Math.random() * (lot.max - lot.min));
+    ajouterXp(userId, montant, reglagesNiveau());
+    return { type: "xp", montant, libelle: `⚡ ${montant} xp bonus` };
+  }
+  if (lot.type === "pepite") {
+    accorderPepiteSlotBonus(userId, 1);
+    return { type: "pepite", libelle: "💎 Un emplacement pépite supplémentaire" };
+  }
+  if (lot.type === "ranked") {
+    accorderPartiesClasseesBonus(userId, 1);
+    return { type: "ranked", libelle: "🏆 Une partie classée bonus" };
+  }
+  accorderTourRoueBonus(userId, 1);
+  return { type: "roue", libelle: "🎡 Un tour de roue bonus" };
+}
 
 app.get("/api/quetes", (req, res) => {
   const user = exigeCompte(req, res);
@@ -2957,20 +3104,23 @@ app.post("/api/quetes/:cle/reclamer", (req, res) => {
   const user = exigeCompte(req, res);
   if (!user) return;
   const cle = req.params.cle;
-  const quete = QUETES[cle];
+  const quete = QUETES[cle] || QUETES_GLOBALES[cle];
   if (!quete) return res.status(404).json({ error: "INCONNUE" });
+  const estGlobale = Boolean(QUETES_GLOBALES[cle]);
 
-  const p = quetesDu(user.id);
+  const p = estGlobale ? quetesGlobalesDe(user.id) : quetesDu(user.id);
+  const n = estGlobale ? (p.compteurs[quete.compteur || cle] || 0) : (p.compteurs[cle] || 0);
   if (p.reclamees.includes(cle)) return res.status(400).json({ error: "DEJA_RECLAMEE" });
-  if ((p.compteurs[cle] || 0) < quete.cible) return res.status(400).json({ error: "PAS_ACCOMPLIE" });
+  if (n < quete.cible) return res.status(400).json({ error: "PAS_ACCOMPLIE" });
 
   p.reclamees.push(cle);
-  saveProgression();
+  estGlobale ? saveProgressionGlobale() : saveProgression();
   grantCredits(user.id, quete.tickets);
   if (quete.tickets) enregistrerTransaction(user.id, quete.tickets, "credits", `Quête « ${quete.titre} »`);
   const niveau = ajouterXp(user.id, quete.xp, reglagesNiveau());
+  const surprise = estGlobale ? appliquerSurpriseQuete(user.id) : null;
 
-  res.json({ ok: true, tickets: quete.tickets, xp: quete.xp,
+  res.json({ ok: true, tickets: quete.tickets, xp: quete.xp, surprise,
              credits: getCredits(user.id), niveau });
 });
 
@@ -3321,6 +3471,7 @@ function logoPourEnseigne(enseigne) {
   if (enseigne === "UGC" && logos.ugc) return logos.ugc;
   if (enseigne === "MK2" && logos.mk2) return logos.mk2;
   if (enseigne === "Gaumont" && logos.gaumont) return logos.gaumont;
+  if (enseigne === "Pathé" && logos.pathe) return logos.pathe;
   return logos.independant || "";
 }
 
@@ -3749,8 +3900,11 @@ function publicVocal(salon) {
     })),
     demandesMontee: [...salon.demandesMontee],
     radio: salon.radio,
+    chat: salon.chat || [],
   };
 }
+
+const VOCAL_CHAT_HISTORIQUE_MAX = 50; // borne la taille de l'historique renvoyé à chaque mise à jour
 
 function diffuserVocal(salon) {
   io.to(`vocal:${salon.code}`).emit("vocal:update", publicVocal(salon));
@@ -3956,6 +4110,14 @@ function prochaineRecharge(userId) {
   return Math.max(0, Math.min(...recentes) + JOUR_MS - Date.now());
 }
 
+/** Enregistre une partie comme comptant sur le quota quotidien classique, sans jamais toucher à la
+ *  réserve bonus (voir enregistrerParticipationClassee ci-dessous pour pourquoi c'est important). */
+function enregistrerParticipationClassee(userId) {
+  const recentes = partiesRecentes(userId);
+  saison.participations[userId] = [...recentes, Date.now()];
+  sauver("saison", saison);
+}
+
 function consommerPartieClassee(userId) {
   // On puise d'abord dans la réserve bonus : elle ne doit jamais entamer le quota quotidien classique.
   if (bonusPartiesClassees[userId] > 0) {
@@ -3963,9 +4125,23 @@ function consommerPartieClassee(userId) {
     saveBonusRanked();
     return;
   }
-  const recentes = partiesRecentes(userId);
-  saison.participations[userId] = [...recentes, Date.now()];
-  sauver("saison", saison);
+  enregistrerParticipationClassee(userId);
+}
+
+/**
+ * Une partie classée gagnée (terminée sans avoir perdu tous ses cœurs) réapprovisionne le seau
+ * d'une partie bonus, comme une victoire méritée qui redonne une chance de continuer à jouer.
+ * Plafonné pour que le seau ne grossisse pas indéfiniment à force d'enchaîner les victoires.
+ *
+ * Une victoire doit TOUJOURS être comptée sur le quota quotidien classique (voir l'appel à
+ * enregistrerParticipationClassee côté appelant), jamais sur la réserve bonus : sinon la victoire
+ * consommerait aussitôt le jeton qu'elle vient elle-même de rapporter, et la réserve ne pourrait
+ * jamais dépasser 1 quel que soit le nombre de victoires enchaînées.
+ */
+const RANKED_BONUS_VICTOIRE_MAX = 3;
+function recompenserVictoireClassee(userId) {
+  if ((bonusPartiesClassees[userId] || 0) >= RANKED_BONUS_VICTOIRE_MAX) return;
+  accorderPartiesClasseesBonus(userId, 1);
 }
 
 /** Libellés des indices actifs, tels que définis dans l'administration. */
@@ -4425,6 +4601,45 @@ function endRound(room) {
   room.nextTimer = setTimeout(() => startRound(room), 12000);   // doublé : laisse plus de temps pour voir la réponse
 }
 
+/**
+ * Fusionne les deux salons vocaux d'équipe (ouverts pendant la partie via vocal:equipe-ouvrir) en
+ * un seul à la fin d'une partie « en équipes », pour un bilan convivial où tout le monde peut se
+ * parler. Ne fait rien si une seule équipe (ou aucune) avait ouvert un salon — rien à fusionner.
+ * Le salon de l'équipe A devient le salon commun ; ceux de l'équipe B y sont ajoutés (leur hôte
+ * devient cohôte, les autres intervenants) pour que tout le monde puisse parler immédiatement.
+ */
+function fusionnerSalonsVocauxEquipe(room) {
+  const codes = room.salonsVocauxEquipe;
+  if (!codes || !codes.A || !codes.B || codes.A === codes.B) return;
+  const salonA = salonsVocaux.get(codes.A);
+  const salonB = salonsVocaux.get(codes.B);
+  if (!salonA || !salonB) return;
+
+  salonA.titre = `🏆 Résultat final — partie ${room.code}`;
+  // Les deux fils de discussion fusionnent aussi, triés chronologiquement, pour ne perdre aucun
+  // message échangé pendant la partie dans l'un ou l'autre salon d'équipe.
+  salonA.chat = [...(salonA.chat || []), ...(salonB.chat || [])]
+    .sort((a, b) => a.at - b.at)
+    .slice(-VOCAL_CHAT_HISTORIQUE_MAX);
+  for (const [uid, p] of salonB.participants) {
+    if (!salonA.participants.has(uid)) {
+      salonA.participants.set(uid, { ...p, role: p.role === "hote" ? "cohote" : "intervenant", parle: false });
+    }
+    const s = [...io.of("/").sockets.values()].find((sk) => sk.data.user?.id === uid);
+    if (s) {
+      s.leave(`vocal:${salonB.code}`);
+      s.join(`vocal:${salonA.code}`);
+      // Émis directement au socket (plutôt qu'à la salle vocal:${salonB.code}, qu'il vient de
+      // quitter) : c'est ce qui déclenche côté client la bascule vers le salon commun et la
+      // reconnexion audio (WebRTC) vers les participants qui n'y étaient pas encore.
+      s.emit("vocal:fusionne", { salon: publicVocal(salonA) });
+    }
+  }
+  salonsVocaux.delete(salonB.code);
+  diffuserVocal(salonA);
+  diffuserAnnonce("🎉 Les deux salons vocaux d'équipe se réunissent pour un bilan convivial !", "equipe");
+}
+
 function endGame(room) {
   room.status = "finished";
   const state = publicState(room);
@@ -4440,6 +4655,13 @@ function endGame(room) {
     const xp = REGLAGES.xpParPartie + (vainqueur ? REGLAGES.xpParVictoire : 0);
     const niveau = ajouterXp(p.userId, xp, reglagesNiveau());
     avancerQuete(p.userId, "jouer3");
+    avancerQueteGlobale(p.userId, "jouerParties");
+    if (p.coeurs !== undefined && p.coeurs === p.coeursMax) avancerQueteGlobale(p.userId, "sansFauteGlobal");
+    // Défi « battre un Hardcore en duel » : un adversaire (parmi les autres joueurs du salon,
+    // donc l'unique adversaire en duel) doté d'un bot de niveau Hardcore, et une victoire.
+    if (room.mode === "duel" && vainqueur &&
+        [...room.players.values()].some((o) => o.userId !== p.userId && o.bot && o.botNiveau === "hardcore"))
+      avancerQueteGlobale(p.userId, "battreHardcoreDuel");
     p.bilan = { xp, niveau, vainqueur, ticketsGagnes: REGLAGES.creditsParPartie };
 
     verifierCodeParrain(p.userId);
@@ -4457,6 +4679,7 @@ function endGame(room) {
     const gagnante = state.teams.A > state.teams.B ? "🟡 L'équipe jaune" : "🔷 L'équipe turquoise";
     diffuserAnnonce(`${gagnante} remporte la partie ! 🏆`, "equipe");
   }
+  if (room.mode === "teams") fusionnerSalonsVocauxEquipe(room);
   // TODO : persister la partie et créditer les récompenses
 }
 
@@ -4913,6 +5136,7 @@ io.on("connection", (socket) => {
       demandesMontee: new Set(),
       invites: new Map(), // userId -> { de, at } — pour proposer un accès rapide même après coup
       radio: null,
+      chat: [], // messages du salon (voir vocal:chat-envoyer) — bornés à VOCAL_CHAT_HISTORIQUE_MAX
       creeLe: Date.now(),
     };
     salon.participants.set(user.id, {
@@ -5085,6 +5309,35 @@ io.on("connection", (socket) => {
     cb?.({ ok: true });
   });
 
+  /** Message de groupe propre au salon vocal — permet d'échanger par écrit sans couper le micro de
+   *  personne, ou pour ceux qui préfèrent taper. Réservé aux participants actuels du salon. Un
+   *  historique court est conservé (voir VOCAL_CHAT_HISTORIQUE_MAX) pour qu'un participant qui
+   *  rejoint en cours de route retrouve un peu de contexte, pas juste les messages à venir. */
+  socket.on("vocal:chat-envoyer", ({ code, texte }, cb) => {
+    const salon = salonsVocaux.get(code);
+    const moi = salon?.participants.get(user.id);
+    if (!salon || !moi) return cb?.({ ok: false });
+
+    const message = String(texte || "").trim().slice(0, 300);
+    if (!message) return cb?.({ ok: false, error: "VIDE" });
+
+    salon.chat = salon.chat || [];
+    salon.chat.push({
+      id: crypto.randomUUID(), userId: user.id, pseudo: user.pseudo,
+      avatar: user.avatar, photo: user.photo || null, texte: message, at: Date.now(),
+    });
+    if (salon.chat.length > VOCAL_CHAT_HISTORIQUE_MAX) salon.chat = salon.chat.slice(-VOCAL_CHAT_HISTORIQUE_MAX);
+
+    // Un message n'atteint pas les participants qui ont bloqué son auteur (même principe que le
+    // chat de partie), mais reste dans l'historique commun pour ne pas compliquer sa reconstruction.
+    for (const p of salon.participants.values()) {
+      if (p.userId !== user.id && estBloque(p.userId, user.id)) continue;
+      const s = [...io.of("/").sockets.values()].find((sk) => sk.data.user?.id === p.userId);
+      if (s) s.emit("vocal:update", publicVocal(salon));
+    }
+    cb?.({ ok: true });
+  });
+
   /** Invite un ami dans le salon vocal en cours — même principe que invite:send pour les parties,
    *  mais vers un salon vocal. Il reçoit une notification avec le code pour le rejoindre. */
   socket.on("vocal:inviter", ({ code, amiId }, cb) => {
@@ -5107,6 +5360,74 @@ io.on("connection", (socket) => {
       livree = true;
     }
     cb?.({ ok: true, livree });
+  });
+
+  /**
+   * Ouvre (ou rejoint, si un coéquipier l'a déjà ouvert) un salon vocal réservé à toute son équipe
+   * dans une partie « en équipes » en cours, et invite d'un coup tous les coéquipiers actuellement
+   * dans la salle de jeu — sans exiger l'amitié, puisqu'ils jouent déjà ensemble. Le code du salon
+   * de chaque équipe est mémorisé sur la salle de jeu (room.salonsVocauxEquipe) pour pouvoir fusionner
+   * les deux salons d'équipe en un seul à la fin de la partie (voir endGame).
+   */
+  socket.on("vocal:equipe-ouvrir", ({ code }, cb) => {
+    const room = rooms.get(code);
+    const joueur = room?.players.get(user.id);
+    if (!room || room.mode !== "teams" || !joueur || !joueur.team) return cb?.({ ok: false, error: "PAS_EQUIPE" });
+
+    room.salonsVocauxEquipe = room.salonsVocauxEquipe || {};
+    let salonCode = room.salonsVocauxEquipe[joueur.team];
+    let salon = salonCode ? salonsVocaux.get(salonCode) : null;
+
+    if (!salon) {
+      quitterSalonVocal(socket);
+      retourVocalDisponible.delete(user.id);
+      salonCode = genererCodeVocal();
+      salon = {
+        code: salonCode, hostId: user.id,
+        titre: `Équipe ${joueur.team === "A" ? "🟡" : "🔷"} — partie ${room.code}`,
+        participants: new Map(),
+        demandesMontee: new Set(),
+        invites: new Map(),
+        radio: null,
+        chat: [],
+        creeLe: Date.now(),
+        salleDeJeu: room.code, equipe: joueur.team, // pour retrouver et fusionner les deux salons à la fin
+      };
+      salon.participants.set(user.id, {
+        userId: user.id, pseudo: user.pseudo, avatar: user.avatar, photo: user.photo || null,
+        role: "hote", mute: true, parle: false,
+      });
+      salonsVocaux.set(salonCode, salon);
+      socket.join(`vocal:${salonCode}`);
+      room.salonsVocauxEquipe[joueur.team] = salonCode;
+    } else if (!salon.participants.has(user.id)) {
+      if (salon.participants.size >= MAX_PARTICIPANTS_VOCAL) return cb?.({ ok: false, error: "SALON_COMPLET" });
+      quitterSalonVocal(socket);
+      retourVocalDisponible.delete(user.id);
+      salon.participants.set(user.id, {
+        userId: user.id, pseudo: user.pseudo, avatar: user.avatar, photo: user.photo || null,
+        role: "auditeur", mute: true, parle: false,
+      });
+      socket.join(`vocal:${salonCode}`);
+    }
+
+    // Invite d'un coup tous les coéquipiers présents dans la salle de jeu (respect des blocages).
+    let invites = 0;
+    for (const p of room.players.values()) {
+      if (p.userId === user.id || p.team !== joueur.team || salon.participants.has(p.userId)) continue;
+      if (estBloque(user.id, p.userId)) continue;
+      salon.invites.set(p.userId, { de: user.pseudo, at: Date.now() });
+      const s = [...io.of("/").sockets.values()].find((sk) => sk.data.user?.id === p.userId);
+      if (s) {
+        s.emit("vocal:invite-recue", {
+          code: salonCode, titre: salon.titre, de: user.pseudo, avatar: user.avatar, photo: user.photo || null,
+        });
+        invites++;
+      }
+    }
+
+    diffuserVocal(salon);
+    cb?.({ ok: true, code: salonCode, salon: publicVocal(salon), invites });
   });
 
   socket.on("disconnect", () => quitterSalonVocal(socket, { involontaire: true }));
@@ -5341,6 +5662,7 @@ empreinteAdmin = await charger("adminPass", null, null);
 palmares = await charger("palmares", null, []);
 chargerSaison(await charger("saison", null, null));
 progression = await charger("quetes", null, {});
+progressionGlobale = await charger("quetesGlobales", null, {});
 for (const [id, liste] of Object.entries(await charger("vus", null, {})))
   vusParJoueur.set(id, liste);
 conversations = await charger("conversations", null, {});
@@ -5400,6 +5722,7 @@ if (!bonusPartiesClassees || typeof bonusPartiesClassees !== "object") bonusPart
 walletHistorique = await charger("wallet", WALLET_FILE, {});
 if (!walletHistorique || typeof walletHistorique !== "object") walletHistorique = {};
 REGLAGES = { ...structuredClone(REGLAGES_DEFAUT), ...(await charger("reglages", null, {})) };
+assurerCouleursCategories();
 if (!empreinteAdmin)
   console.warn("⚠️  Mot de passe d'administration par défaut : changez-le depuis /admin.html");
 await chargerUtilisateurs();
