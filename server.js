@@ -3721,6 +3721,12 @@ const MAX_COHOTES_VOCAL = 3;
 const MAX_PARTICIPANTS_VOCAL = 40;
 const salonsVocaux = new Map(); // code -> salon
 
+/** Personnes coupées involontairement (réseau, onglet fermé…) d'un salon vocal toujours actif :
+ *  on leur garde un accès rapide pour y revenir depuis la page d'accueil plutôt que de les laisser
+ *  rechercher le salon ou retaper le code. Périmé après RETOUR_VOCAL_VALIDITE_MS. */
+const retourVocalDisponible = new Map(); // userId -> { code, titre, at }
+const RETOUR_VOCAL_VALIDITE_MS = 15 * 60 * 1000;
+
 function genererCodeVocal() {
   let code;
   do {
@@ -3757,8 +3763,10 @@ function estModoVocal(salon, userId) {
 
 /** Retire un socket de tout salon vocal dont il fait partie (déconnexion, ou changement de salon).
  *  Si l'hôte part, l'animation du salon s'arrête là : les autres sont prévenus et repassent auditeurs
- *  d'un salon fermé plutôt que d'hériter d'un salon fantôme sans personne pour le modérer pleinement. */
-function quitterSalonVocal(socket) {
+ *  d'un salon fermé plutôt que d'hériter d'un salon fantôme sans personne pour le modérer pleinement.
+ *  `involontaire` distingue une vraie coupure (réseau, onglet fermé) d'un départ volontaire (bouton
+ *  Quitter) : seule la coupure involontaire laisse une trace pour la bulle de retour rapide. */
+function quitterSalonVocal(socket, { involontaire = false } = {}) {
   const userId = socket.data.user?.id;
   if (!userId) return;
   for (const salon of salonsVocaux.values()) {
@@ -3779,6 +3787,9 @@ function quitterSalonVocal(socket) {
       // participant — le salon continue, seul son flux à lui doit s'arrêter.
       io.to(`vocal:${salon.code}`).emit("vocal:rtc-peer-left", { userId });
       diffuserVocal(salon);
+      if (involontaire) {
+        retourVocalDisponible.set(userId, { code: salon.code, titre: salon.titre, at: Date.now() });
+      }
     }
     return; // un compte ne peut être que dans un seul salon vocal à la fois
   }
@@ -3793,6 +3804,41 @@ app.get("/api/vocal/salons", (req, res) => {
     hote: s.participants.get(s.hostId)?.pseudo || "?",
     participants: s.participants.size,
   })));
+});
+
+/** Bulle affichée en haut de la page d'accueil : propose un accès direct à un salon vocal encore
+ *  actif, soit parce que le compte en a été coupé involontairement, soit parce qu'il a reçu une
+ *  invitation à laquelle il n'a pas encore répondu. */
+app.get("/api/vocal/retour", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (!user) return;
+
+  const r = retourVocalDisponible.get(user.id);
+  if (r) {
+    if (Date.now() - r.at < RETOUR_VOCAL_VALIDITE_MS && salonsVocaux.has(r.code)) {
+      return res.json({ retour: { code: r.code, titre: r.titre, motif: "deconnecte" } });
+    }
+    retourVocalDisponible.delete(user.id); // périmé ou salon disparu entretemps
+  }
+
+  for (const salon of salonsVocaux.values()) {
+    const invite = salon.invites?.get(user.id);
+    if (invite && !salon.participants.has(user.id)) {
+      return res.json({ retour: { code: salon.code, titre: salon.titre, motif: "invite", de: invite.de } });
+    }
+  }
+
+  res.json({ retour: null });
+});
+
+/** Ferme la bulle de retour sans rejoindre le salon : nettoie la coupure et les invitations en
+ *  attente pour ce compte, pour qu'elle ne réapparaisse pas tant que rien de nouveau ne survient. */
+app.post("/api/vocal/retour/ignorer", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (!user) return;
+  retourVocalDisponible.delete(user.id);
+  for (const salon of salonsVocaux.values()) salon.invites?.delete(user.id);
+  res.json({ ok: true });
 });
 
 /**
@@ -4858,12 +4904,14 @@ io.on("connection", (socket) => {
 
   socket.on("vocal:creer", ({ titre }, cb) => {
     quitterSalonVocal(socket); // un compte ne peut animer/rejoindre qu'un seul salon vocal à la fois
+    retourVocalDisponible.delete(user.id); // on anime un nouveau salon : la bulle de retour n'a plus lieu d'être
     const code = genererCodeVocal();
     const salon = {
       code, hostId: user.id,
       titre: String(titre || "").trim().slice(0, 60) || `Le salon de ${user.pseudo}`,
       participants: new Map(),
       demandesMontee: new Set(),
+      invites: new Map(), // userId -> { de, at } — pour proposer un accès rapide même après coup
       radio: null,
       creeLe: Date.now(),
     };
@@ -4883,6 +4931,8 @@ io.on("connection", (socket) => {
     if (!salon) return cb?.({ ok: false, error: "SALON_INTROUVABLE" });
     if (salon.participants.size >= MAX_PARTICIPANTS_VOCAL) return cb?.({ ok: false, error: "SALON_COMPLET" });
     quitterSalonVocal(socket);
+    retourVocalDisponible.delete(user.id); // on rejoint un salon : la bulle de retour n'a plus lieu d'être
+    salon.invites?.delete(user.id); // l'invitation, s'il y en avait une, est consommée
     salon.participants.set(user.id, {
       userId: user.id, pseudo: user.pseudo, avatar: user.avatar, photo: user.photo || null,
       role: "auditeur", mute: true, parle: false,
@@ -5043,6 +5093,10 @@ io.on("connection", (socket) => {
     if (statutRelation(user.id, amiId) !== "ami") return cb?.({ ok: false, error: "PAS_AMI" });
     if (estBloque(user.id, amiId)) return cb?.({ ok: false, error: "BLOQUE" });
 
+    // Gardé même si la personne est hors ligne ou manque le message : elle retrouvera l'invitation
+    // sous forme de bulle sur la page d'accueil dès qu'elle reviendra, tant que le salon est ouvert.
+    salon.invites?.set(amiId, { de: user.pseudo, at: Date.now() });
+
     let livree = false;
     for (const [, s] of io.of("/").sockets) {
       if (s.data.user?.id !== amiId) continue;
@@ -5055,7 +5109,7 @@ io.on("connection", (socket) => {
     cb?.({ ok: true, livree });
   });
 
-  socket.on("disconnect", () => quitterSalonVocal(socket));
+  socket.on("disconnect", () => quitterSalonVocal(socket, { involontaire: true }));
 
   /** Réactions émoji pendant la partie, relayées à tout le salon (liste EMOJIS commune, définie
    *  plus haut, aussi utilisée par les bots — voir botDire()). */
