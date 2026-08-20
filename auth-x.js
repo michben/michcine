@@ -115,6 +115,42 @@ export function grantCredits(userId, amount) {
   saveUsers();
 }
 
+/** Emplacements pépites bonus, gagnés via les coffres de niveau (au-delà des 5 de base). */
+export const pepiteSlotsBonus = (userId) => Number(users[userId]?.pepiteSlotsBonus) || 0;
+export function accorderPepiteSlotBonus(userId, n = 1) {
+  const u = users[userId];
+  if (!u) return 0;
+  u.pepiteSlotsBonus = (Number(u.pepiteSlotsBonus) || 0) + n;
+  saveUsers();
+  return u.pepiteSlotsBonus;
+}
+
+/** Tours de roue bonus (hors tour gratuit quotidien), gagnés via les coffres de niveau. */
+export const tourRoueBonusDisponible = (userId) => (Number(users[userId]?.toursRoueBonus) || 0) > 0;
+export function accorderTourRoueBonus(userId, n = 1) {
+  const u = users[userId];
+  if (!u) return 0;
+  u.toursRoueBonus = (Number(u.toursRoueBonus) || 0) + n;
+  saveUsers();
+  return u.toursRoueBonus;
+}
+export function consommerTourRoueBonus(userId) {
+  const u = users[userId];
+  if (!u || !((Number(u.toursRoueBonus) || 0) > 0)) return false;
+  u.toursRoueBonus -= 1;
+  saveUsers();
+  return true;
+}
+
+/** Marque un coffre de niveau (tous les 15 niveaux) comme réclamé. */
+export function marquerCoffreReclame(userId, lvl) {
+  const u = users[userId];
+  if (!u) return;
+  u.claimedChests = u.claimedChests || [];
+  if (!u.claimedChests.includes(lvl)) u.claimedChests.push(lvl);
+  saveUsers();
+}
+
 /** La roue quotidienne : un tour gratuit par « journée de roue » (18h à 18h). */
 export function roueGratuiteDisponible(userId, jour) {
   const u = users[userId];
@@ -660,6 +696,10 @@ export const estBloque = (userId, autreId) =>
   (users[userId]?.bloques || []).includes(autreId) ||
   (users[autreId]?.bloques || []).includes(userId);
 
+/** Le joueur a-t-il activé « Partager ma partie » dans son profil ? Faux par défaut : le
+ * partage est un choix explicite du joueur, pas une option activée pour tout le monde. */
+export const partageJeuActif = (userId) => users[userId]?.partageJeu === true;
+
 /** Recherche par pseudo, insensible à la casse. */
 export function chercherJoueurs(requete, saufId, limite = 15) {
   const q = String(requete || "").trim().toLowerCase();
@@ -1003,6 +1043,9 @@ export function mountAuth(app) {
     user.pseudoChosen = true;
     // la photo n'est pas modifiable ici : seule l'administration la définit
     if (typeof req.body.avatar === "string") user.avatar = req.body.avatar.slice(0, 8);
+    // Partage de partie : le joueur doit explicitement cocher cette case pour que ses
+    // amis puissent le regarder en direct (en plus du réglage global de l'administrateur).
+    if (typeof req.body.partageJeu === "boolean") user.partageJeu = req.body.partageJeu;
     saveUsers();
     res.json(sansSecret(user));
   });

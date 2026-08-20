@@ -24,7 +24,7 @@ import { mountAuth, userFromCookie, addRankedPoints,
          marquerEnLigne, marquerHorsLigne, estEnLigne, nombreEnLigne, getConnectedUsers,
          estModerateur, estEnfant, definirRole, ROLES, chargerUtilisateurs,
          relations, demanderAmi, accepterAmi, retirerAmi, bloquer,
-         chercherJoueurs, statutRelation, estBloque, emailAValider,
+         chercherJoueurs, statutRelation, estBloque, emailAValider, partageJeuActif,
          leaderboard, reinitialiserClassement, definirPhoto, fichePublique, pseudoDe,
          retirerPoints, grantPointsDon, ajouterXp, infoNiveau, validerManuellement,
          verifierCode, rattacherParrain, infoParrainage, verifierCodeParrain,
@@ -33,7 +33,10 @@ import { mountAuth, userFromCookie, addRankedPoints,
          genererCodeParrainGagne, roueGratuiteDisponible, marquerRoueGratuiteUtilisee,
          roueTirPayantDisponible, marquerTirPayantRoueUtilise, ROUE_MAX_TIRS_PAYANTS,
          roueTirPubDisponible, marquerTirPubRoueUtilise,
-         roueTirsPubCycle, roueProchaineRechargePub } from "./auth-x.js";
+         roueTirsPubCycle, roueProchaineRechargePub,
+         pepiteSlotsBonus, accorderPepiteSlotBonus,
+         tourRoueBonusDisponible, accorderTourRoueBonus, consommerTourRoueBonus,
+         marquerCoffreReclame } from "./auth-x.js";
 
 const app = express();
 app.use(express.json({ limit: '15mb' })); // Limite augmentée pour l'upload d'images et de musique
@@ -1122,10 +1125,14 @@ const filmsDepuisIds = (ids) => ids
     .filter(Boolean)
     .map((m) => ({ id: m.id, title: m.title, poster: m.poster, year: m.year, tmdbId: m.tmdbId }));
 
+// Un joueur peut débloquer jusqu'à 2 emplacements pépites supplémentaires via les coffres
+// de niveau (voir plus bas) : sa limite réelle est donc parfois > MAX_PEPITES.
+const maxPepitesPour = (userId) => MAX_PEPITES + pepiteSlotsBonus(userId);
+
 app.get("/api/pepites", (req, res) => {
     const user = exigeCompte(req, res);
     if (!user) return;
-    res.json({ films: filmsDepuisIds(pepites[user.id] || []).reverse(), max: MAX_PEPITES });
+    res.json({ films: filmsDepuisIds(pepites[user.id] || []).reverse(), max: maxPepitesPour(user.id) });
 });
 
 app.post("/api/pepites/:movieId/toggle", (req, res) => {
@@ -1134,11 +1141,12 @@ app.post("/api/pepites/:movieId/toggle", (req, res) => {
     const movieId = Number(req.params.movieId);
     if (!movies.find((m) => m.id === movieId)) return res.status(404).json({ error: "MOVIE_NOT_FOUND" });
 
+    const max = maxPepitesPour(user.id);
     const mesIds = pepites[user.id] || (pepites[user.id] = []);
     const i = mesIds.indexOf(movieId);
     let pepite;
     if (i === -1) {
-        if (mesIds.length >= MAX_PEPITES) return res.status(400).json({ error: "MAX_PEPITES_ATTEINT", max: MAX_PEPITES });
+        if (mesIds.length >= max) return res.status(400).json({ error: "MAX_PEPITES_ATTEINT", max });
         mesIds.push(movieId);
         pepite = true;
     } else {
@@ -1146,7 +1154,7 @@ app.post("/api/pepites/:movieId/toggle", (req, res) => {
         pepite = false;
     }
     savePepites();
-    res.json({ ok: true, pepite, restantes: MAX_PEPITES - mesIds.length });
+    res.json({ ok: true, pepite, restantes: max - mesIds.length, max });
 });
 
 /** Classement des films les plus mis en pépite, tous joueurs confondus. */
@@ -1750,9 +1758,28 @@ app.post("/api/admin/conversations/:cle/traiter", requireModerateur, (req, res) 
 function isBonusLevel(lvl) {
     return lvl === 5 || (lvl > 0 && lvl % 10 === 0);
 }
+/** Niveaux dont le petit cadeau (parmi les ~30 répartis sur toute la montée) est une pépite en
+ * plus plutôt que des tickets — exactement 2, comme demandé, réparties au milieu et au sommet
+ * du parcours pour ne pas les regrouper. Calculé sur le plafond réel (modifiable par l'admin). */
+function niveauxPepiteBonus() {
+    const max = REGLAGES.niveauMax || 300;
+    const milieu = Math.max(10, Math.round(max / 2 / 10) * 10);
+    return [...new Set([milieu, max])].filter((l) => l > 0 && l <= max && isBonusLevel(l));
+}
 function getBonusReward(lvl) {
-    // Ex: +x crédits, +x xp
-    return { credits: 2 + Math.floor(lvl / 10), xp: lvl * 10 };
+    if (niveauxPepiteBonus().includes(lvl)) {
+        // Un petit bonus de tickets/xp accompagne quand même la pépite, pour que le coffre
+        // ne semble jamais « vide » comparé aux autres paliers.
+        return { type: "pepite", credits: 1, xp: lvl * 10, pepite: true };
+    }
+    return { type: "credits", credits: 2 + Math.floor(lvl / 10), xp: lvl * 10 };
+}
+
+/** Coffres tous les 15 niveaux (15, 30, 45… jusqu'au plafond) : au choix, une pépite en plus,
+ * un tour de roue gratuit, ou une demande de code VIP — présentés côté client sous forme de
+ * coffre à ouvrir, distincts des petits cadeaux ci-dessus. */
+function isChestLevel(lvl) {
+    return lvl > 0 && lvl % 15 === 0;
 }
 
 app.get("/api/progression", (req, res) => {
@@ -1760,13 +1787,18 @@ app.get("/api/progression", (req, res) => {
     if (!user) return;
     const n = infoNiveau(user.id, { base: REGLAGES.xpBase, croissance: REGLAGES.xpCroissance, plafond: REGLAGES.niveauMax })?.niveau || 0;
     const claimed = user.claimedBonuses || [];
-    
+    const claimedChests = user.claimedChests || [];
+
     let nextBonus = null;
     for (let i = n + 1; i <= REGLAGES.niveauMax; i++) {
         if (isBonusLevel(i)) { nextBonus = i; break; }
     }
-    
-    res.json({ currentLevel: n, claimedBonuses: claimed, nextBonus, maxLevel: REGLAGES.niveauMax });
+    let nextChest = null;
+    for (let i = n + 1; i <= REGLAGES.niveauMax; i++) {
+        if (isChestLevel(i)) { nextChest = i; break; }
+    }
+
+    res.json({ currentLevel: n, claimedBonuses: claimed, claimedChests, nextBonus, nextChest, maxLevel: REGLAGES.niveauMax });
 });
 
 app.post("/api/progression/claim", (req, res) => {
@@ -1774,21 +1806,60 @@ app.post("/api/progression/claim", (req, res) => {
     if (!user) return;
     const lvl = Number(req.body.level);
     const n = infoNiveau(user.id, { base: REGLAGES.xpBase, croissance: REGLAGES.xpCroissance, plafond: REGLAGES.niveauMax })?.niveau || 0;
-    
+
     if (lvl > n) return res.status(400).json({ error: "NIVEAU_NON_ATTEINT" });
     if (!isBonusLevel(lvl)) return res.status(400).json({ error: "PAS_UN_BONUS" });
-    
+
     user.claimedBonuses = user.claimedBonuses || [];
     if (user.claimedBonuses.includes(lvl)) return res.status(400).json({ error: "DEJA_RECLAME" });
-    
+
     user.claimedBonuses.push(lvl);
-    
+
     const reward = getBonusReward(lvl);
     grantCredits(user.id, reward.credits);
     if (reward.credits) enregistrerTransaction(user.id, reward.credits, "credits", `Bonus du niveau ${lvl}`);
     const nv = ajouterXp(user.id, reward.xp, { base: REGLAGES.xpBase, croissance: REGLAGES.xpCroissance, plafond: REGLAGES.niveauMax });
-    
-    res.json({ ok: true, reward, credits: getCredits(user.id), niveau: nv });
+    if (reward.pepite) accorderPepiteSlotBonus(user.id, 1);
+
+    res.json({ ok: true, reward, credits: getCredits(user.id), niveau: nv,
+        pepiteMax: reward.pepite ? maxPepitesPour(user.id) : undefined });
+});
+
+/** Réclame un coffre de niveau (tous les 15 niveaux) : le joueur choisit sa récompense. */
+app.post("/api/progression/claim-coffre", (req, res) => {
+    const user = exigeCompte(req, res);
+    if (!user) return;
+    const lvl = Number(req.body.level);
+    const choix = String(req.body.choix || "");
+    const n = infoNiveau(user.id, { base: REGLAGES.xpBase, croissance: REGLAGES.xpCroissance, plafond: REGLAGES.niveauMax })?.niveau || 0;
+
+    if (lvl > n) return res.status(400).json({ error: "NIVEAU_NON_ATTEINT" });
+    if (!isChestLevel(lvl) || lvl > REGLAGES.niveauMax) return res.status(400).json({ error: "PAS_UN_COFFRE" });
+    if (!["pepite", "roue", "vip"].includes(choix)) return res.status(400).json({ error: "CHOIX_INVALIDE" });
+
+    const dejaReclames = user.claimedChests || [];
+    if (dejaReclames.includes(lvl)) return res.status(400).json({ error: "DEJA_RECLAME" });
+
+    marquerCoffreReclame(user.id, lvl);
+
+    if (choix === "pepite") {
+        accorderPepiteSlotBonus(user.id, 1);
+        return res.json({ ok: true, choix, pepiteMax: maxPepitesPour(user.id) });
+    }
+    if (choix === "roue") {
+        accorderTourRoueBonus(user.id, 1);
+        return res.json({ ok: true, choix, toursRoueBonus: user.toursRoueBonus || 0 });
+    }
+    // Code VIP : même file d'attente que celle de la roue — l'administrateur valide et envoie le vrai code.
+    const demande = {
+        id: demandesVip.length ? Math.max(...demandesVip.map((d) => d.id)) + 1 : 1,
+        userId: user.id, pseudo: user.pseudo, avatar: user.avatar, photo: user.photo || null,
+        date: new Date().toISOString(), statut: "attente", code: null, envoyeLe: null,
+        origine: `Coffre du niveau ${lvl}`,
+    };
+    demandesVip.push(demande);
+    saveDemandesVip();
+    res.json({ ok: true, choix, enAttente: true });
 });
 
 
@@ -2311,7 +2382,11 @@ app.post("/api/roue/tourner", (req, res) => {
 
     if (gainsEnAttente[user.id]) return res.status(409).json({ error: "GAIN_EN_ATTENTE" });
 
-    const gratuit = roueGratuiteDisponible(user.id, roue.jour);
+    const gratuitJournalier = roueGratuiteDisponible(user.id, roue.jour);
+    // Un tour bonus gagné via un coffre de niveau (voir /api/progression/claim-coffre) compte
+    // aussi comme gratuit, mais seulement une fois le tour gratuit du jour déjà utilisé.
+    const gratuitBonus = !gratuitJournalier && tourRoueBonusDisponible(user.id);
+    const gratuit = gratuitJournalier || gratuitBonus;
     // Une fois le tour gratuit du jour consommé, le joueur choisit : payer en tickets, ou
     // regarder une publicité (gérée depuis la console admin) pour un tour gratuit à la place.
     const viaPub = !gratuit && req.body?.via === "pub";
@@ -2348,7 +2423,8 @@ app.post("/api/roue/tourner", (req, res) => {
     gainsEnAttente[user.id] = { ...resultat, gratuit, viaPub, date: new Date().toISOString() };
     saveGainsRoue();
 
-    if (gratuit) marquerRoueGratuiteUtilisee(user.id, roue.jour);
+    if (gratuitJournalier) marquerRoueGratuiteUtilisee(user.id, roue.jour);
+    else if (gratuitBonus) consommerTourRoueBonus(user.id);
     else if (viaPub) marquerTirPubRoueUtilise(user.id, REGLAGES.pubHeureRecharge);
     else marquerTirPayantRoueUtilise(user.id, roue.jour);
     saveRoue();
@@ -3158,12 +3234,23 @@ app.get("/api/birthdays", async (req, res) => {
     const actors = data.births.filter(b => {
       const text = (b.text || "").toLowerCase();
       return text.includes("acteur") || text.includes("actrice") || text.includes("réalisateur") || text.includes("cinéaste");
-    }).map(b => ({
-      name: b.pages && b.pages[0] ? b.pages[0].title.replace(/_/g, ' ') : "Inconnu",
-      year: b.year,
-      description: b.text,
-      thumbnail: b.pages && b.pages[0] && b.pages[0].thumbnail ? b.pages[0].thumbnail.source : null
-    })).sort((a, b) => b.year - a.year);
+    }).map(b => {
+      const page = b.pages && b.pages[0] ? b.pages[0] : null;
+      const nom = page ? page.title.replace(/_/g, ' ') : "Inconnu";
+      // Lien Wikipédia : celui fourni par l'API si présent, sinon on reconstruit
+      // à partir du titre de la page (fonctionne dans l'immense majorité des cas).
+      const url = page?.content_urls?.desktop?.page
+        || (page ? `https://fr.wikipedia.org/wiki/${encodeURIComponent(page.title)}` : null);
+      return {
+        name: nom,
+        year: b.year,
+        // Âge que la personne a (ou aurait) cette année, calculé à partir de l'année de naissance.
+        age: b.year ? (new Date().getFullYear() - b.year) : null,
+        description: b.text,
+        thumbnail: page && page.thumbnail ? page.thumbnail.source : null,
+        url,
+      };
+    }).sort((a, b) => b.year - a.year);
     
     res.json({ actors: actors.slice(0, 15) });
   } catch (err) {
@@ -3628,6 +3715,9 @@ function publicState(room) {
       // Diffusés à tout le salon (pas seulement au joueur concerné) pour permettre
       // l'affichage permanent des cœurs des adversaires en duel / équipes.
       coeurs: p.coeurs, coeursMax: p.coeursMax,
+      // Confirmation de présence avant le lancement : un bot est toujours « prêt »
+      // (il ne peut pas cliquer lui-même), un joueur humain doit le confirmer.
+      pret: Boolean(p.pret) || Boolean(p.bot),
     })),
     teams: room.mode === "teams" ? teamScores(room) : null,
   };
@@ -3676,11 +3766,14 @@ function diffuserListeSpectateursSolo(userId, p) {
 
 /** Un ami est-il en train de jouer, en salon comme en solo/classée ? */
 function joueurEnPartie(userId) {
+  // partageActif : le joueur a coché « Partager ma partie » dans son profil — sans ça,
+  // même en partie, ses amis ne doivent pas voir le bouton « Regarder en direct ».
+  const partageActif = partageJeuActif(userId);
   const room = salonDuJoueur(userId);
-  if (room) return { enPartie: true, modeSalon: room.mode };
+  if (room) return { enPartie: true, modeSalon: room.mode, partageActif };
   const p = parties.get(userId);
-  if (p) return { enPartie: true, modeSalon: p.mode };
-  return { enPartie: false, modeSalon: null };
+  if (p) return { enPartie: true, modeSalon: p.mode, partageActif };
+  return { enPartie: false, modeSalon: null, partageActif };
 }
 
 /* ------------------------------------------------------------------ */
@@ -4064,10 +4157,25 @@ io.on("connection", (socket) => {
     io.to(room.code).emit("room:update", publicState(room));
   });
 
-  socket.on("game:start", ({ code }) => {
+  /** Confirmation de présence avant le lancement : chacun coche « je suis prêt »,
+   *  l'hôte ne peut lancer la partie qu'une fois tout le monde prêt (les bots le
+   *  sont automatiquement). Évite qu'une manche démarre avec quelqu'un pas installé. */
+  socket.on("room:pret", ({ code, pret }) => {
     const room = rooms.get(code);
-    if (!room || !estHote(room, socket.data.user.id) || room.status !== "lobby") return;
+    const player = room?.players.get(socket.data.user.id);
+    if (!room || !player || room.status !== "lobby" || player.bot) return;
+    player.pret = Boolean(pret);
+    io.to(room.code).emit("room:update", publicState(room));
+  });
+
+  socket.on("game:start", ({ code }, cb) => {
+    const room = rooms.get(code);
+    if (!room || !estHote(room, socket.data.user.id) || room.status !== "lobby") return cb?.({ ok: false });
+    const nonPrets = [...room.players.values()].filter((p) => !p.bot && !p.pret);
+    if (nonPrets.length)
+      return cb?.({ ok: false, error: "JOUEURS_PAS_PRETS", manquants: nonPrets.map((p) => p.pseudo) });
     startRound(room);
+    cb?.({ ok: true });
   });
 
   /** Ajoute un bot au salon (duel uniquement) : pratique quand personne d'autre n'est
@@ -4318,6 +4426,10 @@ io.on("connection", (socket) => {
       return cb?.({ ok: false, error: "SPECTATEUR_DESACTIVE" });
     if (!amiId || statutRelation(user.id, amiId) !== "ami")
       return cb?.({ ok: false, error: "PAS_AMI" });
+    // Même entre amis, il faut que LA PERSONNE REGARDÉE ait explicitement coché
+    // « Partager ma partie » dans son profil — sinon, pas d'accès, même via l'API.
+    if (!partageJeuActif(amiId))
+      return cb?.({ ok: false, error: "PARTAGE_DESACTIVE" });
 
     arreterRegarder(socket);   // ne regarde qu'une seule partie à la fois
 
@@ -4474,7 +4586,8 @@ function joinRoom(socket, room, user) {
     coeursMax: REGLAGES.coeurs + avantages.extraCoeurs,
     coeurs: REGLAGES.coeurs + avantages.extraCoeurs,
     freeHintsRemaining: avantages.freeHints,
-    allHintsFree: avantages.allFree
+    allHintsFree: avantages.allFree,
+    pret: false,
   });
   socket.join(room.code);
   io.to(room.code).emit("room:update", publicState(room));
