@@ -4287,16 +4287,33 @@ function renderSondages(){
 
 /** Petit compteur affiché en haut du menu : nombre de films actifs dans le jeu. */
 async function chargerNombreFilms(){
-  const r = await fetch("/api/movies/total", { credentials: "same-origin" })
-    .then(x => x.ok ? x.json() : null).catch(() => null);
-  if (r && typeof r.total === "number") $("totalFilmsNb").textContent = r.total;
+  try {
+    const res = await fetch("/api/movies/total", { credentials: "same-origin" });
+    if (!res.ok){ console.error("chargerNombreFilms : réponse", res.status); return; }
+    const r = await res.json();
+    if (r && typeof r.total === "number") $("totalFilmsNb").textContent = r.total;
+  } catch (e) { console.error("chargerNombreFilms : erreur réseau", e); }
 }
 
-/** Petit compteur affiché en haut du menu : nombre total de joueurs inscrits depuis le début. */
+/** Petit compteur affiché en haut du menu : nombre total de joueurs inscrits depuis le début.
+ *  Les erreurs sont journalisées dans la console (F12) plutôt que masquées, pour pouvoir
+ *  diagnostiquer facilement si le chiffre ne remonte pas (session expirée, déploiement pas
+ *  encore à jour, etc.). */
 async function chargerNombreJoueurs(){
-  const r = await fetch("/api/joueurs/total", { credentials: "same-origin" })
-    .then(x => x.ok ? x.json() : null).catch(() => null);
-  if (r && typeof r.total === "number") $("totalJoueursNb").textContent = r.total;
+  try {
+    const res = await fetch("/api/joueurs/total", { credentials: "same-origin" });
+    if (!res.ok){
+      console.error("chargerNombreJoueurs : réponse", res.status, await res.text().catch(() => ""));
+      $("totalJoueursNb").textContent = "?";
+      return;
+    }
+    const r = await res.json();
+    if (r && typeof r.total === "number") $("totalJoueursNb").textContent = r.total;
+    else console.error("chargerNombreJoueurs : réponse inattendue", r);
+  } catch (e) {
+    console.error("chargerNombreJoueurs : erreur réseau", e);
+    $("totalJoueursNb").textContent = "?";
+  }
 }
 
 async function chargerSondages(){
