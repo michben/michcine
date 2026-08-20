@@ -1190,6 +1190,7 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
       <div class="card" style="text-align:center">
         <p class="tag" id="vocalTitreSalon" style="margin:0 0 4px">Salon</p>
         <div class="marquee" id="vocalMarquee" style="margin-bottom:10px"></div>
+        <div class="row" style="justify-content:center"><button class="ghost" id="btnVocalInviter">🎙️ Inviter des amis</button></div>
       </div>
 
       <div class="card" id="vocalRadioCard">
@@ -1204,6 +1205,9 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
           </div>
         </div>
       </div>
+
+      <!-- Sons reçus des autres participants (WebRTC) — invisible, un <audio> par personne connectée -->
+      <div id="vocalAudioDistant" style="display:none"></div>
 
       <div class="card">
         <p class="tag" style="margin:0 0 10px">🎤 Hôte & cohôtes</p>
@@ -1225,6 +1229,7 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
           <button id="btnVocalDemander" class="ghost hidden">✋ Demander à intervenir</button>
         </div>
         <p class="note" id="vocalDemandeEnvoyee" style="margin:8px 0 0" hidden>Votre demande a été envoyée à l'hôte.</p>
+        <p class="feedback" id="vocalMicMsg" style="margin:8px 0 0"></p>
       </div>
 
       <div class="card hidden" id="vocalConsole">
@@ -1338,6 +1343,21 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
         <p class="note" style="margin-top:0">Invitez un ami en ligne à rejoindre ce salon — code <b id="inviterLobbyCode"></b>.</p>
         <div id="inviterLobbyListe"></div>
         <p class="feedback" id="inviterLobbyMsg"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODALE : INVITER DES AMIS DEPUIS UN SALON VOCAL -->
+  <div class="modal-overlay" id="inviterVocalModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>🎙️ Inviter des amis</h2>
+        <button class="close-btn" id="closeInviterVocalBtn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="note" style="margin-top:0">Invitez un ami en ligne à rejoindre ce salon vocal — code <b id="inviterVocalCode"></b>.</p>
+        <div id="inviterVocalListe"></div>
+        <p class="feedback" id="inviterVocalMsg"></p>
       </div>
     </div>
   </div>
@@ -4568,10 +4588,108 @@ function renderSondages(){
   });
 }
 
-/* ---------- Salon vocal (façon talkie-walkie : pas de son réel transmis) ---------- */
+/* ---------- Salon vocal ---------- */
 let vocalSalonActuel = null;   // dernier état reçu du serveur (payload publicVocal), ou null si pas dans un salon
 let vocalEnParle = false;      // état local du bouton "maintenir pour parler"
 let vocalMusiquePourRadio = []; // catalogue /api/musique, chargé une seule fois pour le sélecteur radio
+
+/* ----- Son réel entre les joueurs (WebRTC, connexion directe pair-à-pair) -----
+ * Le serveur ne fait que relayer les messages de négociation ("vocal:rtc-signal") — le son ne
+ * transite jamais par lui. Sans service de relais payant (TURN), la connexion directe échoue
+ * parfois sur les réseaux les plus restrictifs : dans ce cas, seul l'indicateur visuel (anneau qui
+ * pulse) continue de fonctionner pour la personne concernée, le reste du salon n'est pas affecté. */
+const VOCAL_ICE_SERVERS = [
+  { urls: "stun:stun.l.google.com:19302" },
+  { urls: "stun:stun1.l.google.com:19302" },
+];
+let vocalPeers = new Map();       // userId -> RTCPeerConnection
+let vocalLocalStream = null;      // notre micro, demandé au tout premier appui sur "parler"
+let vocalMicIndisponible = false; // évite de redemander le micro en boucle après un refus
+
+/** Crée (si besoin) la connexion audio directe vers un participant du salon. Ne fait rien si elle
+ *  existe déjà. Reste "vide" (sans son) tant que personne n'y a ajouté de piste micro — c'est
+ *  l'ajout d'une piste (voir vocalDemanderMicro) qui déclenche automatiquement la négociation. */
+function vocalCreerPeer(peerId){
+  if (vocalPeers.has(peerId)) return vocalPeers.get(peerId);
+  const pc = new RTCPeerConnection({ iceServers: VOCAL_ICE_SERVERS });
+  pc._makingOffer = false;
+  // Politesse déterministe (même règle des deux côtés) : évite que les deux navigateurs
+  // s'envoient une offre en même temps sans savoir qui doit céder.
+  pc._poli = Boolean(me?.id && me.id > peerId);
+  pc.onnegotiationneeded = async () => {
+    try {
+      pc._makingOffer = true;
+      await pc.setLocalDescription();
+      vocalEmettreSignal(peerId, { type: "offer", sdp: pc.localDescription });
+    } catch {} finally { pc._makingOffer = false; }
+  };
+  pc.onicecandidate = (e) => { if (e.candidate) vocalEmettreSignal(peerId, { type: "ice", candidate: e.candidate }); };
+  pc.ontrack = (e) => vocalAttacherAudioDistant(peerId, e.streams[0]);
+  if (vocalLocalStream) vocalLocalStream.getTracks().forEach(t => pc.addTrack(t, vocalLocalStream));
+  vocalPeers.set(peerId, pc);
+  return pc;
+}
+
+function vocalFermerPeer(peerId){
+  const pc = vocalPeers.get(peerId);
+  if (pc){ pc.close(); vocalPeers.delete(peerId); }
+  const audio = document.getElementById(`vocalAudioDistant-${CSS.escape(peerId)}`);
+  if (audio) audio.remove();
+}
+
+function vocalFermerToutesLesConnexions(){
+  for (const peerId of [...vocalPeers.keys()]) vocalFermerPeer(peerId);
+  if (vocalLocalStream){ vocalLocalStream.getTracks().forEach(t => t.stop()); vocalLocalStream = null; }
+  $("vocalAudioDistant").innerHTML = "";
+}
+
+function vocalEmettreSignal(to, signal){
+  if (!vocalSalonActuel) return;
+  socket.emit("vocal:rtc-signal", { code: vocalSalonActuel.code, to, signal });
+}
+
+function vocalAttacherAudioDistant(peerId, stream){
+  const id = `vocalAudioDistant-${CSS.escape(peerId)}`;
+  let audio = document.getElementById(id);
+  if (!audio){
+    audio = document.createElement("audio");
+    audio.id = id;
+    audio.autoplay = true;
+    $("vocalAudioDistant").appendChild(audio);
+  }
+  if (audio.srcObject !== stream) audio.srcObject = stream;
+  audio.play().catch(() => {}); // lecture auto parfois bloquée sans geste récent : sans gravité, ça reprend au prochain geste sur la page
+}
+
+/** S'assure qu'une connexion existe vers chaque autre participant actuellement dans le salon, et
+ *  referme celles qui ne correspondent plus à personne (filet de sécurité, en plus des événements
+ *  vocal:rtc-peer-left qui font normalement déjà le ménage au fil de l'eau). */
+function assurerPeersVocal(salon){
+  if (!salon || !me) return;
+  const presents = new Set(salon.participants.map(p => p.userId).filter(id => id !== me.id));
+  for (const id of presents) vocalCreerPeer(id);
+  for (const id of [...vocalPeers.keys()]) if (!presents.has(id)) vocalFermerPeer(id);
+}
+
+/** Demande le micro au tout premier appui sur "parler" (geste utilisateur, indispensable pour que
+ *  le navigateur affiche la demande d'autorisation), puis ajoute la piste à toutes les connexions
+ *  déjà ouvertes. En cas de refus ou d'appareil sans micro, le salon reste utilisable : seul le
+ *  son ne passera pas pour cette personne, l'indicateur visuel continue de fonctionner. */
+async function vocalDemanderMicro(){
+  if (vocalLocalStream || vocalMicIndisponible) return vocalLocalStream;
+  try {
+    vocalLocalStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    vocalLocalStream.getAudioTracks().forEach(t => t.enabled = false); // muet tant qu'on n'appuie pas
+    for (const pc of vocalPeers.values())
+      vocalLocalStream.getTracks().forEach(t => pc.addTrack(t, vocalLocalStream));
+    $("vocalMicMsg").textContent = "";
+  } catch {
+    vocalMicIndisponible = true;
+    $("vocalMicMsg").textContent = "Micro indisponible ou refusé — seul l'indicateur visuel fonctionnera pour vous.";
+    $("vocalMicMsg").className = "feedback bad";
+  }
+  return vocalLocalStream;
+}
 
 function afficherVocalListe(){
   $("vocalListe").classList.remove("hidden");
@@ -4636,6 +4754,7 @@ $("btnVocalQuitter").onclick = () => {
   vocalSalonActuel = null;
   vocalEnParle = false;
   $("vocalAudio").pause();
+  vocalFermerToutesLesConnexions();
   afficherVocalListe();
   chargerSalonsVocauxOuverts();
 };
@@ -4662,6 +4781,7 @@ function carteParticipantVocal(p){
 function renderVocalSalon(salon){
   if (!salon) return;
   vocalSalonActuel = salon;
+  assurerPeersVocal(salon);
   $("vocalTitreSalon").textContent = salon.titre;
   $("vocalMarquee").textContent = salon.code;
 
@@ -4764,22 +4884,30 @@ $("btnVocalDemander").onclick = () => {
 
 $("btnVocalMute").onclick = () => {
   const moi = vocalSalonActuel?.participants.find(p => p.userId === me?.id);
-  socket.emit("vocal:mute", { code: vocalSalonActuel.code, mute: !moi?.mute });
+  const futurMute = !moi?.mute;
+  if (futurMute && vocalLocalStream) vocalLocalStream.getAudioTracks().forEach(t => t.enabled = false);
+  socket.emit("vocal:mute", { code: vocalSalonActuel.code, mute: futurMute });
 };
 
-// Bouton "maintenir pour parler" façon talkie-walkie : appui = parle, relâche = silence. Couvre
-// souris et tactile, y compris si le doigt/curseur quitte le bouton en cours d'appui.
-function vocalCommencerParler(){
+// Bouton "maintenir pour parler" façon talkie-walkie : appui = parle (micro ouvert), relâche =
+// silence. Couvre souris et tactile, y compris si le doigt/curseur quitte le bouton en cours
+// d'appui. Le tout premier appui demande le micro (geste utilisateur requis par le navigateur).
+async function vocalCommencerParler(){
   if (vocalEnParle || !vocalSalonActuel || $("btnVocalParler").disabled) return;
   vocalEnParle = true;
   $("btnVocalParler").classList.add("actif");
   socket.emit("vocal:parler", { code: vocalSalonActuel.code, parle: true });
+  const stream = await vocalDemanderMicro();
+  // Un relâchement a pu survenir pendant l'attente de l'autorisation micro — on ne réactive pas
+  // le son dans ce cas, seul l'indicateur visuel aura bougé le temps de la demande.
+  if (stream && vocalEnParle) stream.getAudioTracks().forEach(t => t.enabled = true);
 }
 function vocalArreterParler(){
   if (!vocalEnParle || !vocalSalonActuel) return;
   vocalEnParle = false;
   $("btnVocalParler").classList.remove("actif");
   socket.emit("vocal:parler", { code: vocalSalonActuel.code, parle: false });
+  if (vocalLocalStream) vocalLocalStream.getAudioTracks().forEach(t => t.enabled = false);
 }
 $("btnVocalParler").addEventListener("mousedown", vocalCommencerParler);
 $("btnVocalParler").addEventListener("touchstart", e => { e.preventDefault(); vocalCommencerParler(); });
@@ -4807,6 +4935,7 @@ socket.on("vocal:ferme", (info) => {
   vocalSalonActuel = null;
   vocalEnParle = false;
   $("vocalAudio").pause();
+  vocalFermerToutesLesConnexions();
   if (!$("vocal").classList.contains("hidden")){
     afficherVocalListe();
     chargerSalonsVocauxOuverts();
@@ -4818,11 +4947,88 @@ socket.on("vocal:exclu", () => {
   vocalSalonActuel = null;
   vocalEnParle = false;
   $("vocalAudio").pause();
+  vocalFermerToutesLesConnexions();
   if (!$("vocal").classList.contains("hidden")){
     afficherVocalListe();
     chargerSalonsVocauxOuverts();
   }
   bandeauNotif(`<span style="font-size:24px">🚪</span><span><b>Vous avez été exclu du salon vocal</b></span>`);
+});
+
+/** Inviter des amis directement depuis le salon vocal, sans passer par l'écran Amis. */
+$("btnVocalInviter").onclick = async () => {
+  if (!vocalSalonActuel) return;
+  $("inviterVocalCode").textContent = vocalSalonActuel.code || "";
+  $("inviterVocalMsg").textContent = "";
+  $("inviterVocalMsg").className = "feedback";
+  $("inviterVocalListe").innerHTML = `<p class="note" style="margin:0">Chargement…</p>`;
+  $("inviterVocalModal").classList.add("active");
+
+  const r = await fetch("/api/friends").then(x => x.json()).catch(() => null);
+  const amisEnLigne = (r?.amis || []).filter(a => a.online);
+  if (!amisEnLigne.length){
+    $("inviterVocalListe").innerHTML = "";
+    $("inviterVocalMsg").textContent = "Aucun ami en ligne pour l'instant.";
+    return;
+  }
+  $("inviterVocalListe").innerHTML = amisEnLigne.map(a => `
+    <div class="amiLigne">
+      <span class="dot on"></span>
+      <span class="nom">${vignette(a)} ${esc(a.pseudo)}</span>
+      <button class="ghost" data-inviter-vocal="${esc(a.id)}" style="padding:6px 10px;font-size:15px">🎙️ Inviter</button>
+    </div>`).join("");
+  $("inviterVocalListe").querySelectorAll("[data-inviter-vocal]").forEach(b => b.onclick = () => {
+    socket.emit("vocal:inviter", { code: vocalSalonActuel.code, amiId: b.dataset.inviterVocal }, res => {
+      if (!res?.ok){
+        $("inviterVocalMsg").textContent = "Invitation impossible.";
+        $("inviterVocalMsg").className = "feedback bad";
+        return;
+      }
+      b.textContent = res.livree ? "Invité ✓" : "Hors ligne";
+      b.disabled = true;
+    });
+  });
+};
+$("closeInviterVocalBtn").onclick = () => $("inviterVocalModal").classList.remove("active");
+$("inviterVocalModal").onclick = e => { if (e.target.id === "inviterVocalModal") $("inviterVocalModal").classList.remove("active"); };
+
+/** Invitation reçue à rejoindre le salon vocal d'un ami. */
+socket.on("vocal:invite-recue", ({ code, titre, de, avatar, photo }) => {
+  const el = document.createElement("div");
+  el.className = "invitation";
+  el.innerHTML = `<b>${photo ? `<img class="pfp" src="${esc(photo)}" alt="">` : (avatar||"🎬")} ${esc(de)}</b> vous invite dans son salon vocal
+    <small>${esc(titre || "Salon vocal")} · code ${esc(code)}</small>
+    <span><button data-oui>Rejoindre</button><button data-non class="ghost">Plus tard</button></span>`;
+  document.body.append(el);
+  const fermer = () => el.remove();
+  el.querySelector("[data-non]").onclick = fermer;
+  el.querySelector("[data-oui]").onclick = () => {
+    fermer();
+    show("vocal");
+    rejoindreSalonVocalParCode(code);
+  };
+});
+
+// ----- Signalisation WebRTC (le serveur ne fait que relayer, jamais toucher au son) -----
+socket.on("vocal:rtc-peer-left", ({ userId }) => vocalFermerPeer(userId));
+socket.on("vocal:rtc-signal", async ({ from, signal }) => {
+  const pc = vocalCreerPeer(from);
+  try {
+    if (signal.type === "offer" || signal.type === "answer"){
+      // "Négociation polie" : si on reçoit une offre alors qu'on est nous-même en train d'en
+      // envoyer une (collision rare mais possible), le pair "poli" l'ignore et laisse l'autre
+      // mener la négociation — évite que les deux navigateurs restent bloqués l'un contre l'autre.
+      const collision = signal.type === "offer" && (pc._makingOffer || pc.signalingState !== "stable");
+      if (collision && !pc._poli) return;
+      await pc.setRemoteDescription(signal.sdp);
+      if (signal.type === "offer"){
+        await pc.setLocalDescription();
+        vocalEmettreSignal(from, { type: "answer", sdp: pc.localDescription });
+      }
+    } else if (signal.type === "ice"){
+      await pc.addIceCandidate(signal.candidate);
+    }
+  } catch {} // connexion WebRTC déjà refermée ou message arrivé trop tard : sans conséquence
 });
 
 /** Petit compteur affiché en haut du menu : nombre de films actifs dans le jeu. */
