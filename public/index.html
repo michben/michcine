@@ -1034,7 +1034,8 @@ html.mode-enfant-actif .wrap{padding-top:48px}
       <div id="listeTeteAffiche" class="listeTeteAffiche"></div>
     </div>
     <h2 id="hello">Bonjour</h2>
-    <p class="note" id="totalFilmsMenu" style="margin:0 0 10px;font-size:12px;opacity:0.7">🎬 <b id="totalFilmsNb">—</b> films dans le jeu</p>
+    <p class="note" id="totalFilmsMenu" style="margin:0 0 4px;font-size:12px;opacity:0.7">🎬 <b id="totalFilmsNb">—</b> films dans le jeu</p>
+    <p class="note" id="totalJoueursMenu" style="margin:0 0 10px;font-size:12px;opacity:0.7">🧑‍🤝‍🧑 <b id="totalJoueursNb">—</b> joueurs inscrits sur l'application</p>
     <p class="wallet" id="walletMenu" style="cursor:pointer" title="Voir l'historique de vos tickets et points">🎟️ <b>0</b> crédits</p>
     <p class="online" id="btnOnlineUsers" style="cursor:pointer" title="Voir vos amis en ligne"><span class="dot on"></span><b id="onlineNb">—</b><span id="onlineCount">amis en ligne</span></p>
     <div class="row" style="margin-bottom: 14px;" data-module="sorties">
@@ -1611,9 +1612,24 @@ socket.on("spectateurs:liste", ({ noms }) => {
   majSpectateursCorner();
 });
 
-/* Bouton d'aide "?" : masqué tant que l'administration ne l'a pas explicitement activé
-   (voir chargerAide(), défini plus bas une fois le bouton présent dans la page). */
-let aideActive = false;
+/* Bouton d'aide "?" : toujours disponible (hors partie) — voir chargerAide(), défini plus bas
+   une fois le bouton présent dans la page. Un petit manuel par défaut s'affiche systématiquement ;
+   l'administration peut le remplacer par son propre message depuis la console (onglet Réglages). */
+let aideActive = true;
+
+/** Petit manuel par défaut, affiché la première fois qu'un joueur arrive (et à tout moment
+ *  via le bouton "?"), tant que l'administration n'a pas publié son propre message d'aide. */
+const GUIDE_PAR_DEFAUT = `
+  <p><b>🎬 Le principe</b><br>Un synopsis se dévoile petit à petit à l'écran : devinez le film parmi les choix proposés avant la fin du chrono.</p>
+  <p><b>❤️ Les cœurs</b><br>Chaque mauvaise réponse coûte un cœur. À 0 cœur, vous êtes éliminé de la manche, mais vous pouvez suivre la fin de la partie.</p>
+  <p><b>💡 Les indices</b><br>Achetables avec vos tickets : année, réalisateur, acteurs, photo du film — de quoi s'en sortir sur les titres les plus difficiles.</p>
+  <p><b>🎮 Les modes</b><br>Solo (contre vous-même), Duel (1 contre 1, avec ou sans bot si personne n'est dispo), Tous contre tous, Équipes, et Classé (fait progresser votre rang de la saison).</p>
+  <p><b>🎟️ Tickets & niveaux</b><br>Gagnés en jouant, ils servent à acheter des indices ou à tourner la roue. L'expérience vous fait monter de niveau, débloque des avantages, et ouvre régulièrement des petits cadeaux — et tous les 15 niveaux, un vrai coffre à ouvrir !</p>
+  <p><b>💎 Les pépites</b><br>Depuis l'écran de révélation, mettez en avant vos films préférés (5 au minimum, plus si vous débloquez des emplacements bonus). Vos pépites sont visibles par vos amis, et inversement.</p>
+  <p><b>🎡 La roue de la fortune</b><br>Un tour gratuit chaque jour pour tenter de gagner des tickets, des parties classées en plus, ou un code VIP.</p>
+  <p><b>👥 Amis & partage</b><br>Ajoutez des amis, discutez avec eux, et activez le partage de partie dans votre profil pour qu'ils puissent vous regarder jouer en direct.</p>
+  <p><b>📍 Petits plus</b><br>Depuis le menu, retrouvez aussi le cinéma le plus proche de chez vous et les célébrités nées le jour même.</p>
+`;
 
 /* ---------- Radio d'ambiance : playlist en boucle, disponible depuis la page d'accueil et qui ---------- */
 /* continue de jouer sans interruption au fil de la navigation, jusqu'à ce que le joueur la mette en   */
@@ -2293,6 +2309,7 @@ async function loadSession(){
     chargerQuetes(); // Met à jour le niveau au chargement
     chargerSondages(); // Pastille des sondages en attente de vote
     chargerNombreFilms(); // Petit compteur de films en haut du menu
+    chargerNombreJoueurs(); // Petit compteur de joueurs inscrits en haut du menu
     verifierTicketRoue(); // Prévient si un tour gratuit de la roue n'a pas encore été utilisé
     $("hello").innerHTML = `Bonjour ${esc(me.pseudo)}` +
       (["moderateur","admin"].includes(me.role) ? `<span class="badge-role">${esc(me.role)}</span>` : "");
@@ -4275,6 +4292,13 @@ async function chargerNombreFilms(){
   if (r && typeof r.total === "number") $("totalFilmsNb").textContent = r.total;
 }
 
+/** Petit compteur affiché en haut du menu : nombre total de joueurs inscrits depuis le début. */
+async function chargerNombreJoueurs(){
+  const r = await fetch("/api/joueurs/total", { credentials: "same-origin" })
+    .then(x => x.ok ? x.json() : null).catch(() => null);
+  if (r && typeof r.total === "number") $("totalJoueursNb").textContent = r.total;
+}
+
 async function chargerSondages(){
   const r = await fetch("/api/sondages").then(x => x.ok ? x.json() : []).catch(() => []);
   sondagesActifs = Array.isArray(r) ? r : [];
@@ -4549,7 +4573,11 @@ $("btnSaveProfile").onclick = async () => {
   $("hello").textContent = `Bonjour ${me.pseudo}`;
   if (premiere){
     socket.disconnect().connect();   // la session portait l'ancien profil sans pseudo
-    return show("menu");
+    show("menu");
+    // Petit manuel d'utilisation pour un tout nouveau joueur : affiché une seule fois,
+    // juste après le choix du pseudo, avant qu'il ne se lance dans sa première partie.
+    setTimeout(() => $("rulesModal").classList.add("active"), 400);
+    return;
   }
   $("profileMsg").textContent = "Profil enregistré.";
   $("profileMsg").className = "feedback good";
@@ -5459,6 +5487,20 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
                 <select id="cinemasCommune" style="flex:1"></select>
             </div>
             <p class="note" id="cinemasCodePostalMsg" style="text-align:center;margin:6px 0 0"></p>
+            <div class="row hidden" id="cinemasFiltresRow" style="padding:10px 20px 0;gap:10px;flex-wrap:wrap;border-top:1px solid rgba(237,232,220,.12);margin-top:10px;padding-top:12px">
+                <label style="display:flex;align-items:center;gap:5px;margin:0;text-transform:none;letter-spacing:0;font-size:13px;color:var(--chalk);cursor:pointer">
+                    <input type="checkbox" data-enseigne="UGC" class="cinemaFiltre" style="width:auto;cursor:pointer">UGC
+                </label>
+                <label style="display:flex;align-items:center;gap:5px;margin:0;text-transform:none;letter-spacing:0;font-size:13px;color:var(--chalk);cursor:pointer">
+                    <input type="checkbox" data-enseigne="MK2" class="cinemaFiltre" style="width:auto;cursor:pointer">MK2
+                </label>
+                <label style="display:flex;align-items:center;gap:5px;margin:0;text-transform:none;letter-spacing:0;font-size:13px;color:var(--chalk);cursor:pointer">
+                    <input type="checkbox" data-enseigne="Gaumont" class="cinemaFiltre" style="width:auto;cursor:pointer">Gaumont
+                </label>
+                <label style="display:flex;align-items:center;gap:5px;margin:0;text-transform:none;letter-spacing:0;font-size:13px;color:var(--chalk);cursor:pointer">
+                    <input type="checkbox" data-enseigne="Cinéma indépendant" class="cinemaFiltre" style="width:auto;cursor:pointer">Cinéma indépendant
+                </label>
+            </div>
             <div class="modal-body" id="cinemasList" style="max-height: 60vh; overflow-y: auto;">
                 <p class="note" style="text-align:center">Localisation en cours…</p>
             </div>
@@ -5572,7 +5614,7 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
 
     <!-- BOUTON FLOTTANT ET MODALE D'AIDE : masqué tant que l'administration ne l'a pas activé
          depuis la console admin (onglet Réglages) — voir chargerAide() ci-dessous. -->
-    <div class="help-btn hidden" id="helpBtn" title="Règles du jeu">?</div>
+    <div class="help-btn hidden" id="helpBtn" title="Comment jouer ?">?</div>
     <div class="modal-overlay" id="rulesModal">
         <div class="modal-content">
             <div class="modal-header">
@@ -5591,19 +5633,20 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
             }
         });
 
-        // Le message et son activation viennent entièrement de la console admin (onglet Réglages) :
-        // rien ne s'affiche tant que l'administration n'a pas explicitement publié un message.
+        // Par défaut, le petit manuel intégré (GUIDE_PAR_DEFAUT) est affiché à tout le monde.
+        // Si l'administration a publié son propre message depuis la console (onglet Réglages),
+        // il remplace ce manuel par défaut.
+        document.getElementById('rulesBody').innerHTML = GUIDE_PAR_DEFAUT;
         (async function chargerAide(){
             const cfg = await fetch('/api/aide').then(r => r.ok ? r.json() : { actif: false }).catch(() => ({ actif: false }));
-            aideActive = Boolean(cfg.actif);
-            if (aideActive){
+            if (cfg.actif && cfg.message){
                 document.getElementById('rulesTitre').textContent = cfg.titre || 'Comment jouer ? 🎬🎵';
-                document.getElementById('rulesBody').textContent = cfg.message || '';
+                document.getElementById('rulesBody').textContent = cfg.message;
             }
             // Reflète l'état dès maintenant (show() s'en charge ensuite à chaque changement d'écran) ;
             // reste masqué si une partie est déjà en cours au moment où ce fetch se termine.
             const enJeu = ["round","between","lobby","waiting"].some(s => !document.getElementById(s)?.classList.contains('hidden'));
-            document.getElementById('helpBtn').classList.toggle('hidden', !aideActive || enJeu);
+            document.getElementById('helpBtn').classList.toggle('hidden', enJeu);
         })();
 
         // Le bouton d'aide "?" est en bas à gauche, tout comme la fenêtre de chat en plein écran sur mobile :
@@ -5819,9 +5862,55 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
          *  rien si le joueur a désactivé la géolocalisation dans l'application. */
         /** Cherche les cinémas autour d'un point (lat/lon) et affiche le résultat dans #cinemasList —
          *  point qui peut venir du GPS ou d'une commune choisie via un code postal saisi à la main. */
+        // Dernière liste de cinémas reçue du serveur, gardée en mémoire pour filtrer par
+        // enseigne (UGC, MK2, Gaumont, indépendant) sans devoir relancer toute la recherche.
+        let dernierCinemasTrouves = [];
+        const filtresEnseigneCoches = () =>
+            [...document.querySelectorAll(".cinemaFiltre:checked")].map(c => c.dataset.enseigne);
+
+        function afficherCinemas(){
+            const liste = document.getElementById("cinemasList");
+            const filtres = filtresEnseigneCoches();
+            const cinemas = filtres.length
+                ? dernierCinemasTrouves.filter(c => filtres.includes(c.enseigne))
+                : dernierCinemasTrouves;
+
+            document.getElementById("cinemasFiltresRow").classList.toggle("hidden", dernierCinemasTrouves.length === 0);
+
+            if (!cinemas.length){
+                liste.innerHTML = filtres.length
+                    ? "<p class='note'>Aucun cinéma de cette enseigne dans le rayon de recherche.</p>"
+                    : "<p class='note'>Aucun cinéma trouvé dans un rayon de 50 km autour de ce point.</p>";
+                return;
+            }
+            liste.innerHTML = `<p class="note" style="text-align:center;margin-bottom:10px">${cinemas.length} cinéma${cinemas.length>1?"s":""} trouvé${cinemas.length>1?"s":""}${filtres.length ? " (filtré)" : " dans un rayon de 50 km"}</p>` +
+                cinemas.map(c => {
+                const couleur = ENSEIGNE_COULEUR[c.enseigne] || "var(--muted)";
+                return `
+                <div class="bday-item" style="border-left-color: ${couleur}; align-items:flex-start;">
+                    ${c.logo
+                      ? `<img src="${c.logo}" alt="${esc(c.enseigne)}" style="width:44px;height:44px;border-radius:8px;object-fit:contain;background:#222;flex:0 0 auto;padding:4px;box-sizing:border-box;">`
+                      : `<div style="width:44px;height:44px;border-radius:8px;background:#222;display:flex;align-items:center;justify-content:center;font-size:20px;flex:0 0 auto;">🎥</div>`}
+                    <div class="info" style="flex:1;">
+                        <b>${esc(c.nom)}</b>
+                        <div style="display:flex;gap:6px;margin:6px 0;flex-wrap:wrap;align-items:center;">
+                            <span style="font-size:11px;background:${couleur};padding:2px 8px;border-radius:4px;color:#161207;font-weight:bold;">${esc(c.enseigne)}</span>
+                            <span style="font-size:12px;color:var(--muted)">📍 ${c.distanceKm} km</span>
+                        </div>
+                        <small>${esc([c.adresse, c.codePostal, c.ville].filter(Boolean).join(", ") || "Adresse non renseignée")}</small>
+                        <div class="row" style="margin-top:8px">
+                            <a href="https://www.google.com/maps/dir/?api=1&destination=${c.lat},${c.lon}" target="_blank" rel="noopener" style="display:block;text-align:center;text-decoration:none;padding:8px 12px;font-size:13px;border-radius:8px;border:1px solid rgba(237,232,220,.22);color:var(--chalk)">🗺️ Itinéraire (GPS)</a>
+                        </div>
+                    </div>
+                </div>`;
+            }).join("");
+        }
+        document.querySelectorAll(".cinemaFiltre").forEach(cb => cb.addEventListener("change", afficherCinemas));
+
         async function rechercherCinemasPres(lat, lon){
             const liste = document.getElementById("cinemasList");
             liste.innerHTML = "<p class='note' style='text-align:center'>Recherche des cinémas dans un rayon de 50 km… (peut prendre jusqu'à 20 secondes)</p>";
+            document.getElementById("cinemasFiltresRow").classList.add("hidden");
             // Le service de recherche (Overpass) peut être lent : on borne l'attente pour
             // ne jamais laisser le joueur face à un écran figé sans explication.
             const controleur = new AbortController();
@@ -5834,31 +5923,12 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
                     return;
                 }
                 const data = await res.json();
-                if (!data.cinemas || !data.cinemas.length){
+                dernierCinemasTrouves = data.cinemas || [];
+                if (!dernierCinemasTrouves.length){
                     liste.innerHTML = "<p class='note'>Aucun cinéma trouvé dans un rayon de 50 km autour de ce point.</p>";
                     return;
                 }
-                liste.innerHTML = `<p class="note" style="text-align:center;margin-bottom:10px">${data.cinemas.length} cinéma${data.cinemas.length>1?"s":""} trouvé${data.cinemas.length>1?"s":""} dans un rayon de 50 km</p>` +
-                    data.cinemas.map(c => {
-                    const couleur = ENSEIGNE_COULEUR[c.enseigne] || "var(--muted)";
-                    return `
-                    <div class="bday-item" style="border-left-color: ${couleur}; align-items:flex-start;">
-                        ${c.logo
-                          ? `<img src="${c.logo}" alt="${esc(c.enseigne)}" style="width:44px;height:44px;border-radius:8px;object-fit:contain;background:#222;flex:0 0 auto;padding:4px;box-sizing:border-box;">`
-                          : `<div style="width:44px;height:44px;border-radius:8px;background:#222;display:flex;align-items:center;justify-content:center;font-size:20px;flex:0 0 auto;">🎥</div>`}
-                        <div class="info" style="flex:1;">
-                            <b>${esc(c.nom)}</b>
-                            <div style="display:flex;gap:6px;margin:6px 0;flex-wrap:wrap;align-items:center;">
-                                <span style="font-size:11px;background:${couleur};padding:2px 8px;border-radius:4px;color:#161207;font-weight:bold;">${esc(c.enseigne)}</span>
-                                <span style="font-size:12px;color:var(--muted)">📍 ${c.distanceKm} km</span>
-                            </div>
-                            <small>${esc([c.adresse, c.codePostal, c.ville].filter(Boolean).join(", ") || "Adresse non renseignée")}</small>
-                            <div class="row" style="margin-top:8px">
-                                <a href="https://www.google.com/maps/dir/?api=1&destination=${c.lat},${c.lon}" target="_blank" rel="noopener" style="display:block;text-align:center;text-decoration:none;padding:8px 12px;font-size:13px;border-radius:8px;border:1px solid rgba(237,232,220,.22);color:var(--chalk)">🗺️ Itinéraire (GPS)</a>
-                            </div>
-                        </div>
-                    </div>`;
-                }).join("");
+                afficherCinemas();
             } catch(e){
                 clearTimeout(minuteur);
                 liste.innerHTML = e?.name === "AbortError"
