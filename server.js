@@ -3705,11 +3705,16 @@ function generateRoomCode() {
 }
 
 /* ------------------------------------------------------------------ */
-/* Salons vocaux (façon talkie-walkie) : aucun son n'est réellement     */
-/* transmis entre navigateurs (ça demanderait un service de relais audio */
-/* payant) — seulement un indicateur visuel de qui a la parole, des     */
-/* rôles (hôte, cohôte, intervenant, auditeur) et une piste radio        */
-/* diffusée en synchronisé à partir du catalogue musique existant.       */
+/* Salons vocaux : rôles (hôte, cohôte, intervenant, auditeur), une      */
+/* piste radio diffusée en synchronisé à partir du catalogue musique     */
+/* existant, et un vrai son transmis entre navigateurs par connexion     */
+/* directe (WebRTC, pair-à-pair — voir vocal:rtc-signal plus bas). Ce     */
+/* serveur ne fait que relayer les messages de négociation (offres,      */
+/* réponses, candidats ICE) : le son lui-même ne transite jamais par     */
+/* ici. Sans service de relais audio payant (TURN), la connexion directe */
+/* échoue parfois sur les réseaux les plus restrictifs (box de certains  */
+/* opérateurs, wifi d'entreprise très filtré) — c'est le compromis       */
+/* accepté pour garder cette fonctionnalité gratuite.                    */
 /* ------------------------------------------------------------------ */
 
 const MAX_COHOTES_VOCAL = 3;
@@ -3770,6 +3775,9 @@ function quitterSalonVocal(socket) {
       }
       salonsVocaux.delete(salon.code);
     } else {
+      // Prévient les autres qu'ils peuvent fermer leur connexion audio (WebRTC) vers ce
+      // participant — le salon continue, seul son flux à lui doit s'arrêter.
+      io.to(`vocal:${salon.code}`).emit("vocal:rtc-peer-left", { userId });
       diffuserVocal(salon);
     }
     return; // un compte ne peut être que dans un seul salon vocal à la fois
@@ -4887,8 +4895,9 @@ io.on("connection", (socket) => {
     cb?.({ ok: true });
   });
 
-  /** Bouton "parler" façon talkie-walkie : aucun son n'est transmis, seulement l'état affiché
-   *  aux autres (anneau qui pulse autour de la photo). Réservé à ceux qui ont la parole. */
+  /** Bouton "parler" façon talkie-walkie : ne fait que mettre à jour l'état affiché aux autres
+   *  (anneau qui pulse autour de la photo) — le micro lui-même est coupé/activé côté client, en
+   *  parallèle, sur la connexion audio directe. Réservé à ceux qui ont la parole. */
   socket.on("vocal:parler", ({ code, parle }) => {
     const salon = salonsVocaux.get(code);
     const moi = salon?.participants.get(user.id);
@@ -4986,8 +4995,20 @@ io.on("connection", (socket) => {
       socketCible.leave(`vocal:${salon.code}`);
       socketCible.emit("vocal:exclu", { code: salon.code });
     }
+    // Les autres participants doivent couper leur connexion audio directe vers la personne exclue.
+    io.to(`vocal:${salon.code}`).emit("vocal:rtc-peer-left", { userId });
     diffuserVocal(salon);
     cb?.({ ok: true });
+  });
+
+  /** Relais des messages de négociation WebRTC (offres, réponses, candidats ICE) entre deux
+   *  participants du même salon — le serveur ne fait que transmettre, il ne touche jamais au son
+   *  lui-même, qui circule directement entre les deux navigateurs une fois la connexion établie. */
+  socket.on("vocal:rtc-signal", ({ code, to, signal }) => {
+    const salon = salonsVocaux.get(code);
+    if (!salon || !salon.participants.has(user.id) || !salon.participants.has(to)) return;
+    const socketCible = [...io.of("/").sockets.values()].find((s) => s.data.user?.id === to);
+    if (socketCible) socketCible.emit("vocal:rtc-signal", { from: user.id, signal });
   });
 
   /** Diffuse une piste du catalogue radio existant à tout le salon : chacun charge le même
@@ -5006,6 +5027,26 @@ io.on("connection", (socket) => {
     salon.radio = { titre: piste.titre, url: piste.url, demarreLe: Date.now() };
     diffuserVocal(salon);
     cb?.({ ok: true });
+  });
+
+  /** Invite un ami dans le salon vocal en cours — même principe que invite:send pour les parties,
+   *  mais vers un salon vocal. Il reçoit une notification avec le code pour le rejoindre. */
+  socket.on("vocal:inviter", ({ code, amiId }, cb) => {
+    const salon = salonsVocaux.get(code);
+    if (!salon || !salon.participants.has(user.id)) return cb?.({ ok: false });
+    if (statutRelation(user.id, amiId) !== "ami") return cb?.({ ok: false, error: "PAS_AMI" });
+    if (estBloque(user.id, amiId)) return cb?.({ ok: false, error: "BLOQUE" });
+
+    let livree = false;
+    for (const [, s] of io.of("/").sockets) {
+      if (s.data.user?.id !== amiId) continue;
+      s.emit("vocal:invite-recue", {
+        code: salon.code, titre: salon.titre,
+        de: user.pseudo, avatar: user.avatar, photo: user.photo || null,
+      });
+      livree = true;
+    }
+    cb?.({ ok: true, livree });
   });
 
   socket.on("disconnect", () => quitterSalonVocal(socket));
