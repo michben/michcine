@@ -1053,6 +1053,19 @@ export function mountAuth(app) {
     res.json(sansSecret(user));
   });
 
+  /** Réponse (une seule fois, définitive) au bandeau cookies/vie privée — voir #popCookies côté
+   *  client. `cookiesReponse` absent = jamais répondu (compte nouveau ou déjà existant avant
+   *  l'ajout de ce bandeau, les deux cas sont traités pareil) ; une fois posé, on ne redemande
+   *  plus jamais, quelle que soit la réponse donnée. */
+  app.post("/api/cookies-reponse", (req, res) => {
+    const user = userFromCookie(req.headers.cookie);
+    if (!user) return res.status(401).json({ error: "NOT_AUTHENTICATED" });
+    user.cookiesReponse = req.body?.accepte === true ? "accepte" : "refuse";
+    user.cookiesReponseLe = new Date().toISOString();
+    saveUsers();
+    res.json(sansSecret(user));
+  });
+
   app.post("/auth/logout", (req, res) => {
     res.setHeader("Set-Cookie", `mb_sid=;${domaineCookie()} HttpOnly; Path=/; Max-Age=0`);
     res.json({ ok: true });

@@ -169,6 +169,12 @@ const REGLAGES_DEFAUT = {
     turnActif: false, turnUrl: "", turnUsername: "", turnCredential: "",
     maxParticipantsVocal: 40, maxCohotesVocal: 3, fermetureGraceMinutes: 3,
   },
+  // Petit bouton teaser (voir #btnLienExterne côté client, à côté du bouton "?") pour annoncer un
+  // lien externe — pensé au départ pour un futur second jeu développé séparément. `cible` est une
+  // date/heure (format <input type="datetime-local">, donc sans fuseau horaire explicite) : tant
+  // qu'elle n'est pas atteinte, les joueurs voient un compte à rebours plutôt que le lien lui-même.
+  // Laisser `cible` vide rend le lien actif immédiatement, sans compte à rebours.
+  lienExterne: { actif: false, url: "", titre: "", cible: "" },
 };
 
 let REGLAGES = structuredClone(REGLAGES_DEFAUT);
@@ -798,6 +804,30 @@ app.put("/api/admin/audio", requireAdmin, (req, res) => {
   REGLAGES.audio.fermetureGraceMinutes = borneValeur(a.fermetureGraceMinutes, 1, 30, REGLAGES.audio.fermetureGraceMinutes);
   sauver("reglages", REGLAGES);
   res.json({ ok: true, audio: REGLAGES.audio });
+});
+
+/**
+ * Petit bouton teaser à côté du "?" (voir #btnLienExterne côté client) : un lien externe à
+ * annoncer aux joueurs, avec un compte à rebours optionnel avant qu'il ne devienne cliquable.
+ * Pensé pour un futur second jeu développé séparément, sans rien présumer de plus pour l'instant.
+ */
+app.get("/api/admin/lien-externe", requireAdmin, (_req, res) => res.json(REGLAGES.lienExterne));
+
+app.put("/api/admin/lien-externe", requireAdmin, (req, res) => {
+  const l = req.body || {};
+  if (!REGLAGES.lienExterne) REGLAGES.lienExterne = structuredClone(REGLAGES_DEFAUT.lienExterne);
+  if (typeof l.url === "string") {
+    const url = l.url.trim().slice(0, 500);
+    // Seuls http(s) sont acceptés : rien d'autre n'atterrit jamais dans un attribut href généré
+    // côté serveur (voir la règle du projet sur ce qui peut être injecté dans le HTML du site).
+    if (url && !/^https?:\/\//i.test(url)) return res.status(400).json({ error: "URL_INVALIDE" });
+    REGLAGES.lienExterne.url = url;
+  }
+  if (typeof l.titre === "string") REGLAGES.lienExterne.titre = l.titre.trim().slice(0, 60);
+  if (typeof l.cible === "string") REGLAGES.lienExterne.cible = l.cible.trim().slice(0, 40);
+  if (typeof l.actif === "boolean") REGLAGES.lienExterne.actif = l.actif;
+  sauver("reglages", REGLAGES);
+  res.json({ ok: true, lienExterne: REGLAGES.lienExterne });
 });
 
 /** Indique si le mot de passe par défaut est encore en usage. */
@@ -3782,6 +3812,11 @@ app.get("/api/config", (_req, res) => res.json({
     if (!urls.length) return null;
     return { urls: urls.length > 1 ? urls : urls[0], username: REGLAGES.audio.turnUsername, credential: REGLAGES.audio.turnCredential };
   })(),
+  // Bouton teaser à côté du "?" (voir #btnLienExterne) : n'est envoyé au client que si l'admin l'a
+  // activé et a bien renseigné un lien — sinon le bouton reste simplement masqué.
+  lienExterne: (REGLAGES.lienExterne?.actif && REGLAGES.lienExterne.url)
+    ? { url: REGLAGES.lienExterne.url, titre: REGLAGES.lienExterne.titre || "", cible: REGLAGES.lienExterne.cible || null }
+    : null,
 }));
 
 /**
@@ -5899,6 +5934,8 @@ if (!REGLAGES.audio.turnUrl && TURN_URL) {
   REGLAGES.audio.turnUsername = TURN_USERNAME;
   REGLAGES.audio.turnCredential = TURN_CREDENTIAL;
 }
+if (!REGLAGES.lienExterne || typeof REGLAGES.lienExterne !== "object")
+  REGLAGES.lienExterne = structuredClone(REGLAGES_DEFAUT.lienExterne);
 if (!empreinteAdmin)
   console.warn("⚠️  Mot de passe d'administration par défaut : changez-le depuis /admin.html");
 await chargerUtilisateurs();
