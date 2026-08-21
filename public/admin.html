@@ -929,6 +929,35 @@
       </div>
 
       <div class="card">
+        <p class="tag">🔗↔️ Passerelle de connexion (comptes partagés avec un autre jeu)</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6">
+          Fait en sorte qu'un clic sur le bouton 🔗 ci-dessus arrive <b>déjà connecté</b> sur votre
+          autre projet, avec le même compte (même pseudo, même avatar) — sans jamais partager de
+          mot de passe ni de base de données entre les deux sites. Cette clé secrète et la liste des
+          adresses autorisées doivent être communiquées au développeur (ou à l'IA) qui construit
+          l'autre jeu : demandez-lui d'implémenter le petit contrat décrit dans le document fourni
+          à part. Tant que ce n'est pas fait des deux côtés, laissez cette section désactivée — le
+          bouton 🔗 continuera de fonctionner comme un simple lien.
+        </p>
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer;font-size:15px;color:var(--chalk);text-transform:none;letter-spacing:0">
+          <input type="checkbox" id="passerelleActif" style="width:auto">
+          Activer la passerelle de connexion
+        </label>
+        <label for="passerelleCleInput">Clé secrète partagée</label>
+        <div class="row">
+          <input id="passerelleCleInput" type="text" maxlength="200" placeholder="Cliquez sur « Générer » →" style="flex:1">
+          <button class="ghost" id="btnPasserelleGenerer" style="flex:0 0 auto">🎲 Générer</button>
+          <button class="ghost" id="btnPasserelleCopier" style="flex:0 0 auto">Copier</button>
+        </div>
+        <label style="margin-top:10px" for="passerelleDomainesInput">Adresses de retour autorisées (une par ligne)</label>
+        <textarea id="passerelleDomainesInput" rows="2" style="width:100%" placeholder="https://mon-nouveau-jeu.exemple.com"></textarea>
+        <div class="row">
+          <button id="btnSavePasserelle">Enregistrer</button>
+        </div>
+        <p class="msg" id="passerelleMsg"></p>
+      </div>
+
+      <div class="card">
         <p class="tag">✉️ Messages des joueurs au développeur</p>
         <p style="color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6">
           Chaque joueur peut vous écrire depuis le bouton « ✉️ Contacter le développeur » de son menu,
@@ -1509,7 +1538,7 @@ function tab(which){
   if (which === "classement") loadClassement();
   if (which === "users") { loadUsers(); chargerCompteurEnfant(); }
   if (which === "reports"){ loadReports(); loadConversations(); }
-  if (which === "reglages"){ etatSecurite(); chargerReglages(); chargerAide(); chargerAnnonce(); chargerLienExterne(); chargerMaintenance(); chargerContactDev(); }
+  if (which === "reglages"){ etatSecurite(); chargerReglages(); chargerAide(); chargerAnnonce(); chargerLienExterne(); chargerPasserelle(); chargerMaintenance(); chargerContactDev(); }
   if (which === "sorties") loadSorties();
   if (which === "nowplaying") loadNowPlaying();
   if (which === "sondages") { loadSondages(); remplirFilmsListe(); chargerSuggestionsPepites(); }
@@ -1865,6 +1894,39 @@ $("btnSaveLienExterne").onclick = async () => {
     ? "Enregistré."
     : (data.error === "URL_INVALIDE" ? "Le lien doit commencer par http:// ou https://" : "Enregistrement refusé.");
   $("lienExterneMsg").className = res.ok ? "msg ok" : "msg err";
+};
+
+/* ---------- Passerelle de connexion (SSO vers un autre jeu) ---------- */
+async function chargerPasserelle(){
+  const res = await api("/api/admin/passerelle");
+  if (!res.ok) return;
+  const p = await res.json();
+  $("passerelleActif").checked = Boolean(p.actif);
+  $("passerelleCleInput").value = p.cleSecrete || "";
+  $("passerelleDomainesInput").value = p.domaines || "";
+}
+$("btnPasserelleGenerer").onclick = async () => {
+  const res = await api("/api/admin/passerelle/generer-cle");
+  if (!res.ok) return;
+  const data = await res.json();
+  $("passerelleCleInput").value = data.cle;
+};
+$("btnPasserelleCopier").onclick = () => {
+  navigator.clipboard?.writeText($("passerelleCleInput").value || "");
+  $("btnPasserelleCopier").textContent = "Copié ✓";
+  setTimeout(() => $("btnPasserelleCopier").textContent = "Copier", 2000);
+};
+$("btnSavePasserelle").onclick = async () => {
+  const res = await api("/api/admin/passerelle", {method:"PUT", body: JSON.stringify({
+    actif: $("passerelleActif").checked,
+    cleSecrete: $("passerelleCleInput").value,
+    domaines: $("passerelleDomainesInput").value,
+  })});
+  const data = await res.json().catch(() => ({}));
+  $("passerelleMsg").textContent = res.ok
+    ? "Enregistré."
+    : (data.error === "DOMAINE_INVALIDE" ? "Chaque adresse doit commencer par http:// ou https://" : "Enregistrement refusé.");
+  $("passerelleMsg").className = res.ok ? "msg ok" : "msg err";
 };
 
 async function chargerMaintenance(){

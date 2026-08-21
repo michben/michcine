@@ -2827,7 +2827,12 @@ function rafraichirLienExterne(){
   if (!cible || restant <= 0){
     clearInterval(lienExterneMinuteur);
     lienExterneMinuteur = null;
-    contenu.innerHTML = `<a class="lienActif" href="${esc(lienExterneInfo.url)}" target="_blank" rel="noopener">Ouvrir le lien ↗</a>`;
+    // Si la passerelle de connexion est activée (voir console admin), le clic passe d'abord par
+    // elle pour arriver déjà connecté sur l'autre jeu, avec le même compte — sinon lien direct.
+    const href = lienExterneInfo.passerelle
+      ? `/api/passerelle/autoriser?retour=${encodeURIComponent(lienExterneInfo.url)}`
+      : lienExterneInfo.url;
+    contenu.innerHTML = `<a class="lienActif" href="${esc(href)}" target="_blank" rel="noopener">Ouvrir le lien ↗</a>`;
   } else {
     contenu.innerHTML = `<p class="lienExterneCompte">${formatCompteARebours(restant)}</p>
       <p class="noteAttente">Le lien s'ouvrira automatiquement dès la fin du compte à rebours.</p>`;
