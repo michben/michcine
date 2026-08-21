@@ -3301,6 +3301,42 @@ async function offrirPartieClassee(id, pseudo){
     <small>à ${esc(pseudo)} · il vous reste ${data.partiesRestantes} partie${data.partiesRestantes>1?"s":""} classée${data.partiesRestantes>1?"s":""} aujourd'hui</small></span>`);
 }
 
+/* ---------- Don de tickets ---------- */
+async function offrirTickets(id, pseudo){
+  const statut = await fetch("/api/tickets/dons-statut").then(r => r.ok ? r.json() : null).catch(() => null);
+  const bilanJour = statut
+    ? `\nAujourd'hui : ${statut.dejaDonne}/${statut.plafondJour} tickets déjà offerts — il vous reste ${statut.restant} à offrir.`
+    : "";
+  const bilanXp = statut
+    ? (statut.xpEncoreDisponible
+        ? `\nCe don vous rapportera ${statut.xpParDon} xp.`
+        : `\nVous avez déjà atteint le maximum de dons récompensés en xp aujourd'hui — celui-ci n'en rapportera pas, mais les tickets seront bien transférés.`)
+    : "";
+  const saisie = prompt(`Combien de tickets offrir à ${pseudo} ?\n\nVotre solde : ${credits} tickets.${bilanJour}${bilanXp}`);
+  if (saisie === null) return;
+  const montant = Math.floor(Number(saisie));
+  if (!montant || montant <= 0) return;
+
+  const res = await fetch("/api/tickets/donner", {method:"POST",
+    headers:{"Content-Type":"application/json"}, body: JSON.stringify({id, montant})});
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok){
+    const messages = {
+      SOLDE_INSUFFISANT: `Votre solde de tickets ne suffit pas (vous avez ${credits} tickets).`,
+      TROP_ELEVE: `Maximum ${data.max} tickets en une fois.`,
+      PLAFOND_JOUR: `Plafond quotidien atteint. Il vous reste ${data.restant} tickets à offrir aujourd'hui.`,
+      PAS_AMI: "Vous ne pouvez offrir des tickets qu'à vos amis.",
+      BLOQUE: "Don impossible avec ce joueur.",
+      MONTANT_INVALIDE: "Quantité invalide.",
+    };
+    return alert(messages[data.error] || "Don impossible.");
+  }
+  setCredits(data.credits);
+  const bandeauXp = data.xpGagnee ? ` · +${data.xpGagnee} xp` : "";
+  bandeauNotif(`<span style="font-size:24px">🎟️</span><span><b>${montant} tickets envoyés</b>
+    <small>à ${esc(pseudo)}${bandeauXp} · il vous reste ${data.restant} tickets à offrir aujourd'hui</small></span>`);
+}
+
 /* ---------- Lecture à voix haute ---------- */
 
 /**
@@ -4255,6 +4291,7 @@ const ACTIONS_AMI = {
   recue:    [["accepter", "Accepter la demande"], ["retirer", "Refuser"], ["bloquer", "Bloquer"]],
   ami:      [["message", "✉ Envoyer un message"], ["donner", "🎁 Offrir des points"],
              ["don-partie", "🍿 Offrir une partie classée"],
+             ["don-tickets", "🎟️ Offrir des tickets"],
              ["retirer", "Retirer des amis"], ["bloquer", "Bloquer"]],
   bloque:   [["debloquer", "Débloquer"]],
 };
@@ -4355,6 +4392,10 @@ async function ouvrirJoueur(id, pseudo, avatar, photoJoueur){
       $("popJoueur").classList.add("hidden");
       return offrirPartieClassee(id, f.pseudo);
     }
+    if (b.dataset.act === "don-tickets"){
+      $("popJoueur").classList.add("hidden");
+      return offrirTickets(id, f.pseudo);
+    }
     if (b.dataset.act === "bloquer" && !confirm(`Bloquer ${pseudo} ?`)) return;
     await agirAmi(b.dataset.act, id);
     $("popJoueur").classList.add("hidden");
@@ -4425,6 +4466,10 @@ function brancher(){
         const nomEl = b.closest(".amiLigne").querySelector(".nom");
         return offrirPartieClassee(b.dataset.id, nomEl.dataset.pseudo);
     }
+    if (b.dataset.act === "don-tickets") {
+        const nomEl = b.closest(".amiLigne").querySelector(".nom");
+        return offrirTickets(b.dataset.id, nomEl.dataset.pseudo);
+    }
     if (b.dataset.act === "bloquer" && !confirm("Bloquer ce joueur ?")) return;
     if (b.dataset.act === "retirer" && !confirm("Retirer cet ami ?")) return;
     await agirAmi(b.dataset.act, b.dataset.id);
@@ -4452,8 +4497,8 @@ async function chargerAmis(){
     r.amis = triAmisParActivite(r.amis);
     $("listeAmis").innerHTML = r.amis.map(j => ligneJoueur(j,
       enSalon && j.online
-        ? [["bloquer","🚫"], ["retirer","❌"], ["donner","🎁"], ["don-partie","🍿"], ["message","✉️"], ["inviter","🎮 Inviter"]]
-        : [["bloquer","🚫"], ["retirer","❌"], ["donner","🎁"], ["don-partie","🍿"], ["message","✉️"]])).join("");
+        ? [["bloquer","🚫"], ["retirer","❌"], ["donner","🎁"], ["don-partie","🍿"], ["don-tickets","🎟️"], ["message","✉️"], ["inviter","🎮 Inviter"]]
+        : [["bloquer","🚫"], ["retirer","❌"], ["donner","🎁"], ["don-partie","🍿"], ["don-tickets","🎟️"], ["message","✉️"]])).join("");
     $("amisVide").textContent = r.amis.length ? "" :
       "Aucun ami pour l'instant. Cherchez un pseudo dans l'onglet Rechercher.";
   } else if (ongletAmis === "demandes"){
@@ -4737,6 +4782,12 @@ socket.on("notif", (notif) => {
     bandeauNotif(`${image}<span><b>${esc(de)}</b> vous offre une partie classée
       <small>Ajoutée à votre seau — touchez pour voir votre classement</small></span>`,
       () => $("btnBoard").click());
+
+  if (type === "don_tickets"){
+    setCredits(credits + (notif.montant || 0));
+    bandeauNotif(`${image}<span><b>${esc(de)}</b> vous offre ${notif.montant} ticket${notif.montant>1?"s":""}
+      <small>Ajoutés à votre solde</small></span>`);
+  }
 
   if (type === "acceptee")
     bandeauNotif(`${image}<span><b>${esc(de)}</b> a accepté votre demande
