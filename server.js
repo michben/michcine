@@ -123,6 +123,10 @@ const REGLAGES_DEFAUT = {
   partiesClasseesParJour: 5,         // parties classées autorisées par 24 h
   transfertMax: 2000,                // points transférables en une fois entre amis
   transfertParJour: 5000,            // plafond quotidien de dons
+  donTicketsMax: 100,                // tickets (crédits) transférables en une fois entre amis
+  donTicketsParJour: 500,            // plafond quotidien de tickets donnés
+  donTicketsXp: 8,                   // xp gagnée par le donneur à chaque don de tickets récompensé
+  donTicketsXpParJourMax: 5,         // au-delà de ce nombre de dons par jour, le don marche toujours mais ne rapporte plus d'xp
   coeurs: 3,                         // erreurs tolérées avant la fin de partie
   xpBase: 100,                       // expérience du premier niveau
   xpCroissance: 1.04,                // augmentation par niveau
@@ -663,6 +667,10 @@ app.put("/api/admin/reglages", requireAdmin, (req, res) => {
   REGLAGES.partiesClasseesParJour = borne(r.partiesClasseesParJour, 1, 100, REGLAGES.partiesClasseesParJour);
   REGLAGES.transfertMax     = borne(r.transfertMax, 0, 100000, REGLAGES.transfertMax);
   REGLAGES.transfertParJour = borne(r.transfertParJour, 0, 500000, REGLAGES.transfertParJour);
+  REGLAGES.donTicketsMax    = borne(r.donTicketsMax, 0, 100000, REGLAGES.donTicketsMax);
+  REGLAGES.donTicketsParJour = borne(r.donTicketsParJour, 0, 500000, REGLAGES.donTicketsParJour);
+  REGLAGES.donTicketsXp     = borne(r.donTicketsXp, 0, 1000, REGLAGES.donTicketsXp);
+  REGLAGES.donTicketsXpParJourMax = borne(r.donTicketsXpParJourMax, 0, 1000, REGLAGES.donTicketsXpParJourMax);
   if (typeof r.tmdbApiKey === 'string') REGLAGES.tmdbApiKey = r.tmdbApiKey;
   if (typeof r.geoapifyApiKey === 'string') REGLAGES.geoapifyApiKey = r.geoapifyApiKey;
   if (typeof r.adsterraApiKey === 'string') REGLAGES.adsterraApiKey = r.adsterraApiKey;
@@ -4012,6 +4020,82 @@ app.post("/api/parties-classees/donner", (req, res) => {
 
   notifier(cible, { type: "don_partie", de: user.pseudo, avatar: user.avatar, photo: user.photo || null });
   res.json({ ok: true, partiesRestantes: partiesRestantes(user.id) });
+});
+
+/**
+ * Don de tickets (crédits) à un ami : le joueur choisit librement la quantité (plafonnée par envoi
+ * et sur 24h, comme le don de points plus haut, pour éviter qu'un même joueur ne fasse converger
+ * plusieurs comptes vers un seul). Contrairement au don de points, celui qui offre des tickets
+ * gagne un peu d'expérience en retour — mais seulement pour un nombre limité de dons par jour
+ * (REGLAGES.donTicketsXpParJourMax) : sans cette limite, deux comptes pourraient se renvoyer le même
+ * ticket à l'infini pour farmer de l'xp gratuitement. Au-delà, le don continue de fonctionner
+ * normalement, simplement sans xp supplémentaire ce jour-là.
+ */
+const donsTicketsRecents = new Map();   // userId -> [{ montant, at }]
+
+/** Total de tickets déjà donnés par ce joueur sur les dernières 24h, ce qu'il lui reste à donner,
+ *  et le nombre de dons déjà récompensés en xp aujourd'hui. */
+function statutDonsTicketsJour(userId) {
+  const limite = Date.now() - 24 * 60 * 60 * 1000;
+  const recents = (donsTicketsRecents.get(userId) || []).filter((d) => d.at > limite);
+  const dejaDonne = recents.reduce((t, d) => t + d.montant, 0);
+  return {
+    max: REGLAGES.donTicketsMax,
+    plafondJour: REGLAGES.donTicketsParJour,
+    dejaDonne,
+    restant: Math.max(0, REGLAGES.donTicketsParJour - dejaDonne),
+    xpParDon: REGLAGES.donTicketsXp,
+    donsRecompensesAujourdhui: recents.length,
+    xpEncoreDisponible: recents.length < REGLAGES.donTicketsXpParJourMax,
+  };
+}
+
+app.get("/api/tickets/dons-statut", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (!user) return;
+  res.json(statutDonsTicketsJour(user.id));
+});
+
+app.post("/api/tickets/donner", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (!user) return;
+
+  const cible = String(req.body.id || "");
+  const montant = Math.floor(Number(req.body.montant) || 0);
+  if (montant <= 0) return res.status(400).json({ error: "MONTANT_INVALIDE" });
+  if (montant > REGLAGES.donTicketsMax)
+    return res.status(400).json({ error: "TROP_ELEVE", max: REGLAGES.donTicketsMax });
+  if (statutRelation(user.id, cible) !== "ami")
+    return res.status(403).json({ error: "PAS_AMI" });
+  if (estBloque(user.id, cible)) return res.status(403).json({ error: "BLOQUE" });
+
+  const { dejaDonne, restant, donsRecompensesAujourdhui } = statutDonsTicketsJour(user.id);
+  if (dejaDonne + montant > REGLAGES.donTicketsParJour)
+    return res.status(400).json({ error: "PLAFOND_JOUR", restant });
+
+  if (!spendCredits(user.id, montant)) return res.status(400).json({ error: "SOLDE_INSUFFISANT" });
+  grantCredits(cible, montant);
+
+  const limite = Date.now() - 24 * 60 * 60 * 1000;
+  const recents = (donsTicketsRecents.get(user.id) || []).filter((d) => d.at > limite);
+  donsTicketsRecents.set(user.id, [...recents, { montant, at: Date.now() }]);
+
+  // Récompense de générosité, plafonnée en nombre de dons par jour (voir le commentaire plus haut).
+  let xpGagnee = 0, niveau = null;
+  if (donsRecompensesAujourdhui < REGLAGES.donTicketsXpParJourMax) {
+    xpGagnee = REGLAGES.donTicketsXp;
+    niveau = ajouterXp(user.id, xpGagnee, reglagesNiveau());
+  }
+
+  const cibleFiche = fichePublique(cible, user.id);
+  enregistrerTransaction(user.id, -montant, "credits", `Don envoyé à ${cibleFiche?.pseudo || "un ami"}`);
+  enregistrerTransaction(cible, montant, "credits", `Don reçu de ${user.pseudo}`);
+
+  notifier(cible, { type: "don_tickets", de: user.pseudo, avatar: user.avatar,
+                    photo: user.photo || null, montant });
+
+  res.json({ ok: true, credits: getCredits(user.id), montant, xpGagnee, niveau,
+             restant: statutDonsTicketsJour(user.id).restant });
 });
 
 /** Espace échange : points gagnés → tickets bonus. */
