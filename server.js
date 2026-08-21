@@ -3994,6 +3994,26 @@ app.post("/api/points/donner", (req, res) => {
   res.json({ ok: true, points: getPoints(user.id), montant, restant: statutDonsJour(user.id).restant });
 });
 
+/**
+ * Don d'une partie classée à un ami (voir donnerPartieClassee) : réservé aux amis, comme le don de
+ * points ci-dessus — jamais à un inconnu ni à quelqu'un qu'on a bloqué (ou qui nous a bloqué).
+ */
+app.post("/api/parties-classees/donner", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (!user) return;
+
+  const cible = String(req.body.id || "");
+  if (statutRelation(user.id, cible) !== "ami")
+    return res.status(403).json({ error: "PAS_AMI" });
+  if (estBloque(user.id, cible)) return res.status(403).json({ error: "BLOQUE" });
+
+  const resultat = donnerPartieClassee(user.id, cible);
+  if (!resultat.ok) return res.status(400).json(resultat);
+
+  notifier(cible, { type: "don_partie", de: user.pseudo, avatar: user.avatar, photo: user.photo || null });
+  res.json({ ok: true, partiesRestantes: partiesRestantes(user.id) });
+});
+
 /** Espace échange : points gagnés → tickets bonus. */
 app.post("/api/exchange", (req, res) => {
   const user = userFromCookie(req.headers.cookie);
@@ -4378,6 +4398,26 @@ const RANKED_BONUS_VICTOIRE_MAX = 3;
 function recompenserVictoireClassee(userId) {
   if ((bonusPartiesClassees[userId] || 0) >= RANKED_BONUS_VICTOIRE_MAX) return;
   accorderPartiesClasseesBonus(userId, 1);
+}
+
+/**
+ * Don d'une partie classée à un ami : le donneur cède une des parties encore disponibles dans son
+ * propre seau. Seule condition, comme demandé : le seau du destinataire doit être totalement vide
+ * (aucune partie classée disponible pour lui, sinon le don est refusé — jamais accepté puis perdu
+ * en silence, ce qui gâcherait la partie donnée de bonne foi par le donneur).
+ *
+ * Le don retire une partie chez le donneur exactement comme s'il venait d'en jouer une (voir
+ * consommerPartieClassee, qui puise d'abord dans sa propre réserve bonus) et en accorde une, en
+ * bonus, chez le destinataire (voir accorderPartiesClasseesBonus) — jamais l'inverse.
+ */
+function donnerPartieClassee(donneurId, destinataireId) {
+  if (donneurId === destinataireId) return { ok: false, error: "SOI_MEME" };
+  if (partiesRestantes(donneurId) <= 0) return { ok: false, error: "AUCUNE_PARTIE" };
+  const dispoDestinataire = partiesRestantes(destinataireId);
+  if (dispoDestinataire > 0) return { ok: false, error: "SEAU_NON_VIDE", disponibles: dispoDestinataire };
+  consommerPartieClassee(donneurId);
+  accorderPartiesClasseesBonus(destinataireId, 1);
+  return { ok: true };
 }
 
 /** Libellés des indices actifs, tels que définis dans l'administration. */
@@ -4803,6 +4843,23 @@ function endRound(room) {
   clearTimeout(room.timer);
   clearTimeout(room.graceTimer);
   room.graceTimer = null;
+
+  // Le seul cas où un cœur est préservé, c'est de donner la bonne réponse (voir answer:submit) :
+  // une mauvaise réponse en coûte un (answer:submit), passer volontairement aussi (round:skip), et
+  // ne pas répondre du tout avant la fin du temps imparti doit se comporter pareil — sans ce
+  // rattrapage, un joueur qui restait simplement silencieux gardait tous ses cœurs indéfiniment,
+  // manche après manche, ce qui n'est pas la règle voulue. Les bots ne sont jamais concernés : leur
+  // propre minuteur (voir planifierReponseBot) répond toujours avant celui-ci.
+  for (const p of room.players.values()) {
+    if (p.bot || p.hasAnswered || p.coeurs === 0) continue;
+    p.hasAnswered = true;
+    p.coeurs = Math.max(0, (p.coeurs ?? p.coeursMax) - 1);
+    const s = [...io.of("/").sockets.values()].find((sk) => sk.data.user?.id === p.userId);
+    if (s) s.emit("coeurs:maj", { coeurs: p.coeurs, elimine: p.coeurs === 0 });
+    io.to(room.code).emit("player:answered", { id: p.id, pseudo: p.pseudo, team: p.team, points: 0,
+      coeurs: p.coeurs, coeursMax: p.coeursMax });
+  }
+
   io.to(room.code).emit("round:end", {
     answer: room.currentMovie.title,
     movieId: room.currentMovie.id,
