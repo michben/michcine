@@ -175,6 +175,12 @@ const REGLAGES_DEFAUT = {
   // qu'elle n'est pas atteinte, les joueurs voient un compte à rebours plutôt que le lien lui-même.
   // Laisser `cible` vide rend le lien actif immédiatement, sans compte à rebours.
   lienExterne: { actif: false, url: "", titre: "", cible: "" },
+  // Passerelle de connexion (« Sign in with MichBen ») : permet à un AUTRE projet de reconnaître
+  // automatiquement un compte MichBen sans jamais partager mots de passe ni base de données — voir
+  // GET /api/passerelle/autoriser et POST /api/passerelle/echanger plus bas. `domaines` liste les
+  // adresses de retour autorisées (une par ligne) pour empêcher qu'un lien piégé ne détourne un
+  // code de connexion vers un site tiers.
+  passerelle: { actif: false, cleSecrete: "", domaines: "" },
 };
 
 let REGLAGES = structuredClone(REGLAGES_DEFAUT);
@@ -828,6 +834,87 @@ app.put("/api/admin/lien-externe", requireAdmin, (req, res) => {
   if (typeof l.actif === "boolean") REGLAGES.lienExterne.actif = l.actif;
   sauver("reglages", REGLAGES);
   res.json({ ok: true, lienExterne: REGLAGES.lienExterne });
+});
+
+/**
+ * Passerelle de connexion (« Sign in with MichBen ») : permet à un AUTRE jeu, développé
+ * séparément, de reconnaître automatiquement le compte MichBen d'un joueur qui clique sur le
+ * bouton 🔗 — sans jamais partager de mot de passe ni de base de données entre les deux projets.
+ * Voir le document remis à part pour la marche à suivre côté second projet.
+ */
+app.get("/api/admin/passerelle", requireAdmin, (_req, res) => res.json(REGLAGES.passerelle));
+
+app.get("/api/admin/passerelle/generer-cle", requireAdmin, (_req, res) => {
+  res.json({ cle: crypto.randomBytes(24).toString("hex") });
+});
+
+app.put("/api/admin/passerelle", requireAdmin, (req, res) => {
+  const p = req.body || {};
+  if (!REGLAGES.passerelle) REGLAGES.passerelle = structuredClone(REGLAGES_DEFAUT.passerelle);
+  if (typeof p.cleSecrete === "string") REGLAGES.passerelle.cleSecrete = p.cleSecrete.trim().slice(0, 200);
+  if (typeof p.domaines === "string") {
+    const lignes = p.domaines.split(/[\n,]/).map((d) => d.trim()).filter(Boolean);
+    if (lignes.some((d) => !/^https?:\/\//i.test(d)))
+      return res.status(400).json({ error: "DOMAINE_INVALIDE" });
+    REGLAGES.passerelle.domaines = lignes.join("\n").slice(0, 1000);
+  }
+  if (typeof p.actif === "boolean") REGLAGES.passerelle.actif = p.actif;
+  sauver("reglages", REGLAGES);
+  res.json({ ok: true, passerelle: REGLAGES.passerelle });
+});
+
+// code à usage unique -> { userId, expiresAt } — voir GET /api/passerelle/autoriser.
+const passerelleCodes = new Map();
+const PASSERELLE_CODE_DUREE_MS = 60 * 1000; // large marge : l'échange se fait serveur à serveur, tout de suite après la redirection
+setInterval(() => {
+  const maintenant = Date.now();
+  for (const [code, entree] of passerelleCodes) if (entree.expiresAt < maintenant) passerelleCodes.delete(code);
+}, 5 * 60 * 1000);
+
+/** Un joueur clique sur le bouton 🔗 : s'il est bien connecté ici, on l'envoie vers l'autre jeu
+ *  avec un code à usage unique dans l'URL, que ce jeu pourra échanger contre son profil (voir plus
+ *  bas). Rien n'est jamais transmis en clair : le code seul ne révèle rien sans la clé secrète. */
+app.get("/api/passerelle/autoriser", (req, res) => {
+  const retour = String(req.query.retour || "");
+  if (!REGLAGES.passerelle?.actif || !REGLAGES.passerelle.cleSecrete)
+    return res.redirect("/?erreur=passerelle_indisponible");
+
+  const domainesAutorises = (REGLAGES.passerelle.domaines || "").split("\n").map((d) => d.trim()).filter(Boolean);
+  if (!domainesAutorises.some((d) => retour.startsWith(d)))
+    return res.redirect("/?erreur=passerelle_domaine");
+
+  const user = userFromCookie(req.headers.cookie);
+  if (!user) return res.redirect("/?erreur=passerelle_non_connecte");
+
+  const code = crypto.randomBytes(24).toString("hex");
+  passerelleCodes.set(code, { userId: user.id, expiresAt: Date.now() + PASSERELLE_CODE_DUREE_MS });
+  const sep = retour.includes("?") ? "&" : "?";
+  res.redirect(`${retour}${sep}mb_code=${code}`);
+});
+
+/** Appel serveur-à-serveur depuis l'AUTRE jeu (jamais depuis un navigateur) : échange un code
+ *  contre le profil MichBen minimal du joueur concerné. Authentifié par la clé secrète partagée
+ *  (configurée dans les deux projets, jamais par cookie) — voir x-passerelle-cle ci-dessous. */
+app.post("/api/passerelle/echanger", (req, res) => {
+  const cleAttendue = REGLAGES.passerelle?.cleSecrete || "";
+  const cleRecue = String(req.get("x-passerelle-cle") || "");
+  if (!cleAttendue || cleRecue.length !== cleAttendue.length ||
+      !crypto.timingSafeEqual(Buffer.from(cleRecue), Buffer.from(cleAttendue)))
+    return res.status(401).json({ error: "CLE_INVALIDE" });
+
+  const code = String(req.body?.code || "");
+  const entree = passerelleCodes.get(code);
+  passerelleCodes.delete(code); // usage unique, qu'il soit valide ou non
+  if (!entree || entree.expiresAt < Date.now()) return res.status(400).json({ error: "CODE_INVALIDE" });
+
+  const user = listUsers().find((u) => u.id === entree.userId);
+  if (!user) return res.status(404).json({ error: "INTROUVABLE" });
+
+  res.json({
+    ok: true,
+    id: user.id, pseudo: user.pseudo, avatar: user.avatar, photo: user.photo || null,
+    niveau: user.niveau || 0, xp: user.xp || 0, role: user.role || "joueur",
+  });
 });
 
 /** Indique si le mot de passe par défaut est encore en usage. */
@@ -3815,7 +3902,12 @@ app.get("/api/config", (_req, res) => res.json({
   // Bouton teaser à côté du "?" (voir #btnLienExterne) : n'est envoyé au client que si l'admin l'a
   // activé et a bien renseigné un lien — sinon le bouton reste simplement masqué.
   lienExterne: (REGLAGES.lienExterne?.actif && REGLAGES.lienExterne.url)
-    ? { url: REGLAGES.lienExterne.url, titre: REGLAGES.lienExterne.titre || "", cible: REGLAGES.lienExterne.cible || null }
+    ? {
+        url: REGLAGES.lienExterne.url, titre: REGLAGES.lienExterne.titre || "", cible: REGLAGES.lienExterne.cible || null,
+        // Si la passerelle de connexion est configurée, le clic passe par elle (voir
+        // /api/passerelle/autoriser) pour arriver déjà connecté sur l'autre jeu.
+        passerelle: Boolean(REGLAGES.passerelle?.actif && REGLAGES.passerelle.cleSecrete),
+      }
     : null,
 }));
 
@@ -5936,6 +6028,8 @@ if (!REGLAGES.audio.turnUrl && TURN_URL) {
 }
 if (!REGLAGES.lienExterne || typeof REGLAGES.lienExterne !== "object")
   REGLAGES.lienExterne = structuredClone(REGLAGES_DEFAUT.lienExterne);
+if (!REGLAGES.passerelle || typeof REGLAGES.passerelle !== "object")
+  REGLAGES.passerelle = structuredClone(REGLAGES_DEFAUT.passerelle);
 if (!empreinteAdmin)
   console.warn("⚠️  Mot de passe d'administration par défaut : changez-le depuis /admin.html");
 await chargerUtilisateurs();
