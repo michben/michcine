@@ -475,6 +475,20 @@
   .bulle.moi{align-self:flex-end;background:var(--beam);color:#161207;border-bottom-right-radius:4px}
   .bulle.lui{align-self:flex-start;background:var(--card);border-bottom-left-radius:4px}
   .bulle small{display:block;font-size:11px;opacity:.6;margin-top:3px}
+  /* Tutoriel d'accueil (3 écrans, joueurs qui n'ont encore jamais joué de partie — voir
+     ouvrirTutorielAccueil()) : même gabarit de fenêtre centrée que #popJoueur, en plus haut niveau
+     (z-index) puisqu'il peut s'ouvrir par-dessus le menu dès le premier chargement. */
+  #tutorielAccueil{position:fixed;inset:0;background:rgba(10,12,22,.8);display:grid;place-items:center;z-index:90;padding:18px}
+  #tutorielAccueil .boite{background:var(--velvet);border:1px solid rgba(237,232,220,.14);border-radius:14px;
+    padding:26px 24px;max-width:360px;width:100%;text-align:center;max-height:calc(100vh - 36px);
+    overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .tutorielIcone{font-size:44px;line-height:1;margin-bottom:14px}
+  .tutorielEcran h3{font-family:'Anton',sans-serif;text-transform:uppercase;letter-spacing:.03em;
+    font-size:19px;margin:0 0 10px;font-weight:400;color:var(--chalk)}
+  .tutorielEcran p{color:var(--muted);font-size:14px;line-height:1.55;margin:0}
+  .tutorielPoints{display:flex;justify-content:center;gap:7px;margin-top:20px}
+  .tutorielPoints span{width:7px;height:7px;border-radius:50%;background:rgba(237,232,220,.25)}
+  .tutorielPoints span.actif{background:var(--beam)}
   #popJoueur{position:fixed;inset:0;background:rgba(10,12,22,.72);display:grid;place-items:center;z-index:70;padding:18px}
   #popJoueur .boite{background:var(--velvet);border:1px solid rgba(237,232,220,.14);border-radius:14px;
     padding:22px;max-width:340px;width:100%;text-align:center;position:relative;
@@ -1613,6 +1627,40 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
 
   <p id="erreurJS" class="hidden"></p>
 
+  <!-- TUTORIEL D'ACCUEIL : 3 écrans max, montrés une seule fois à qui n'a encore jamais joué de
+       partie (voir ouvrirTutorielAccueil()), pour expliquer la mécanique de base sans dérouler tout
+       de suite le tableau de bord complet (quêtes, roue, classement...). -->
+  <div id="tutorielAccueil" class="hidden">
+    <div class="boite">
+      <div id="tutorielEcrans">
+        <div class="tutorielEcran" data-ecran="0">
+          <div class="tutorielIcone">📝</div>
+          <h3>Un synopsis, un film à deviner</h3>
+          <p>Chaque question vous montre le résumé d'un film, sans jamais dire son titre. À vous de
+            deviner de quel film il s'agit, parmi les propositions affichées en dessous.</p>
+        </div>
+        <div class="tutorielEcran hidden" data-ecran="1">
+          <div class="tutorielIcone">💡</div>
+          <h3>Des indices si vous séchez</h3>
+          <p>Bloqué ? Des indices sont disponibles contre quelques crédits (année, affiche, acteur…).
+            Ils vous aident, mais réduisent les points gagnés à la fin — mieux vaut essayer d'abord
+            sans !</p>
+        </div>
+        <div class="tutorielEcran hidden" data-ecran="2">
+          <div class="tutorielIcone">⚡</div>
+          <h3>Répondez vite et juste</h3>
+          <p>Plus vous répondez vite, plus vous marquez de points. Une fois à l'aise, revenez
+            découvrir les Quêtes, la Roue du jour et le Classement — ils vous attendront.</p>
+        </div>
+      </div>
+      <div class="tutorielPoints" id="tutorielPoints"></div>
+      <div class="row" style="margin-top:18px">
+        <button class="ghost" id="tutorielPasser">Passer</button>
+        <button id="tutorielSuivant">Suivant</button>
+      </div>
+    </div>
+  </div>
+
   <div id="popMessages" class="hidden">
     <div class="boiteMsg">
       <div class="enteteMsg">
@@ -1663,7 +1711,8 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
 
   <footer>
     <p>MichBen Ciné Quizz est entièrement gratuit et le restera.<br>Si le jeu vous amuse, vous pouvez m'offrir un café.</p>
-    <p style="margin-bottom:14px"><a href="/regles.html" style="color:var(--muted);font-size:13px">Règles du jeu et code de bonne conduite</a></p>
+    <p style="margin-bottom:14px"><a href="/regles.html" style="color:var(--muted);font-size:13px">Règles du jeu et code de bonne conduite</a> ·
+      <a href="/confidentialite.html" style="color:var(--muted);font-size:13px">Confidentialité</a></p>
     <a class="tip" id="tipLink" href="#" target="_blank" rel="noopener">☕ Offrir un café</a>
   </footer>
 </div>
@@ -2715,6 +2764,7 @@ async function loadSession(){
     $("btnModeration").classList.toggle("hidden", !["moderateur","admin"].includes(me.role));
     appliquerRole();
     show("menu");
+    tenterOuvrirTutorielAccueil();
   } catch (e) {
     $("diag").textContent = `Contact du serveur impossible : ${e.message}`;
     show("landing");
@@ -2739,6 +2789,46 @@ function firstVisit(){
   $("compteInfo").textContent = "";
   $("btnSaveProfile").textContent = "Commencer à jouer";
   show("profile");
+}
+
+/* ---------- Tutoriel d'accueil (3 écrans max, voir tenterOuvrirTutorielAccueil()) ---------- */
+const TUTORIEL_VU_CLE = "michben_tutoriel_vu";
+const TUTORIEL_NB_ECRANS = 3;
+let tutorielEcranActuel = 0;
+
+function afficherEcranTutoriel(i){
+  document.querySelectorAll(".tutorielEcran").forEach(el =>
+    el.classList.toggle("hidden", Number(el.dataset.ecran) !== i));
+  $("tutorielPoints").innerHTML = Array.from({length: TUTORIEL_NB_ECRANS}, (_, j) =>
+    `<span class="${j === i ? "actif" : ""}"></span>`).join("");
+  $("tutorielSuivant").textContent = i === TUTORIEL_NB_ECRANS - 1 ? "C'est parti !" : "Suivant";
+}
+function ouvrirTutorielAccueil(){
+  tutorielEcranActuel = 0;
+  afficherEcranTutoriel(0);
+  $("tutorielAccueil").classList.remove("hidden");
+}
+function fermerTutorielAccueil(){
+  $("tutorielAccueil").classList.add("hidden");
+  try { localStorage.setItem(TUTORIEL_VU_CLE, "1"); } catch {}
+}
+$("tutorielSuivant").onclick = () => {
+  if (tutorielEcranActuel < TUTORIEL_NB_ECRANS - 1){
+    tutorielEcranActuel++;
+    afficherEcranTutoriel(tutorielEcranActuel);
+  } else {
+    fermerTutorielAccueil();
+  }
+};
+$("tutorielPasser").onclick = fermerTutorielAccueil;
+
+/** Montré une seule fois, à qui n'a encore jamais terminé de partie (gamesPlayed === 0) et ne l'a
+ *  pas déjà fermé sur cet appareil. Dès qu'une partie est jouée, la condition serveur suffit à ne
+ *  plus jamais le montrer, même sur un autre appareil — pas besoin d'un champ dédié côté serveur. */
+function tenterOuvrirTutorielAccueil(){
+  if (!me || (me.gamesPlayed || 0) > 0) return;
+  try { if (localStorage.getItem(TUTORIEL_VU_CLE) === "1") return; } catch {}
+  ouvrirTutorielAccueil();
 }
 
 /* ---------- Captcha (actif seulement si une clé est configurée) ---------- */
@@ -2788,6 +2878,7 @@ $("btnValider").onclick = async () => {
   if (!me.pseudoChosen) return firstVisit();
   $("hello").textContent = `Bonjour ${me.pseudo}`;
   show("menu");
+  tenterOuvrirTutorielAccueil();
 };
 
 $("btnRenvoyer").onclick = async () => {
@@ -2837,6 +2928,7 @@ async function authMail(chemin){
   majBadgeAmis();
   appliquerRole();
   show("menu");
+  tenterOuvrirTutorielAccueil();
 }
 $("btnMailConnexion").onclick = () => authMail("connexion");
 $("btnMailInscription").onclick = () => authMail("inscription");
@@ -2865,6 +2957,7 @@ async function authEnfant(){
   majBadgeAmis();
   appliquerRole();
   show("menu");
+  tenterOuvrirTutorielAccueil();
 }
 $("btnCcConnexion").onclick = authEnfant;
 $("ccMdp").addEventListener("keydown", e => { if (e.key === "Enter") authEnfant(); });
@@ -5730,9 +5823,11 @@ $("btnSaveProfile").onclick = async () => {
   if (premiere){
     socket.disconnect().connect();   // la session portait l'ancien profil sans pseudo
     show("menu");
-    // Petit manuel d'utilisation pour un tout nouveau joueur : affiché une seule fois,
-    // juste après le choix du pseudo, avant qu'il ne se lance dans sa première partie.
-    setTimeout(() => $("rulesModal").classList.add("active"), 400);
+    // Tutoriel d'accueil (3 écrans) pour un tout nouveau joueur : affiché une seule fois, juste
+    // après le choix du pseudo, avant qu'il ne se lance dans sa première partie. Le manuel complet
+    // (rulesModal) reste disponible à tout moment via le bouton flottant "?", sans être imposé dès
+    // la première seconde en plus de ce tutoriel.
+    setTimeout(() => tenterOuvrirTutorielAccueil(), 400);
     return;
   }
   $("profileMsg").textContent = "Profil enregistré.";
