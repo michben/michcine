@@ -542,16 +542,17 @@
           suffit la plupart du temps, mais certains réseaux très restrictifs (wifi d'entreprise
           filtré, certaines box) empêchent malgré tout la connexion directe entre deux navigateurs
           — la personne concernée n'entend alors personne, même si les autres s'entendent bien
-          entre eux. Un serveur TURN relaie l'audio dans ce cas précis. Ce n'est pas gratuit, mais
-          certains fournisseurs (metered.ca, Twilio, Cloudflare Calls…) offrent un palier gratuit
-          suffisant pour un petit groupe d'amis.
+          entre eux. Un serveur TURN relaie l'audio dans ce cas précis. Le fournisseur recommandé
+          (gratuit, sans carte bancaire, 500 Mo/mois) est <b>metered.ca</b> — voir le message
+          détaillé fourni avec cette mise à jour pour la marche à suivre pas à pas.
         </p>
         <label style="display:flex;align-items:center;gap:8px;margin:0 0 12px;cursor:pointer">
           <input type="checkbox" id="audioTurnActif" style="width:auto;cursor:pointer">
           Activer le serveur TURN ci-dessous
         </label>
-        <label>Adresse du serveur (ex. turn:relay.exemple.com:3478)</label>
-        <input id="audioTurnUrl" placeholder="turn:...">
+        <label>Adresse(s) du serveur — une par ligne (ex. turn:global.relay.metered.ca:80 puis turn:global.relay.metered.ca:443?transport=tcp)</label>
+        <textarea id="audioTurnUrl" rows="3" style="width:100%" placeholder="turn:global.relay.metered.ca:80&#10;turn:global.relay.metered.ca:443?transport=tcp"></textarea>
+        <p style="color:var(--muted);font-size:12px;margin:4px 0 0">Mettre plusieurs adresses (une par ligne) augmente les chances que ça passe, notamment une en port 443/tcp pour les réseaux les plus filtrés.</p>
         <label style="margin-top:10px">Identifiant</label>
         <input id="audioTurnUsername" placeholder="Identifiant fourni par le service TURN">
         <label style="margin-top:10px">Mot de passe / clé</label>
