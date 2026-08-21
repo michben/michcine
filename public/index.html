@@ -418,6 +418,11 @@
   .emojis button{background:var(--card);border:1px solid rgba(237,232,220,.12);font-size:22px;
     padding:8px 11px;line-height:1;min-height:0}
   .emojis button:hover{border-color:var(--beam)}
+  /* Options du bas du salon vocal : une seule barre compacte (micro, intervenir, réactions,
+     quitter) plutôt que plusieurs cartes empilées — voir #vocalBarreBas. */
+  .vocalBarreBas .vocalBarreRangee{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+  .vocalBarreBas .vocalBarreRangee button{flex:1 1 calc(50% - 8px);min-width:130px;font-size:14px;padding:12px 10px}
+  #btnVocalReactionsToggle[aria-pressed="true"]{background:var(--card);border-color:var(--beam);color:var(--beam)}
   .flyEmoji{position:fixed;z-index:55;pointer-events:none;font-size:34px;
     animation:monte 2.2s ease-out forwards}
   .flyEmoji small{display:block;font-size:11px;color:var(--muted);text-align:center;
@@ -1311,15 +1316,6 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
         <div id="vocalListeAuditeurs" class="vocalGrille"></div>
       </div>
 
-      <div class="card" id="vocalControles">
-        <div class="row">
-          <button id="btnVocalMute" class="hidden">🎙️ Activer mon micro</button>
-          <button id="btnVocalDemander" class="ghost hidden">✋ Demander à intervenir</button>
-        </div>
-        <p class="note" id="vocalDemandeEnvoyee" style="margin:8px 0 0" hidden>Votre demande a été envoyée à l'hôte.</p>
-        <p class="feedback" id="vocalMicMsg" style="margin:8px 0 0"></p>
-      </div>
-
       <div class="card hidden" id="vocalConsole">
         <p class="tag" style="margin:0 0 10px">🎛️ Console de modération</p>
         <label style="display:flex;align-items:center;gap:8px;margin:0 0 8px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:14px">
@@ -1334,9 +1330,20 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
         <div id="vocalConsoleParticipants"></div>
       </div>
 
-      <div class="card">
-        <p class="tag" style="margin:0 0 10px">👋 Réactions</p>
-        <div id="vocalEmojiBar" class="emojis"></div>
+      <!-- Options du bas, regroupées dans une seule barre compacte plutôt que plusieurs cartes
+           empilées : micro / demande d'intervention / réactions (repliées, voir #vocalEmojiBar) /
+           quitter, toujours dans le flux normal de la page (jamais en position fixe, voir la note
+           sur .radioBar plus haut) pour ne jamais chevaucher le clavier mobile ou le chat. -->
+      <div class="card vocalBarreBas" id="vocalBarreBas">
+        <div class="vocalBarreRangee">
+          <button id="btnVocalMute" class="hidden">🎙️ Activer mon micro</button>
+          <button id="btnVocalDemander" class="ghost hidden">✋ Demander à intervenir</button>
+          <button id="btnVocalReactionsToggle" class="ghost" type="button" aria-pressed="false">👋 Réactions</button>
+          <button id="btnVocalQuitter" class="ghost danger">🚪 Quitter</button>
+        </div>
+        <p class="note" id="vocalDemandeEnvoyee" style="margin:10px 0 0;text-align:center" hidden>Votre demande a été envoyée à l'hôte.</p>
+        <p class="feedback" id="vocalMicMsg" style="margin:8px 0 0;text-align:center"></p>
+        <div id="vocalEmojiBar" class="emojis hidden" style="margin-top:14px"></div>
       </div>
 
       <div class="card">
@@ -1347,8 +1354,6 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
           <button id="btnVocalChatEnvoyer" style="flex:0 0 auto">➤</button>
         </div>
       </div>
-
-      <div class="row"><button class="ghost" id="btnVocalQuitter">Quitter le salon</button></div>
     </div>
   </section>
 
@@ -3275,6 +3280,27 @@ async function offrirPoints(id, pseudo){
     <small>à ${esc(pseudo)} · il vous reste ${data.restant} points à offrir aujourd'hui</small></span>`);
 }
 
+/* ---------- Don de partie classée ---------- */
+async function offrirPartieClassee(id, pseudo){
+  if (!confirm(`Offrir une de vos parties classées disponibles à ${pseudo} ?\n\nLe don n'est possible que si son seau est actuellement complètement vide.`)) return;
+
+  const res = await fetch("/api/parties-classees/donner", {method:"POST",
+    headers:{"Content-Type":"application/json"}, body: JSON.stringify({id})});
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok){
+    const messages = {
+      AUCUNE_PARTIE: "Votre propre seau est vide : vous n'avez aucune partie classée disponible à offrir pour l'instant.",
+      SEAU_NON_VIDE: `Le seau de ${pseudo} n'est pas vide (il lui reste encore ${data.disponibles || 0} partie${(data.disponibles||0)>1?"s":""} classée${(data.disponibles||0)>1?"s":""} disponible${(data.disponibles||0)>1?"s":""}) — le don n'est possible que lorsque son seau est complètement vide.`,
+      PAS_AMI: "Vous ne pouvez offrir une partie classée qu'à vos amis.",
+      BLOQUE: "Don impossible avec ce joueur.",
+      SOI_MEME: "Impossible de vous offrir une partie à vous-même.",
+    };
+    return alert(messages[data.error] || "Don impossible.");
+  }
+  bandeauNotif(`<span style="font-size:24px">🍿</span><span><b>Partie classée offerte</b>
+    <small>à ${esc(pseudo)} · il vous reste ${data.partiesRestantes} partie${data.partiesRestantes>1?"s":""} classée${data.partiesRestantes>1?"s":""} aujourd'hui</small></span>`);
+}
+
 /* ---------- Lecture à voix haute ---------- */
 
 /**
@@ -4228,6 +4254,7 @@ const ACTIONS_AMI = {
   envoyee:  [["retirer", "Annuler la demande"], ["bloquer", "Bloquer"]],
   recue:    [["accepter", "Accepter la demande"], ["retirer", "Refuser"], ["bloquer", "Bloquer"]],
   ami:      [["message", "✉ Envoyer un message"], ["donner", "🎁 Offrir des points"],
+             ["don-partie", "🍿 Offrir une partie classée"],
              ["retirer", "Retirer des amis"], ["bloquer", "Bloquer"]],
   bloque:   [["debloquer", "Débloquer"]],
 };
@@ -4324,6 +4351,10 @@ async function ouvrirJoueur(id, pseudo, avatar, photoJoueur){
       $("popJoueur").classList.add("hidden");
       return offrirPoints(id, f.pseudo);
     }
+    if (b.dataset.act === "don-partie"){
+      $("popJoueur").classList.add("hidden");
+      return offrirPartieClassee(id, f.pseudo);
+    }
     if (b.dataset.act === "bloquer" && !confirm(`Bloquer ${pseudo} ?`)) return;
     await agirAmi(b.dataset.act, id);
     $("popJoueur").classList.add("hidden");
@@ -4390,6 +4421,10 @@ function brancher(){
         const nomEl = b.closest(".amiLigne").querySelector(".nom");
         return offrirPoints(b.dataset.id, nomEl.dataset.pseudo);
     }
+    if (b.dataset.act === "don-partie") {
+        const nomEl = b.closest(".amiLigne").querySelector(".nom");
+        return offrirPartieClassee(b.dataset.id, nomEl.dataset.pseudo);
+    }
     if (b.dataset.act === "bloquer" && !confirm("Bloquer ce joueur ?")) return;
     if (b.dataset.act === "retirer" && !confirm("Retirer cet ami ?")) return;
     await agirAmi(b.dataset.act, b.dataset.id);
@@ -4417,8 +4452,8 @@ async function chargerAmis(){
     r.amis = triAmisParActivite(r.amis);
     $("listeAmis").innerHTML = r.amis.map(j => ligneJoueur(j,
       enSalon && j.online
-        ? [["bloquer","🚫"], ["retirer","❌"], ["donner","🎁"], ["message","✉️"], ["inviter","🎮 Inviter"]]
-        : [["bloquer","🚫"], ["retirer","❌"], ["donner","🎁"], ["message","✉️"]])).join("");
+        ? [["bloquer","🚫"], ["retirer","❌"], ["donner","🎁"], ["don-partie","🍿"], ["message","✉️"], ["inviter","🎮 Inviter"]]
+        : [["bloquer","🚫"], ["retirer","❌"], ["donner","🎁"], ["don-partie","🍿"], ["message","✉️"]])).join("");
     $("amisVide").textContent = r.amis.length ? "" :
       "Aucun ami pour l'instant. Cherchez un pseudo dans l'onglet Rechercher.";
   } else if (ongletAmis === "demandes"){
@@ -4697,6 +4732,11 @@ socket.on("notif", (notif) => {
   if (type === "don")
     bandeauNotif(`${image}<span><b>${esc(de)}</b> vous offre ${notif.montant} points
       <small>Ajoutés à votre cagnotte</small></span>`, () => $("btnExchange").click());
+
+  if (type === "don_partie")
+    bandeauNotif(`${image}<span><b>${esc(de)}</b> vous offre une partie classée
+      <small>Ajoutée à votre seau — touchez pour voir votre classement</small></span>`,
+      () => $("btnBoard").click());
 
   if (type === "acceptee")
     bandeauNotif(`${image}<span><b>${esc(de)}</b> a accepté votre demande
@@ -5401,6 +5441,13 @@ $("vocalEmojiBar").querySelectorAll("[data-emoji]").forEach(btn => {
   };
 });
 socket.on("vocal:reaction", ({ emoji, pseudo }) => afficherReactionVolante(emoji, pseudo));
+
+/** Réactions repliées par défaut dans la barre du bas : un coup d'œil sur les icônes suffit,
+ *  pas besoin de les garder affichées en permanence — voir la refonte de #vocalBarreBas. */
+$("btnVocalReactionsToggle").onclick = () => {
+  const masque = $("vocalEmojiBar").classList.toggle("hidden");
+  $("btnVocalReactionsToggle").setAttribute("aria-pressed", String(!masque));
+};
 
 function renderConsoleVocal(salon, monRole){
   $("vocalReglagePrive").checked = Boolean(salon.prive);
