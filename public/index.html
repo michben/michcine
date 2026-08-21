@@ -478,6 +478,16 @@
   /* Tutoriel d'accueil (3 écrans, joueurs qui n'ont encore jamais joué de partie — voir
      ouvrirTutorielAccueil()) : même gabarit de fenêtre centrée que #popJoueur, en plus haut niveau
      (z-index) puisqu'il peut s'ouvrir par-dessus le menu dès le premier chargement. */
+  /* Bandeau de consentement cookies/vie privée (voir #popCookies) : plus haut niveau que le
+     tutoriel puisqu'il doit passer avant lui pour un tout nouveau compte. */
+  #popCookies{position:fixed;inset:0;background:rgba(10,12,22,.82);display:grid;place-items:center;z-index:98;padding:18px}
+  #popCookies .boite{background:var(--velvet);border:1px solid rgba(237,232,220,.14);border-radius:14px;
+    padding:22px;max-width:380px;width:100%;text-align:center}
+  #popCookies h3{font-family:'Anton',sans-serif;text-transform:uppercase;letter-spacing:.03em;
+    font-size:18px;margin:6px 0 10px;font-weight:400;color:var(--chalk)}
+  #popCookies p{color:var(--muted);font-size:13.5px;line-height:1.55;margin:0 0 6px}
+  #popCookies a{color:var(--beam)}
+  #popCookies .row{margin-top:16px}
   #tutorielAccueil{position:fixed;inset:0;background:rgba(10,12,22,.8);display:grid;place-items:center;z-index:90;padding:18px}
   #tutorielAccueil .boite{background:var(--velvet);border:1px solid rgba(237,232,220,.14);border-radius:14px;
     padding:26px 24px;max-width:360px;width:100%;text-align:center;max-height:calc(100vh - 36px);
@@ -609,6 +619,21 @@
    les deux ne se croisent donc jamais. */
 .help-btn { position: fixed; top: 38px; right: 14px; width: 40px; height: 40px; background: rgba(28, 34, 56, 0.6); color: var(--muted); border: 1px solid rgba(237, 232, 220, 0.15); border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 20px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2); transition: all 0.3s ease; z-index: 1000; backdrop-filter: blur(4px); }
 .help-btn:hover { transform: scale(1.1); color: var(--chalk); border-color: var(--beam); background: rgba(28, 34, 56, 0.9); }
+/* Bouton teaser "lien externe" (voir initLienExterne()) : même gabarit que le bouton d'aide,
+   placé juste à sa gauche — masqué tant que l'administration n'a rien configuré/activé. */
+#btnLienExterne{right:64px}
+@media(max-width:480px){ #btnLienExterne{top:34px;right:60px} }
+#popLienExterne{position:fixed;inset:0;background:rgba(10,12,22,.72);display:grid;place-items:center;z-index:95;padding:18px}
+#popLienExterne .boite{background:var(--velvet);border:1px solid rgba(237,232,220,.14);border-radius:14px;
+  padding:24px;max-width:340px;width:100%;text-align:center;position:relative}
+#popLienExterne .close-btn{position:absolute;top:6px;right:10px;font-size:26px;cursor:pointer;color:var(--muted)}
+#popLienExterne .close-btn:hover{color:var(--chalk)}
+#popLienExterne h3{font-family:'Anton',sans-serif;text-transform:uppercase;letter-spacing:.03em;
+  font-size:19px;margin:8px 0 12px;font-weight:400;color:var(--chalk)}
+#popLienExterne .lienExterneCompte{font-family:'JetBrains Mono',monospace;font-size:26px;color:var(--beam);margin:0 0 6px}
+#popLienExterne .noteAttente{color:var(--muted);font-size:13px;margin:0}
+#popLienExterne a.lienActif{display:inline-block;margin-top:6px;background:var(--beam);color:#0A0C16;
+  font-weight:bold;padding:11px 20px;border-radius:999px;text-decoration:none}
 
 /* --- COIN "REGARDÉ PAR" : qui suit la partie en direct --- */
 #spectateursCorner{position:fixed;top:14px;right:14px;z-index:45;max-width:180px;
@@ -1626,6 +1651,38 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
   
 
   <p id="erreurJS" class="hidden"></p>
+
+  <!-- Bouton teaser configurable depuis la console admin (onglet Réglages) — masqué tant que
+       rien n'est configuré/activé. Voir initLienExterne() et ouvrirLienExterne(). Placé ici (plutôt
+       qu'à côté de #helpBtn plus bas dans le document) pour que le script qui lui attache ses
+       gestionnaires de clic, exécuté plus haut dans la page, le trouve déjà présent dans le DOM. -->
+  <div class="help-btn hidden" id="btnLienExterne" title="À venir">🔗</div>
+  <div id="popLienExterne" class="hidden">
+    <div class="boite">
+      <span class="close-btn" id="lienExterneFermer">&times;</span>
+      <div style="font-size:38px">🔗</div>
+      <h3 id="lienExterneTitre">À venir</h3>
+      <div id="lienExterneContenu"></div>
+    </div>
+  </div>
+
+  <!-- BANDEAU COOKIES / VIE PRIVÉE : montré une seule fois à chaque compte (nouveau ou déjà
+       existant), tant qu'il n'a jamais répondu (voir apresArriveeMenu(), user.cookiesReponse
+       côté serveur). Ne redemande plus jamais une fois une réponse enregistrée, quelle qu'elle soit. -->
+  <div id="popCookies" class="hidden">
+    <div class="boite">
+      <div style="font-size:34px">🍪</div>
+      <h3>Cookies et vie privée</h3>
+      <p>Un cookie technique est indispensable pour vous garder connecté(e) d'une visite à l'autre —
+        sans lui, impossible de retrouver votre compte. Aucun cookie publicitaire ni traceur tiers
+        n'est utilisé sur ce site.</p>
+      <p><a href="/confidentialite.html" target="_blank" rel="noopener">En savoir plus</a></p>
+      <div class="row">
+        <button class="ghost" id="btnCookiesRefuser">Refuser</button>
+        <button id="btnCookiesAccepter">Accepter</button>
+      </div>
+    </div>
+  </div>
 
   <!-- TUTORIEL D'ACCUEIL : 3 écrans max, montrés une seule fois à qui n'a encore jamais joué de
        partie (voir ouvrirTutorielAccueil()), pour expliquer la mécanique de base sans dérouler tout
@@ -2734,8 +2791,65 @@ fetch("/api/config").then(r => r.json())
     // Serveur TURN optionnel (voir server.js) : s'ajoute aux serveurs STUN pour les salons vocaux,
     // utile quand la connexion directe échoue sur un réseau très restrictif.
     if (c.turn && c.turn.urls) VOCAL_ICE_SERVERS.push(c.turn);
+    initLienExterne(c.lienExterne);
   })
   .catch(() => $("tipLink").classList.add("hidden"));
+
+/* ---------- Bouton teaser "lien externe" (voir REGLAGES.lienExterne côté serveur) ----------
+ * Configuré depuis la console admin (onglet Réglages) : un lien à annoncer aux joueurs, avec un
+ * compte à rebours optionnel avant qu'il ne devienne cliquable. Pensé au départ pour un futur
+ * second jeu développé séparément, sans rien présumer de plus pour l'instant. */
+let lienExterneInfo = null;
+let lienExterneMinuteur = null;
+
+function initLienExterne(info){
+  lienExterneInfo = info || null;
+  $("btnLienExterne").classList.toggle("hidden", !lienExterneInfo);
+}
+
+function formatCompteARebours(ms){
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const jours = Math.floor(s / 86400);
+  const heures = Math.floor((s % 86400) / 3600);
+  const minutes = Math.floor((s % 3600) / 60);
+  const secondes = s % 60;
+  const deux = (n) => String(n).padStart(2, "0");
+  return jours > 0
+    ? `${jours} j ${deux(heures)}:${deux(minutes)}:${deux(secondes)}`
+    : `${deux(heures)}:${deux(minutes)}:${deux(secondes)}`;
+}
+
+function rafraichirLienExterne(){
+  if (!lienExterneInfo) return;
+  const cible = lienExterneInfo.cible ? new Date(lienExterneInfo.cible).getTime() : null;
+  const contenu = $("lienExterneContenu");
+  const restant = cible ? cible - Date.now() : 0;
+  if (!cible || restant <= 0){
+    clearInterval(lienExterneMinuteur);
+    lienExterneMinuteur = null;
+    contenu.innerHTML = `<a class="lienActif" href="${esc(lienExterneInfo.url)}" target="_blank" rel="noopener">Ouvrir le lien ↗</a>`;
+  } else {
+    contenu.innerHTML = `<p class="lienExterneCompte">${formatCompteARebours(restant)}</p>
+      <p class="noteAttente">Le lien s'ouvrira automatiquement dès la fin du compte à rebours.</p>`;
+  }
+}
+
+function ouvrirLienExterne(){
+  if (!lienExterneInfo) return;
+  $("lienExterneTitre").textContent = lienExterneInfo.titre || "À venir";
+  rafraichirLienExterne();
+  clearInterval(lienExterneMinuteur);
+  lienExterneMinuteur = setInterval(rafraichirLienExterne, 1000);
+  $("popLienExterne").classList.remove("hidden");
+}
+function fermerLienExterne(){
+  $("popLienExterne").classList.add("hidden");
+  clearInterval(lienExterneMinuteur);
+  lienExterneMinuteur = null;
+}
+$("btnLienExterne").onclick = ouvrirLienExterne;
+$("lienExterneFermer").onclick = fermerLienExterne;
+$("popLienExterne").onclick = (e) => { if (e.target.id === "popLienExterne") fermerLienExterne(); };
 
 /* ---------- Session ---------- */
 let me = null;
@@ -2764,7 +2878,7 @@ async function loadSession(){
     $("btnModeration").classList.toggle("hidden", !["moderateur","admin"].includes(me.role));
     appliquerRole();
     show("menu");
-    tenterOuvrirTutorielAccueil();
+    apresArriveeMenu();
   } catch (e) {
     $("diag").textContent = `Contact du serveur impossible : ${e.message}`;
     show("landing");
@@ -2789,6 +2903,35 @@ function firstVisit(){
   $("compteInfo").textContent = "";
   $("btnSaveProfile").textContent = "Commencer à jouer";
   show("profile");
+}
+
+/* ---------- Bandeau cookies / vie privée (voir apresArriveeMenu() plus bas) ---------- */
+function ouvrirPopupCookies(apresReponse){
+  const repondre = async (accepte) => {
+    $("popCookies").classList.add("hidden");
+    $("btnCookiesAccepter").onclick = null;
+    $("btnCookiesRefuser").onclick = null;
+    try {
+      const res = await fetch("/api/cookies-reponse", {method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({accepte})});
+      if (res.ok) me = await res.json();
+    } catch {}
+    apresReponse?.();
+  };
+  $("btnCookiesAccepter").onclick = () => repondre(true);
+  $("btnCookiesRefuser").onclick = () => repondre(false);
+  $("popCookies").classList.remove("hidden");
+}
+
+/** Point d'entrée commun, appelé juste après l'arrivée sur le menu (connexion, choix du pseudo…) :
+ *  d'abord le bandeau cookies s'il n'a jamais reçu de réponse pour ce compte, puis seulement
+ *  ensuite le tutoriel d'accueil — pour ne jamais empiler les deux fenêtres en même temps. */
+function apresArriveeMenu(){
+  if (me && me.pseudoChosen && !me.cookiesReponse){
+    ouvrirPopupCookies(tenterOuvrirTutorielAccueil);
+  } else {
+    tenterOuvrirTutorielAccueil();
+  }
 }
 
 /* ---------- Tutoriel d'accueil (3 écrans max, voir tenterOuvrirTutorielAccueil()) ---------- */
@@ -2878,7 +3021,7 @@ $("btnValider").onclick = async () => {
   if (!me.pseudoChosen) return firstVisit();
   $("hello").textContent = `Bonjour ${me.pseudo}`;
   show("menu");
-  tenterOuvrirTutorielAccueil();
+  apresArriveeMenu();
 };
 
 $("btnRenvoyer").onclick = async () => {
@@ -2928,7 +3071,7 @@ async function authMail(chemin){
   majBadgeAmis();
   appliquerRole();
   show("menu");
-  tenterOuvrirTutorielAccueil();
+  apresArriveeMenu();
 }
 $("btnMailConnexion").onclick = () => authMail("connexion");
 $("btnMailInscription").onclick = () => authMail("inscription");
@@ -2957,7 +3100,7 @@ async function authEnfant(){
   majBadgeAmis();
   appliquerRole();
   show("menu");
-  tenterOuvrirTutorielAccueil();
+  apresArriveeMenu();
 }
 $("btnCcConnexion").onclick = authEnfant;
 $("ccMdp").addEventListener("keydown", e => { if (e.key === "Enter") authEnfant(); });
@@ -5823,11 +5966,11 @@ $("btnSaveProfile").onclick = async () => {
   if (premiere){
     socket.disconnect().connect();   // la session portait l'ancien profil sans pseudo
     show("menu");
-    // Tutoriel d'accueil (3 écrans) pour un tout nouveau joueur : affiché une seule fois, juste
-    // après le choix du pseudo, avant qu'il ne se lance dans sa première partie. Le manuel complet
-    // (rulesModal) reste disponible à tout moment via le bouton flottant "?", sans être imposé dès
-    // la première seconde en plus de ce tutoriel.
-    setTimeout(() => tenterOuvrirTutorielAccueil(), 400);
+    // Bandeau cookies puis tutoriel d'accueil (3 écrans) pour un tout nouveau joueur : affichés
+    // une seule fois chacun, juste après le choix du pseudo, avant qu'il ne se lance dans sa
+    // première partie. Le manuel complet (rulesModal) reste disponible à tout moment via le
+    // bouton flottant "?", sans être imposé dès la première seconde en plus de ces deux fenêtres.
+    setTimeout(() => apresArriveeMenu(), 400);
     return;
   }
   $("profileMsg").textContent = "Profil enregistré.";

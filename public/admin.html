@@ -902,6 +902,33 @@
       </div>
 
       <div class="card">
+        <p class="tag">🔗 Bouton teaser — lien externe</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6">
+          Ajoute un petit bouton 🔗 à côté du bouton d'aide "?", visible de tous les joueurs. En
+          cliquant dessus, ils voient soit un compte à rebours (si une date est renseignée), soit
+          directement le lien une fois cette date passée — pratique pour annoncer un autre projet
+          avant qu'il ne soit prêt. Laissez la date vide pour rendre le lien actif immédiatement.
+          Le compte à rebours affiché à chaque joueur dépend de l'heure de son propre appareil :
+          pour un groupe réparti sur plusieurs fuseaux horaires, le décompte ne tombera pas à zéro
+          au même instant pour tout le monde.
+        </p>
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer;font-size:15px;color:var(--chalk);text-transform:none;letter-spacing:0">
+          <input type="checkbox" id="lienExterneActif" style="width:auto">
+          Afficher le bouton 🔗 aux joueurs
+        </label>
+        <label for="lienExterneTitreInput">Titre affiché</label>
+        <input id="lienExterneTitreInput" type="text" maxlength="60" placeholder="Un nouveau jeu arrive...">
+        <label style="margin-top:10px" for="lienExterneUrlInput">Lien (http:// ou https://)</label>
+        <input id="lienExterneUrlInput" type="text" maxlength="500" placeholder="https://...">
+        <label style="margin-top:10px" for="lienExterneCibleInput">Date/heure d'ouverture (facultatif)</label>
+        <input id="lienExterneCibleInput" type="datetime-local">
+        <div class="row">
+          <button id="btnSaveLienExterne">Enregistrer</button>
+        </div>
+        <p class="msg" id="lienExterneMsg"></p>
+      </div>
+
+      <div class="card">
         <p class="tag">✉️ Messages des joueurs au développeur</p>
         <p style="color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6">
           Chaque joueur peut vous écrire depuis le bouton « ✉️ Contacter le développeur » de son menu,
@@ -1482,7 +1509,7 @@ function tab(which){
   if (which === "classement") loadClassement();
   if (which === "users") { loadUsers(); chargerCompteurEnfant(); }
   if (which === "reports"){ loadReports(); loadConversations(); }
-  if (which === "reglages"){ etatSecurite(); chargerReglages(); chargerAide(); chargerAnnonce(); chargerMaintenance(); chargerContactDev(); }
+  if (which === "reglages"){ etatSecurite(); chargerReglages(); chargerAide(); chargerAnnonce(); chargerLienExterne(); chargerMaintenance(); chargerContactDev(); }
   if (which === "sorties") loadSorties();
   if (which === "nowplaying") loadNowPlaying();
   if (which === "sondages") { loadSondages(); remplirFilmsListe(); chargerSuggestionsPepites(); }
@@ -1814,6 +1841,30 @@ $("btnSaveAnnonce").onclick = async () => {
     ? ($("annonceActif").checked ? "Diffusé : le bandeau affiche votre message à tous les joueurs connectés." : "Enregistré, bandeau développeur masqué.")
     : "Enregistrement refusé.";
   $("annonceMsg").className = res.ok ? "msg ok" : "msg err";
+};
+
+/* ---------- Bouton teaser "lien externe" ---------- */
+async function chargerLienExterne(){
+  const res = await api("/api/admin/lien-externe");
+  if (!res.ok) return;
+  const l = await res.json();
+  $("lienExterneActif").checked = Boolean(l.actif);
+  $("lienExterneTitreInput").value = l.titre || "";
+  $("lienExterneUrlInput").value = l.url || "";
+  $("lienExterneCibleInput").value = l.cible || "";
+}
+$("btnSaveLienExterne").onclick = async () => {
+  const res = await api("/api/admin/lien-externe", {method:"PUT", body: JSON.stringify({
+    actif: $("lienExterneActif").checked,
+    titre: $("lienExterneTitreInput").value,
+    url: $("lienExterneUrlInput").value,
+    cible: $("lienExterneCibleInput").value,
+  })});
+  const data = await res.json().catch(() => ({}));
+  $("lienExterneMsg").textContent = res.ok
+    ? "Enregistré."
+    : (data.error === "URL_INVALIDE" ? "Le lien doit commencer par http:// ou https://" : "Enregistrement refusé.");
+  $("lienExterneMsg").className = res.ok ? "msg ok" : "msg err";
 };
 
 async function chargerMaintenance(){
