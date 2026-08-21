@@ -790,7 +790,7 @@ app.put("/api/admin/audio", requireAdmin, (req, res) => {
   const a = req.body || {};
   if (!REGLAGES.audio) REGLAGES.audio = structuredClone(REGLAGES_DEFAUT.audio);
   if (typeof a.turnActif === "boolean") REGLAGES.audio.turnActif = a.turnActif;
-  if (typeof a.turnUrl === "string") REGLAGES.audio.turnUrl = a.turnUrl.trim().slice(0, 200);
+  if (typeof a.turnUrl === "string") REGLAGES.audio.turnUrl = a.turnUrl.trim().slice(0, 600);
   if (typeof a.turnUsername === "string") REGLAGES.audio.turnUsername = a.turnUsername.trim().slice(0, 120);
   if (typeof a.turnCredential === "string") REGLAGES.audio.turnCredential = a.turnCredential.trim().slice(0, 200);
   REGLAGES.audio.maxParticipantsVocal = borneValeur(a.maxParticipantsVocal, 2, 200, REGLAGES.audio.maxParticipantsVocal);
@@ -3776,9 +3776,12 @@ app.get("/api/config", (_req, res) => res.json({
   // Priorité au réglage fait depuis la console admin (onglet Audio) ; les variables d'environnement
   // TURN_URL / TURN_USERNAME / TURN_CREDENTIAL ne servent plus que de valeur de secours au tout
   // premier démarrage (voir l'initialisation de REGLAGES.audio plus bas dans ce fichier).
-  turn: REGLAGES.audio?.turnActif && REGLAGES.audio.turnUrl
-    ? { urls: REGLAGES.audio.turnUrl, username: REGLAGES.audio.turnUsername, credential: REGLAGES.audio.turnCredential }
-    : null,
+  turn: (() => {
+    if (!REGLAGES.audio?.turnActif || !REGLAGES.audio.turnUrl) return null;
+    const urls = REGLAGES.audio.turnUrl.split(/[\n,]/).map((u) => u.trim()).filter(Boolean);
+    if (!urls.length) return null;
+    return { urls: urls.length > 1 ? urls : urls[0], username: REGLAGES.audio.turnUsername, credential: REGLAGES.audio.turnCredential };
+  })(),
 }));
 
 /**
