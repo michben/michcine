@@ -4052,6 +4052,9 @@ app.get("/api/vocal/salons", (req, res) => {
   const user = exigeCompte(req, res);
   if (!user) return;
   res.json([...salonsVocaux.values()]
+    // Un compte enfant ne doit même pas voir apparaître un salon adulte dans la liste (ni l'inverse) :
+    // même séparation stricte qu'à la création/à l'entrée d'un salon (voir vocal:creer, vocal:rejoindre).
+    .filter((s) => Boolean(s.compteEnfant) === (user.role === "enfant"))
     .filter((s) => {
       if (!s.prive) return true;
       if (s.participants.has(user.id)) return true;
@@ -5250,6 +5253,10 @@ io.on("connection", (socket) => {
       // à demander (et sans que l'hôte ait à valider) la parole.
       prive: false,
       monteeLibre: false,
+      // Même séparation stricte que pour les salons de jeu (voir room:join) : un compte enfant ne
+      // doit jamais se retrouver en direct vocal avec un adulte, ni l'inverse. Fixé une fois pour
+      // toutes à la création — pas de mécanisme pour "convertir" un salon après coup.
+      compteEnfant: user.role === "enfant",
     };
     salon.participants.set(user.id, {
       // Micro fermé par défaut : c'est le premier clic sur "activer mon micro" qui l'ouvre —
@@ -5265,6 +5272,10 @@ io.on("connection", (socket) => {
   socket.on("vocal:rejoindre", ({ code }, cb) => {
     const salon = salonsVocaux.get(code);
     if (!salon) return cb?.({ ok: false, error: "SALON_INTROUVABLE" });
+    // Séparation stricte enfant / adulte, identique à room:join : jamais de contact vocal en
+    // direct entre un compte enfant et un adulte, quel que soit le sens.
+    if (user.role === "enfant" && !salon.compteEnfant) return cb?.({ ok: false, error: "ENFANT_MODE_ENFANT_UNIQUEMENT" });
+    if (user.role !== "enfant" && salon.compteEnfant) return cb?.({ ok: false, error: "ADULTE_SALON_ENFANT_INTERDIT" });
     if (salon.participants.size >= MAX_PARTICIPANTS_VOCAL()) return cb?.({ ok: false, error: "SALON_COMPLET" });
     quitterSalonVocal(socket);
     retourVocalDisponible.delete(user.id); // on rejoint un salon : la bulle de retour n'a plus lieu d'être
