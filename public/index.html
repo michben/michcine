@@ -270,9 +270,12 @@
   .online b{color:#3DDC84;font-family:'JetBrains Mono',monospace;font-size:16px}
   /* Bulle en haut de l'accueil : accès rapide à un salon vocal dont on a été coupé, ou auquel
      on a été invité et pas encore rejoint. */
+  /* position:fixed : cette bannière n'est plus dans #menu (voir HTML) pour rester visible même
+     pendant une partie en cours, par-dessus l'écran affiché sans jamais recouvrir la barre du bas. */
   .retourVocalBulle{display:flex;align-items:center;gap:10px;background:var(--card);
-    border:1px solid var(--teal);border-radius:14px;padding:12px 14px;margin:0 0 16px;
-    animation:apparitionBulle .3s ease both}
+    border:1px solid var(--teal);border-radius:14px;padding:12px 14px;
+    position:fixed;top:10px;left:10px;right:10px;z-index:300;max-width:480px;margin:0 auto;
+    box-shadow:0 10px 28px rgba(0,0,0,.4);animation:apparitionBulle .3s ease both}
   @keyframes apparitionBulle{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
   .retourVocalBulle .ic{font-size:24px;flex:0 0 auto}
   .retourVocalBulle .txt{flex:1;min-width:0}
@@ -860,7 +863,7 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
     <h1>MichBen <em>Ciné Quizz</em></h1>
   </button>
   <button id="btnQuitGame" class="ghost hidden" style="position:absolute; top:20px; right:18px; font-size:22px; padding:4px 8px; z-index:50;" title="Quitter la partie">🏠</button>
-  <button id="btnVocalEquipe" class="ghost hidden" style="position:absolute; top:20px; left:18px; font-size:12px; padding:6px 10px; z-index:50; border-color:var(--teal); color:var(--teal); max-width:calc(50vw - 26px)" title="Ouvrir rapidement un salon vocal avec votre équipe">🎙️ Vocal équipe</button>
+  <button id="btnVocalEquipe" class="ghost hidden" style="position:absolute; top:20px; left:18px; font-size:12px; padding:6px 10px; z-index:50; border-color:var(--teal); color:var(--teal); max-width:calc(50vw - 26px)" title="Ouvrir rapidement un salon vocal avec les autres joueurs de la partie">🎙️ Vocal</button>
 
   <!-- RADIO D'AMBIANCE : disponible dès la page d'accueil, continue de jouer jusqu'à la sortie du site. -->
   <div class="radioBar" id="radioBar">
@@ -1177,17 +1180,20 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
     </div>
   </section>
 
+  <!-- Bannière « rejoindre un salon vocal » : hors de toute section pour rester visible même
+       pendant une partie en cours (voir verifierRetourVocal, appelée à chaque navigation). -->
+  <div id="retourVocalBulle" class="retourVocalBulle hidden">
+    <span class="ic">🎙️</span>
+    <span class="txt">
+      <b id="retourVocalTitre"></b>
+      <small id="retourVocalSousTitre"></small>
+    </span>
+    <button id="btnRetourVocalRejoindre">Rejoindre</button>
+    <button id="btnRetourVocalIgnorer" class="retourVocalFermer" aria-label="Ignorer" title="Ignorer">&times;</button>
+  </div>
+
   <!-- CHOIX DU MODE -->
   <section id="menu" class="hidden">
-    <div id="retourVocalBulle" class="retourVocalBulle hidden">
-      <span class="ic">🎙️</span>
-      <span class="txt">
-        <b id="retourVocalTitre"></b>
-        <small id="retourVocalSousTitre"></small>
-      </span>
-      <button id="btnRetourVocalRejoindre">Rejoindre</button>
-      <button id="btnRetourVocalIgnorer" class="retourVocalFermer" aria-label="Ignorer" title="Ignorer">&times;</button>
-    </div>
     <div id="teteAffiche" class="teteAffiche hidden">
       <p class="tag" style="margin:0 0 8px">🟢 Vos amis en ligne</p>
       <div id="listeTeteAffiche" class="listeTeteAffiche"></div>
@@ -2517,18 +2523,24 @@ const show = id => {
 
   const inGame = ["round", "between", "lobby", "waiting"].includes(id);
   $("btnQuitGame").classList.toggle("hidden", !inGame);
-  // Accès rapide à un salon vocal d'équipe : seulement en partie « en équipes », dès le salon
-  // d'attente et jusqu'à la fin de la manche en cours (pas besoin d'attendre que la partie démarre
-  // pour commencer à se coordonner avec ses coéquipiers).
-  $("btnVocalEquipe").classList.toggle("hidden", !(inGame && state.mode === "teams"));
+  // Accès rapide à un salon vocal avec les autres joueurs de la partie : dès le salon d'attente et
+  // jusqu'à la fin de la manche en cours, dans tous les modes à plusieurs (pas en solo, où il n'y a
+  // personne avec qui parler). En « équipes », un salon séparé par équipe (voir vocal:equipe-ouvrir) ;
+  // dans les autres modes, un seul salon partagé par toute la partie (voir vocal:partie-ouvrir).
+  $("btnVocalEquipe").classList.toggle("hidden", !(inGame && state.mode && state.mode !== "solo"));
+  $("btnVocalEquipe").textContent = state.mode === "teams" ? "🎙️ Vocal équipe" : "🎙️ Vocal";
   // Le bouton d'aide "?" reste masqué tant que l'administration ne l'a pas activé (voir chargerAide()),
   // et aussi pendant une partie pour ne jamais recouvrir la rangée de boutons du bas.
   $("helpBtn")?.classList.toggle("hidden", inGame || !aideActive);
   enPartieActuellement = inGame;
   majSpectateursCorner();
+  // Vérifiée à chaque navigation (pas seulement vers le menu) pour que la bannière de retour au
+  // salon vocal reste utilisable même pendant une partie en cours (voir sa nouvelle position hors
+  // de #menu, dans le HTML).
+  verifierRetourVocal();
   // On revérifie discrètement (sans popup) à chaque passage par le menu si une suggestion
   // vient d'être acceptée, pour que le bouton/pastille reste à jour même sans se reconnecter.
-  if (id === "menu") { rafraichirSuggestionsARepost(); verifierRetourVocal(); }
+  if (id === "menu") rafraichirSuggestionsARepost();
   // La page Profil affiche le détail (statut de chaque suggestion) et sa propre pastille.
   if (id === "profile") chargerMesSuggestionsProfil();
 };
@@ -5396,7 +5408,9 @@ $("btnVocalCreer").onclick = () => {
   });
 };
 
-function rejoindreSalonVocalParCode(code){
+/** `rester: true` : rejoint le salon en arrière-plan sans afficher l'écran "Salon vocal" — utile
+ *  pour rejoindre depuis la bannière de retour sans quitter la partie en cours (voir plus bas). */
+function rejoindreSalonVocalParCode(code, { rester = false } = {}){
   emitAvecDelai("vocal:rejoindre", { code }, (res) => {
     if (!res?.ok){
       $("vocalErreur").textContent = res?.error === "SALON_COMPLET" ? "Ce salon est complet."
@@ -5408,7 +5422,10 @@ function rejoindreSalonVocalParCode(code){
     $("vocalErreur").textContent = "";
     chargerMusiqueVocal();
     renderVocalSalon(res.salon);
-    afficherVocalSalonVue();
+    // rester: true (bannière de retour cliquée en pleine partie) : la connexion audio se fait
+    // en arrière-plan, sans changer d'écran ni afficher de notification qui interromprait la
+    // partie (voir bandeauNotif, volontairement silencieux pendant une partie en cours).
+    if (!rester) afficherVocalSalonVue();
   });
 }
 $("btnVocalRejoindre").onclick = () => {
@@ -5437,8 +5454,13 @@ $("btnRetourVocalRejoindre").onclick = () => {
   const code = retourVocalCourant.code;
   $("retourVocalBulle").classList.add("hidden");
   retourVocalCourant = null;
-  show("vocal");
-  rejoindreSalonVocalParCode(code);
+  if (enPartieActuellement) {
+    // On reste sur l'écran de la partie en cours : la connexion vocale se fait en arrière-plan.
+    rejoindreSalonVocalParCode(code, { rester: true });
+  } else {
+    show("vocal");
+    rejoindreSalonVocalParCode(code);
+  }
 };
 $("btnRetourVocalIgnorer").onclick = async () => {
   $("retourVocalBulle").classList.add("hidden");
@@ -5789,24 +5811,31 @@ socket.on("vocal:rtc-signal", async ({ from, signal }) => {
   } catch {} // connexion WebRTC déjà refermée ou message arrivé trop tard : sans conséquence
 });
 
-/** Ouvre rapidement (ou rejoint, si un coéquipier l'a déjà fait) un salon vocal réservé à toute son
- *  équipe pendant une partie « en équipes » — tous les coéquipiers présents dans la salle de jeu
- *  sont invités d'un coup, sans avoir besoin d'être amis. Le salon continue de vivre en arrière-plan
- *  même si on ne va pas voir l'écran « Salon vocal » tout de suite : pas besoin d'interrompre la
- *  partie en cours pour que la connexion s'établisse. */
+/** Ouvre rapidement (ou rejoint, si quelqu'un l'a déjà fait) un salon vocal réservé aux joueurs de
+ *  la partie en cours — un salon par équipe en mode « équipes » (vocal:equipe-ouvrir), un seul
+ *  salon partagé par toute la partie dans les autres modes à plusieurs (vocal:partie-ouvrir).
+ *  Tout le monde est invité d'un coup, sans avoir besoin d'être amis. Le salon continue de vivre
+ *  en arrière-plan même si on ne va pas voir l'écran « Salon vocal » tout de suite : pas besoin
+ *  d'interrompre la partie en cours pour que la connexion s'établisse. Passe par emitAvecDelai :
+ *  sans ça, une connexion temps réel coupée laissait ce bouton bloqué indéfiniment sur "..." sans
+ *  aucun message, exactement le même symptôme que celui déjà corrigé pour Ouvrir/Rejoindre. */
 $("btnVocalEquipe").onclick = () => {
   if (!state.code) return;
   const libelleInitial = $("btnVocalEquipe").textContent;
   $("btnVocalEquipe").disabled = true;
-  socket.emit("vocal:equipe-ouvrir", { code: state.code }, (res) => {
+  $("btnVocalEquipe").textContent = "…";
+  const evenement = state.mode === "teams" ? "vocal:equipe-ouvrir" : "vocal:partie-ouvrir";
+  emitAvecDelai(evenement, { code: state.code }, (res) => {
     $("btnVocalEquipe").disabled = false;
     if (!res?.ok){
-      $("btnVocalEquipe").textContent = "❌ Indisponible";
+      $("btnVocalEquipe").textContent = res?.error === "TIMEOUT" ? "❌ Pas de réponse" : "❌ Indisponible";
       setTimeout(() => { $("btnVocalEquipe").textContent = libelleInitial; }, 2500);
       return;
     }
+    chargerMusiqueVocal();
+    renderVocalSalon(res.salon);
     $("btnVocalEquipe").textContent = res.invites
-      ? `✅ ${res.invites} coéquipier${res.invites > 1 ? "s" : ""} invité${res.invites > 1 ? "s" : ""}`
+      ? `✅ ${res.invites} joueur${res.invites > 1 ? "s" : ""} invité${res.invites > 1 ? "s" : ""}`
       : "✅ Salon ouvert";
     setTimeout(() => { $("btnVocalEquipe").textContent = libelleInitial; }, 3000);
   });
