@@ -88,7 +88,14 @@ const httpServer = createServer(app);
  * « /rt », un nom neutre. Un seul serveur : tous les joueurs partagent
  * bien les mêmes salons.
  */
-const io = new Server(httpServer, { cors: { origin: "*" }, path: "/rt" });
+// maxHttpBufferSize : par défaut Socket.IO plafonne chaque message à 1 Mo, bien trop peu pour un
+// fichier audio envoyé en base64 depuis un salon vocal (voir vocal:radio-ajouter) — un fichier de
+// quelques Mo encodé en base64 grossit d'environ 37 %, et dépassait donc systématiquement cette
+// limite. Le paquet est alors rejeté avant même d'atteindre notre gestionnaire : le rappel (cb)
+// n'arrive jamais, et le client finit par afficher « le serveur ne répond pas » après le délai
+// de emitAvecDelai — alors que le serveur n'a en réalité jamais reçu la demande. Alignée sur la
+// limite déjà en place pour les images/musique par HTTP (voir express.json ci-dessus).
+const io = new Server(httpServer, { cors: { origin: "*" }, path: "/rt", maxHttpBufferSize: 15 * 1024 * 1024 });
 
 /* ------------------------------------------------------------------ */
 /* Configuration                                                       */
