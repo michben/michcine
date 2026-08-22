@@ -2122,13 +2122,12 @@ function sauverEtatRadio(){
 setInterval(sauverEtatRadio, 4000);
 window.addEventListener("pagehide", sauverEtatRadio);
 
-/** Relance automatiquement la radio après un rafraîchissement si elle jouait avant, sauf pour un compte enfant ou si l'admin l'a désactivée. */
-function tenterRepriseRadio(){
-  if (!afficherRadioGlobal) return;
-  if (me && me.role === "enfant") return;
-  if (!etatRadioInitial?.enLecture) return;
-  demarrerMusique();
-}
+/** La radio ne reprend plus toute seule après une actualisation, même si elle jouait avant :
+ *  l'application ne doit émettre aucun son sans un clic volontaire sur son propre bouton ▶️/🔊
+ *  (voir $("btnMusique").onclick) — seul un salon vocal (voix, radio du salon) fait exception.
+ *  On garde la position mémorisée (voir etatRadioInitial/sauverEtatRadio) pour que, si le joueur
+ *  relance lui-même la radio, elle reprenne où il l'avait laissée plutôt que de repartir de zéro. */
+function tenterRepriseRadio(){}
 
 let playlisteChargee = false;
 async function chargerPlaylisteMusique(){
@@ -4240,7 +4239,10 @@ async function ouvrirPub(){
     $("pubImage").src = pub.url;
   } else if (idYoutube){
     $("pubZoneVideo").classList.remove("hidden");
-    $("pubFrame").src = `https://www.youtube.com/embed/${encodeURIComponent(idYoutube)}?autoplay=1&rel=0&controls=0`;
+    // mute=1 : comme pour la vidéo hébergée juste en dessous (voir <video ... muted>), une
+    // publicité ne doit jamais être une source de son non sollicitée — seul un salon vocal en
+    // fait exception, ou un clic volontaire sur le bouton de la radio d'ambiance.
+    $("pubFrame").src = `https://www.youtube.com/embed/${encodeURIComponent(idYoutube)}?autoplay=1&mute=1&rel=0&controls=0`;
   } else {
     // Vidéo hébergée directement (mp4/webm...) plutôt qu'un lien YouTube.
     $("pubZoneVideo").classList.remove("hidden");
@@ -6728,7 +6730,10 @@ function ouvrirConfirmationMode(mode){
 $("btnConfirmModeAnnuler").onclick = () => $("confirmModeModal").classList.remove("active");
 $("confirmModeModal").onclick = e => { if (e.target.id === "confirmModeModal") $("confirmModeModal").classList.remove("active"); };
 $("btnConfirmModeValider").onclick = async () => {
-  demarrerMusique();   // dans le geste de clic, pour respecter les règles anti-autoplay des navigateurs
+  // La radio d'ambiance ne doit démarrer que sur un clic explicite sur son propre bouton
+  // (voir $("btnMusique").onclick) — jamais accrochée à une autre action comme lancer une partie :
+  // l'application ne doit émettre aucun son en dehors d'un salon vocal sans un geste volontaire
+  // dédié au son lui-même.
   $("confirmModeModal").classList.remove("active");
   if (modeAConfirmer) await lancerPartie(modeAConfirmer);
 };
