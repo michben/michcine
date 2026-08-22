@@ -1,11 +1,11 @@
 /**
- * MichBen Ciné Quizz — serveur de jeu (MVP)
+ * Le Nouveau Bac — serveur de jeu (MVP)
  * Node 18+ / Express / Socket.IO
  *
  *   npm install && npm start   →  http://localhost:3000
  *   Interface d'administration →  http://localhost:3000/admin.html
  *
- * Les films sont stockés dans movies.json (éditable via l'admin).
+ * Les thèmes sont stockés dans themes.json (éditable via l'admin).
  * L'état des parties est en mémoire : Redis en production.
  */
 
@@ -34,7 +34,6 @@ import { mountAuth, mountPasserelleEntrante, userFromCookie, addRankedPoints,
          roueTirPayantDisponible, marquerTirPayantRoueUtilise, ROUE_MAX_TIRS_PAYANTS,
          roueTirPubDisponible, marquerTirPubRoueUtilise,
          roueTirsPubCycle, roueProchaineRechargePub,
-         pepiteSlotsBonus, accorderPepiteSlotBonus,
          tourRoueBonusDisponible, accorderTourRoueBonus, consommerTourRoueBonus,
          marquerCoffreReclame, nombreComptes } from "./auth-x.js";
 
@@ -80,7 +79,7 @@ app.get("/js/moteur.js", (_req, res) => {
 });
 
 mountAuth(app);                       // /auth/x/login, /auth/x/callback, /api/me, /api/leaderboard
-mountPasserelleEntrante(app, () => REGLAGES.passerelleEntrante);   // /auth/michben/retour
+mountPasserelleEntrante(app, () => REGLAGES.passerelleEntrante);   // /auth/michben/retour (voir plus bas)
 const httpServer = createServer(app);
 /**
  * Le chemin par défaut « /socket.io » est filtré par de nombreux bloqueurs de
@@ -100,11 +99,8 @@ const io = new Server(httpServer, { cors: { origin: "*" }, path: "/rt" });
  */
 const REGLAGES_DEFAUT = {
   animationsAvancees: true,
-  roundDuration: 60,                 // secondes
+  roundDuration: 30,                  // secondes — durée par défaut (« Standard », voir DUREES_MANCHE)
   basePoints: 1000,
-  tmdbApiKey: "",
-  geoapifyApiKey: "",   // « Cinéma le plus proche » — clé gratuite (3000 requêtes/jour) sur geoapify.com,
-                        // utilisée en priorité pour la fiabilité (Overpass/OSM sert de repli sans clé).
   adsterraApiKey: "",   // Réservée pour un usage futur (ex. récupération de statistiques via l'API
                         // éditeur Adsterra) — non nécessaire pour diffuser une publicité « Lien
                         // direct » Adsterra, qui se configure uniquement via l'onglet Publicités.
@@ -113,19 +109,24 @@ const REGLAGES_DEFAUT = {
                          // elle-même ; le cycle dure 12h, donc la recharge a aussi lieu 12h plus tôt/tard.
   afficherRadio: true,   // Affiche (ou masque entièrement, boutons compris) la radio d'ambiance
                          // sur toutes les pages — réglable depuis la console (onglet Réglages).
-  // Logos affichés sur les fiches de « Cinéma le plus proche », selon l'enseigne détectée dans
-  // le nom du cinéma (UGC / MK2 / Gaumont) ou l'image "indépendant" par défaut pour les autres
-  // salles. Chaque valeur est soit "" (rien d'uploadé), soit une image encodée en base64.
-  logosCinema: { ugc: "", mk2: "", gaumont: "", pathe: "", independant: "" },
   // Un ami peut-il regarder la partie d'un autre ami en direct (lecture seule) ? Désactivé par
   // défaut — réglable depuis la console admin (onglet Réglages).
   autoriserSpectateur: false,
-  // Plafond (en %) de la part de films français dans une manche tirée au sort — le reste
-  // (international + non classés) comble la différence. Sert à rééquilibrer un catalogue trop
-  // riche en films français, sans jamais raccourcir une partie si le vivier international est
-  // insuffisant (voir choisirFilms). Ignoré tant que des films ne sont pas classés « France » /
-  // « International » depuis l'onglet Films de la console admin (champ « Origine »).
-  ratioFilmsFrancaisMax: 40,
+  // Nombre de thèmes actifs proposés à chaque manche (voir choisirThemes) — un mot à trouver par
+  // thème, tous joués en même temps sur la même lettre imposée.
+  themesParManche: 4,
+  // Lettres jamais tirées (voir tirerLettre) : par défaut les plus rares en français, trop
+  // frustrantes à jouer si elles tombent souvent — réglable depuis la console admin.
+  lettresExclues: ["W", "X", "Y", "Z"],
+  // Points attribués à une réponse validée par le vote collectif (voir la phase de vote après
+  // chaque manche) : pointsReponseUnique si aucun autre joueur n'a donné la même réponse valide pour
+  // ce thème-là, pointsReponseDoublon sinon — règle classique du Petit Bac : une réponse unique
+  // vaut plus qu'une réponse que d'autres ont trouvée aussi.
+  pointsReponseUnique: 10,
+  pointsReponseDoublon: 5,
+  // Durée du vote collectif après la révélation des réponses (voir phaseVote) : assez court pour ne
+  // pas ralentir la partie, assez long pour lire les réponses de tout le monde.
+  dureeVoteSecondes: 20,
   creditsDepart: 12,
   creditsParPartie: 4,
   pointsParTicket: 250,
@@ -144,23 +145,14 @@ const REGLAGES_DEFAUT = {
   xpParPartie: 40,                   // expérience versée pour une partie terminée
   xpParBonneReponse: 12,
   xpParVictoire: 60,                 // bonus en multijoueur
-  graceApresPremier: 15,             // secondes
-  vitesseSynopsis: 2800,             // durée totale du dévoilement, en millisecondes (0 = désactivé)
-  indices: {
-    letters:  { actif: true, points: 150, tickets: 1, libelle: "Nombre de lettres" },
-    year:     { actif: true, points: 100, tickets: 1, libelle: "Année" },
-    director: { actif: true, points: 200, tickets: 1, libelle: "Réalisateur" },
-    actors:   { actif: true, points: 300, tickets: 2, libelle: "Acteurs" },
-    poster:   { actif: true, points: 250, tickets: 2, libelle: "Photo du film",
-                zoom: 160, cadrage: "center", flou: 0 },
-  },
+  graceApresPremier: 15,             // secondes — délai de grâce après le bouton STOP (voir manche:stop)
   // Personnalisation graphique (console admin, onglet « Apparence ») : couleurs, polices et
   // ordre des modules du menu principal. Vide par défaut = apparence d'origine inchangée.
   theme: {
     couleurs: { ink: "#0A0C16", velvet: "#151A2E", card: "#1C2238", beam: "#F5B942",
                 ticket: "#E4586E", teal: "#4ECDC4", chalk: "#EDE8DC", muted: "#7C819B" },
     polices: { affiche: "Anton", corps: "Inter", etiquette: "Oswald" },
-    ordre: { menu: ["sorties", "cinemas", "niveau", "quotidien", "modes", "actions", "admin", "repost", "rejoindre"] },
+    ordre: { menu: ["niveau", "quotidien", "modes", "actions", "admin", "rejoindre"] },
     // Couleurs propres à chaque grand module (espace échanges, classement, quêtes, sondages,
     // amis, salon vocal) : "" = pas de personnalisation, le module garde les couleurs globales
     // ci-dessus. Volontairement limité à l'accent principal et secondaire (et non les 8 couleurs
@@ -195,10 +187,10 @@ const REGLAGES_DEFAUT = {
   // adresses de retour autorisées (une par ligne) pour empêcher qu'un lien piégé ne détourne un
   // code de connexion vers un site tiers.
   passerelle: { actif: false, cleSecrete: "", domaines: "" },
-  // Passerelle ENTRANTE : le sens inverse — recevoir un joueur qui arrive déjà connecté depuis un
-  // AUTRE jeu (ex. Le Nouveau Bac) via son propre bouton 🔗. `domaine` = adresse de cet autre jeu,
-  // `cleSecrete` = exactement la même valeur que celle réglée dans SA carte « Passerelle de
-  // connexion » — c'est un secret partagé entre les deux projets, jamais transmis au navigateur.
+  // Passerelle ENTRANTE : le sens inverse — recevoir un joueur qui arrive déjà connecté depuis
+  // MichBen Ciné Quizz (voir /auth/michben/retour dans auth-x.js). `domaine` est l'adresse de ce
+  // jeu-là, `cleSecrete` doit être EXACTEMENT la même clé que celle configurée dans sa propre
+  // console admin (carte « Passerelle de connexion » côté Ciné Quizz) — c'est un secret partagé.
   passerelleEntrante: { actif: false, domaine: "", cleSecrete: "" },
 };
 
@@ -207,23 +199,25 @@ let REGLAGES = structuredClone(REGLAGES_DEFAUT);
 const CONFIG = {
   get ROUND_DURATION_MS() { return REGLAGES.roundDuration * 1000; },
   get BASE_POINTS() { return REGLAGES.basePoints; },
-  get HINT_COSTS() {
-    return Object.fromEntries(Object.entries(REGLAGES.indices)
-      .filter(([, v]) => v.actif).map(([k, v]) => [k, v.points]));
-  },
-  get HINT_CREDITS() {
-    return Object.fromEntries(Object.entries(REGLAGES.indices)
-      .filter(([, v]) => v.actif).map(([k, v]) => [k, v.tickets]));
-  },
   get GRACE_AFTER_FIRST_MS() { return REGLAGES.graceApresPremier * 1000; },
+  get VOTE_DURATION_MS() { return REGLAGES.dureeVoteSecondes * 1000; },
   get POINTS_PAR_TICKET() { return REGLAGES.pointsParTicket; },
   MAX_PLAYERS: 16,
-  CHOICE_RATIO: 1,                // le clic est le seul mode de réponse : score plein
   TIP_URL: process.env.TIP_URL || "https://buymeacoffee.com/votre-pseudo",
   // Le temps laissé à un salon sans aucun joueur en ligne avant sa suppression :
   // couvre une coupure wifi ou une mise en veille de téléphone le temps de revenir.
   ROOM_VIDE_GRACE_MS: 90 * 1000,
 };
+
+/**
+ * Durées de manche proposées à la création du salon (voir newbac.onrender.com) : Éclair, Standard,
+ * Détente. Le joueur choisit à la création (room:create / solo/start), la valeur admin
+ * (REGLAGES.roundDuration) ne sert que de valeur par défaut / de repli.
+ */
+const DUREES_MANCHE = { eclair: 15, standard: 30, detente: 60 };
+function dureeManche(cle) {
+  return DUREES_MANCHE[cle] ? DUREES_MANCHE[cle] * 1000 : CONFIG.ROUND_DURATION_MS;
+}
 
 /* ------------------------------------------------------------------ */
 /* Bots (duel)                                                         */
@@ -245,10 +239,10 @@ const BOT_NIVEAUX = {
 const MAX_BOTS_FFA = 7;
 
 const BOT_NOMS = [
-  "CinéPhilippe", "PopcornMaster", "Bobine Express", "Le Projectionniste Fou", "Grosminet Ciné",
-  "Madame Sous-titres", "Capitaine Spoiler", "Nanar Attitude", "Vieux Fauteuil Rouge", "Toto la Pellicule",
-  "Zorro du Zapping", "Reine du Rembobinage", "Doudou Blockbuster", "Papy Western", "Mémé Nanar",
-  "Turbo Ticket", "Choupinet Cinéma", "L'Ouvreuse Masquée", "Sacha Scénario", "Bulle de Pop-corn",
+  "AlphaBétise", "Madame Dico", "Capitaine Lettre", "Nanar des Mots", "Vieux Stylo Rouge",
+  "Toto la Craie", "Zorro du Vocabulaire", "Reine du Scrabble", "Doudou Dictée", "Papy Mots-Croisés",
+  "Mémé Syllabe", "Turbo Ticket", "Choupinet Cursif", "L'Instituteur Masqué", "Sacha Synonyme",
+  "Bulle de Chalk", "Le Correcteur Fou", "Grosminet Lettres", "Bobine de Fil (à retordre)", "Madame Sous-Entendus",
 ];
 const nomBotAleatoire = () => BOT_NOMS[Math.floor(Math.random() * BOT_NOMS.length)];
 
@@ -266,13 +260,13 @@ const BOT_PHRASES = {
     intro: ["Salut ! Je vais faire de mon mieux 🙂", "Coucou tout le monde, soyez indulgents avec moi !", "C'est parti, j'ai un peu le trac 😅"],
     bonneReponse: ["Ah, je l'ai eu ! 🙂", "Oh, une bonne réponse, ça arrive même à moi !", "Youpi, j'ai trouvé !"],
     mauvaiseReponse: ["Zut, raté...", "Ah non, pas celui-là 😅", "Je n'avais aucune idée pour celui-ci."],
-    adversaireReussit: ["Bien joué !", "Chapeau, tu connais tes films 👏", "Wahou, trouvé si vite !"],
+    adversaireReussit: ["Bien joué !", "Chapeau, tu as du vocabulaire 👏", "Wahou, trouvé si vite !"],
     adversaireRate: ["Pas grave, on se rattrape au prochain !", "Ça arrive à tout le monde 🙂", "Oh, dommage pour toi aussi !"],
     victoire: ["J'ai gagné ?! Incroyable 😄", "Waouh, première place, je n'y crois pas !", "Merci d'avoir joué avec moi, c'était sympa !"],
     defaite: ["Bien joué, tu as mérité ta victoire !", "GG, c'était une belle partie 🙂", "Je ferai mieux la prochaine fois !"],
   },
   moyen: {
-    intro: ["Prêt à jouer ? On va voir ce que tu vaux 😎", "Salut ! J'espère que t'as révisé tes films.", "C'est parti, accroche-toi un peu quand même."],
+    intro: ["Prêt à jouer ? On va voir ce que tu vaux 😎", "Salut ! J'espère que t'as révisé ton alphabet.", "C'est parti, accroche-toi un peu quand même."],
     bonneReponse: ["Facile 😎", "Encore une pour moi.", "Je commence à prendre le rythme !"],
     mauvaiseReponse: ["Bon, celui-là je le laisse passer.", "Ok, celle-ci était un piège.", "Pas ma meilleure manche..."],
     adversaireReussit: ["Pas mal, pas mal 👀", "Ok tu connais un peu tes classiques.", "Tiens, une bonne réponse, ça change !"],
@@ -371,30 +365,29 @@ function motDePasseAdminValide(mdp) {
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ"; // sans I, O, 0, 1
 
 /* ------------------------------------------------------------------ */
-/* Catalogue de films (persisté dans movies.json)                      */
+/* Catalogue des thèmes du Bac (persisté dans themes.json)              */
 /* ------------------------------------------------------------------ */
 
-const MOVIES_FILE = new URL("./movies.json", import.meta.url);
-let movies = [];
+const THEMES_FILE = new URL("./themes.json", import.meta.url);
+let themes = [];
 
-/** Niveau déduit de la notoriété : un film très voté est facile à reconnaître. */
-const niveauDepuisVotes = (v = 0) => (v >= 8000 ? "facile" : v >= 2500 ? "moyen" : "difficile");
-
-/** Complète les catalogues anciens, sans niveau ni activation. */
-function normaliserFilms() {
-  for (const m of movies) {
-    if (!m.difficulty) m.difficulty = niveauDepuisVotes(m.votes);
-    if (m.enabled === undefined) m.enabled = true;
-    if (m.kids === undefined) m.kids = false;
-    // Origine (France / international) utilisée pour équilibrer le tirage des manches (voir
-    // choisirFilms) : reprend l'ancien champ `vf` posé par le script d'import en masse quand il
-    // existe, sinon reste "non classé" (n'entre alors dans aucun des deux quotas, sans jamais
-    // être exclu du jeu) — à corriger au cas par cas depuis l'onglet Films de la console admin.
-    if (m.origine === undefined)
-      m.origine = m.vf === true ? "france" : (m.vf === false ? "international" : "");
+/** Complète les catalogues anciens, sans activation définie. */
+function normaliserThemes() {
+  for (const t of themes) {
+    if (t.enabled === undefined) t.enabled = true;
+    if (t.kids === undefined) t.kids = false;
   }
 }
-const saveMovies = () => sauver("movies", movies, MOVIES_FILE);
+const saveThemes = () => sauver("themes", themes, THEMES_FILE);
+
+function sanitizeTheme(body) {
+  return {
+    nom: String(body.nom || "").trim().slice(0, 40),
+    enabled: body.enabled !== false,
+    // Thème adapté aux enfants (facile à deviner, sans ambiguïté) : sert au mode enfant.
+    kids: body.kids === true || body.kids === "true",
+  };
+}
 
 /* ---------- signalements d'anomalies ---------- */
 
@@ -568,10 +561,9 @@ function assurerRoueDuJour() {
 }
 
 const MOTIFS = {
-  spoiler: "Le synopsis révèle le titre",
-  synopsis: "Synopsis incompréhensible ou trop court",
-  image: "Image ou affiche incorrecte",
-  reponse: "Mauvaise réponse acceptée",
+  ambigu: "Thème ambigu ou trop vague",
+  injouable: "Thème quasi injouable avec certaines lettres",
+  doublon: "Thème en double avec un autre",
   inapproprie: "Contenu inapproprié",
   autre: "Autre",
 };
@@ -631,38 +623,6 @@ app.post("/api/admin/favicon", requireAdmin, (req, res) => {
   }
 });
 
-/**
- * Logos des enseignes de cinéma (UGC, MK2, Gaumont) et logo générique « indépendant »,
- * affichés sur les fiches de résultat de « Cinéma le plus proche ». Stockés directement dans
- * REGLAGES (comme le reste de la config) plutôt qu'en fichier sur disque : contrairement au
- * favicon, ça survit à un redéploiement même sans disque persistant sur l'hébergeur.
- */
-const LOGOS_CINEMA_CLES = ["ugc", "mk2", "gaumont", "pathe", "independant"];
-app.post("/api/admin/logos-cinema", requireAdmin, (req, res) => {
-  try {
-    const { cle, image } = req.body || {};
-    if (!LOGOS_CINEMA_CLES.includes(cle)) return res.status(400).json({ error: "CLE_INVALIDE" });
-    if (!REGLAGES.logosCinema) REGLAGES.logosCinema = { ugc: "", mk2: "", gaumont: "", pathe: "", independant: "" };
-    if (!image) {
-      // image vide/absente = on retire le logo pour cette enseigne
-      REGLAGES.logosCinema[cle] = "";
-      sauver("reglages", REGLAGES);
-      return res.json({ ok: true, logosCinema: REGLAGES.logosCinema });
-    }
-    if (!/^data:image\/(png|jpe?g|webp|gif|svg\+xml);base64,/.test(image))
-      return res.status(400).json({ error: "IMAGE_INVALIDE" });
-    // ~1.4 Mo de base64 ≈ 1 Mo d'image d'origine : large pour un logo, mais on borne quand même
-    // pour éviter qu'un fichier trop lourd n'alourdisse chaque sauvegarde des réglages.
-    if (image.length > 1_400_000) return res.status(400).json({ error: "IMAGE_TROP_LOURDE" });
-    REGLAGES.logosCinema[cle] = image;
-    sauver("reglages", REGLAGES);
-    res.json({ ok: true, logosCinema: REGLAGES.logosCinema });
-  } catch (error) {
-    console.error("Erreur upload logo cinéma:", error);
-    res.status(500).json({ error: "INTERNAL_ERROR" });
-  }
-});
-
 app.get("/api/admin/reglages", requireAdmin, (_req, res) => res.json(REGLAGES));
 
 app.put("/api/admin/reglages", requireAdmin, (req, res) => {
@@ -678,7 +638,14 @@ app.put("/api/admin/reglages", requireAdmin, (req, res) => {
   REGLAGES.creditsParPartie = borne(r.creditsParPartie, 0, 100, REGLAGES.creditsParPartie);
   REGLAGES.pointsParTicket  = borne(r.pointsParTicket, 10, 100000, REGLAGES.pointsParTicket);
   REGLAGES.graceApresPremier= borne(r.graceApresPremier, 0, 120, REGLAGES.graceApresPremier);
-  REGLAGES.vitesseSynopsis  = borne(r.vitesseSynopsis, 0, 10000, REGLAGES.vitesseSynopsis);
+  REGLAGES.themesParManche  = borne(r.themesParManche, 1, 10, REGLAGES.themesParManche);
+  REGLAGES.pointsReponseUnique  = borne(r.pointsReponseUnique, 0, 1000, REGLAGES.pointsReponseUnique);
+  REGLAGES.pointsReponseDoublon = borne(r.pointsReponseDoublon, 0, 1000, REGLAGES.pointsReponseDoublon);
+  REGLAGES.dureeVoteSecondes    = borne(r.dureeVoteSecondes, 5, 120, REGLAGES.dureeVoteSecondes);
+  if (Array.isArray(r.lettresExclues))
+    REGLAGES.lettresExclues = r.lettresExclues
+      .map((l) => String(l || "").trim().toUpperCase())
+      .filter((l) => /^[A-Z]$/.test(l));
   REGLAGES.partiesClasseesParJour = borne(r.partiesClasseesParJour, 1, 100, REGLAGES.partiesClasseesParJour);
   REGLAGES.transfertMax     = borne(r.transfertMax, 0, 100000, REGLAGES.transfertMax);
   REGLAGES.transfertParJour = borne(r.transfertParJour, 0, 500000, REGLAGES.transfertParJour);
@@ -686,14 +653,11 @@ app.put("/api/admin/reglages", requireAdmin, (req, res) => {
   REGLAGES.donTicketsParJour = borne(r.donTicketsParJour, 0, 500000, REGLAGES.donTicketsParJour);
   REGLAGES.donTicketsXp     = borne(r.donTicketsXp, 0, 1000, REGLAGES.donTicketsXp);
   REGLAGES.donTicketsXpParJourMax = borne(r.donTicketsXpParJourMax, 0, 1000, REGLAGES.donTicketsXpParJourMax);
-  if (typeof r.tmdbApiKey === 'string') REGLAGES.tmdbApiKey = r.tmdbApiKey;
-  if (typeof r.geoapifyApiKey === 'string') REGLAGES.geoapifyApiKey = r.geoapifyApiKey;
   if (typeof r.adsterraApiKey === 'string') REGLAGES.adsterraApiKey = r.adsterraApiKey;
   REGLAGES.pubMaxParCycle   = borne(r.pubMaxParCycle, 1, 50, REGLAGES.pubMaxParCycle);
   REGLAGES.pubHeureRecharge = borne(r.pubHeureRecharge, 0, 23, REGLAGES.pubHeureRecharge);
   if (typeof r.afficherRadio === "boolean") REGLAGES.afficherRadio = r.afficherRadio;
   if (typeof r.autoriserSpectateur === "boolean") REGLAGES.autoriserSpectateur = r.autoriserSpectateur;
-  REGLAGES.ratioFilmsFrancaisMax = borne(r.ratioFilmsFrancaisMax, 0, 100, REGLAGES.ratioFilmsFrancaisMax);
   REGLAGES.animationsAvancees = r.animationsAvancees !== false;
   REGLAGES.coeurs           = borne(r.coeurs, 1, 10, REGLAGES.coeurs);
   REGLAGES.xpBase           = borne(r.xpBase, 10, 10000, REGLAGES.xpBase);
@@ -702,26 +666,6 @@ app.put("/api/admin/reglages", requireAdmin, (req, res) => {
   REGLAGES.xpParPartie      = borne(r.xpParPartie, 0, 1000, REGLAGES.xpParPartie);
   REGLAGES.xpParBonneReponse= borne(r.xpParBonneReponse, 0, 500, REGLAGES.xpParBonneReponse);
   REGLAGES.xpParVictoire    = borne(r.xpParVictoire, 0, 1000, REGLAGES.xpParVictoire);
-
-  for (const [cle, valeurs] of Object.entries(r.indices || {})) {
-    const cible = REGLAGES.indices[cle];
-    if (!cible) continue;
-    cible.actif   = valeurs.actif !== false;
-    cible.points  = borne(valeurs.points, 0, 5000, cible.points);
-    cible.tickets = borne(valeurs.tickets, 0, 50, cible.tickets);
-    if (typeof valeurs.libelle === "string" && valeurs.libelle.trim())
-      cible.libelle = valeurs.libelle.trim().slice(0, 40);
-    if (cle === "poster") {
-      cible.zoom = borne(valeurs.zoom, 100, 400, cible.zoom);
-      cible.flou = borne(valeurs.flou, 0, 30, cible.flou);
-      if (["center","top","bottom","left","right"].includes(valeurs.cadrage))
-        cible.cadrage = valeurs.cadrage;
-    }
-  }
-
-  // au moins un indice doit rester actif, sinon la boutique est vide
-  if (!Object.values(REGLAGES.indices).some((i) => i.actif))
-    REGLAGES.indices.year.actif = true;
 
   sauver("reglages", REGLAGES);
   res.json(REGLAGES);
@@ -747,7 +691,7 @@ const THEME_POLICES = {
   corps: ["Inter", "Roboto", "Poppins", "Montserrat", "Nunito"],
   etiquette: ["Oswald", "Barlow Condensed", "Teko", "Rajdhani", "Bebas Neue", "Montserrat"],
 };
-const THEME_MODULES_MENU = ["sorties", "cinemas", "niveau", "quotidien", "modes", "actions", "admin", "repost", "rejoindre"];
+const THEME_MODULES_MENU = ["niveau", "quotidien", "modes", "actions", "admin", "rejoindre"];
 // Modules personnalisables individuellement (accent principal + secondaire uniquement — voir
 // REGLAGES_DEFAUT.theme.couleursCategories pour le détail du choix).
 const THEME_CATEGORIES = {
@@ -886,28 +830,6 @@ app.put("/api/admin/passerelle", requireAdmin, (req, res) => {
   res.json({ ok: true, passerelle: REGLAGES.passerelle });
 });
 
-/**
- * Passerelle ENTRANTE : configuration du sens inverse — un joueur d'un AUTRE jeu (ex. Le Nouveau
- * Bac) qui clique sur son propre bouton 🔗 doit arriver ici déjà connecté (voir
- * /auth/michben/retour dans auth-x.js). `cleSecrete` doit être EXACTEMENT la même valeur que
- * celle configurée côté de cet autre jeu, dans sa carte « Passerelle de connexion ».
- */
-app.get("/api/admin/passerelle-entrante", requireAdmin, (_req, res) => res.json(REGLAGES.passerelleEntrante));
-
-app.put("/api/admin/passerelle-entrante", requireAdmin, (req, res) => {
-  const p = req.body || {};
-  if (!REGLAGES.passerelleEntrante) REGLAGES.passerelleEntrante = structuredClone(REGLAGES_DEFAUT.passerelleEntrante);
-  if (typeof p.domaine === "string") {
-    const d = p.domaine.trim();
-    if (d && !/^https?:\/\//i.test(d)) return res.status(400).json({ error: "DOMAINE_INVALIDE" });
-    REGLAGES.passerelleEntrante.domaine = d.slice(0, 300);
-  }
-  if (typeof p.cleSecrete === "string") REGLAGES.passerelleEntrante.cleSecrete = p.cleSecrete.trim().slice(0, 200);
-  if (typeof p.actif === "boolean") REGLAGES.passerelleEntrante.actif = p.actif;
-  sauver("reglages", REGLAGES);
-  res.json({ ok: true, passerelleEntrante: REGLAGES.passerelleEntrante });
-});
-
 // code à usage unique -> { userId, expiresAt } — voir GET /api/passerelle/autoriser.
 const passerelleCodes = new Map();
 const PASSERELLE_CODE_DUREE_MS = 60 * 1000; // large marge : l'échange se fait serveur à serveur, tout de suite après la redirection
@@ -962,19 +884,41 @@ app.post("/api/passerelle/echanger", (req, res) => {
   });
 });
 
+/**
+ * Passerelle ENTRANTE : configuration du sens inverse — un joueur MichBen Ciné Quizz qui clique
+ * sur son propre bouton 🔗 doit arriver ici déjà connecté (voir /auth/michben/retour dans
+ * auth-x.js). `cleSecrete` doit être EXACTEMENT la même valeur que celle configurée côté Ciné
+ * Quizz (secret partagé, jamais transmis au navigateur ici non plus).
+ */
+app.get("/api/admin/passerelle-entrante", requireAdmin, (_req, res) => res.json(REGLAGES.passerelleEntrante));
+
+app.put("/api/admin/passerelle-entrante", requireAdmin, (req, res) => {
+  const p = req.body || {};
+  if (!REGLAGES.passerelleEntrante) REGLAGES.passerelleEntrante = structuredClone(REGLAGES_DEFAUT.passerelleEntrante);
+  if (typeof p.domaine === "string") {
+    const d = p.domaine.trim().replace(/\/+$/, "");
+    if (d && !/^https?:\/\//i.test(d)) return res.status(400).json({ error: "DOMAINE_INVALIDE" });
+    REGLAGES.passerelleEntrante.domaine = d.slice(0, 300);
+  }
+  if (typeof p.cleSecrete === "string") REGLAGES.passerelleEntrante.cleSecrete = p.cleSecrete.trim().slice(0, 200);
+  if (typeof p.actif === "boolean") REGLAGES.passerelleEntrante.actif = p.actif;
+  sauver("reglages", REGLAGES);
+  res.json({ ok: true, passerelleEntrante: REGLAGES.passerelleEntrante });
+});
+
 /** Indique si le mot de passe par défaut est encore en usage. */
 app.get("/api/admin/etat", requireAdmin, (_req, res) =>
   res.json({ motDePasseParDefaut: !empreinteAdmin })
 );
 
-app.get("/api/movies", requireAdmin, (_req, res) => res.json(movies));
+app.get("/api/themes", requireAdmin, (_req, res) => res.json(themes));
 
-// Nombre de films actifs dans le jeu — affiché en petit dans le menu des joueurs, pas besoin
+// Nombre de thèmes actifs dans le jeu — affiché en petit dans le menu des joueurs, pas besoin
 // d'être admin pour le consulter (aucune donnée sensible, juste un compteur).
-app.get("/api/movies/total", (req, res) => {
+app.get("/api/themes/total", (req, res) => {
   const user = exigeCompte(req, res);
   if (!user) return;
-  res.json({ total: movies.filter((m) => m.enabled).length });
+  res.json({ total: themes.filter((t) => t.enabled).length });
 });
 
 // Nombre total de joueurs inscrits depuis le début — petit indicateur du menu, lui aussi
@@ -985,258 +929,31 @@ app.get("/api/joueurs/total", (req, res) => {
   res.json({ total: nombreComptes() });
 });
 
-/** Active ou désactive des films en lot, selon niveau et note minimale. */
-app.post("/api/admin/movies/bulk", requireAdmin, (req, res) => {
-  const { difficulty, minRating, enabled } = req.body;
+/** Active ou désactive des thèmes en lot. */
+app.post("/api/admin/themes/bulk", requireAdmin, (req, res) => {
+  const { enabled } = req.body;
   let touched = 0;
-  for (const m of movies) {
-    if (difficulty && difficulty !== "tous" && m.difficulty !== difficulty) continue;
-    if (minRating && (m.rating || 0) < Number(minRating)) continue;
-    m.enabled = enabled !== false;
+  for (const t of themes) {
+    t.enabled = enabled !== false;
     touched++;
   }
-  saveMovies();
-  res.json({ touched, actifs: movies.filter((m) => m.enabled).length });
+  saveThemes();
+  res.json({ touched, actifs: themes.filter((t) => t.enabled).length });
 });
 
-/** Réimporte movies.json du dépôt par-dessus le catalogue en base. */
-app.post("/api/admin/movies/reimport", requireAdmin, async (_req, res) => {
+/** Réimporte themes.json du dépôt par-dessus le catalogue en base. */
+app.post("/api/admin/themes/reimport", requireAdmin, async (_req, res) => {
   try {
     const { readFileSync } = await import("fs");
-    const frais = JSON.parse(readFileSync(MOVIES_FILE, "utf8"));
+    const frais = JSON.parse(readFileSync(THEMES_FILE, "utf8"));
     if (!Array.isArray(frais) || !frais.length) throw new Error("fichier vide");
-    movies = frais;
-    normaliserFilms();
-    saveMovies();
-    res.json({ ok: true, films: movies.length });
+    themes = frais;
+    normaliserThemes();
+    saveThemes();
+    res.json({ ok: true, themes: themes.length });
   } catch (e) {
     res.status(400).json({ error: "IMPORT_ECHOUE", detail: e.message });
   }
-});
-
-/* ------------------------------------------------------------------ */
-/* Import de films enfants depuis TMDB (Animation / Famille)           */
-/* ------------------------------------------------------------------ */
-const GENRE_ANIMATION_TMDB = 16, GENRE_FAMILLE_TMDB = 10751;
-
-/** Retire le titre du synopsis : sinon la réponse est offerte. */
-function scrubTitreTmdb(synopsis, title) {
-  const t = String(title || "");
-  const echappe = t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  if (!echappe) return String(synopsis || "").trim();
-  return String(synopsis || "").replace(new RegExp(echappe, "gi"), "…").replace(/\s+/g, " ").trim();
-}
-
-/** Variantes acceptées en réponse (VF, VO, titre sans sous-titre). */
-function buildAnswersTmdb(fr, original) {
-  const set = new Set([fr, original].filter(Boolean));
-  for (const t of [fr, original]) {
-    if (!t) continue;
-    if (t.includes(":")) set.add(t.split(":")[0]);
-    if (t.includes(" - ")) set.add(t.split(" - ")[0]);
-  }
-  return [...set].map((t) => t.trim()).filter(Boolean);
-}
-
-/**
- * Cherche sur TMDB des films d'animation / familiaux absents du catalogue,
- * pour alimenter le mode enfant sans avoir à lancer de script en ligne de
- * commande. Ne modifie rien : l'administration choisit ensuite lesquels
- * ajouter via /tmdb-kids-importer.
- */
-app.get("/api/admin/movies/tmdb-kids-suggestions", requireAdmin, async (req, res) => {
-  const tmdbKey = REGLAGES.tmdbApiKey;
-  if (!tmdbKey) return res.status(400).json({ error: "NO_KEY" });
-
-  const pages = Math.min(5, Math.max(1, Number(req.query.pages) || 2));
-  const limite = Math.min(40, Math.max(1, Number(req.query.limite) || 24));
-
-  const idsConnus = new Set(movies.filter((m) => m.tmdbId).map((m) => m.tmdbId));
-  const titresConnus = new Set(movies.map((m) => String(m.title || "").trim().toLowerCase()));
-
-  try {
-    const candidats = [];
-    for (let page = 1; page <= pages && candidats.length < limite * 2; page++) {
-      const url = `https://api.themoviedb.org/3/discover/movie?api_key=${tmdbKey}&language=fr-FR&region=FR` +
-        `&sort_by=popularity.desc&include_adult=false&with_genres=${GENRE_ANIMATION_TMDB},${GENRE_FAMILLE_TMDB}` +
-        `&vote_count.gte=150&page=${page}`;
-      const r = await fetch(url);
-      if (!r.ok) break;
-      const data = await r.json();
-      for (const m of data.results || []) {
-        if (idsConnus.has(m.id)) continue;
-        if (titresConnus.has(String(m.title || "").trim().toLowerCase())) continue;
-        if (!m.overview || !m.poster_path) continue;
-        candidats.push(m);
-      }
-    }
-
-    const retenus = [];
-    for (const brut of candidats.slice(0, limite)) {
-      try {
-        const dRes = await fetch(
-          `https://api.themoviedb.org/3/movie/${brut.id}?api_key=${tmdbKey}&language=fr-FR&append_to_response=credits`
-        );
-        if (!dRes.ok) continue;
-        const d = await dRes.json();
-        if (!d.overview || !d.poster_path) continue;
-        retenus.push({
-          tmdbId: d.id,
-          title: d.title,
-          acceptedAnswers: buildAnswersTmdb(d.title, d.original_title),
-          synopsis: scrubTitreTmdb(d.overview, d.title),
-          year: Number((d.release_date || "").slice(0, 4)) || null,
-          director: (d.credits?.crew || []).find((c) => c.job === "Director")?.name || "",
-          actors: (d.credits?.cast || []).slice(0, 3).map((c) => c.name).join(", "),
-          poster: `https://image.tmdb.org/t/p/w500${d.poster_path}`,
-          still: d.backdrop_path ? `https://image.tmdb.org/t/p/w780${d.backdrop_path}` : "",
-          rating: Math.round((d.vote_average || 0) * 10) / 10,
-          votes: d.vote_count || 0,
-          difficulty: niveauDepuisVotes(d.vote_count || 0),
-          kids: true,
-        });
-      } catch { /* un film en erreur n'empêche pas les autres */ }
-    }
-    res.json({ movies: retenus });
-  } catch (err) {
-    console.error("Erreur suggestions TMDB enfants:", err);
-    res.status(500).json({ error: "INTERNAL_ERROR" });
-  }
-});
-
-/** Ajoute au catalogue les films choisis par l'administration parmi les suggestions TMDB. */
-app.post("/api/admin/movies/tmdb-kids-importer", requireAdmin, (req, res) => {
-  const proposes = Array.isArray(req.body.movies) ? req.body.movies : [];
-  const titresConnus = new Set(movies.map((m) => String(m.title || "").trim().toLowerCase()));
-  const idsConnus = new Set(movies.filter((m) => m.tmdbId).map((m) => m.tmdbId));
-
-  let ajoutes = 0, ignores = 0;
-  for (const brut of proposes) {
-    const titreNorm = String(brut.title || "").trim().toLowerCase();
-    if (!titreNorm || titresConnus.has(titreNorm) || (brut.tmdbId && idsConnus.has(Number(brut.tmdbId)))) {
-      ignores++; continue;
-    }
-    const film = sanitizeMovie({ ...brut, kids: true });
-    if (!film.title || !film.synopsis) { ignores++; continue; }
-    film.tmdbId = Number(brut.tmdbId) || null;
-    film.id = Math.max(0, ...movies.map((m) => m.id)) + 1;
-    movies.push(film);
-    titresConnus.add(titreNorm);
-    if (film.tmdbId) idsConnus.add(film.tmdbId);
-    ajoutes++;
-  }
-  saveMovies();
-  res.json({ ajoutes, ignores, total: movies.length });
-});
-
-/** Codes pays acceptés pour l'import ciblé (voir tmdb-pays-suggestions) — liste volontairement
- *  fermée pour ne jamais transmettre à TMDB une valeur arbitraire venue du client. */
-const PAYS_IMPORT_TMDB = {
-  FR: "France", US: "États-Unis", GB: "Royaume-Uni", CA: "Canada", IT: "Italie", ES: "Espagne",
-  DE: "Allemagne", BE: "Belgique", CH: "Suisse", JP: "Japon", KR: "Corée du Sud", CN: "Chine",
-  HK: "Hong Kong", IN: "Inde", BR: "Brésil", MX: "Mexique", AU: "Australie", SE: "Suède",
-  DK: "Danemark", NO: "Norvège", NL: "Pays-Bas", RU: "Russie", PL: "Pologne", TR: "Turquie",
-  IR: "Iran", TH: "Thaïlande", EG: "Égypte", SN: "Sénégal", MA: "Maroc", DZ: "Algérie",
-  TN: "Tunisie", AR: "Argentine", CO: "Colombie", ZA: "Afrique du Sud", NG: "Nigeria",
-};
-
-/**
- * Cherche sur TMDB des films d'un pays donné, absents du catalogue — même principe que
- * l'import ciblé « enfant » ci-dessus, mais filtré par pays d'origine (with_origin_country)
- * plutôt que par genre. Classe automatiquement chaque suggestion « France » ou
- * « international » selon le pays choisi, pour alimenter directement l'équilibrage du tirage
- * des manches (voir choisirFilms / REGLAGES.ratioFilmsFrancaisMax) sans reclassement manuel.
- */
-app.get("/api/admin/movies/tmdb-pays-suggestions", requireAdmin, async (req, res) => {
-  const tmdbKey = REGLAGES.tmdbApiKey;
-  if (!tmdbKey) return res.status(400).json({ error: "NO_KEY" });
-
-  const pays = String(req.query.pays || "").toUpperCase();
-  if (!PAYS_IMPORT_TMDB[pays]) return res.status(400).json({ error: "PAYS_INVALIDE" });
-
-  const pages = Math.min(5, Math.max(1, Number(req.query.pages) || 2));
-  const limite = Math.min(40, Math.max(1, Number(req.query.limite) || 24));
-  const origine = pays === "FR" ? "france" : "international";
-
-  const idsConnus = new Set(movies.filter((m) => m.tmdbId).map((m) => m.tmdbId));
-  const titresConnus = new Set(movies.map((m) => String(m.title || "").trim().toLowerCase()));
-
-  try {
-    const candidats = [];
-    for (let page = 1; page <= pages && candidats.length < limite * 2; page++) {
-      const url = `https://api.themoviedb.org/3/discover/movie?api_key=${tmdbKey}&language=fr-FR` +
-        `&sort_by=popularity.desc&include_adult=false&with_origin_country=${pays}` +
-        `&vote_count.gte=100&page=${page}`;
-      const r = await fetch(url);
-      if (!r.ok) break;
-      const data = await r.json();
-      for (const m of data.results || []) {
-        if (idsConnus.has(m.id)) continue;
-        if (titresConnus.has(String(m.title || "").trim().toLowerCase())) continue;
-        if (!m.overview || !m.poster_path) continue;
-        candidats.push(m);
-      }
-    }
-
-    const retenus = [];
-    for (const brut of candidats.slice(0, limite)) {
-      try {
-        const dRes = await fetch(
-          `https://api.themoviedb.org/3/movie/${brut.id}?api_key=${tmdbKey}&language=fr-FR&append_to_response=credits`
-        );
-        if (!dRes.ok) continue;
-        const d = await dRes.json();
-        if (!d.overview || !d.poster_path) continue;
-        const estAnime = (d.genres || []).some((g) => g.id === GENRE_ANIMATION_TMDB);
-        const estFamille = (d.genres || []).some((g) => g.id === GENRE_FAMILLE_TMDB);
-        retenus.push({
-          tmdbId: d.id,
-          title: d.title,
-          acceptedAnswers: buildAnswersTmdb(d.title, d.original_title),
-          synopsis: scrubTitreTmdb(d.overview, d.title),
-          year: Number((d.release_date || "").slice(0, 4)) || null,
-          director: (d.credits?.crew || []).find((c) => c.job === "Director")?.name || "",
-          actors: (d.credits?.cast || []).slice(0, 3).map((c) => c.name).join(", "),
-          poster: `https://image.tmdb.org/t/p/w500${d.poster_path}`,
-          still: d.backdrop_path ? `https://image.tmdb.org/t/p/w780${d.backdrop_path}` : "",
-          rating: Math.round((d.vote_average || 0) * 10) / 10,
-          votes: d.vote_count || 0,
-          difficulty: niveauDepuisVotes(d.vote_count || 0),
-          kids: estAnime || estFamille,
-          origine,
-        });
-      } catch { /* un film en erreur n'empêche pas les autres */ }
-    }
-    res.json({ movies: retenus, pays, paysNom: PAYS_IMPORT_TMDB[pays] });
-  } catch (err) {
-    console.error("Erreur suggestions TMDB par pays:", err);
-    res.status(500).json({ error: "INTERNAL_ERROR" });
-  }
-});
-
-/** Ajoute au catalogue les films choisis par l'administration parmi les suggestions par pays. */
-app.post("/api/admin/movies/tmdb-pays-importer", requireAdmin, (req, res) => {
-  const proposes = Array.isArray(req.body.movies) ? req.body.movies : [];
-  const titresConnus = new Set(movies.map((m) => String(m.title || "").trim().toLowerCase()));
-  const idsConnus = new Set(movies.filter((m) => m.tmdbId).map((m) => m.tmdbId));
-
-  let ajoutes = 0, ignores = 0;
-  for (const brut of proposes) {
-    const titreNorm = String(brut.title || "").trim().toLowerCase();
-    if (!titreNorm || titresConnus.has(titreNorm) || (brut.tmdbId && idsConnus.has(Number(brut.tmdbId)))) {
-      ignores++; continue;
-    }
-    const film = sanitizeMovie(brut);
-    if (!film.title || !film.synopsis) { ignores++; continue; }
-    film.tmdbId = Number(brut.tmdbId) || null;
-    film.id = Math.max(0, ...movies.map((m) => m.id)) + 1;
-    movies.push(film);
-    titresConnus.add(titreNorm);
-    if (film.tmdbId) idsConnus.add(film.tmdbId);
-    ajoutes++;
-  }
-  saveMovies();
-  res.json({ ajoutes, ignores, total: movies.length });
 });
 
 app.post("/api/admin/invite", requireAdmin, (req, res) => {
@@ -1245,22 +962,8 @@ app.post("/api/admin/invite", requireAdmin, (req, res) => {
 });
 
 app.get("/api/admin/stats", requireAdmin, (_req, res) => {
-  const parNiveau = {};
-  for (const n of ["facile", "moyen", "difficile"])
-    parNiveau[n] = {
-      total: movies.filter((m) => m.difficulty === n).length,
-      actifs: movies.filter((m) => m.difficulty === n && m.enabled).length,
-    };
-  // Répartition France / international parmi les films actifs : sert à voir d'un coup d'œil si
-  // le catalogue est équilibré, sans quoi le tirage (voir choisirFilms) a beau plafonner la part
-  // de films français par manche, il ne peut pas inventer des films internationaux manquants.
-  const actifsListe = movies.filter((m) => m.enabled);
-  const parOrigine = {
-    france: actifsListe.filter((m) => m.origine === "france").length,
-    international: actifsListe.filter((m) => m.origine === "international").length,
-    nonClasse: actifsListe.filter((m) => !m.origine).length,
-  };
-  res.json({ total: movies.length, actifs: actifsListe.length, parNiveau, parOrigine });
+  const actifsListe = themes.filter((t) => t.enabled);
+  res.json({ total: themes.length, actifs: actifsListe.length });
 });
 
 /* ---------- administration des joueurs ---------- */
@@ -1319,74 +1022,28 @@ app.post("/api/admin/grant-all", requireAdmin, (req, res) => {
   res.json({ users: grantAll(amount), amount });
 });
 
-app.post("/api/movies", requireAdmin, (req, res) => {
-  const movie = sanitizeMovie(req.body);
-  if (!movie.title || !movie.synopsis) return res.status(400).json({ error: "TITLE_AND_SYNOPSIS_REQUIRED" });
-  movie.id = Math.max(0, ...movies.map((m) => m.id)) + 1;
-  movies.push(movie);
-  saveMovies();
-  res.status(201).json(movie);
+app.post("/api/themes", requireAdmin, (req, res) => {
+  const theme = sanitizeTheme(req.body);
+  if (!theme.nom) return res.status(400).json({ error: "NOM_REQUIS" });
+  theme.id = Math.max(0, ...themes.map((t) => t.id)) + 1;
+  themes.push(theme);
+  saveThemes();
+  res.status(201).json(theme);
 });
 
-app.put("/api/movies/:id", requireAdmin, (req, res) => {
-  const index = movies.findIndex((m) => m.id === Number(req.params.id));
+app.put("/api/themes/:id", requireAdmin, (req, res) => {
+  const index = themes.findIndex((t) => t.id === Number(req.params.id));
   if (index === -1) return res.status(404).json({ error: "NOT_FOUND" });
-  movies[index] = { ...sanitizeMovie(req.body), id: movies[index].id };
-  saveMovies();
-  res.json(movies[index]);
+  themes[index] = { ...sanitizeTheme(req.body), id: themes[index].id };
+  saveThemes();
+  res.json(themes[index]);
 });
 
-app.delete("/api/movies/:id", requireAdmin, (req, res) => {
-  movies = movies.filter((m) => m.id !== Number(req.params.id));
-  saveMovies();
+app.delete("/api/themes/:id", requireAdmin, (req, res) => {
+  themes = themes.filter((t) => t.id !== Number(req.params.id));
+  saveThemes();
   res.status(204).end();
 });
-
-/** Cadrage spécifique à un film, ou null pour suivre le réglage global. */
-function cadragePropre(valeur) {
-  if (!valeur || valeur.suivreGlobal) return null;
-  const borne = (v, min, max, defaut) => {
-    const n = Number(v);
-    return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : defaut;
-  };
-  return {
-    zoom: borne(valeur.zoom, 100, 400, 160),
-    flou: borne(valeur.flou, 0, 30, 0),
-    cadrage: ["center", "top", "bottom", "left", "right"].includes(valeur.cadrage)
-      ? valeur.cadrage : "center",
-  };
-}
-
-function sanitizeMovie(body) {
-  const answers = Array.isArray(body.acceptedAnswers)
-    ? body.acceptedAnswers
-    : String(body.acceptedAnswers || "").split(",");
-  return {
-    title: String(body.title || "").trim(),
-    synopsis: String(body.synopsis || "").trim(),
-    acceptedAnswers: [String(body.title || ""), ...answers].map((a) => a.trim()).filter(Boolean),
-    year: Number(body.year) || null,
-    director: String(body.director || "").trim(),
-    actors: String(body.actors || "").trim(),
-    poster: String(body.poster || "").trim(),
-    still: String(body.still || "").trim(),
-    // cadrage propre à ce film : remplace le réglage global quand il est défini
-    cadrageImage: cadragePropre(body.cadrageImage),
-    rating: Number(body.rating) || null,
-    votes: Number(body.votes) || 0,
-    difficulty: ["facile", "moyen", "difficile"].includes(body.difficulty)
-      ? body.difficulty : niveauDepuisVotes(Number(body.votes) || 0),
-    enabled: body.enabled !== false,
-    // Film adapté aux enfants (Disney, Pixar, familial…) : sert au mode enfant.
-    kids: body.kids === true || body.kids === "true",
-    // Identifiant TMDB d'origine, pour éviter les doublons lors d'un futur import.
-    tmdbId: Number(body.tmdbId) || null,
-    // France / international : sert à équilibrer le tirage des manches (voir choisirFilms),
-    // pour éviter qu'un catalogue trop riche en films français à l'ajout n'étouffe les
-    // films internationaux. "" = non classé (n'entre dans aucun des deux quotas).
-    origine: ["france", "international"].includes(body.origine) ? body.origine : "",
-  };
-}
 
 /* ------------------------------------------------------------------ */
 /* Premium : suppression de la publicité                               */
@@ -1409,24 +1066,24 @@ const verifyLicense = (lic) => {
 
 app.get("/api/reports/motifs", (_req, res) => res.json(MOTIFS));
 
-/** Tout joueur connecté peut signaler une anomalie sur un film. */
+/** Tout joueur connecté peut signaler une anomalie sur un thème (ambigu, injouable...). */
 app.post("/api/reports", (req, res) => {
   const user = userFromCookie(req.headers.cookie);
   if (!user) return res.status(401).json({ error: "NOT_AUTHENTICATED" });
 
-  const movieId = Number(req.body.movieId);
-  const film = movies.find((m) => m.id === movieId);
-  if (!film) return res.status(404).json({ error: "MOVIE_NOT_FOUND" });
+  const themeId = Number(req.body.themeId);
+  const theme = themes.find((t) => t.id === themeId);
+  if (!theme) return res.status(404).json({ error: "THEME_NOT_FOUND" });
   if (!MOTIFS[req.body.motif]) return res.status(400).json({ error: "MOTIF_INVALIDE" });
 
   const doublon = reports.find(
-    (r) => r.movieId === movieId && r.auteurId === user.id && r.statut === "ouvert"
+    (r) => r.themeId === themeId && r.auteurId === user.id && r.statut === "ouvert"
   );
   if (doublon) return res.json({ ok: true, deja: true });
 
   reports.push({
     id: (reports.at(-1)?.id || 0) + 1,
-    movieId, titre: film.title,
+    themeId, titre: theme.nom,
     motif: req.body.motif,
     commentaire: String(req.body.commentaire || "").trim().slice(0, 300),
     auteurId: user.id, auteur: user.pseudo,
@@ -1436,120 +1093,11 @@ app.post("/api/reports", (req, res) => {
   res.status(201).json({ ok: true });
 });
 
-/* ------------------------------------------------------------------ */
-/* Signets : chaque joueur (adulte ou enfant) peut mettre de côté un    */
-/* film à voir plus tard, proposé juste après la révélation de la      */
-/* réponse. Simple liste d'identifiants par joueur.                     */
-/* ------------------------------------------------------------------ */
-
-const SIGNETS_FILE = new URL("./signets.json", import.meta.url);
-let signets = {};   // userId -> [movieId, ...] (le plus récent en dernier)
-const saveSignets = () => sauver("signets", signets, SIGNETS_FILE);
-
-app.get("/api/signets", (req, res) => {
-    const user = exigeCompte(req, res);
-    if (!user) return;
-    const mesIds = signets[user.id] || [];
-    const films = mesIds
-        .map((id) => movies.find((m) => m.id === id))
-        .filter(Boolean)
-        .map((m) => ({ id: m.id, title: m.title, poster: m.poster, year: m.year, tmdbId: m.tmdbId }))
-        .reverse();   // le plus récemment ajouté en premier
-    res.json(films);
-});
-
-app.post("/api/signets/:movieId/toggle", (req, res) => {
-    const user = exigeCompte(req, res);
-    if (!user) return;
-    const movieId = Number(req.params.movieId);
-    if (!movies.find((m) => m.id === movieId)) return res.status(404).json({ error: "MOVIE_NOT_FOUND" });
-
-    const mesIds = signets[user.id] || (signets[user.id] = []);
-    const i = mesIds.indexOf(movieId);
-    let signet;
-    if (i === -1) { mesIds.push(movieId); signet = true; }
-    else { mesIds.splice(i, 1); signet = false; }
-    saveSignets();
-    res.json({ ok: true, signet });
-});
-
-/* ------------------------------------------------------------------ */
-/* Pépites                                                              */
-/*                                                                      */
-/* Un « top 5 » personnel, plus exclusif que les signets (illimités) :  */
-/* chaque joueur ne peut mettre en avant que 5 films au maximum. Les    */
-/* pépites de tout le monde sont agrégées pour faire remonter les films */
-/* les plus plébiscités (visible par tous, et depuis la console admin). */
-/* ------------------------------------------------------------------ */
-
-const PEPITES_FILE = new URL("./pepites.json", import.meta.url);
-let pepites = {};   // userId -> [movieId, ...] (le plus récent en dernier), 5 maximum
-const savePepites = () => sauver("pepites", pepites, PEPITES_FILE);
-const MAX_PEPITES = 5;
-
-const filmsDepuisIds = (ids) => ids
-    .map((id) => movies.find((m) => m.id === id))
-    .filter(Boolean)
-    .map((m) => ({ id: m.id, title: m.title, poster: m.poster, year: m.year, tmdbId: m.tmdbId }));
-
-// Un joueur peut débloquer jusqu'à 2 emplacements pépites supplémentaires via les coffres
-// de niveau (voir plus bas) : sa limite réelle est donc parfois > MAX_PEPITES.
-const maxPepitesPour = (userId) => MAX_PEPITES + pepiteSlotsBonus(userId);
-
-app.get("/api/pepites", (req, res) => {
-    const user = exigeCompte(req, res);
-    if (!user) return;
-    res.json({ films: filmsDepuisIds(pepites[user.id] || []).reverse(), max: maxPepitesPour(user.id) });
-});
-
-app.post("/api/pepites/:movieId/toggle", (req, res) => {
-    const user = exigeCompte(req, res);
-    if (!user) return;
-    const movieId = Number(req.params.movieId);
-    if (!movies.find((m) => m.id === movieId)) return res.status(404).json({ error: "MOVIE_NOT_FOUND" });
-
-    const max = maxPepitesPour(user.id);
-    const mesIds = pepites[user.id] || (pepites[user.id] = []);
-    const i = mesIds.indexOf(movieId);
-    let pepite;
-    if (i === -1) {
-        if (mesIds.length >= max) return res.status(400).json({ error: "MAX_PEPITES_ATTEINT", max });
-        mesIds.push(movieId);
-        pepite = true;
-    } else {
-        mesIds.splice(i, 1);
-        pepite = false;
-    }
-    savePepites();
-    res.json({ ok: true, pepite, restantes: max - mesIds.length, max });
-});
-
-/** Classement des films les plus mis en pépite, tous joueurs confondus. */
-function topPepites(limite = 10) {
-    const compte = new Map();
-    for (const ids of Object.values(pepites)) for (const id of ids) compte.set(id, (compte.get(id) || 0) + 1);
-    return [...compte.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, limite)
-        .map(([id, n]) => {
-            const m = movies.find((x) => x.id === id);
-            return m ? { id: m.id, title: m.title, poster: m.poster, year: m.year, tmdbId: m.tmdbId, pepites: n } : null;
-        })
-        .filter(Boolean);
-}
-
-app.get("/api/pepites/top", (req, res) => {
-    const user = exigeCompte(req, res);
-    if (user) res.json(topPepites());
-});
-
-app.get("/api/admin/pepites/top", requireAdmin, (_req, res) => res.json(topPepites(20)));
-
 app.get("/api/reports", requireModerateur, (_req, res) =>
   res.json(reports.slice().reverse())
 );
 
-/** Traiter un signalement : le clore, ou retirer le film du catalogue. */
+/** Traiter un signalement : le clore, ou retirer le thème du catalogue. */
 app.put("/api/reports/:id", requireModerateur, (req, res) => {
   const signalement = reports.find((r) => r.id === Number(req.params.id));
   if (!signalement) return res.status(404).json({ error: "NOT_FOUND" });
@@ -1557,9 +1105,9 @@ app.put("/api/reports/:id", requireModerateur, (req, res) => {
   if (req.body.statut === "ouvert" || req.body.statut === "traite")
     signalement.statut = req.body.statut;
 
-  if (req.body.retirerFilm) {
-    const film = movies.find((m) => m.id === signalement.movieId);
-    if (film) { film.enabled = false; saveMovies(); }
+  if (req.body.retirerTheme) {
+    const theme = themes.find((t) => t.id === signalement.themeId);
+    if (theme) { theme.enabled = false; saveThemes(); }
     signalement.statut = "traite";
   }
   signalement.traitePar = req.moderateur?.pseudo || "administration";
@@ -1698,10 +1246,8 @@ app.post("/api/sondages/:id/voter", (req, res) => {
 app.get("/api/admin/sondages", requireAdmin, (_req, res) =>
   res.json(sondages.map((s) => sondageAggrege(s))));
 
-/** Construit une option de sondage à partir d'un film du catalogue (pour les battles). */
-function optionDepuisFilm(filmId, texteRepli, emojiRepli) {
-  const film = filmId ? movies.find((m) => m.id === Number(filmId)) : null;
-  if (film) return { texte: film.title.slice(0, 40), emoji: "🎬", filmId: film.id, poster: film.poster || "" };
+/** Construit une option de sondage à partir d'un texte libre + emoji. */
+function optionSondage(texteRepli, emojiRepli) {
   const texte = String(texteRepli || "").trim();
   if (!texte) return null;
   return { texte: texte.slice(0, 40), emoji: String(emojiRepli || "🅰️").slice(0, 8) };
@@ -1719,10 +1265,8 @@ function recompenseDepuisRequete(r) {
 }
 
 app.post("/api/admin/sondages", requireAdmin, (req, res) => {
-  // Option « battle de films » : filmA/filmB (identifiants du catalogue) remplacent le texte
-  // libre — le titre, l'affiche et l'emoji 🎬 sont repris automatiquement du film.
-  const optionA = optionDepuisFilm(req.body.filmA, req.body.optionA?.texte, req.body.optionA?.emoji);
-  const optionB = optionDepuisFilm(req.body.filmB, req.body.optionB?.texte, req.body.optionB?.emoji);
+  const optionA = optionSondage(req.body.optionA?.texte, req.body.optionA?.emoji);
+  const optionB = optionSondage(req.body.optionB?.texte, req.body.optionB?.emoji);
   if (!optionA || !optionB) return res.status(400).json({ error: "OPTIONS_MANQUANTES" });
   const s = {
     id: crypto.randomUUID(),
@@ -1739,7 +1283,7 @@ app.post("/api/admin/sondages", requireAdmin, (req, res) => {
   // Annoncée dans le bandeau défilant de tout le monde : les statistiques en direct suivront
   // ensuite toutes seules, l'onglet Sondages affichant déjà les pourcentages en temps réel
   // (voir socket.on("sondage:maj", ...) côté client, repris aussi par le bandeau — cf. index.html).
-  diffuserAnnonce(`🍿 Nouvelle battle de films : ${optionA.emoji} ${optionA.texte} contre ${optionB.texte} ${optionB.emoji} — venez voter !`, "sondage");
+  diffuserAnnonce(`🍿 Nouveau sondage : ${optionA.emoji} ${optionA.texte} contre ${optionB.texte} ${optionB.emoji} — venez voter !`, "sondage");
   res.status(201).json(sondageAggrege(s));
 });
 
@@ -1788,22 +1332,47 @@ app.delete("/api/admin/sondages/:id", requireAdmin, (req, res) => {
 /* ------------------------------------------------------------------ */
 
 
-/** Calcule les avantages d'un joueur en fonction de son niveau */
+/** Calcule les avantages d'un joueur en fonction de son niveau : plus de cœurs, rien d'autre —
+ *  il n'y a plus d'indices à acheter dans le Bac, un mot vide n'a rien à révéler. */
 function getAvantagesNiveau(niveau) {
   let extraCoeurs = 0;
   if (niveau >= 300) extraCoeurs = 3;
   else if (niveau >= 200) extraCoeurs = 2;
   else if (niveau >= 100) extraCoeurs = 1;
+  return { extraCoeurs };
+}
 
-  let freeHints = 0;
-  let allFree = false;
-  if (niveau >= 300) {
-    allFree = true;
-  } else if (niveau >= 50) {
-    freeHints = 1; // 1 indice gratuit par partie
+/** Alphabet des lettres tirables : celles listées dans REGLAGES.lettresExclues sont écartées
+ *  (par défaut W, X, Y, Z — trop rares pour rester agréables à jouer). */
+const ALPHABET_COMPLET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+function tirerLettre(exclues = []) {
+  const exclusion = new Set([...(REGLAGES.lettresExclues || []), ...exclues]);
+  const dispo = ALPHABET_COMPLET.filter((l) => !exclusion.has(l));
+  const pool = dispo.length ? dispo : ALPHABET_COMPLET;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+/**
+ * Construit les manches d'une partie : un tirage de lettre (jamais deux fois de suite la même)
+ * et un jeu de thèmes actifs. Les thèmes sont piochés par lots mélangés dans tout le catalogue
+ * (plutôt qu'un tirage indépendant à chaque manche) pour qu'un même thème ne revienne pas trop
+ * vite au sein d'une même partie, sans pour autant bloquer si le catalogue est petit.
+ */
+function construirePlaylistManches(nombre, kids) {
+  let pool = themes.filter((t) => t.enabled !== false);
+  if (kids) pool = pool.filter((t) => t.kids === true);
+  const parManche = Math.max(1, Math.min(REGLAGES.themesParManche, pool.length));
+  const liste = [];
+  let derniereLettre = null;
+  let reserve = [];
+  for (let i = 0; i < nombre; i++) {
+    if (reserve.length < parManche) reserve = melange(pool);
+    const themesManche = reserve.splice(0, parManche);
+    const lettre = tirerLettre(derniereLettre ? [derniereLettre] : []);
+    derniereLettre = lettre;
+    liste.push({ lettre, themes: themesManche });
   }
-
-  return { extraCoeurs, freeHints, allFree };
+  return liste;
 }
 
 const parties = new Map();
@@ -1812,26 +1381,15 @@ const parties = new Map();
 const vueManche = (p) => ({
   roundIndex: p.index,
   total: p.playlist.length,
-  synopsis: masquerReponse(p.playlist[p.index].synopsis, p.playlist[p.index]),
-  choices: p.choices,
+  lettre: p.playlist[p.index].lettre,
+  themes: p.playlist[p.index].themes.map((t) => ({ id: t.id, nom: t.nom })),
   duration: CONFIG.ROUND_DURATION_MS,
-  hintCosts: CONFIG.HINT_COSTS,
-  hintCredits: CONFIG.HINT_CREDITS,
   coeurs: p.coeurs,
   coeursMax: p.coeursMax,
-  freeHintsRemaining: p.freeHintsRemaining,
-  allHintsFree: p.allHintsFree,
-  hintLabels: libellesIndices(),
-  posterStyle: styleAffiche(p.playlist[p.index]),
-  vitesseSynopsis: REGLAGES.vitesseSynopsis,
 });
 
 function demarrerManche(p) {
-  const film = p.playlist[p.index];
-  p.choices = buildChoices(film);
   p.startedAt = Date.now();
-  p.hints = [];
-  p.paidHints = [];
   p.repondu = false;
   p.pauseA = null;
   const vue = vueManche(p);
@@ -1847,29 +1405,25 @@ app.post("/api/solo/start", (req, res) => {
   const { mode = "solo", rounds, kids } = req.body;
   // Un compte enfant ne joue qu'avec le catalogue enfant, quoi que le client envoie.
   const modeEnfant = user.role === "enfant" ? true : kids === true;
-  let vivier = movies.filter((m) => m.enabled !== false);
-  if (modeEnfant) vivier = vivier.filter((m) => m.kids === true);
-  if (!vivier.length) return res.status(400).json({ error: modeEnfant ? "NO_MOVIES_KIDS" : "NO_MOVIES" });
+  let vivier = themes.filter((t) => t.enabled !== false);
+  if (modeEnfant) vivier = vivier.filter((t) => t.kids === true);
+  if (!vivier.length) return res.status(400).json({ error: modeEnfant ? "NO_THEMES_KIDS" : "NO_THEMES" });
 
   if (mode === "ranked" && partiesRestantes(user.id) <= 0)
     return res.status(400).json({ error: "PLUS_DE_PARTIES", ...infoSaison(),
                                   prochaineRecharge: prochaineRecharge(user.id) });
 
-  const nombre = Math.min(Number(rounds) || 10, vivier.length);
+  const nombre = Math.min(Number(rounds) || 10, 30);
   const niveau = infoNiveau(user.id)?.niveau || 0;
   const avantages = getAvantagesNiveau(niveau);
-  
+
   const p = {
     mode: mode === "ranked" ? "ranked" : "solo",
-    playlist: choisirFilms(vivier, nombre, user.id),
-    index: 0, score: 0, 
+    playlist: construirePlaylistManches(nombre, modeEnfant),
+    index: 0, score: 0,
     coeursMax: REGLAGES.coeurs + avantages.extraCoeurs,
     coeurs: REGLAGES.coeurs + avantages.extraCoeurs,
-    freeHintsRemaining: avantages.freeHints,
-    allHintsFree: avantages.allFree,
-    paidHints: []
   };
-  memoriserVus(user.id, p.playlist);
   parties.set(user.id, p);
   res.json({ ok: true, mode: p.mode, ...demarrerManche(p) });
 });
@@ -1893,36 +1447,12 @@ app.post("/api/solo/pause", (req, res) => {
   res.json({ ok: true, enPause: Boolean(p.pauseA), reste });
 });
 
-app.post("/api/solo/hint", (req, res) => {
-  const user = exigeCompte(req, res);
-  if (!user) return;
-  const p = parties.get(user.id);
-  if (!p || p.repondu) return res.status(400).json({ error: "PAS_DE_MANCHE" });
-  if (p.pauseA) return res.status(400).json({ error: "EN_PAUSE" });
-
-  const type = req.body.type;
-  if (!CONFIG.HINT_COSTS[type]) return res.status(400).json({ error: "UNKNOWN_HINT" });
-  if (p.hints.includes(type)) return res.status(400).json({ error: "ALREADY_BOUGHT" });
-
-  const isFree = p.allHintsFree || p.freeHintsRemaining > 0;
-  if (!isFree) {
-    if (!spendCredits(user.id, CONFIG.HINT_CREDITS[type]))
-      return res.status(400).json({ error: "NO_CREDITS" });
-    enregistrerTransaction(user.id, -CONFIG.HINT_CREDITS[type], "credits",
-      `Indice « ${REGLAGES.indices?.[type]?.libelle || type} »`);
-    p.paidHints.push(type);
-  } else {
-    if (!p.allHintsFree) p.freeHintsRemaining--;
-  }
-
-  p.hints.push(type);
-  const film = p.playlist[p.index];
-  const value = type === "poster" ? (film.still || film.poster)
-              : type === "letters" ? titlePattern(film.title)
-              : film[type];
-  res.json({ ok: true, type, value, credits: getCredits(user.id), freeHintsRemaining: p.freeHintsRemaining, allHintsFree: p.allHintsFree });
-});
-
+/**
+ * Validation solo : sans autre joueur pour voter, on ne peut vérifier que la règle objective
+ * (un mot non vide commençant par la lettre imposée) — voir REGLAGES.pointsReponseUnique. En
+ * solo, chaque réponse valide compte comme « unique » (pas de doublon possible face à soi-même) ;
+ * la phase de vote collectif n'existe qu'en salon (voir answer:submit plus bas).
+ */
 app.post("/api/solo/answer", (req, res) => {
   const user = exigeCompte(req, res);
   if (!user) return;
@@ -1931,29 +1461,34 @@ app.post("/api/solo/answer", (req, res) => {
 
   if (p.pauseA) return res.status(400).json({ error: "EN_PAUSE" });
 
-  const film = p.playlist[p.index];
-  const juste = Number(req.body.choiceId) === film.id;
+  const manche = p.playlist[p.index];
+  const reponses = req.body.reponses && typeof req.body.reponses === "object" ? req.body.reponses : {};
   p.repondu = true;
 
-  let points = 0;
-  if (juste) {
-    points = computeScore({ elapsedMs: Date.now() - p.startedAt, hintsUsed: p.paidHints });
-    p.score += points;
-    p.bonnes = (p.bonnes || 0) + 1;
-    if (!p.hints.length) p.sansIndice = (p.sansIndice || 0) + 1;
-  } else {
-    p.coeurs = Math.max(0, p.coeurs - 1);
+  const detail = {};
+  let valides = 0;
+  for (const theme of manche.themes) {
+    const mot = String(reponses[theme.id] ?? "").trim().slice(0, 60);
+    const valide = mot.length > 0 && normalize(mot).startsWith(normalize(manche.lettre));
+    if (valide) valides++;
+    detail[theme.id] = { mot, valide, points: valide ? REGLAGES.pointsReponseUnique : 0 };
   }
+  const points = Object.values(detail).reduce((s, d) => s + d.points, 0);
+  p.score += points;
+  p.bonnes = (p.bonnes || 0) + valides;
+  // En solo, il n'y a personne d'autre pour faire un doublon : toute réponse valide compte comme
+  // « unique » (voir la note sur la validation objective seule en solo, sans vote de joueurs).
+  p.uniques = (p.uniques || 0) + valides;
+  if (!valides) p.coeurs = Math.max(0, p.coeurs - 1);
 
   diffuserSpectateursSolo(p, "regarder:fin", {
-    answer: film.title, poster: film.poster, year: film.year,
+    lettre: manche.lettre, detail,
     scores: [{ pseudo: user.pseudo, avatar: user.avatar, photo: user.photo, score: p.score }],
     mode: p.mode,
   });
 
   res.json({
-    ok: true, correct: juste, points, movieId: film.id,
-    answer: film.title, poster: film.poster, year: film.year, total: p.score,
+    ok: true, points, detail, lettre: manche.lettre, total: p.score,
     coeurs: p.coeurs, perdu: p.coeurs === 0,
   });
 });
@@ -1982,7 +1517,7 @@ app.post("/api/solo/next", (req, res) => {
   if (p.mode === "ranked") {
     addRankedPoints(user.id, p.score);
     if (p.coeurs > 0) {
-      // Victoire (terminée sans perdre tous ses cœurs) : comptée sur le quota de base, jamais sur
+      // Victoire (terminée sans avoir perdu tous ses cœurs) : comptée sur le quota de base, jamais sur
       // le bonus, pour que celui-ci puisse vraiment s'accumuler jusqu'à 3 (voir les commentaires
       // sur enregistrerParticipationClassee et recompenserVictoireClassee).
       enregistrerParticipationClassee(user.id);
@@ -2002,7 +1537,7 @@ app.post("/api/solo/next", (req, res) => {
 
   avancerQuete(user.id, "jouer3");
   if (bonnes) avancerQuete(user.id, "bonnes10", bonnes);
-  if (p.sansIndice) avancerQuete(user.id, "sansIndice", p.sansIndice);
+  if (p.uniques) avancerQuete(user.id, "reponsesUniques", p.uniques);
   if (p.coeurs === REGLAGES.coeurs) avancerQuete(user.id, "sansFaute");
   avancerQueteGlobale(user.id, "jouerParties");
   if (p.coeurs === REGLAGES.coeurs) avancerQueteGlobale(user.id, "sansFauteGlobal");
@@ -2203,19 +1738,20 @@ app.delete("/api/admin/contact-developpeur/:id", requireAdmin, (req, res) => {
 function isBonusLevel(lvl) {
     return lvl === 5 || (lvl > 0 && lvl % 10 === 0);
 }
-/** Niveaux dont le petit cadeau (parmi les ~30 répartis sur toute la montée) est une pépite en
- * plus plutôt que des tickets — exactement 2, comme demandé, réparties au milieu et au sommet
- * du parcours pour ne pas les regrouper. Calculé sur le plafond réel (modifiable par l'admin). */
-function niveauxPepiteBonus() {
+/** Niveaux dont le petit cadeau (parmi les ~30 répartis sur toute la montée) est une partie
+ * classée bonus en plus plutôt que des tickets — exactement 2, comme demandé, réparties au milieu
+ * et au sommet du parcours pour ne pas les regrouper. Calculé sur le plafond réel (modifiable
+ * par l'admin). */
+function niveauxPartieBonus() {
     const max = REGLAGES.niveauMax || 300;
     const milieu = Math.max(10, Math.round(max / 2 / 10) * 10);
     return [...new Set([milieu, max])].filter((l) => l > 0 && l <= max && isBonusLevel(l));
 }
 function getBonusReward(lvl) {
-    if (niveauxPepiteBonus().includes(lvl)) {
-        // Un petit bonus de tickets/xp accompagne quand même la pépite, pour que le coffre
+    if (niveauxPartieBonus().includes(lvl)) {
+        // Un petit bonus de tickets/xp accompagne quand même la partie bonus, pour que le coffre
         // ne semble jamais « vide » comparé aux autres paliers.
-        return { type: "pepite", credits: 1, xp: lvl * 10, pepite: true };
+        return { type: "partie", credits: 1, xp: lvl * 10, partieBonus: true };
     }
     return { type: "credits", credits: 2 + Math.floor(lvl / 10), xp: lvl * 10 };
 }
@@ -2264,10 +1800,10 @@ app.post("/api/progression/claim", (req, res) => {
     grantCredits(user.id, reward.credits);
     if (reward.credits) enregistrerTransaction(user.id, reward.credits, "credits", `Bonus du niveau ${lvl}`);
     const nv = ajouterXp(user.id, reward.xp, { base: REGLAGES.xpBase, croissance: REGLAGES.xpCroissance, plafond: REGLAGES.niveauMax });
-    if (reward.pepite) accorderPepiteSlotBonus(user.id, 1);
+    if (reward.partieBonus) accorderPartiesClasseesBonus(user.id, 1);
 
     res.json({ ok: true, reward, credits: getCredits(user.id), niveau: nv,
-        pepiteMax: reward.pepite ? maxPepitesPour(user.id) : undefined });
+        partiesRestantes: reward.partieBonus ? partiesRestantes(user.id) : undefined });
 });
 
 /** Réclame un coffre de niveau (tous les 15 niveaux) : le joueur choisit sa récompense. */
@@ -2280,16 +1816,16 @@ app.post("/api/progression/claim-coffre", (req, res) => {
 
     if (lvl > n) return res.status(400).json({ error: "NIVEAU_NON_ATTEINT" });
     if (!isChestLevel(lvl) || lvl > REGLAGES.niveauMax) return res.status(400).json({ error: "PAS_UN_COFFRE" });
-    if (!["pepite", "roue", "vip"].includes(choix)) return res.status(400).json({ error: "CHOIX_INVALIDE" });
+    if (!["partie", "roue", "vip"].includes(choix)) return res.status(400).json({ error: "CHOIX_INVALIDE" });
 
     const dejaReclames = user.claimedChests || [];
     if (dejaReclames.includes(lvl)) return res.status(400).json({ error: "DEJA_RECLAME" });
 
     marquerCoffreReclame(user.id, lvl);
 
-    if (choix === "pepite") {
-        accorderPepiteSlotBonus(user.id, 1);
-        return res.json({ ok: true, choix, pepiteMax: maxPepitesPour(user.id) });
+    if (choix === "partie") {
+        accorderPartiesClasseesBonus(user.id, 1);
+        return res.json({ ok: true, choix, partiesRestantes: partiesRestantes(user.id) });
     }
     if (choix === "roue") {
         accorderTourRoueBonus(user.id, 1);
@@ -2647,17 +2183,18 @@ app.post("/api/admin/musique/:id/deplacer", requireAdmin, (req, res) => {
 const AIDE_FILE = new URL("./aide.json", import.meta.url);
 let aideConfig = {
     actif: false,
-    titre: "Comment jouer ? 🎬🎵",
-    message: `Bienvenue ! Testez vos connaissances et défiez vos amis dans nos différents modes de jeu interactifs.
+    titre: "Comment jouer ? 🔤🎵",
+    message: `Bienvenue ! Retrouvez ici les règles du Petit Bac, et défiez vos amis dans nos différents modes de jeu interactifs.
 
-🍿 Mode Ciné Quiz
-Prouvez que vous êtes incollable sur le 7ème art.
-- Lisez attentivement la question affichée.
-- Sélectionnez la bonne proposition avant la fin du chrono.
-- Plus vous êtes rapide, plus vous marquez de points !
+🔤 Le Nouveau Bac
+Une lettre est tirée, plusieurs thèmes sont à l'affiche : trouvez un mot pour chaque thème qui commence par cette lettre.
+- Remplissez la grille avec un mot par thème actif.
+- Appuyez sur STOP dès que vous avez fini (ou attendez la fin du temps imparti).
+- Une fois le temps écoulé, votez avec les autres joueurs sur la validité des réponses.
+- Une réponse unique rapporte plus qu'une réponse trouvée par plusieurs joueurs (doublon) !
 
 🚀 L'aventure ne fait que commencer...
-MichBen Ciné n'est que la toute première étape. Ce que vous voyez aujourd'hui est le point de départ d'une longue série de mini-jeux, d'expériences interactives et d'univers encore plus poussés qui arriveront très prochainement. Entraînez-vous bien, la suite s'annonce lourde !`,
+Le Nouveau Bac n'est que la toute première étape. Ce que vous voyez aujourd'hui est le point de départ d'une longue série de mini-jeux, d'expériences interactives et d'univers encore plus poussés qui arriveront très prochainement. Entraînez-vous bien, la suite s'annonce lourde !`,
 };
 const saveAide = () => sauver("aide", aideConfig, AIDE_FILE);
 
@@ -3136,9 +2673,6 @@ app.get("/api/players/:id/fiche", (req, res) => {
   // fiche de profil — fichePublique() ne renvoie que le niveau brut, sans ce détail.
   const progression = infoNiveau(fiche.id, reglagesNiveau());
   if (progression) { fiche.reste = progression.reste; fiche.requis = progression.requis; }
-  // Les pépites sont volontairement publiques (comme le reste de la fiche) : chacun peut
-  // voir le « top 5 » d'un autre joueur, exactement comme demandé.
-  fiche.pepites = filmsDepuisIds(pepites[fiche.id] || []).reverse();
   res.json(fiche);
 });
 
@@ -3188,8 +2722,8 @@ app.post("/api/friends/:action", (req, res) => {
 
 const QUETES = {
   jouer3:      { titre: "Jouer 3 parties",              cible: 3,  tickets: 3, xp: 60 },
-  bonnes10:    { titre: "Trouver 10 films",             cible: 10, tickets: 4, xp: 80 },
-  sansIndice:  { titre: "Gagner 3 questions sans indice", cible: 3,  tickets: 5, xp: 100 },
+  bonnes10:    { titre: "Trouver 10 bonnes réponses",   cible: 10, tickets: 4, xp: 80 },
+  reponsesUniques: { titre: "Trouver 3 réponses uniques (que vous seul avez données)", cible: 3, tickets: 5, xp: 100 },
   sansFaute:   { titre: "Terminer une partie sans faute", cible: 1, tickets: 6, xp: 120 },
 };
 
@@ -3262,9 +2796,8 @@ const etatQuetes = (userId) => {
  * niveau : rien de nouveau à administrer, juste un tirage pondéré parmi des gains déjà éprouvés.
  */
 const SURPRISES_QUETES = [
-  { type: "credits", poids: 40, min: 150, max: 500 },
+  { type: "credits", poids: 55, min: 150, max: 500 },
   { type: "xp",      poids: 25, min: 150, max: 450 },
-  { type: "pepite",  poids: 15 },
   { type: "ranked",  poids: 10 },
   { type: "roue",    poids: 10 },
 ];
@@ -3292,10 +2825,6 @@ function appliquerSurpriseQuete(userId) {
     const montant = Math.round(lot.min + Math.random() * (lot.max - lot.min));
     ajouterXp(userId, montant, reglagesNiveau());
     return { type: "xp", montant, libelle: `⚡ ${montant} xp bonus` };
-  }
-  if (lot.type === "pepite") {
-    accorderPepiteSlotBonus(userId, 1);
-    return { type: "pepite", libelle: "💎 Un emplacement pépite supplémentaire" };
   }
   if (lot.type === "ranked") {
     accorderPartiesClasseesBonus(userId, 1);
@@ -3377,501 +2906,6 @@ app.get("/api/presence/users", (req, res) => {
   res.json(amis.filter((a) => a.online).map(({ id, pseudo, avatar, photo, role }) => ({ id, pseudo, avatar, photo, role })));
 });
 
-
-const SORTIES_FILE = new URL("./sorties.json", import.meta.url);
-// kidsOk : films explicitement approuvés par l'administration pour les comptes enfant.
-// Liste blanche volontairement vide par défaut — un film non approuvé n'est jamais montré
-// à un compte enfant, même s'il est visible pour les comptes adultes.
-let sortiesConfig = { hidden: [], custom: [], kidsOk: [] };
-const saveSortiesConfig = () => sauver("sortiesConfig", sortiesConfig, SORTIES_FILE);
-
-const NOWPLAYING_FILE = new URL("./nowplaying.json", import.meta.url);
-let nowPlayingConfig = { hidden: [], custom: [], kidsOk: [] };
-const saveNowPlayingConfig = () => sauver("nowPlayingConfig", nowPlayingConfig, NOWPLAYING_FILE);
-
-app.post("/api/admin/sorties/hide", requireAdmin, (req, res) => {
-    const id = Number(req.body.id);
-    if (id && !sortiesConfig.hidden.includes(id)) {
-        sortiesConfig.hidden.push(id);
-        saveSortiesConfig();
-    }
-    res.json({ ok: true });
-});
-
-app.post("/api/admin/sorties/unhide", requireAdmin, (req, res) => {
-    const id = Number(req.body.id);
-    sortiesConfig.hidden = sortiesConfig.hidden.filter(x => x !== id);
-    saveSortiesConfig();
-    res.json({ ok: true });
-});
-
-app.post("/api/admin/sorties/custom", requireAdmin, (req, res) => {
-    const id = Number(req.body.id);
-    if (id && !sortiesConfig.custom.includes(id)) {
-        sortiesConfig.custom.push(id);
-        saveSortiesConfig();
-    }
-    res.json({ ok: true });
-});
-
-app.post("/api/admin/sorties/remove-custom", requireAdmin, (req, res) => {
-    const id = Number(req.body.id);
-    sortiesConfig.custom = sortiesConfig.custom.filter(x => x !== id);
-    saveSortiesConfig();
-    res.json({ ok: true });
-});
-
-/** Approuve ou retire un film de la liste blanche « adapté aux enfants » des sorties ciné. */
-app.post("/api/admin/sorties/kids-toggle", requireAdmin, (req, res) => {
-    const id = Number(req.body.id);
-    if (!id) return res.status(400).json({ error: "ID_MANQUANT" });
-    sortiesConfig.kidsOk = sortiesConfig.kidsOk || [];
-    sortiesConfig.kidsOk = sortiesConfig.kidsOk.includes(id)
-        ? sortiesConfig.kidsOk.filter(x => x !== id)
-        : [...sortiesConfig.kidsOk, id];
-    saveSortiesConfig();
-    res.json({ ok: true, kidsOk: sortiesConfig.kidsOk.includes(id) });
-});
-
-app.post("/api/admin/nowplaying/hide", requireAdmin, (req, res) => {
-    const id = Number(req.body.id);
-    if (id && !nowPlayingConfig.hidden.includes(id)) {
-        nowPlayingConfig.hidden.push(id);
-        saveNowPlayingConfig();
-    }
-    res.json({ ok: true });
-});
-
-app.post("/api/admin/nowplaying/unhide", requireAdmin, (req, res) => {
-    const id = Number(req.body.id);
-    nowPlayingConfig.hidden = nowPlayingConfig.hidden.filter(x => x !== id);
-    saveNowPlayingConfig();
-    res.json({ ok: true });
-});
-
-app.post("/api/admin/nowplaying/custom", requireAdmin, (req, res) => {
-    const id = Number(req.body.id);
-    if (id && !nowPlayingConfig.custom.includes(id)) {
-        nowPlayingConfig.custom.push(id);
-        saveNowPlayingConfig();
-    }
-    res.json({ ok: true });
-});
-
-app.post("/api/admin/nowplaying/remove-custom", requireAdmin, (req, res) => {
-    const id = Number(req.body.id);
-    nowPlayingConfig.custom = nowPlayingConfig.custom.filter(x => x !== id);
-    saveNowPlayingConfig();
-    res.json({ ok: true });
-});
-
-/** Approuve ou retire un film de la liste blanche « adapté aux enfants » des films au cinéma. */
-app.post("/api/admin/nowplaying/kids-toggle", requireAdmin, (req, res) => {
-    const id = Number(req.body.id);
-    if (!id) return res.status(400).json({ error: "ID_MANQUANT" });
-    nowPlayingConfig.kidsOk = nowPlayingConfig.kidsOk || [];
-    nowPlayingConfig.kidsOk = nowPlayingConfig.kidsOk.includes(id)
-        ? nowPlayingConfig.kidsOk.filter(x => x !== id)
-        : [...nowPlayingConfig.kidsOk, id];
-    saveNowPlayingConfig();
-    res.json({ ok: true, kidsOk: nowPlayingConfig.kidsOk.includes(id) });
-});
-
-app.get("/api/movies/upcoming", async (req, res) => {
-  try {
-    const tmdbKey = REGLAGES.tmdbApiKey;
-    if (!tmdbKey) return res.json({ error: "NO_KEY", movies: [] });
-    
-    const isAdmin = motDePasseAdminValide(req.get("x-admin-token"));
-    // Un compte "enfant" est toujours filtré, mais aussi n'importe quel compte qui a activé le
-    // bouton "Mode enfant" en cours de session (paramètre ?kids=1) : sans ça, ce mode ne
-    // s'appliquait qu'au choix des films de quiz, jamais aux Sorties Ciné / À l'affiche.
-    const estCompteEnfant = estEnfant(userFromCookie(req.headers.cookie)) || req.query.kids === "1";
-
-    const now = new Date();
-    const day = now.getDay();
-    const diffToWed = (3 - day + 7) % 7; 
-    
-    const wednesday = new Date(now);
-    wednesday.setDate(now.getDate() + (day >= 3 ? (3 - day) : diffToWed));
-    
-    const nextTuesday = new Date(wednesday);
-    nextTuesday.setDate(wednesday.getDate() + 6);
-
-    const fmt = d => d.toISOString().split('T')[0];
-    const gte = fmt(wednesday);
-    const lte = fmt(nextTuesday);
-
-    const url = `https://api.themoviedb.org/3/discover/movie?api_key=${tmdbKey}&language=fr-FR&region=FR&primary_release_date.gte=${gte}&primary_release_date.lte=${lte}&with_release_type=3&sort_by=popularity.desc`;
-    const response = await fetch(url);
-    if (!response.ok) return res.json({ error: "API_ERROR", movies: [] });
-    
-    const data = await response.json();
-    let results = data.results || [];
-    
-    const customMovies = [];
-    for (const cid of (sortiesConfig.custom || [])) {
-        try {
-            const cRes = await fetch(`https://api.themoviedb.org/3/movie/${cid}?api_key=${tmdbKey}&language=fr-FR`);
-            if (cRes.ok) {
-                customMovies.push(await cRes.json());
-            }
-        } catch(e){}
-    }
-    
-    const allMovies = [...customMovies, ...results];
-    const seen = new Set();
-    const finalMovies = [];
-    
-    for (const m of allMovies) {
-        if (seen.has(m.id)) continue;
-        seen.add(m.id);
-        
-        const isHidden = (sortiesConfig.hidden || []).includes(m.id);
-        const isCustom = (sortiesConfig.custom || []).includes(m.id);
-        const isKidsOk = (sortiesConfig.kidsOk || []).includes(m.id);
-
-        if (isHidden && !isAdmin) continue;
-        // Liste blanche stricte : un compte enfant ne voit que les films explicitement
-        // approuvés par l'administration, jamais le flux TMDB brut (non classé par âge).
-        if (estCompteEnfant && !isKidsOk) continue;
-
-        finalMovies.push({
-            id: m.id,
-            title: m.title,
-            overview: m.overview,
-            poster: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : null,
-            vote: m.vote_average,
-            hidden: isHidden,
-            custom: isCustom,
-            kidsOk: isKidsOk
-        });
-    }
-
-    res.json({
-        dateDebut: gte,
-        movies: isAdmin ? finalMovies : finalMovies.slice(0, 10)
-    });
-  } catch (err) {
-    console.error("Erreur upcoming:", err);
-    res.json({ error: "INTERNAL_ERROR", movies: [] });
-  }
-});
-
-
-
-app.get("/api/movies/now_playing", async (req, res) => {
-  try {
-    const tmdbKey = REGLAGES.tmdbApiKey;
-    if (!tmdbKey) return res.json({ error: "NO_KEY", movies: [] });
-    
-    const isAdmin = motDePasseAdminValide(req.get("x-admin-token"));
-    // Voir le commentaire équivalent dans /api/movies/upcoming : le mode enfant activé en session
-    // (pas seulement un compte enfant dédié) doit aussi filtrer la liste "Actuellement au cinéma".
-    const estCompteEnfant = estEnfant(userFromCookie(req.headers.cookie)) || req.query.kids === "1";
-    const url = `https://api.themoviedb.org/3/movie/now_playing?api_key=${tmdbKey}&language=fr-FR&region=FR`;
-    
-    const response = await fetch(url);
-    if (!response.ok) return res.json({ error: "API_ERROR", movies: [] });
-    
-    const data = await response.json();
-    let results = data.results || [];
-    
-    const customMovies = [];
-    for (const cid of (nowPlayingConfig.custom || [])) {
-        try {
-            const cRes = await fetch(`https://api.themoviedb.org/3/movie/${cid}?api_key=${tmdbKey}&language=fr-FR`);
-            if (cRes.ok) customMovies.push(await cRes.json());
-        } catch(e){}
-    }
-    
-    const allMovies = [...customMovies, ...results];
-    const seen = new Set();
-    const finalMovies = [];
-    
-    for (const m of allMovies) {
-        if (seen.has(m.id)) continue;
-        seen.add(m.id);
-        
-        const isHidden = (nowPlayingConfig.hidden || []).includes(m.id);
-        const isCustom = (nowPlayingConfig.custom || []).includes(m.id);
-        const isKidsOk = (nowPlayingConfig.kidsOk || []).includes(m.id);
-
-        if (isHidden && !isAdmin) continue;
-        // Liste blanche stricte : un compte enfant ne voit que les films explicitement
-        // approuvés par l'administration, jamais le flux TMDB brut (non classé par âge).
-        if (estCompteEnfant && !isKidsOk) continue;
-
-        finalMovies.push({
-            id: m.id,
-            title: m.title,
-            overview: m.overview,
-            poster: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : null,
-            vote: m.vote_average,
-            hidden: isHidden,
-            custom: isCustom,
-            kidsOk: isKidsOk
-        });
-    }
-
-    res.json({ movies: isAdmin ? finalMovies : finalMovies.slice(0, 15) });
-  } catch (err) {
-    console.error("Erreur now_playing:", err);
-    res.json({ error: "INTERNAL_ERROR", movies: [] });
-  }
-});
-
-/** Bande-annonce YouTube d'un film TMDB, utilisée par le lecteur vidéo des « Sorties de la
- *  semaine » : cherche d'abord une bande-annonce officielle en VF, puis retente en VO si
- *  TMDB n'en propose aucune (fréquent pour les sorties très récentes). Appelée à la demande,
- *  au clic sur un film, plutôt qu'en même temps que la liste pour ne pas multiplier les
- *  appels TMDB par film affiché. */
-app.get("/api/movies/:id/trailer", async (req, res) => {
-  try {
-    const tmdbKey = REGLAGES.tmdbApiKey;
-    if (!tmdbKey) return res.json({ error: "NO_KEY", key: null });
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: "ID_INVALIDE", key: null });
-
-    const chercherTrailer = async (langue) => {
-      const r = await fetch(`https://api.themoviedb.org/3/movie/${id}/videos?api_key=${tmdbKey}&language=${langue}`);
-      if (!r.ok) return null;
-      const d = await r.json();
-      const vids = d.results || [];
-      const officiel = vids.find((v) => v.site === "YouTube" && v.type === "Trailer" && v.official);
-      const trailer = officiel || vids.find((v) => v.site === "YouTube" && v.type === "Trailer");
-      const teaser = vids.find((v) => v.site === "YouTube" && v.type === "Teaser");
-      return trailer || teaser || null;
-    };
-
-    const trouve = (await chercherTrailer("fr-FR")) || (await chercherTrailer("en-US"));
-    if (!trouve) return res.json({ key: null });
-    res.json({ key: trouve.key });
-  } catch (err) {
-    console.error("Erreur bande-annonce:", err);
-    res.status(500).json({ error: "INTERNAL_ERROR", key: null });
-  }
-});
-
-/* ------------------------------------------------------------------ */
-/* Cinémas à proximité : géolocalisation du joueur → cinémas les plus  */
-/* proches via OpenStreetMap (Overpass API, gratuit, sans clé), avec   */
-/* identification des grandes enseignes (UGC, MK2, Gaumont, Pathé...)  */
-/* pour les distinguer des cinémas indépendants / de quartier.         */
-/* ------------------------------------------------------------------ */
-
-const ENSEIGNES_CINEMA = [
-  { motif: /\bugc\b/i, nom: "UGC" },
-  { motif: /\bmk2\b/i, nom: "MK2" },
-  { motif: /gaumont/i, nom: "Gaumont" },
-  { motif: /path[eé]/i, nom: "Pathé" },
-  { motif: /\bcgr\b/i, nom: "CGR" },
-  { motif: /cin[eé]ville/i, nom: "Cinéville" },
-  { motif: /kinepolis/i, nom: "Kinepolis" },
-  { motif: /megarama/i, nom: "Megarama" },
-];
-const enseigneDepuisNom = (nom) =>
-  (ENSEIGNES_CINEMA.find((e) => e.motif.test(nom || "")) || {}).nom || "Cinéma indépendant";
-
-/** Logo à afficher sur une fiche cinéma, selon son enseigne — configuré (upload d'image) depuis
- *  la console admin. Les enseignes non reconnues (ou sans logo dédié uploadé) reçoivent le logo
- *  "indépendant" générique, s'il a été configuré ; sinon aucun logo n'est affiché. */
-function logoPourEnseigne(enseigne) {
-  const logos = REGLAGES.logosCinema || {};
-  if (enseigne === "UGC" && logos.ugc) return logos.ugc;
-  if (enseigne === "MK2" && logos.mk2) return logos.mk2;
-  if (enseigne === "Gaumont" && logos.gaumont) return logos.gaumont;
-  if (enseigne === "Pathé" && logos.pathe) return logos.pathe;
-  return logos.independant || "";
-}
-
-/** Distance à vol d'oiseau entre deux points GPS, en kilomètres (formule de haversine). */
-function distanceKm(lat1, lon1, lat2, lon2) {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-// Le serveur Overpass principal (OpenStreetMap, gratuit et sans clé) est parfois lent, surchargé
-// ou limite le débit des adresses IP partagées des hébergeurs cloud (Render, Heroku...) — ce qui
-// peut le rendre silencieusement inutilisable depuis un serveur, même quand tout fonctionne en
-// local. On borne chaque appel dans le temps et on bascule sur un miroir avant d'abandonner.
-const OVERPASS_INSTANCES = [
-  "https://overpass-api.de/api/interpreter",
-  "https://overpass.kumi.systems/api/interpreter",
-];
-async function interrogerOverpass(url, requete) {
-  const controleur = new AbortController();
-  const minuteur = setTimeout(() => controleur.abort(), 10000);
-  try {
-    const r = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        // Overpass demande un User-Agent explicite identifiant l'appli — son absence peut
-        // entraîner un rejet silencieux des requêtes sur certaines instances.
-        "User-Agent": "MichBenCineQuizz/1.0 (+https://michben-cine-quizz; contact: sospchs@gmail.com)",
-      },
-      body: `data=${encodeURIComponent(requete)}`,
-      signal: controleur.signal,
-    });
-    if (!r.ok) { console.error(`Overpass (${url}) a répondu ${r.status}`); return null; }
-    const d = await r.json();
-    return d.elements || [];
-  } catch (err) {
-    console.error(`Overpass (${url}) indisponible :`, err?.message || err);
-    return null;
-  } finally {
-    clearTimeout(minuteur);
-  }
-}
-
-/** Cherche des cinémas via OpenStreetMap/Overpass (gratuit, sans clé, mais pas toujours
- *  fiable depuis un serveur cloud). Retourne un tableau (éventuellement vide) ou null si les
- *  deux instances ont échoué. */
-async function cinemasViaOverpass(lat, lon, rayonMetres) {
-  const requete = `[out:json][timeout:9];(node["amenity"="cinema"](around:${rayonMetres},${lat},${lon});way["amenity"="cinema"](around:${rayonMetres},${lat},${lon}););out center;`;
-  let elements = null;
-  for (const instance of OVERPASS_INSTANCES) {
-    elements = await interrogerOverpass(instance, requete);
-    if (elements !== null) break;
-  }
-  if (elements === null) return null;
-
-  const vus = new Set();
-  const cinemas = [];
-  for (const el of elements) {
-    const nom = el.tags?.name;
-    if (!nom) continue;
-    const latEl = el.lat ?? el.center?.lat;
-    const lonEl = el.lon ?? el.center?.lon;
-    if (!Number.isFinite(latEl) || !Number.isFinite(lonEl)) continue;
-    const cle = nom + "|" + (el.tags?.["addr:street"] || "");
-    if (vus.has(cle)) continue;
-    vus.add(cle);
-    const adresse = [el.tags?.["addr:housenumber"], el.tags?.["addr:street"]].filter(Boolean).join(" ") || null;
-    cinemas.push({
-      nom, enseigne: enseigneDepuisNom(nom), adresse,
-      ville: el.tags?.["addr:city"] || null, codePostal: el.tags?.["addr:postcode"] || null,
-      lat: latEl, lon: lonEl, distanceKm: Math.round(distanceKm(lat, lon, latEl, lonEl) * 10) / 10,
-    });
-  }
-  return cinemas;
-}
-
-/** Cherche des cinémas via l'API Geoapify Places (clé gratuite requise, configurée en
- *  console admin — bien plus fiable qu'Overpass depuis un hébergeur cloud). Retourne un
- *  tableau (éventuellement vide) ou null en cas d'échec ou si aucune clé n'est configurée. */
-async function cinemasViaGeoapify(lat, lon, rayonMetres) {
-  const cle = REGLAGES.geoapifyApiKey;
-  if (!cle) return null;
-  const controleur = new AbortController();
-  const minuteur = setTimeout(() => controleur.abort(), 10000);
-  try {
-    const url = `https://api.geoapify.com/v2/places?categories=entertainment.cinema` +
-      `&filter=circle:${lon},${lat},${rayonMetres}&bias=proximity:${lon},${lat}&limit=20&apiKey=${encodeURIComponent(cle)}`;
-    const r = await fetch(url, { signal: controleur.signal });
-    if (!r.ok) { console.error(`Geoapify a répondu ${r.status}`); return null; }
-    const d = await r.json();
-    const features = d.features || [];
-    return features.map((f) => {
-      const p = f.properties || {};
-      return {
-        nom: p.name || "Cinéma",
-        enseigne: enseigneDepuisNom(p.name || ""),
-        adresse: p.address_line1 || [p.housenumber, p.street].filter(Boolean).join(" ") || null,
-        ville: p.city || null,
-        codePostal: p.postcode || null,
-        lat: p.lat, lon: p.lon,
-        distanceKm: Number.isFinite(p.distance) ? Math.round(p.distance / 100) / 10
-          : Math.round(distanceKm(lat, lon, p.lat, p.lon) * 10) / 10,
-      };
-    }).filter((c) => Number.isFinite(c.lat) && Number.isFinite(c.lon));
-  } catch (err) {
-    console.error("Geoapify indisponible :", err?.message || err);
-    return null;
-  } finally {
-    clearTimeout(minuteur);
-  }
-}
-
-/**
- * Communes correspondant à un code postal de France métropolitaine — utilisé pour chercher des
- * cinémas sans dépendre du GPS (adresse saisie à la main). S'appuie sur l'API officielle
- * gratuite « geo.api.gouv.fr » (aucune clé requise) : un code postal peut couvrir plusieurs
- * communes (ex. Paris), d'où le retour d'une liste plutôt que d'une seule position.
- */
-app.get("/api/communes", async (req, res) => {
-  try {
-    const cp = String(req.query.codePostal || "").trim();
-    // Métropole uniquement (01xxx à 95xxx), comme demandé : les DROM (97x/98x) et la Corse restent
-    // hors du champ de cette recherche pour l'instant, mais sont bien sûr toujours trouvables via GPS.
-    if (!/^(0[1-9]|[1-8]\d|9[0-5])\d{3}$/.test(cp))
-      return res.status(400).json({ error: "CODE_POSTAL_INVALIDE", communes: [] });
-
-    const controleur = new AbortController();
-    const minuteur = setTimeout(() => controleur.abort(), 8000);
-    try {
-      const url = `https://geo.api.gouv.fr/communes?codePostal=${cp}&fields=nom,code,centre,codesPostaux&format=json`;
-      const r = await fetch(url, { signal: controleur.signal });
-      if (!r.ok) return res.status(502).json({ error: "SERVICE_INDISPONIBLE", communes: [] });
-      const data = await r.json();
-      const communes = (Array.isArray(data) ? data : [])
-        .filter((c) => c.centre?.coordinates?.length === 2)
-        .map((c) => ({ nom: c.nom, code: c.code, lat: c.centre.coordinates[1], lon: c.centre.coordinates[0] }))
-        .sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
-      res.json({ communes });
-    } finally {
-      clearTimeout(minuteur);
-    }
-  } catch (err) {
-    console.error("Erreur communes:", err);
-    res.status(500).json({ error: "INTERNAL_ERROR", communes: [] });
-  }
-});
-
-app.get("/api/cinemas/proches", async (req, res) => {
-  try {
-    const lat = Number(req.query.lat);
-    const lon = Number(req.query.lon);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180)
-      return res.status(400).json({ error: "POSITION_INVALIDE", cinemas: [] });
-
-    // Geoapify (avec clé configurée) est essayé en premier — bien plus fiable depuis un
-    // serveur cloud qu'Overpass, qui limite parfois le débit des adresses IP partagées des
-    // hébergeurs. Overpass sert de repli gratuit si aucune clé n'est configurée, ou si
-    // Geoapify échoue ou ne remonte presque rien.
-    let cinemas = await cinemasViaGeoapify(lat, lon, 50000);
-    let source = cinemas !== null ? "geoapify" : null;
-    if ((cinemas === null || cinemas.length < 3)) {
-      const viaOsm = await cinemasViaOverpass(lat, lon, 50000);
-      if (viaOsm !== null && (cinemas === null || viaOsm.length > cinemas.length)) { cinemas = viaOsm; source = "overpass"; }
-    }
-    // Élargit à 100 km si presque rien ne remonte — utile en zone peu dense.
-    if (cinemas !== null && cinemas.length < 3) {
-      const elargi = source === "geoapify" ? await cinemasViaGeoapify(lat, lon, 100000) : await cinemasViaOverpass(lat, lon, 100000);
-      if (elargi && elargi.length > cinemas.length) cinemas = elargi;
-    }
-
-    if (cinemas === null) {
-      const conseil = REGLAGES.geoapifyApiKey
-        ? "Geoapify et OpenStreetMap sont tous deux indisponibles pour le moment."
-        : "Aucune clé Geoapify configurée et OpenStreetMap est indisponible pour le moment — ajoutez une clé Geoapify gratuite en console admin (Réglages) pour fiabiliser cette fonctionnalité.";
-      console.error("Recherche de cinémas : aucune source disponible.", conseil);
-      return res.status(502).json({ error: "SERVICE_INDISPONIBLE", cinemas: [] });
-    }
-
-    cinemas.sort((a, b) => a.distanceKm - b.distanceKm);
-    const cinemasAvecLogo = cinemas.slice(0, 20).map((c) => ({ ...c, logo: logoPourEnseigne(c.enseigne) }));
-    res.json({ cinemas: cinemasAvecLogo, source });
-  } catch (err) {
-    console.error("Erreur cinémas proches:", err);
-    res.status(500).json({ error: "INTERNAL_ERROR", cinemas: [] });
-  }
-});
 
 app.get("/api/leaderboard", (req, res) =>
   res.json(leaderboard(50, ["global", "enfant"].includes(req.query.type) ? req.query.type : "saison"))
@@ -4372,29 +3406,6 @@ app.post("/api/vocal/retour/ignorer", (req, res) => {
   res.json({ ok: true });
 });
 
-/**
- * Quatre propositions : la bonne, plus trois leurres pris de préférence
- * dans la même décennie — sinon le bon titre saute aux yeux.
- */
-function buildChoices(movie) {
-  // Si la question porte sur un film enfant, les leurres doivent l'être
-  // aussi : pas question qu'un titre pour adultes apparaisse comme option.
-  const actifs = movies.filter((m) => m.enabled !== false && (!movie.kids || m.kids === true));
-  const memeEpoque = actifs.filter(
-    (m) => m.id !== movie.id && m.year && movie.year && Math.abs(m.year - movie.year) <= 12
-  );
-  const vivier = melange(memeEpoque.length >= 3 ? memeEpoque : actifs.filter((m) => m.id !== movie.id));
-
-  const leurres = [];
-  for (const m of vivier) {
-    if (leurres.length >= 3) break;
-    if (leurres.some((l) => l.title === m.title) || m.title === movie.title) continue;
-    leurres.push(m);
-  }
-
-  return melange([movie, ...leurres].map((m) => ({ id: m.id, title: m.title })));
-}
-
 /* ------------------------------------------------------------------ */
 /* Saisons classées                                                    */
 /*                                                                     */
@@ -4541,154 +3552,6 @@ function donnerPartieClassee(donneurId, destinataireId) {
   return { ok: true };
 }
 
-/** Libellés des indices actifs, tels que définis dans l'administration. */
-const libellesIndices = () =>
-  Object.fromEntries(Object.entries(REGLAGES.indices)
-    .filter(([, v]) => v.actif).map(([k, v]) => [k, v.libelle]));
-
-/**
- * Recadrage de l'image d'indice. Un zoom supérieur à 100 % rogne les bords :
- * le titre imprimé et les visages en gros plan disparaissent souvent, ce qui
- * rend l'indice utile sans donner la réponse.
- */
-const styleAffiche = (film) => {
-  if (film?.cadrageImage) return film.cadrageImage;   // réglage propre au film
-  const p = REGLAGES.indices.poster;
-  return { zoom: p.zoom ?? 100, cadrage: p.cadrage || "center", flou: p.flou ?? 0 };
-};
-
-/**
- * Masque dans le synopsis tout mot appartenant au titre ou aux réponses
- * acceptées. Le joueur voit « ▪▪▪▪▪ » : il comprend qu'un mot a été retiré
- * parce qu'il donnait la réponse, plutôt que de tomber sur un synopsis
- * incohérent ou, pire, sur le titre en clair.
- */
-const MOTS_VIDES = new Set([
-  "le","la","les","un","une","des","du","de","d","l","au","aux","et","ou","à","a",
-  "en","dans","sur","pour","par","avec","sans","son","sa","ses","ce","cet","cette",
-  "the","of","and","in","on","to","il","elle","est","qui","que","plus","ne","pas",
-]);
-
-function masquerReponse(synopsis, film) {
-  const sources = [film.title, ...(film.acceptedAnswers || [])];
-  const interdits = new Set();
-
-  for (const source of sources) {
-    const complet = normalize(source);
-    if (complet.length > 2) interdits.add(complet);
-    for (const mot of complet.split(/\s+/))
-      if (mot.length > 3 && !MOTS_VIDES.has(mot)) interdits.add(mot);
-  }
-  if (!interdits.size) return synopsis;
-
-  // on remplace mot à mot, en conservant la ponctuation d'origine
-  return synopsis.replace(/[\p{L}\p{N}'’-]+/gu, (mot) => {
-    const nu = normalize(mot);
-    if (!nu || nu.length < 3) return mot;
-    const touche = [...interdits].some((i) =>
-      nu === i || (i.length > 4 && nu.startsWith(i)) || (nu.length > 4 && i.startsWith(nu))
-    );
-    return touche ? "▪".repeat(Math.max(3, mot.length)) : mot;
-  });
-}
-
-/** Motif du titre : un tiret par lettre, espaces et ponctuation conservés. */
-/** Indice « Nombre de lettres » : le masque du titre, plus le chiffre exact. */
-function titlePattern(title) {
-  const masque = [...title].map((c) => (/[\p{L}\p{N}]/u.test(c) ? "–" : c)).join("");
-  const nbLettres = [...title].filter((c) => /[\p{L}\p{N}]/u.test(c)).length;
-  return `${masque}  (${nbLettres} lettre${nbLettres > 1 ? "s" : ""})`;
-}
-
-/**
- * Films servis récemment, tous joueurs confondus (pas seulement l'historique du joueur qui a
- * lancé la partie). En multijoueur, seule la personne qui crée le salon comptait jusqu'ici pour
- * éviter les répétitions : les autres joueurs du salon pouvaient très bien retomber sur des
- * films qu'ils venaient eux-mêmes de voir dans une partie précédente. Ce filet de sécurité
- * partagé réduit ce cas sans avoir à connaître à l'avance tous les joueurs d'un salon.
- */
-const recemmentServis = new Map();          // id de film -> horodatage du dernier tirage
-const COOLDOWN_SERVI_MS = 3 * 60 * 60 * 1000; // 3 h : large sur un petit catalogue, discret sur un grand
-
-function purgerServisRecents() {
-  const limite = Date.now() - COOLDOWN_SERVI_MS;
-  for (const [id, t] of recemmentServis) if (t < limite) recemmentServis.delete(id);
-}
-function marquerServis(films) {
-  const maintenant = Date.now();
-  for (const f of films) recemmentServis.set(f.id, maintenant);
-}
-
-/**
- * Parmi un ensemble de films déjà filtré (indemnes de répétition), plafonne la part de films
- * français à REGLAGES.ratioFilmsFrancaisMax % et comble le reste avec l'international (et les
- * films non classés, qui ne sont pénalisés ni favorisés). Ne raccourcit jamais une manche : si le
- * vivier international est insuffisant pour atteindre `nombre`, on repuise dans le reste des
- * films français plutôt que de livrer moins de films que demandé.
- */
-function tirerAvecEquilibreOrigine(pool, nombre) {
-  const ratioMax = Math.min(1, Math.max(0, (REGLAGES.ratioFilmsFrancaisMax ?? 100) / 100));
-  const francais = melange(pool.filter((m) => m.origine === "france"));
-  const autres = melange(pool.filter((m) => m.origine !== "france"));
-  const maxFrancais = Math.min(francais.length, Math.ceil(nombre * ratioMax));
-
-  const choisis = [...francais.slice(0, maxFrancais), ...autres.slice(0, nombre - maxFrancais)];
-  if (choisis.length < nombre) {
-    // L'international (+ non classés) ne suffit pas à compléter : on repuise dans le reste des
-    // films français déjà écartés par le plafond, plutôt que de jouer une manche plus courte.
-    const resteFrancais = francais.slice(maxFrancais);
-    choisis.push(...resteFrancais.slice(0, nombre - choisis.length));
-  }
-  return melange(choisis).slice(0, nombre);
-}
-
-/**
- * Sélectionne des films en évitant ceux déjà vus récemment par le joueur (et, dans la mesure du
- * possible, ceux servis à n'importe qui il y a peu), puis équilibre la part de films français /
- * internationaux du tirage. Sans anti-répétition, un tirage purement aléatoire ramène
- * statistiquement les mêmes titres bien plus souvent que ne le perçoit un joueur — c'est le
- * reproche le plus fréquent sur ce type de jeu, avec celui d'un catalogue trop mono-national.
- */
-function choisirFilms(vivier, nombre, userId) {
-  purgerServisRecents();
-  const vus = new Set(historiqueVus(userId));
-  const dispoBase = vivier.filter((m) => !vus.has(m.id));
-  // On essaie d'abord d'éviter aussi ce qui vient d'être servi à d'autres joueurs, mais seulement
-  // si ça laisse assez de choix — sinon on revient au filtrage simple plutôt que de bloquer la partie.
-  const dispoFrais = dispoBase.filter((m) => !recemmentServis.has(m.id));
-  const dispo = dispoFrais.length >= nombre ? dispoFrais : dispoBase;
-
-  let choix;
-  if (dispo.length >= nombre) {
-    choix = tirerAvecEquilibreOrigine(dispo, nombre);
-  } else {
-    // Pas assez d'inédits pour ce joueur : on complète avec les films déjà vus, les plus
-    // anciennement vus en priorité — toujours en essayant de respecter l'équilibre d'origine.
-    const anciens = melange(vivier.filter((m) => vus.has(m.id)));
-    choix = [...tirerAvecEquilibreOrigine(dispo, dispo.length), ...anciens].slice(0, nombre);
-  }
-  marquerServis(choix);
-  return choix;
-}
-
-/** Films récemment vus par un joueur, du plus ancien au plus récent. */
-function historiqueVus(userId) {
-  return vusParJoueur.get(userId) || [];
-}
-
-/**
- * Mémorise les films joués. La fenêtre couvre la moitié du catalogue :
- * un joueur ne revoit un film qu'après en avoir vu des centaines d'autres.
- */
-function memoriserVus(userId, films) {
-  const taille = Math.max(50, Math.floor(movies.length / 2));
-  const liste = [...historiqueVus(userId), ...films.map((m) => m.id)];
-  vusParJoueur.set(userId, liste.slice(-taille));
-  sauver("vus", Object.fromEntries(vusParJoueur));
-}
-
-const vusParJoueur = new Map();
-
 /**
  * Mélange de Fisher-Yates : chaque permutation est équiprobable.
  * (sort(() => Math.random() - 0.5) paraît équivalent mais ne l'est pas :
@@ -4712,13 +3575,6 @@ function normalize(str) {
     .replace(/[^a-z0-9 ]/g, "")
     .replace(/^(le |la |les |the |a |an )/, "")
     .trim();
-}
-
-/** Score = base × facteur temps − coût des indices consommés. */
-function computeScore({ elapsedMs, hintsUsed }) {
-  const timeFactor = Math.max(0.1, 1 - elapsedMs / CONFIG.ROUND_DURATION_MS);
-  const penalty = hintsUsed.reduce((sum, h) => sum + (CONFIG.HINT_COSTS[h] ?? 0), 0);
-  return Math.max(50, Math.round(CONFIG.BASE_POINTS * timeFactor) - penalty);
 }
 
 function publicState(room) {
@@ -4775,9 +3631,9 @@ function reprendreSalon(room) {
   room.startedAt += duree;
   room.pauseA = null;
   const reste = CONFIG.ROUND_DURATION_MS - (Date.now() - room.startedAt);
-  room.timer = setTimeout(() => endRound(room), Math.max(0, reste));
+  room.timer = setTimeout(() => passerAuVote(room), Math.max(0, reste));
   if (room.graceRestant) {
-    room.graceTimer = setTimeout(() => endRound(room), room.graceRestant);
+    room.graceTimer = setTimeout(() => passerAuVote(room), room.graceRestant);
     room.graceRestant = null;
   }
   io.to(room.code).emit("game:paused", { enPause: false, reste });
@@ -4835,73 +3691,86 @@ function joueurEnPartie(userId) {
 /* ------------------------------------------------------------------ */
 
 /**
- * Programme la réponse d'un bot pour la manche en cours : délai de réflexion aléatoire
- * (borné à la durée de la manche) puis clic simulé, correct ou non selon sa précision.
+ * Petit lexique utilisé UNIQUEMENT par les bots (jamais pour valider la réponse d'un joueur
+ * humain, jamais consulté par le vote) : sans lui, un bot resterait toujours muet. Couverture
+ * volontairement partielle — un bot qui ne connaît pas de mot pour une lettre donnée laisse
+ * simplement la case vide, comme le ferait un joueur humain qui sèche.
+ */
+const MOTS_BAC = {
+  "prenom": { A:"Alice", B:"Bruno", C:"Claire", D:"David", E:"Emma", F:"Fabien", G:"Gabriel", H:"Hugo", I:"Ines", J:"Julien", L:"Lucas", M:"Marie", N:"Nicolas", O:"Olivier", P:"Paul", R:"Romain", S:"Sophie", T:"Thomas", U:"Ursula", V:"Victor" },
+  "pays": { A:"Allemagne", B:"Belgique", C:"Canada", D:"Danemark", E:"Espagne", F:"France", G:"Grece", H:"Hongrie", I:"Italie", J:"Japon", K:"Kenya", L:"Laos", M:"Maroc", N:"Norvege", O:"Oman", P:"Portugal", Q:"Qatar", R:"Roumanie", S:"Suisse", T:"Turquie", U:"Uruguay", V:"Vietnam" },
+  "ville": { A:"Amiens", B:"Bordeaux", C:"Cannes", D:"Dijon", E:"Evreux", F:"Florence", G:"Grenoble", H:"Hanoi", I:"Istanbul", J:"Jerusalem", L:"Lyon", M:"Marseille", N:"Nice", O:"Orleans", P:"Paris", Q:"Quebec", R:"Rennes", S:"Strasbourg", T:"Toulouse", U:"Utrecht", V:"Versailles" },
+  "animal": { A:"Aigle", B:"Baleine", C:"Chat", D:"Dauphin", E:"Ecureuil", F:"Faucon", G:"Girafe", H:"Herisson", I:"Iguane", J:"Jaguar", K:"Koala", L:"Lion", M:"Mouton", N:"Nandou", O:"Ours", P:"Panda", R:"Renard", S:"Serpent", T:"Tigre", U:"Urubu", V:"Vache" },
+  "metier": { A:"Avocat", B:"Boulanger", C:"Chirurgien", D:"Danseur", E:"Electricien", F:"Facteur", G:"Garagiste", H:"Horloger", I:"Infirmier", J:"Jardinier", L:"Libraire", M:"Medecin", N:"Notaire", O:"Opticien", P:"Peintre", R:"Redacteur", S:"Serveur", T:"Traducteur", U:"Urbaniste", V:"Veterinaire" },
+  "fruit ou legume": { A:"Abricot", B:"Banane", C:"Carotte", D:"Datte", E:"Epinard", F:"Fraise", G:"Grenade", H:"Haricot", K:"Kiwi", L:"Laitue", M:"Mangue", N:"Navet", O:"Oignon", P:"Poire", R:"Radis", S:"Salade", T:"Tomate", V:"Vigne" },
+  "couleur": { A:"Azur", B:"Beige", C:"Cyan", D:"Dore", E:"Ecarlate", F:"Fauve", G:"Grenat", I:"Indigo", J:"Jaune", L:"Lilas", M:"Marron", N:"Noir", O:"Orange", P:"Pourpre", R:"Rouge", S:"Saumon", T:"Turquoise", V:"Vert" },
+  "objet": { A:"Assiette", B:"Bureau", C:"Chaise", D:"Divan", E:"Ecran", F:"Fauteuil", G:"Gobelet", H:"Horloge", I:"Interrupteur", J:"Jouet", L:"Lampe", M:"Miroir", N:"Nappe", O:"Oreiller", P:"Peigne", R:"Radio", S:"Stylo", T:"Table", U:"Ustensile", V:"Vase" },
+  "sport": { A:"Athletisme", B:"Basket", C:"Cyclisme", D:"Danse", E:"Escalade", F:"Football", G:"Golf", H:"Handball", J:"Judo", K:"Karate", L:"Lutte", M:"Marathon", N:"Natation", P:"Petanque", R:"Rugby", S:"Ski", T:"Tennis", V:"Volley" },
+  "marque": { A:"Adidas", B:"Bic", C:"Citroen", D:"Danone", E:"Evian", F:"Fanta", G:"Gucci", H:"Heineken", I:"IBM", J:"Jacadi", K:"Kenzo", L:"Lego", M:"Michelin", N:"Nike", O:"Orange", P:"Peugeot", R:"Renault", S:"Samsung", T:"Tefal", V:"Volvo" },
+};
+
+/** Mot qu'un bot proposerait pour ce thème et cette lettre, ou "" s'il ne connaît rien (sèche,
+ *  comme un joueur humain). */
+function motBotPour(themeNom, lettre) {
+  const cle = normalize(themeNom);
+  return (MOTS_BAC[cle] || {})[lettre] || "";
+}
+
+/**
+ * Fait remplir sa grille par un bot après un délai de réflexion aléatoire (borné à la durée de
+ * la manche), avec une précision qui dépend de son niveau : même quand il connaît un mot valide,
+ * un bot moins fort a une chance de le laisser de côté (case vide), pour rester battable.
  */
 function planifierReponseBot(room, bot) {
   const config = BOT_NIVEAUX[bot.botNiveau] || BOT_NIVEAUX.moyen;
-  const correct = Math.random() < config.precision;
-  const autres = room.choices.filter((c) => c.id !== room.currentMovie.id);
-  const choiceId = (correct || !autres.length)
-    ? room.currentMovie.id
-    : autres[Math.floor(Math.random() * autres.length)].id;
   const delaiBrut = config.delaiMin + Math.random() * (config.delaiMax - config.delaiMin);
-  const delai = Math.max(400, Math.min(delaiBrut, CONFIG.ROUND_DURATION_MS - 1200));
+  const delai = Math.max(400, Math.min(delaiBrut, CONFIG.ROUND_DURATION_MS - 800));
   const manche = room.roundIndex;   // pour ignorer ce minuteur si la manche a déjà changé
   clearTimeout(bot.timerReponse);
   bot.timerReponse = setTimeout(() => {
-    if (room.roundIndex !== manche || room.status !== "playing") return;
-    traiterReponseBot(room, bot, choiceId);
+    if (room.roundIndex !== manche || room.status !== "playing" || bot.hasAnswered) return;
+    const reponses = {};
+    for (const theme of room.currentManche.themes) {
+      const mot = motBotPour(theme.nom, room.currentManche.lettre);
+      if (mot && Math.random() < config.precision) reponses[theme.id] = mot;
+    }
+    soumettreReponses(room, bot, reponses);
   }, delai);
 }
 
 /**
- * Fait « répondre » un bot après son délai de réflexion — reprend exactement la même logique
- * de score/cœurs/fin de manche que answer:submit en mode « par clic », sans passer par un
- * socket puisque le bot n'en a pas.
+ * Enregistre la grille d'un joueur (ou d'un bot) pour la manche en cours — utilisé aussi bien
+ * par le socket answer:submit que par les bots (voir planifierReponseBot) et par passerAuVote()
+ * pour les joueurs qui n'ont rien envoyé avant la fin du temps imparti (voir plus bas : une
+ * grille vide, exactement comme une mauvaise réponse au quiz de films, coûte un cœur).
  */
-function traiterReponseBot(room, bot, choiceId) {
-  if (!room || !bot || room.status !== "playing" || bot.hasAnswered || bot.coeurs === 0) return;
-  const correct = Number(choiceId) === room.currentMovie.id;
-
-  if (!correct) {
-    bot.hasAnswered = true;
-    bot.coeurs = Math.max(0, (bot.coeurs ?? bot.coeursMax) - 1);
-    io.to(room.code).emit("player:answered", { id: bot.id, pseudo: bot.pseudo, team: bot.team, points: 0,
-      coeurs: bot.coeurs, coeursMax: bot.coeursMax });
-    io.to(room.code).emit("room:update", publicState(room));
-    botDire(room, bot, "mauvaiseReponse");
-    if ([...room.players.values()].every((p) => p.hasAnswered)) endRound(room);
-    return;
-  }
-
-  bot.hasAnswered = true;
-  let points = computeScore({ elapsedMs: Date.now() - room.startedAt, hintsUsed: bot.paidHints });
-  points = Math.max(30, Math.round(points * CONFIG.CHOICE_RATIO));
-  bot.score += points;
-  io.to(room.code).emit("player:answered", { id: bot.id, pseudo: bot.pseudo, team: bot.team, points,
-    coeurs: bot.coeurs, coeursMax: bot.coeursMax });
-  botDire(room, bot, "bonneReponse");
+function soumettreReponses(room, player, reponses) {
+  if (player.hasAnswered) return;
+  player.hasAnswered = true;
+  room.reponses.set(player.userId, reponses || {});
+  io.to(room.code).emit("player:answered", { id: player.id, pseudo: player.pseudo, team: player.team,
+    coeurs: player.coeurs, coeursMax: player.coeursMax });
 
   const tousTrouve = [...room.players.values()].every((p) => p.hasAnswered || p.coeurs === 0);
-  if (tousTrouve) return endRound(room);
+  if (tousTrouve) return passerAuVote(room);
 
+  // premier à valider sa grille : les autres ont encore quelques secondes (bouton STOP)
   if (!room.graceTimer) {
     room.graceDebut = Date.now();
-    room.graceTimer = setTimeout(() => endRound(room), CONFIG.GRACE_AFTER_FIRST_MS);
-    io.to(room.code).emit("round:grace", { ms: CONFIG.GRACE_AFTER_FIRST_MS, pseudo: bot.pseudo });
+    room.graceTimer = setTimeout(() => passerAuVote(room), CONFIG.GRACE_AFTER_FIRST_MS);
+    io.to(room.code).emit("round:grace", { ms: CONFIG.GRACE_AFTER_FIRST_MS, pseudo: player.pseudo });
   }
 }
 
 function startRound(room) {
   clearTimeout(room.graceTimer);
   room.graceTimer = null;
-  const movie = room.playlist[room.roundIndex];
-  if (!movie) return endGame(room);
+  const manche = room.playlist[room.roundIndex];
+  if (!manche) return endGame(room);
 
   room.status = "playing";
-  room.currentMovie = movie;
-  room.choices = buildChoices(movie);
+  room.currentManche = manche;
+  room.reponses = new Map();
   room.startedAt = Date.now();
   room.pauseA = null;
   room.graceRestant = null;
@@ -4910,37 +3779,23 @@ function startRound(room) {
     // Cœurs épuisés : éliminé pour le reste de la partie — on ne le sollicite plus à
     // chaque manche, il ne peut plus que suivre la partie ou quitter le salon.
     p.hasAnswered = p.coeurs === 0;
-    p.hints = [];
-    p.paidHints = [];
   }
 
-  io.to(room.code).emit("round:start", {
+  const vue = {
     roundIndex: room.roundIndex,
     total: room.playlist.length,
-    synopsis: masquerReponse(movie.synopsis, movie),   // aucun mot du titre ne transparaît
+    lettre: manche.lettre,
+    themes: manche.themes.map((t) => ({ id: t.id, nom: t.nom })),
     duration: CONFIG.ROUND_DURATION_MS,
-    hintCosts: CONFIG.HINT_COSTS,
-    hintCredits: CONFIG.HINT_CREDITS,
-    hintLabels: libellesIndices(),
-    posterStyle: styleAffiche(movie),
-    vitesseSynopsis: REGLAGES.vitesseSynopsis,
-    choices: room.choices,
-  });
-  diffuserSpectateurs(room, "regarder:manche", {
-    roundIndex: room.roundIndex,
-    total: room.playlist.length,
-    synopsis: masquerReponse(movie.synopsis, movie),
-    duration: CONFIG.ROUND_DURATION_MS,
-    posterStyle: styleAffiche(movie),
-    vitesseSynopsis: REGLAGES.vitesseSynopsis,
-    choices: room.choices,
-  });
+  };
+  io.to(room.code).emit("round:start", vue);
+  diffuserSpectateurs(room, "regarder:manche", vue);
 
   clearTimeout(room.timer);
-  room.timer = setTimeout(() => endRound(room), CONFIG.ROUND_DURATION_MS);
+  room.timer = setTimeout(() => passerAuVote(room), CONFIG.ROUND_DURATION_MS);
 
-  // Les bots encore en jeu « réfléchissent » puis répondent tout seuls, avec un délai et une
-  // précision qui dépendent du niveau choisi par l'hôte.
+  // Les bots encore en jeu « réfléchissent » puis remplissent leur grille tout seuls, avec un
+  // délai et une précision qui dépendent du niveau choisi par l'hôte.
   for (const p of room.players.values()) {
     if (p.bot && p.coeurs > 0) planifierReponseBot(room, p);
   }
@@ -4950,69 +3805,195 @@ function startRound(room) {
   io.to(room.code).emit("room:update", publicState(room));
 
   for (const p of room.players.values()) {
-    io.to(p.id).emit("player:round_info", {
-      coeursMax: p.coeursMax,
-      coeurs: p.coeurs,
-      freeHintsRemaining: p.freeHintsRemaining,
-      allHintsFree: p.allHintsFree
-    });
+    io.to(p.id).emit("player:round_info", { coeursMax: p.coeursMax, coeurs: p.coeurs });
   }
 }
 
-function endRound(room) {
+/**
+ * Fin du temps de jeu : bascule vers la phase de vote collectif. Un joueur humain qui n'a rien
+ * envoyé (temps écoulé sans avoir cliqué sur STOP) est traité comme s'il avait rendu une grille
+ * entièrement vide — jamais comme s'il gardait son cœur : c'est exactement la règle voulue pour
+ * les cœurs (voir soumettreReponses et resoudreVote), la même que pour le quiz de films.
+ */
+function passerAuVote(room) {
   if (room.status !== "playing") return;   // évite un double appel timer + grâce
   clearTimeout(room.timer);
   clearTimeout(room.graceTimer);
   room.graceTimer = null;
 
-  // Le seul cas où un cœur est préservé, c'est de donner la bonne réponse (voir answer:submit) :
-  // une mauvaise réponse en coûte un (answer:submit), passer volontairement aussi (round:skip), et
-  // ne pas répondre du tout avant la fin du temps imparti doit se comporter pareil — sans ce
-  // rattrapage, un joueur qui restait simplement silencieux gardait tous ses cœurs indéfiniment,
-  // manche après manche, ce qui n'est pas la règle voulue. Les bots ne sont jamais concernés : leur
-  // propre minuteur (voir planifierReponseBot) répond toujours avant celui-ci.
   for (const p of room.players.values()) {
-    if (p.bot || p.hasAnswered || p.coeurs === 0) continue;
+    if (p.hasAnswered || p.coeurs === 0) continue;
     p.hasAnswered = true;
-    p.coeurs = Math.max(0, (p.coeurs ?? p.coeursMax) - 1);
-    const s = [...io.of("/").sockets.values()].find((sk) => sk.data.user?.id === p.userId);
-    if (s) s.emit("coeurs:maj", { coeurs: p.coeurs, elimine: p.coeurs === 0 });
-    io.to(room.code).emit("player:answered", { id: p.id, pseudo: p.pseudo, team: p.team, points: 0,
-      coeurs: p.coeurs, coeursMax: p.coeursMax });
+    room.reponses.set(p.userId, {});
   }
 
-  io.to(room.code).emit("round:end", {
-    answer: room.currentMovie.title,
-    movieId: room.currentMovie.id,
-    poster: room.currentMovie.poster,   // affiche révélée seulement maintenant
-    year: room.currentMovie.year,
+  const manche = room.currentManche;
+  // reponsesParTheme[themeId] = [{ userId, pseudo, mot, valideObjectif }]
+  const reponsesParTheme = {};
+  for (const theme of manche.themes) reponsesParTheme[theme.id] = [];
+  for (const p of room.players.values()) {
+    const grille = room.reponses.get(p.userId) || {};
+    for (const theme of manche.themes) {
+      const mot = String(grille[theme.id] || "").trim().slice(0, 60);
+      const valideObjectif = mot.length > 0 && normalize(mot).startsWith(normalize(manche.lettre));
+      reponsesParTheme[theme.id].push({ userId: p.userId, pseudo: p.pseudo, mot, valideObjectif });
+    }
+  }
+
+  // Construit les cases à soumettre au vote : un mot non vide, qui respecte la lettre imposée,
+  // par groupe (thème + mot, insensible à la casse et aux accents) — une seule fois même si
+  // plusieurs joueurs ont écrit exactement le même mot valide.
+  const voteItems = [];
+  for (const theme of manche.themes) {
+    const vus = new Map(); // mot normalisé -> item
+    for (const rep of reponsesParTheme[theme.id]) {
+      if (!rep.valideObjectif) continue;
+      const cle = normalize(rep.mot);
+      if (!vus.has(cle)) {
+        const item = { themeId: theme.id, themeNom: theme.nom, mot: rep.mot, auteurs: [rep.userId],
+          votes: {}, resultat: null };
+        vus.set(cle, item);
+        voteItems.push(item);
+      } else {
+        vus.get(cle).auteurs.push(rep.userId);
+      }
+    }
+  }
+
+  room.status = "vote";
+  room.voteItems = voteItems;
+  room.reponsesParTheme = reponsesParTheme;
+
+  if (!voteItems.length) {
+    // Rien à voter (toutes les cases vides ou hors-lettre) : on peut résoudre tout de suite.
+    return resoudreVote(room);
+  }
+
+  io.to(room.code).emit("round:reveal", {
+    roundIndex: room.roundIndex,
+    lettre: manche.lettre,
+    themes: manche.themes.map((t) => ({ id: t.id, nom: t.nom })),
+    reponses: reponsesParTheme,
+    voteItems: voteItems.map((it, idx) => ({ index: idx, themeId: it.themeId, themeNom: it.themeNom, mot: it.mot })),
+    duration: CONFIG.VOTE_DURATION_MS,
+  });
+  diffuserSpectateurs(room, "regarder:vote", {
+    roundIndex: room.roundIndex, lettre: manche.lettre, reponses: reponsesParTheme,
+  });
+
+  room.voteTimer = setTimeout(() => resoudreVote(room), CONFIG.VOTE_DURATION_MS);
+
+  // Les bots votent aussi (généreusement, ils donnent le bénéfice du doute) — sinon un salon
+  // sans autre joueur humain que l'auteur d'un mot ne recueillerait jamais aucun vote.
+  for (const p of room.players.values()) {
+    if (!p.bot) continue;
+    const delai = 600 + Math.random() * (CONFIG.VOTE_DURATION_MS - 1500);
+    setTimeout(() => {
+      if (room.status !== "vote" || room.roundIndex !== room.roundIndex) return;
+      const votes = {};
+      voteItems.forEach((it, idx) => {
+        if (it.auteurs.includes(p.userId)) return;   // ne vote jamais sur son propre mot
+        votes[idx] = Math.random() < 0.85 ? "valide" : "invalide";
+      });
+      enregistrerVotes(room, p, votes);
+    }, Math.max(400, delai));
+  }
+}
+
+/** Enregistre les votes d'un joueur (ou bot) sur les cases en attente, et déclenche la
+ *  résolution dès que tout le monde d'éligible a voté. */
+function enregistrerVotes(room, votant, votes) {
+  if (room.status !== "vote" || !room.voteItems) return;
+  for (const [idx, valeur] of Object.entries(votes || {})) {
+    const item = room.voteItems[Number(idx)];
+    if (!item || item.auteurs.includes(votant.userId)) continue;   // pas de vote sur son propre mot
+    if (valeur !== "valide" && valeur !== "invalide") continue;
+    item.votes[votant.userId] = valeur;
+  }
+  io.to(room.code).emit("vote:maj", {
+    voteItems: room.voteItems.map((it, idx) => ({ index: idx, nbVotes: Object.keys(it.votes).length })),
+  });
+
+  const electeurs = [...room.players.values()].filter((p) => p.coeurs > 0 || p.bot);
+  const complet = room.voteItems.every((it) => {
+    const votantsAttendus = electeurs.filter((p) => !it.auteurs.includes(p.userId));
+    return votantsAttendus.every((p) => it.votes[p.userId] !== undefined);
+  });
+  if (complet) resoudreVote(room);
+}
+
+/**
+ * Tranche chaque case au vote (majorité ; égalité ou absence de vote = bénéfice du doute, la
+ * réponse reste valide puisqu'elle a déjà passé le test objectif de la lettre imposée), calcule
+ * les points (réponse unique vs doublon, voir REGLAGES.pointsReponseUnique/pointsReponseDoublon),
+ * puis applique la règle des cœurs : un joueur qui termine la manche avec zéro réponse valide en
+ * perd un — exactement la même règle que dans le quiz de films (voir la note dans passerAuVote).
+ */
+function resoudreVote(room) {
+  if (room.status !== "vote") return;
+  clearTimeout(room.voteTimer);
+  room.voteTimer = null;
+
+  const manche = room.currentManche;
+  for (const item of room.voteItems || []) {
+    const valeurs = Object.values(item.votes);
+    const pour = valeurs.filter((v) => v === "valide").length;
+    const contre = valeurs.filter((v) => v === "invalide").length;
+    item.resultat = contre > pour ? "invalide" : "valide";
+  }
+
+  // motsValides[themeId] = Map(motNormalise -> nombre d'auteurs) parmi les mots retenus par le vote
+  const motsValides = {};
+  for (const theme of manche.themes) motsValides[theme.id] = new Map();
+  for (const item of room.voteItems || []) {
+    if (item.resultat !== "valide") continue;
+    motsValides[item.themeId].set(normalize(item.mot), item.auteurs.length);
+  }
+
+  const detailParJoueur = {};
+  for (const p of room.players.values()) {
+    const grille = room.reponses.get(p.userId) || {};
+    const detail = {};
+    let valides = 0, points = 0, uniques = 0;
+    for (const theme of manche.themes) {
+      const mot = String(grille[theme.id] || "").trim().slice(0, 60);
+      const cle = normalize(mot);
+      const nbAuteurs = motsValides[theme.id].get(cle) || 0;
+      const valide = mot.length > 0 && nbAuteurs > 0;
+      const pts = !valide ? 0 : (nbAuteurs > 1 ? REGLAGES.pointsReponseDoublon : REGLAGES.pointsReponseUnique);
+      if (valide) valides++;
+      if (valide && nbAuteurs === 1) uniques++;
+      points += pts;
+      detail[theme.id] = { mot, valide, doublon: valide && nbAuteurs > 1, points: pts };
+    }
+    p.score += points;
+    if (!p.bot && uniques) avancerQuete(p.userId, "reponsesUniques", uniques);
+    if (!valides && p.coeurs > 0) {
+      p.coeurs = Math.max(0, p.coeurs - 1);
+      const s = [...io.of("/").sockets.values()].find((sk) => sk.data.user?.id === p.userId);
+      if (s) s.emit("coeurs:maj", { coeurs: p.coeurs, elimine: p.coeurs === 0 });
+    }
+    detailParJoueur[p.userId] = { detail, points, valides };
+  }
+
+  io.to(room.code).emit("round:results", {
+    roundIndex: room.roundIndex,
+    lettre: manche.lettre,
+    themes: manche.themes.map((t) => ({ id: t.id, nom: t.nom })),
+    detail: detailParJoueur,
     scores: publicState(room).players,
     isHost: room.hostId,
     mode: room.mode,
   });
   diffuserSpectateurs(room, "regarder:fin", {
-    answer: room.currentMovie.title,
-    poster: room.currentMovie.poster,
-    year: room.currentMovie.year,
-    scores: publicState(room).players,
-    mode: room.mode,
+    lettre: manche.lettre, detail: detailParJoueur, scores: publicState(room).players, mode: room.mode,
   });
-  // Petit partage dans le bandeau défilant de tout le monde : qui a trouvé le film en premier,
-  // avec sa photo — cliquer dessus ouvre sa fiche. Diffusé seulement maintenant que la réponse
-  // vient d'être révélée à toute la salle (jamais avant, ça donnerait la solution aux autres).
-  if (room.premierTrouveur) {
-    diffuserAnnonce(`🎬 ${room.premierTrouveur.pseudo} a trouvé « ${room.currentMovie.title} » !`, "partage", {
-      joueurId: room.premierTrouveur.userId,
-      joueurPseudo: room.premierTrouveur.pseudo,
-      joueurAvatar: room.premierTrouveur.avatar,
-      joueurPhoto: room.premierTrouveur.photo,
-      filmTitre: room.currentMovie.title,
-    });
-    room.premierTrouveur = null;
-  }
+
+  room.voteItems = null;
+  room.reponsesParTheme = null;
   room.roundIndex++;
   room.status = "intermission";
-  room.nextTimer = setTimeout(() => startRound(room), 12000);   // doublé : laisse plus de temps pour voir la réponse
+  room.nextTimer = setTimeout(() => startRound(room), 12000);   // doublé : laisse plus de temps pour voir les résultats
 }
 
 /**
@@ -5166,27 +4147,27 @@ io.on("connection", (socket) => {
 
     // Un compte enfant crée forcément un salon en mode enfant, quoi qu'envoie le client.
     const compteEnfant = user.role === "enfant";
-    // Filtre de films "enfant" : forcé pour un compte enfant, ou activé volontairement par un adulte
+    // Filtre de thèmes "enfant" : forcé pour un compte enfant, ou activé volontairement par un adulte
     // (contenu familial). Ceci est indépendant de la présence réelle d'un compte enfant dans le salon.
     const modeEnfant = compteEnfant ? true : kids === true;
-    let vivier = movies.filter((m) => m.enabled !== false);
-    if (modeEnfant) vivier = vivier.filter((m) => m.kids === true);
-    if (vivier.length === 0) return cb?.({ ok: false, error: modeEnfant ? "NO_MOVIES_KIDS" : "NO_MOVIES" });
+    let vivier = themes.filter((t) => t.enabled !== false);
+    if (modeEnfant) vivier = vivier.filter((t) => t.kids === true);
+    if (vivier.length === 0) return cb?.({ ok: false, error: modeEnfant ? "NO_THEMES_KIDS" : "NO_THEMES" });
 
     const code = generateRoomCode();
-    const count = Math.min(Number(rounds) || 10, vivier.length);
+    const count = Math.min(Number(rounds) || 10, 30);
     const room = {
       code, hostId: user.id, status: "lobby", roundIndex: 0,
       mode: ["solo", "ffa", "duel", "teams", "ranked"].includes(mode) ? mode : "ffa",
       kids: modeEnfant,
       // Isolation stricte : un salon créé par un compte enfant ne peut accueillir que des comptes enfants,
-      // et inversement. Distinct de "kids" (qui ne filtre que le catalogue de films).
+      // et inversement. Distinct de "kids" (qui ne filtre que le catalogue de thèmes).
       compteEnfant,
       players: new Map(),
-      playlist: choisirFilms(vivier, count, user.id),
-      currentMovie: null, startedAt: null, timer: null, nextTimer: null, graceTimer: null, emptyTimer: null,
+      playlist: construirePlaylistManches(count, modeEnfant),
+      currentManche: null, reponses: new Map(), startedAt: null,
+      timer: null, nextTimer: null, graceTimer: null, voteTimer: null, emptyTimer: null,
     };
-    memoriserVus(user.id, room.playlist);
     rooms.set(code, room);
     joinRoom(socket, room, user);
     cb?.({ ok: true, code, state: publicState(room) });
@@ -5248,34 +4229,35 @@ io.on("connection", (socket) => {
        // Réémis aussi pour un joueur éliminé (cœurs à 0) qui se reconnecte : il ne peut plus
        // répondre, mais doit pouvoir suivre la manche en cours plutôt que rester sur un écran
        // vide — le client bascule automatiquement sur l'écran « éliminé » via state.elimine.
-       if (room.status === "playing" && (!existingPlayer.hasAnswered || existingPlayer.coeurs === 0)) {
-          const movie = room.currentMovie;
+       if (room.status === "playing" && room.currentManche) {
           io.to(socket.id).emit("round:start", {
             roundIndex: room.roundIndex,
             total: room.playlist.length,
-            synopsis: masquerReponse(movie.synopsis, movie),
+            lettre: room.currentManche.lettre,
+            themes: room.currentManche.themes.map((t) => ({ id: t.id, nom: t.nom })),
             duration: CONFIG.ROUND_DURATION_MS,
-            hintCosts: CONFIG.HINT_COSTS,
-            hintCredits: CONFIG.HINT_CREDITS,
-            hintLabels: libellesIndices(),
-            posterStyle: styleAffiche(movie),
-            vitesseSynopsis: REGLAGES.vitesseSynopsis,
-            choices: room.choices,
           });
           io.to(socket.id).emit("player:round_info", {
             coeursMax: existingPlayer.coeursMax,
             coeurs: existingPlayer.coeurs,
-            freeHintsRemaining: existingPlayer.freeHintsRemaining,
-            allHintsFree: existingPlayer.allHintsFree
           });
-       } else if (room.status === "intermission" && room.currentMovie) {
-          // Reconnecté pendant l'entracte : on rejoue la révélation de la manche
-          // qui vient de se terminer, sinon l'écran resterait figé jusqu'à la suivante.
-          io.to(socket.id).emit("round:end", {
-            answer: room.currentMovie.title,
-            movieId: room.currentMovie.id,
-            poster: room.currentMovie.poster,
-            year: room.currentMovie.year,
+       } else if (room.status === "vote" && room.currentManche && room.voteItems) {
+          // Reconnecté pendant le vote : on rejoue la révélation pour qu'il puisse voter aussi.
+          io.to(socket.id).emit("round:reveal", {
+            roundIndex: room.roundIndex,
+            lettre: room.currentManche.lettre,
+            themes: room.currentManche.themes.map((t) => ({ id: t.id, nom: t.nom })),
+            reponses: room.reponsesParTheme,
+            voteItems: room.voteItems.map((it, idx) => ({ index: idx, themeId: it.themeId, themeNom: it.themeNom, mot: it.mot })),
+            duration: CONFIG.VOTE_DURATION_MS,
+          });
+       } else if (room.status === "intermission" && room.currentManche) {
+          // Reconnecté pendant l'entracte : on rejoue les résultats de la manche qui vient de se
+          // terminer, sinon l'écran resterait figé jusqu'à la suivante.
+          io.to(socket.id).emit("round:results", {
+            roundIndex: room.roundIndex,
+            lettre: room.currentManche.lettre,
+            themes: room.currentManche.themes.map((t) => ({ id: t.id, nom: t.nom })),
             scores: publicState(room).players,
             isHost: room.hostId,
             mode: room.mode,
@@ -5345,9 +4327,8 @@ io.on("connection", (socket) => {
     const bot = {
       id: botId, userId: botId, pseudo: nomBotAleatoire(), avatar: BOT_NIVEAUX[niveauBot].emoji,
       photo: null, fondateur: false, team: null,
-      score: 0, hints: [], paidHints: [], hasAnswered: false,
+      score: 0, hasAnswered: false,
       coeursMax: REGLAGES.coeurs, coeurs: REGLAGES.coeurs,
-      freeHintsRemaining: 0, allHintsFree: false,
       online: true, bot: true, botNiveau: niveauBot,
     };
     room.players.set(botId, bot);
@@ -5379,99 +4360,41 @@ io.on("connection", (socket) => {
     cb?.({ ok: true, state: publicState(room) });
   });
 
-  socket.on("hint:buy", ({ code, type }, cb) => {
+  /**
+   * Bouton STOP : le joueur envoie sa grille complète (un mot par thème actif de la manche) et
+   * ne peut plus la modifier ensuite — exactement comme claquer la main sur la table au Petit
+   * Bac. La validité de chaque mot n'est PAS tranchée ici : elle attend la phase de vote
+   * collectif (voir passerAuVote / resoudreVote) une fois que tout le monde a envoyé sa grille
+   * ou que le temps est écoulé.
+   */
+  socket.on("answer:submit", ({ code, reponses }, cb) => {
     const room = rooms.get(code);
     const player = room?.players.get(socket.data.user.id);
     if (!room || !player || room.status !== "playing") return cb?.({ ok: false });
-    if (room.pauseA) return cb?.({ ok: false, error: "EN_PAUSE" });
-    if (!CONFIG.HINT_COSTS[type]) return cb?.({ ok: false, error: "UNKNOWN_HINT" });
-    if (player.hints.includes(type)) return cb?.({ ok: false, error: "ALREADY_BOUGHT" });
-
-    const isFree = player.allHintsFree || player.freeHintsRemaining > 0;
-    if (!isFree) {
-      if (!spendCredits(player.userId, CONFIG.HINT_CREDITS[type]))
-        return cb?.({ ok: false, error: "NO_CREDITS" });
-      enregistrerTransaction(player.userId, -CONFIG.HINT_CREDITS[type], "credits",
-        `Indice « ${REGLAGES.indices?.[type]?.libelle || type} »`);
-      player.paidHints.push(type);
-    } else {
-      if (!player.allHintsFree) player.freeHintsRemaining--;
-    }
-
-    player.hints.push(type);
-    const value =
-      type === "poster" ? (room.currentMovie.still || room.currentMovie.poster) // sans titre imprimé
-    : type === "letters" ? titlePattern(room.currentMovie.title)
-    : room.currentMovie[type];
-    cb?.({ ok: true, type, value, credits: getCredits(player.userId), freeHintsRemaining: player.freeHintsRemaining, allHintsFree: player.allHintsFree });
-  });
-
-  socket.on("answer:submit", ({ code, guess, choiceId }, cb) => {
-    const room = rooms.get(code);
-    const player = room?.players.get(socket.data.user.id);
-    if (!room || !player || room.status !== "playing") return cb?.({ ok: false });
-    // Cœurs épuisés : éliminé pour le reste de la partie, ne peut plus répondre — seulement
+    // Cœurs épuisés : éliminé pour le reste de la partie, ne peut plus jouer — seulement
     // suivre la partie ou quitter le salon (voir aussi startRound, qui ne le sollicite plus).
-    // Ce contrôle passe AVANT celui de hasAnswered (startRound met hasAnswered=true pour les
-    // joueurs éliminés) afin que le client reçoive toujours un motif clair ("ELIMINE").
     if (player.coeurs === 0) return cb?.({ ok: false, error: "ELIMINE" });
     if (player.hasAnswered) return cb?.({ ok: false, error: "DEJA_REPONDU" });
     if (room.pauseA) return cb?.({ ok: false, error: "EN_PAUSE" });
 
-    const parClic = choiceId !== undefined && choiceId !== null;
-    const correct = parClic
-      ? Number(choiceId) === room.currentMovie.id
-      : room.currentMovie.acceptedAnswers.some((a) => normalize(a) === normalize(guess));
-
-    // un clic est définitif : sinon il suffirait de cliquer les quatre cases
-    if (!correct) {
-      if (!parClic) return cb?.({ ok: true, correct: false });
-      player.hasAnswered = true;
-      player.coeurs = Math.max(0, (player.coeurs ?? player.coeursMax) - 1);
-      io.to(room.code).emit("player:answered", { id: player.id, pseudo: player.pseudo, team: player.team, points: 0,
-        coeurs: player.coeurs, coeursMax: player.coeursMax });
-      io.to(room.code).emit("room:update", publicState(room));   // pour l'affichage permanent des cœurs adverses
-      // Un bot du salon (s'il y en a) peut se moquer gentiment d'une mauvaise réponse — un seul à
-      // la fois, même avec plusieurs bots en « chacun pour soi », pour ne pas noyer le chat.
-      const botTaquin = botAuHasard(room);
-      if (botTaquin) botDire(room, botTaquin, "adversaireRate", 0.3);
-      if ([...room.players.values()].every((p) => p.hasAnswered)) endRound(room);
-      return cb?.({ ok: true, correct: false, final: true,
-                    coeurs: player.coeurs, elimine: player.coeurs === 0 });
-    }
-
-    player.hasAnswered = true;
-    let points = computeScore({ elapsedMs: Date.now() - room.startedAt, hintsUsed: player.paidHints });
-    if (parClic) points = Math.max(30, Math.round(points * CONFIG.CHOICE_RATIO));
-    player.score += points;
-
-    // Retenu pour le petit partage dans le bandeau défilant, diffusé seulement à la fin de la
-    // manche (voir endRound) — jamais avant, pour ne pas donner la solution en cours de manche.
-    if (!room.premierTrouveur) {
-      room.premierTrouveur = { userId: player.userId, pseudo: player.pseudo, avatar: player.avatar, photo: player.photo || null };
-    }
-
-    cb?.({ ok: true, correct: true, points, movieId: room.currentMovie.id,
-           coeurs: player.coeurs ?? player.coeursMax });
-    io.to(room.code).emit("player:answered", { id: player.id, pseudo: player.pseudo, team: player.team, points,
-      coeurs: player.coeurs, coeursMax: player.coeursMax });
-    const botAdmiratif = botAuHasard(room);
-    if (botAdmiratif) botDire(room, botAdmiratif, "adversaireReussit", 0.3);
-
-    const tousTrouve = [...room.players.values()]
-      .every((p) => p.hasAnswered || p.coeurs === 0);
-    if (tousTrouve) return endRound(room);
-
-    // premier à trouver : les autres ont encore quelques secondes
-    if (!room.graceTimer) {
-      room.graceDebut = Date.now();
-      room.graceTimer = setTimeout(() => endRound(room), CONFIG.GRACE_AFTER_FIRST_MS);
-      io.to(room.code).emit("round:grace", { ms: CONFIG.GRACE_AFTER_FIRST_MS, pseudo: player.pseudo });
-    }
+    const grille = reponses && typeof reponses === "object" ? reponses : {};
+    soumettreReponses(room, player, grille);
+    cb?.({ ok: true });
   });
 
-  /** Chat réservé aux joueurs du salon. Les messages qui contiennent la
-   *  réponse en cours sont bloqués : sinon le chat devient un anti-jeu. */
+  /** Un joueur vote sur les mots proposés par les autres, pendant la phase de vote (voir
+   *  round:reveal / passerAuVote). `votes` = { indexDeLaCase: "valide" | "invalide" }. */
+  socket.on("vote:submit", ({ code, votes }, cb) => {
+    const room = rooms.get(code);
+    const player = room?.players.get(socket.data.user.id);
+    if (!room || !player || room.status !== "vote") return cb?.({ ok: false });
+    enregistrerVotes(room, player, votes && typeof votes === "object" ? votes : {});
+    cb?.({ ok: true });
+  });
+
+  /** Chat réservé aux joueurs du salon. Pendant une manche, on ne bloque plus les messages sur
+   *  la base d'une réponse toute faite (il n'y a plus de titre unique à protéger dans le Bac —
+   *  la seule règle objective, la lettre imposée, ne se « laisse » pas dans le chat). */
   socket.on("chat:send", ({ code, text }) => {
     const room = rooms.get(code);
     const player = room?.players.get(socket.data.user.id);
@@ -5479,15 +4402,6 @@ io.on("connection", (socket) => {
 
     const message = String(text || "").trim().slice(0, 200);
     if (!message) return;
-
-    if (room.status === "playing" && room.currentMovie) {
-      const said = normalize(message);
-      const leaks = room.currentMovie.acceptedAnswers.some((a) => {
-        const answer = normalize(a);
-        return answer.length > 2 && said.includes(answer);
-      });
-      if (leaks) return socket.emit("chat:blocked");
-    }
 
     // un message n'atteint pas les joueurs qui ont bloqué son auteur
     for (const autre of room.players.values()) {
@@ -5498,22 +4412,15 @@ io.on("connection", (socket) => {
     }
   });
 
-  /** Un joueur qui a déjà répondu (ou qui joue seul) peut enchaîner. */
+  /** Un joueur qui a déjà validé sa grille (ou qui joue seul) peut renoncer à celle-ci pour
+   *  faire avancer la manche plus vite — comme une grille vide, ça coûte un cœur (voir
+   *  soumettreReponses et resoudreVote). */
   socket.on("round:skip", ({ code }) => {
     const room = rooms.get(code);
     const player = room?.players.get(socket.data.user.id);
     if (!room || !player || room.status !== "playing" || player.coeurs === 0) return;
-
-    // renoncer à la manche coûte un cœur, comme une mauvaise réponse
-    if (!player.hasAnswered) {
-      player.hasAnswered = true;
-      player.coeurs = Math.max(0, (player.coeurs ?? player.coeursMax) - 1);
-      socket.emit("coeurs:maj", { coeurs: player.coeurs, elimine: player.coeurs === 0 });
-      io.to(room.code).emit("player:answered", { id: player.id, pseudo: player.pseudo, team: player.team, points: 0,
-        coeurs: player.coeurs, coeursMax: player.coeursMax });
-      io.to(room.code).emit("room:update", publicState(room));   // pour l'affichage permanent des cœurs adverses
-    }
-    if ([...room.players.values()].every((p) => p.hasAnswered || p.coeurs === 0)) endRound(room);
+    if (player.hasAnswered) return;
+    soumettreReponses(room, player, {});
   });
 
   /** Enchaîner sans attendre la fin de l'entracte. */
@@ -5937,7 +4844,7 @@ io.on("connection", (socket) => {
   });
 
   /**
-   * Regarder en direct la partie d'un ami — lecture seule : synopsis, choix,
+   * Regarder en direct la partie d'un ami — lecture seule : lettre, thèmes,
    * scores en temps réel, mais aucune réponse possible. Réservé aux amis.
    */
   socket.on("room:regarder", ({ amiId }, cb) => {
@@ -5959,15 +4866,12 @@ io.on("connection", (socket) => {
       socket.data.regarde = room.code;
       diffuserListeSpectateurs(room);
 
-      const film = room.currentMovie;
-      const manche = room.status === "playing" && film ? {
+      const manche = room.status === "playing" && room.currentManche ? {
         roundIndex: room.roundIndex,
         total: room.playlist.length,
-        synopsis: masquerReponse(film.synopsis, film),
+        lettre: room.currentManche.lettre,
+        themes: room.currentManche.themes.map((t) => ({ id: t.id, nom: t.nom })),
         duration: CONFIG.ROUND_DURATION_MS,
-        choices: room.choices,
-        posterStyle: styleAffiche(film),
-        vitesseSynopsis: REGLAGES.vitesseSynopsis,
       } : null;
 
       return cb?.({ ok: true, code: room.code, state: publicState(room), manche });
@@ -6101,11 +5005,9 @@ function joinRoom(socket, room, user) {
     photo: user.photo || null,
     fondateur: Boolean(user.fondateur),
     team: room.mode === "teams" ? balancedTeam(room) : null,
-    score: 0, hints: [], paidHints: [], hasAnswered: false,
+    score: 0, hasAnswered: false,
     coeursMax: REGLAGES.coeurs + avantages.extraCoeurs,
     coeurs: REGLAGES.coeurs + avantages.extraCoeurs,
-    freeHintsRemaining: avantages.freeHints,
-    allHintsFree: avantages.allFree,
     pret: false,
   });
   socket.join(room.code);
@@ -6126,10 +5028,19 @@ function balancedTeam(room) {
 const PORT = process.env.PORT || 3000;
 
 await initStockage();
-movies = await charger("movies", MOVIES_FILE, []);
-normaliserFilms();
+themes = await charger("themes", THEMES_FILE, []);
+normaliserThemes();
 reports = await charger("reports", REPORTS_FILE, []);
 empreinteAdmin = await charger("adminPass", null, null);
+if (process.env.RESET_ADMIN_PASSWORD && empreinteAdmin) {
+  empreinteAdmin = null;
+  await sauver("adminPass", null);
+  console.log(
+    "🔓 RESET_ADMIN_PASSWORD détecté : mot de passe d'administration réinitialisé — la clé par défaut " +
+    "redevient valable. ⚠️ Retirez cette variable d'environnement une fois reconnecté(e), sinon le mot " +
+    "de passe sera réinitialisé à chaque redémarrage du service."
+  );
+}
 palmares = await charger("palmares", null, []);
 chargerSaison(await charger("saison", null, null));
 progression = await charger("quetes", null, {});
@@ -6137,10 +5048,6 @@ progressionGlobale = await charger("quetesGlobales", null, {});
 for (const [id, liste] of Object.entries(await charger("vus", null, {})))
   vusParJoueur.set(id, liste);
 conversations = await charger("conversations", null, {});
-  sortiesConfig = await charger("sortiesConfig", SORTIES_FILE, { hidden: [], custom: [], kidsOk: [] });
-  if (!Array.isArray(sortiesConfig.kidsOk)) sortiesConfig.kidsOk = [];
-  nowPlayingConfig = await charger("nowPlayingConfig", NOWPLAYING_FILE, { hidden: [], custom: [], kidsOk: [] });
-  if (!Array.isArray(nowPlayingConfig.kidsOk)) nowPlayingConfig.kidsOk = [];
 suggestions = await charger("suggestions", SUGGESTIONS_FILE, []);
 if (!Array.isArray(suggestions)) suggestions = [];
 // Ancien format sans id/statut : on complète pour que les suggestions déjà en base
@@ -6170,10 +5077,6 @@ erreursMusique = await charger("erreursMusique", ERREURS_MUSIQUE_FILE, {});
 if (!erreursMusique || typeof erreursMusique !== "object") erreursMusique = {};
 publicites = await charger("publicites", PUBLICITES_FILE, []);
 if (!Array.isArray(publicites)) publicites = [];
-signets = await charger("signets", SIGNETS_FILE, {});
-if (!signets || typeof signets !== "object") signets = {};
-pepites = await charger("pepites", PEPITES_FILE, {});
-if (!pepites || typeof pepites !== "object") pepites = {};
 aideConfig = await charger("aide", AIDE_FILE, aideConfig);
 if (!aideConfig || typeof aideConfig !== "object") aideConfig = { actif: false, titre: "Comment jouer ? 🎬🎵", message: "" };
 annonceConfig = await charger("annonce", ANNONCE_FILE, annonceConfig);
@@ -6215,6 +5118,6 @@ if (!empreinteAdmin)
 await chargerUtilisateurs();
 
 httpServer.listen(PORT, "0.0.0.0", () => {
-  console.log(`MichBen Ciné Quizz → http://localhost:${PORT}  (admin : /admin.html)`);
-  console.log(`${movies.length} films · stockage : ${enBase ? "Postgres" : "fichiers locaux"}`);
+  console.log(`Le Nouveau Bac → http://localhost:${PORT}  (admin : /admin.html)`);
+  console.log(`${themes.length} thèmes · stockage : ${enBase() ? "Postgres" : "fichiers locaux"}`);
 });
