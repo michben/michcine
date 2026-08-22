@@ -5950,6 +5950,70 @@ io.on("connection", (socket) => {
     cb?.({ ok: true, code: salonCode, salon: publicVocal(salon), invites });
   });
 
+  /** Équivalent de vocal:equipe-ouvrir pour les modes sans équipes (duel, chacun pour soi,
+   *  classée) : un seul salon partagé par tous les joueurs humains de la partie en cours, ouvert
+   *  ou rejoint d'un clic pendant le jeu — sans avoir à interrompre la partie pour aller chercher
+   *  un code dans le menu. */
+  socket.on("vocal:partie-ouvrir", ({ code }, cb) => {
+    const room = rooms.get(code);
+    const joueur = room?.players.get(user.id);
+    if (!room || room.mode === "teams" || !joueur) return cb?.({ ok: false, error: "INDISPONIBLE" });
+
+    let salonCode = room.salonVocalPartie;
+    let salon = salonCode ? salonsVocaux.get(salonCode) : null;
+
+    if (!salon) {
+      quitterSalonVocal(socket);
+      retourVocalDisponible.delete(user.id);
+      salonCode = genererCodeVocal();
+      salon = {
+        code: salonCode, hostId: user.id,
+        titre: `Salon de la partie ${room.code}`,
+        participants: new Map(),
+        demandesMontee: new Set(),
+        invites: new Map(),
+        radio: null,
+        chat: [],
+        creeLe: Date.now(),
+        salleDeJeu: room.code,
+      };
+      salon.participants.set(user.id, {
+        userId: user.id, pseudo: user.pseudo, avatar: user.avatar, photo: user.photo || null,
+        role: "hote", mute: true, parle: false,
+      });
+      salonsVocaux.set(salonCode, salon);
+      socket.join(`vocal:${salonCode}`);
+      room.salonVocalPartie = salonCode;
+    } else if (!salon.participants.has(user.id)) {
+      if (salon.participants.size >= MAX_PARTICIPANTS_VOCAL()) return cb?.({ ok: false, error: "SALON_COMPLET" });
+      quitterSalonVocal(socket);
+      retourVocalDisponible.delete(user.id);
+      salon.participants.set(user.id, {
+        userId: user.id, pseudo: user.pseudo, avatar: user.avatar, photo: user.photo || null,
+        role: "auditeur", mute: true, parle: false,
+      });
+      socket.join(`vocal:${salonCode}`);
+    }
+
+    // Invite d'un coup tous les autres joueurs humains présents dans la salle de jeu.
+    let invites = 0;
+    for (const p of room.players.values()) {
+      if (p.userId === user.id || p.bot || salon.participants.has(p.userId)) continue;
+      if (estBloque(user.id, p.userId)) continue;
+      salon.invites.set(p.userId, { de: user.pseudo, at: Date.now() });
+      const s = [...io.of("/").sockets.values()].find((sk) => sk.data.user?.id === p.userId);
+      if (s) {
+        s.emit("vocal:invite-recue", {
+          code: salonCode, titre: salon.titre, de: user.pseudo, avatar: user.avatar, photo: user.photo || null,
+        });
+        invites++;
+      }
+    }
+
+    diffuserVocal(salon);
+    cb?.({ ok: true, code: salonCode, salon: publicVocal(salon), invites });
+  });
+
   socket.on("disconnect", () => quitterSalonVocal(socket, { involontaire: true }));
 
   /** Réactions émoji pendant la partie, relayées à tout le salon (liste EMOJIS commune, définie
