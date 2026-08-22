@@ -962,6 +962,30 @@
       </div>
 
       <div class="card">
+        <p class="tag">🔗↔️ Passerelle entrante (recevoir depuis un autre jeu, ex. Le Nouveau Bac)</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6">
+          Le sens inverse de la carte ci-dessus : fait en sorte qu'un joueur qui clique sur son bouton
+          🔗 <b>depuis cet autre jeu</b> arrive ici déjà connecté, avec le même compte (même pseudo,
+          même avatar). La clé secrète ci-dessous doit être <b>exactement la même</b> que celle
+          configurée dans la console admin de cet autre jeu (sa carte « Passerelle de connexion ») —
+          c'est un secret partagé entre les deux sites, jamais transmis au navigateur. Tant que ce
+          n'est pas configuré des deux côtés, laissez cette section désactivée.
+        </p>
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer;font-size:15px;color:var(--chalk);text-transform:none;letter-spacing:0">
+          <input type="checkbox" id="passerelleEntranteActif" style="width:auto">
+          Activer la passerelle entrante
+        </label>
+        <label for="passerelleEntranteDomaineInput">Adresse de l'autre jeu</label>
+        <input id="passerelleEntranteDomaineInput" type="text" placeholder="https://newbac.onrender.com">
+        <label style="margin-top:10px" for="passerelleEntranteCleInput">Clé secrète partagée (identique à celle de l'autre jeu)</label>
+        <input id="passerelleEntranteCleInput" type="text" maxlength="200" placeholder="Collez ici la même clé que côté de l'autre jeu">
+        <div class="row">
+          <button id="btnSavePasserelleEntrante">Enregistrer</button>
+        </div>
+        <p class="msg" id="passerelleEntranteMsg"></p>
+      </div>
+
+      <div class="card">
         <p class="tag">✉️ Messages des joueurs au développeur</p>
         <p style="color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6">
           Chaque joueur peut vous écrire depuis le bouton « ✉️ Contacter le développeur » de son menu,
@@ -1542,7 +1566,7 @@ function tab(which){
   if (which === "classement") loadClassement();
   if (which === "users") { loadUsers(); chargerCompteurEnfant(); }
   if (which === "reports"){ loadReports(); loadConversations(); }
-  if (which === "reglages"){ etatSecurite(); chargerReglages(); chargerAide(); chargerAnnonce(); chargerLienExterne(); chargerPasserelle(); chargerMaintenance(); chargerContactDev(); }
+  if (which === "reglages"){ etatSecurite(); chargerReglages(); chargerAide(); chargerAnnonce(); chargerLienExterne(); chargerPasserelle(); chargerPasserelleEntrante(); chargerMaintenance(); chargerContactDev(); }
   if (which === "sorties") loadSorties();
   if (which === "nowplaying") loadNowPlaying();
   if (which === "sondages") { loadSondages(); remplirFilmsListe(); chargerSuggestionsPepites(); }
@@ -1933,6 +1957,28 @@ $("btnSavePasserelle").onclick = async () => {
     ? "Enregistré."
     : (data.error === "DOMAINE_INVALIDE" ? "Chaque adresse doit commencer par http:// ou https://" : "Enregistrement refusé.");
   $("passerelleMsg").className = res.ok ? "msg ok" : "msg err";
+};
+
+/* ---------- Passerelle entrante (SSO depuis un autre jeu) ---------- */
+async function chargerPasserelleEntrante(){
+  const res = await api("/api/admin/passerelle-entrante");
+  if (!res.ok) return;
+  const p = await res.json();
+  $("passerelleEntranteActif").checked = Boolean(p.actif);
+  $("passerelleEntranteDomaineInput").value = p.domaine || "";
+  $("passerelleEntranteCleInput").value = p.cleSecrete || "";
+}
+$("btnSavePasserelleEntrante").onclick = async () => {
+  const res = await api("/api/admin/passerelle-entrante", {method:"PUT", body: JSON.stringify({
+    actif: $("passerelleEntranteActif").checked,
+    domaine: $("passerelleEntranteDomaineInput").value,
+    cleSecrete: $("passerelleEntranteCleInput").value,
+  })});
+  const data = await res.json().catch(() => ({}));
+  $("passerelleEntranteMsg").textContent = res.ok
+    ? "Enregistré."
+    : (data.error === "DOMAINE_INVALIDE" ? "L'adresse doit commencer par http:// ou https://" : "Enregistrement refusé.");
+  $("passerelleEntranteMsg").className = res.ok ? "msg ok" : "msg err";
 };
 
 async function chargerMaintenance(){
