@@ -2525,7 +2525,12 @@ const MUSIQUE_FILE = new URL("./musique.json", import.meta.url);
 let playlisteMusique = [];   // [{id, titre, type: "lien"|"fichier", url, ajouteLe}]
 const saveMusique = () => sauver("musique", playlisteMusique, MUSIQUE_FILE);
 const MUSIQUE_DIR = join(process.cwd(), "public", "musique");
-const MUSIQUE_EXT_AUTORISEES = ["mp3", "mpeg", "ogg", "wav", "m4a"];
+// Élargi au-delà de mp3/wav : un fichier envoyé depuis un téléphone est très souvent dans un
+// format « natif » du partage (WhatsApp envoie du .opus, un iPhone du .m4a/.aac...). Un fichier
+// mal reconnu retombait sur l'extension "mp3" par défaut alors que son contenu réel était différent
+// — le navigateur reçoit alors un Content-Type qui ne correspond pas aux octets envoyés, et refuse
+// de le décoder (lecture totalement silencieuse, y compris en cliquant sur ▶️ manuellement).
+const MUSIQUE_EXT_AUTORISEES = ["mp3", "mpeg", "ogg", "oga", "opus", "wav", "m4a", "aac", "flac", "webm"];
 // ~8 Mo de fichier réel. Comparer directement à la longueur de la chaîne base64 (comme
 // c'était fait avant) rejette à tort des fichiers d'à peine 6 Mo : l'encodage base64 gonfle
 // la taille d'environ 1,37×, donc un fichier de 8 Mo produit une chaîne d'environ 11 Mo. On
