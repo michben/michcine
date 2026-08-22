@@ -4265,6 +4265,12 @@ function estModoVocal(salon, userId) {
  *  Durée réglable depuis la console admin (onglet Audio) — 3 minutes par défaut. */
 const VOCAL_SALON_VIDE_GRACE_MS = () => borneValeur(REGLAGES.audio?.fermetureGraceMinutes, 1, 30, 3) * 60 * 1000;
 
+/** Un salon totalement vide (plus personne dedans, pas seulement l'hôte parti) n'a aucune raison
+ *  de bénéficier du long délai de grâce ci-dessus, qui n'a de sens que pour laisser à l'hôte le
+ *  temps de revenir pendant que d'autres participants patientent : personne ne profite d'un salon
+ *  vide qui traîne pendant plusieurs minutes. Fermeture rapide pour libérer le code. */
+const VOCAL_SALON_TOTALEMENT_VIDE_GRACE_MS = 10_000;
+
 /** Ferme un salon vocal pour de bon : prévient tout le monde et libère le salon. */
 function fermerSalonVocalDefinitivement(salon, raison) {
   io.to(`vocal:${salon.code}`).emit("vocal:ferme", { raison });
@@ -4300,10 +4306,13 @@ function quitterSalonVocal(socket, { involontaire = false } = {}) {
       // fermeture définitive est programmée, pas immédiate.
       io.to(`vocal:${salon.code}`).emit("vocal:rtc-peer-left", { userId });
       diffuserVocal(salon);
+      const delaiFermeture = salon.participants.size === 0
+        ? VOCAL_SALON_TOTALEMENT_VIDE_GRACE_MS
+        : VOCAL_SALON_VIDE_GRACE_MS();
       salon.fermetureTimer = setTimeout(() => {
         if (salonsVocaux.get(salon.code) === salon)
           fermerSalonVocalDefinitivement(salon, etaitHote ? "HOTE_PARTI" : "SALON_VIDE");
-      }, VOCAL_SALON_VIDE_GRACE_MS());
+      }, delaiFermeture);
     } else {
       // Prévient les autres qu'ils peuvent fermer leur connexion audio (WebRTC) vers ce
       // participant — le salon continue, seul son flux à lui doit s'arrêter.
@@ -5665,6 +5674,16 @@ io.on("connection", (socket) => {
     cible.mute = true; // micro fermé par défaut, même après une promotion — jamais une surprise
     salon.demandesMontee.delete(userId);
     diffuserVocal(salon);
+    cb?.({ ok: true });
+  });
+
+  /** Ferme le salon immédiatement pour tout le monde, sans attendre le délai de grâce — réservé à
+   *  l'hôte (pas aux cohôtes) : c'est une action définitive et irréversible pour tous les participants. */
+  socket.on("vocal:fermer", ({ code }, cb) => {
+    const salon = salonsVocaux.get(code);
+    if (!salon || salon.hostId !== user.id) return cb?.({ ok: false });
+    clearTimeout(salon.fermetureTimer);
+    fermerSalonVocalDefinitivement(salon, "FERME_PAR_HOTE");
     cb?.({ ok: true });
   });
 
