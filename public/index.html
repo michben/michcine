@@ -7152,7 +7152,33 @@ socket.on("connect", () => {
     else if (!state.code) show("menu");
   }
   resynchroniserSalon();
+  resynchroniserSalonVocal();
 });
+
+/** Même problème que resynchroniserSalon() (voir juste en dessous), mais côté salon vocal : sans
+ *  ça, une coupure wifi/4G d'une seconde (très courante en mobilité) retirait silencieusement le
+ *  joueur du salon côté serveur (voir quitterSalonVocal, involontaire:true) pendant que son écran,
+ *  lui, continuait d'afficher le salon comme si de rien n'était — jusqu'à ce qu'il tente une action
+ *  (parler, changer un réglage...) qui échoue sans explication, ou que la bannière de retour
+ *  apparaisse en lui annonçant une déconnexion qu'il n'a pas vécue comme telle. C'est très
+ *  probablement ce qui remonte comme une éjection « brutale » du salon : le rejoindre tout de
+ *  suite, en silence, évite que la moindre micro-coupure se voie à l'écran. */
+function resynchroniserSalonVocal(){
+  if (!vocalSalonActuel) return;
+  const code = vocalSalonActuel.code;
+  emitAvecDelai("vocal:rejoindre", { code }, (res) => {
+    if (!res?.ok){
+      // Le salon a vraiment disparu (fermé, expiré) pendant la coupure : on ne force rien —
+      // vocal:ferme ou la bannière de retour (verifierRetourVocal) prennent le relais.
+      vocalSalonActuel = null;
+      vocalMicOuvert = false;
+      $("vocalAudio").pause();
+      vocalFermerToutesLesConnexions();
+      return;
+    }
+    renderVocalSalon(res.salon);
+  });
+}
 
 /**
  * Après toute reconnexion Socket.IO (coupure wifi, téléphone qui se réveille,
