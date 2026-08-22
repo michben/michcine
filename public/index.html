@@ -5611,13 +5611,32 @@ function renderVocalSalon(salon){
   const audio = $("vocalAudio");
   if (salon.radio){
     $("vocalRadioTexte").textContent = `🎶 En cours : ${salon.radio.titre} — cliquez ▶️ si la lecture ne démarre pas toute seule.`;
+    audio.style.display = "";
     if (audio.dataset.url !== salon.radio.url){
       audio.src = salon.radio.url;
       audio.dataset.url = salon.radio.url;
+      // Poser currentTime avant que le navigateur ait pu lire les métadonnées (durée, format) du
+      // fichier échoue souvent en silence : on attend ce signal plutôt que de le tenter tout de
+      // suite, pour rester synchronisé avec les autres sans empêcher la lecture de démarrer.
+      audio.addEventListener("loadedmetadata", () => {
+        if (audio.dataset.url !== salon.radio.url) return; // une autre piste a démarré entretemps
+        const ecoule = Math.max(0, (Date.now() - salon.radio.demarreLe) / 1000);
+        try { audio.currentTime = ecoule; } catch {}
+      }, { once: true });
+      // Signale clairement pourquoi rien ne s'entend (lien mort, fichier corrompu, format non
+      // supporté par ce navigateur…) plutôt que de laisser un silence total sans explication —
+      // c'était le principal signalement remonté : « ça ne marche même en cliquant sur lecture ».
+      audio.onerror = () => {
+        const raison = raisonDepuisMediaError(audio.error);
+        const libelles = { reseau: "fichier inaccessible", decodage: "fichier corrompu",
+          format: "format non lisible par ce navigateur", inconnue: "erreur de lecture inconnue" };
+        $("vocalRadioTexte").textContent = `⚠️ Lecture impossible (${libelles[raison]}).` +
+          (modo ? " Essayez un autre lien ou fichier." : " Prévenez l'hôte du salon.");
+      };
+    } else {
+      const elapsed = Math.max(0, (Date.now() - salon.radio.demarreLe) / 1000);
+      if (audio.readyState >= 1 && Math.abs((audio.currentTime || 0) - elapsed) > 3) audio.currentTime = elapsed;
     }
-    audio.style.display = "";
-    const elapsed = Math.max(0, (Date.now() - salon.radio.demarreLe) / 1000);
-    if (Math.abs((audio.currentTime || 0) - elapsed) > 3) audio.currentTime = elapsed;
     audio.play().catch(() => {}); // lecture auto parfois bloquée sans geste : les contrôles restent visibles pour lancer à la main
   } else {
     $("vocalRadioTexte").textContent = "Aucune piste diffusée pour l'instant.";
