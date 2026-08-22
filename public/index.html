@@ -288,6 +288,11 @@
     font-weight:400;padding:0 2px;line-height:1}
   /* Tête d'affiche : bandeau des joueurs en ligne, mis en avant en haut du menu. */
   .teteAffiche{margin:0 0 16px}
+  /* Étoile pour épingler une option de « Plus d'options » en raccourci sur l'accueil. */
+  .favoriGroup{display:inline-flex;align-items:stretch;gap:2px}
+  .favToggle{background:transparent;border:1px solid rgba(237,232,220,.14);border-radius:8px;
+    color:var(--muted);font-size:15px;padding:0 8px;cursor:pointer;line-height:1}
+  .favToggle.actif{color:var(--beam);border-color:var(--beam)}
   .listeTeteAffiche{display:flex;gap:12px;overflow-x:auto;padding:2px 2px 8px;scrollbar-width:thin}
   .teteAvatar{display:flex;flex-direction:column;align-items:center;gap:5px;flex:0 0 auto;width:60px;cursor:pointer}
   .teteAvatar .cadre{position:relative;width:48px;height:48px;border-radius:50%;overflow:hidden;
@@ -418,7 +423,10 @@
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
   select{width:100%;background:var(--card);border:1px solid rgba(237,232,220,.14);color:var(--chalk);
     border-radius:10px;padding:12px 13px;font:inherit;font-size:16px}
-  .invitation{position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:80;
+  /* top:96px (et non 18px) : laisse la place à la bannière « retourVocalBulle » qui occupe déjà
+     le haut de l'écran (voir plus bas) — les deux se recouvraient sinon, et un clic sur
+     « Rejoindre » atterrissait sur le mauvais bouton (celui du dessus). */
+  .invitation{position:fixed;left:50%;top:96px;transform:translateX(-50%);z-index:80;
     background:var(--velvet);border:1px solid var(--beam);border-radius:14px;padding:16px 18px;
     max-width:min(360px,calc(100vw - 24px));box-shadow:0 14px 40px rgba(0,0,0,.6);
     animation:descend .3s ease both}
@@ -1194,15 +1202,21 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
 
   <!-- CHOIX DU MODE -->
   <section id="menu" class="hidden">
-    <div id="teteAffiche" class="teteAffiche hidden">
-      <p class="tag" style="margin:0 0 8px">🟢 Vos amis en ligne</p>
-      <div id="listeTeteAffiche" class="listeTeteAffiche"></div>
-    </div>
     <h2 id="hello">Bonjour</h2>
-    <p class="note" id="totalFilmsMenu" style="margin:0 0 4px;font-size:12px;opacity:0.7">🎬 <b id="totalFilmsNb">—</b> films dans le jeu</p>
-    <p class="note" id="totalJoueursMenu" style="margin:0 0 10px;font-size:12px;opacity:0.7">🧑‍🤝‍🧑 <b id="totalJoueursNb">—</b> joueurs inscrits sur l'application</p>
+
+    <!-- Position au classement : remplace l'ancien bandeau « Vos amis en ligne », qui faisait
+         doublon avec le compteur juste en dessous (voir btnOnlineUsers). -->
+    <div id="classementAccueil" class="card hidden" style="margin:0 0 12px;padding:12px 14px;cursor:pointer">
+      <p class="tag" style="margin:0 0 4px">🏆 Votre position au classement</p>
+      <p class="note" id="classementAccueilTexte" style="margin:0;font-size:14px;font-weight:600;opacity:1">—</p>
+    </div>
+
     <p class="wallet" id="walletMenu" style="cursor:pointer" title="Voir l'historique de vos tickets et points">🎟️ <b>0</b> crédits</p>
     <p class="online" id="btnOnlineUsers" style="cursor:pointer" title="Voir vos amis en ligne"><span class="dot on"></span><b id="onlineNb">—</b><span id="onlineCount">amis en ligne</span></p>
+
+    <!-- Raccourcis épinglés depuis « Plus d'options » (voir l'étoile à côté de chaque option). -->
+    <div class="row hidden" id="favorisAccueil" style="margin-bottom:14px;flex-wrap:wrap"></div>
+
     <div class="row" style="margin-bottom: 14px;" data-module="sorties">
       <button id="btnFilmsCinema" style="flex:1; padding: 10px 16px; background: var(--beam); color: #0A0C16; font-weight: bold; border: 0; border-radius: 999px; cursor: pointer;">🎬 Films au cinéma</button>
     </div>
@@ -1219,16 +1233,20 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
       <div class="jauge"><i id="niveauJauge" style="width:0%"></i></div>
       <p class="tagPresque hidden" id="tagPresqueNiveau">✨ Presque au niveau supérieur !</p>
     </div>
+
+    <!-- Le titre « Choisissez votre partie » introduit directement le bouton qui ouvre le choix
+         du mode de jeu — remis juste au-dessus, à sa place logique (il vivait par erreur au-dessus
+         de « Nés aujourd'hui / Roue du jour », restés là depuis la fusion des boutons de mode). -->
+    <div class="modes" data-module="modes">
+      <p class="tag" style="margin:18px 0 10px">Choisissez votre partie</p>
+      <button class="mode" id="btnCommencerPartie" data-bulle="▶️ Choisissez votre façon de jouer : Solo, Duel, Chacun pour soi, En équipes ou Partie classée.">
+        <span class="ic">▶️</span><span class="details"><b>Commencer la partie</b><small>Solo, Duel, Chacun pour soi, Équipes, Classée</small></span></button>
+    </div>
     <div data-module="quotidien">
-      <p class="tag" style="margin-top:18px">Choisissez votre partie</p>
       <div class="row" style="margin-bottom: 14px;">
         <button id="btnBirthdays" class="ghost" style="border-color: var(--teal); color: var(--teal);">🎂 Nés aujourd'hui</button>
         <button id="btnRoue" class="ghost" style="border-color: var(--beam); color: var(--beam);">🎡 Roue du jour <span id="badgeRoue" class="pastille hidden">GRATUIT</span></button>
       </div>
-    </div>
-    <div class="modes" data-module="modes">
-      <button class="mode" id="btnCommencerPartie" data-bulle="▶️ Choisissez votre façon de jouer : Solo, Duel, Chacun pour soi, En équipes ou Partie classée.">
-        <span class="ic">▶️</span><span class="details"><b>Commencer la partie</b><small>Solo, Duel, Chacun pour soi, Équipes, Classée</small></span></button>
     </div>
     <div class="row" data-module="actions">
       <button class="ghost" id="btnPlusOptions">☰ Plus d'options</button>
@@ -1238,6 +1256,14 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
       <input id="joinCode" maxlength="4" placeholder="ABCD" autocomplete="off">
       <div class="row"><button id="btnJoin" class="ghost">Rejoindre</button></div>
       <p class="feedback bad" id="joinError"></p>
+    </div>
+
+    <!-- data-module="stats" : comme les autres blocs ci-dessus, sans quoi la réorganisation
+         de l'ordre du menu (voir appliquerTheme) le remonterait mécaniquement en haut de page,
+         avant les blocs numérotés — placé en dernier dans l'ordre par défaut (voir server.js). -->
+    <div data-module="stats">
+      <p class="note" id="totalFilmsMenu" style="margin:16px 0 4px;font-size:12px;opacity:0.7;text-align:center">🎬 <b id="totalFilmsNb">—</b> films dans le jeu</p>
+      <p class="note" id="totalJoueursMenu" style="margin:0;font-size:12px;opacity:0.7;text-align:center">🧑‍🤝‍🧑 <b id="totalJoueursNb">—</b> joueurs inscrits sur l'application</p>
     </div>
   </section>
 
@@ -1514,21 +1540,22 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
         <button class="close-btn" id="closePlusOptionsBtn">&times;</button>
       </div>
       <div class="modal-body">
+        <p class="note" style="margin:0 0 10px">★ Épinglez jusqu'à 4 raccourcis sur votre page d'accueil en cliquant sur l'étoile à côté d'une option.</p>
         <div class="row" style="flex-wrap:wrap">
-          <button class="ghost" id="btnExchange">Espace échange</button>
-          <button class="ghost" id="btnBoard">Classement</button>
-          <button class="ghost" id="btnQuetes">Quêtes <span id="badgeQuetes" class="pastille hidden">0</span></button>
-          <button class="ghost" id="btnSondages">🍿 Sondages <span id="badgeSondages" class="pastille hidden">0</span></button>
-          <button class="ghost" id="btnFriends">Amis <span id="badgeAmis" class="pastille hidden">0</span></button>
-          <button class="ghost" id="btnSignets">🔖 Mes signets</button>
-          <button class="ghost" id="btnPepites">💎 Mes pépites <span id="badgePepites" class="pastille hidden">0</span></button>
-          <button class="ghost" id="btnVocal" style="border-color:var(--teal);color:var(--teal)">🔴 Salons en direct</button>
+          <span class="favoriGroup"><button class="ghost" id="btnExchange">Espace échange</button><button class="favToggle" data-fav="btnExchange" title="Épingler sur l'accueil">☆</button></span>
+          <span class="favoriGroup"><button class="ghost" id="btnBoard">Classement</button><button class="favToggle" data-fav="btnBoard" title="Épingler sur l'accueil">☆</button></span>
+          <span class="favoriGroup"><button class="ghost" id="btnQuetes">Quêtes <span id="badgeQuetes" class="pastille hidden">0</span></button><button class="favToggle" data-fav="btnQuetes" title="Épingler sur l'accueil">☆</button></span>
+          <span class="favoriGroup"><button class="ghost" id="btnSondages">🍿 Sondages <span id="badgeSondages" class="pastille hidden">0</span></button><button class="favToggle" data-fav="btnSondages" title="Épingler sur l'accueil">☆</button></span>
+          <span class="favoriGroup"><button class="ghost" id="btnFriends">Amis <span id="badgeAmis" class="pastille hidden">0</span></button><button class="favToggle" data-fav="btnFriends" title="Épingler sur l'accueil">☆</button></span>
+          <span class="favoriGroup"><button class="ghost" id="btnSignets">🔖 Mes signets</button><button class="favToggle" data-fav="btnSignets" title="Épingler sur l'accueil">☆</button></span>
+          <span class="favoriGroup"><button class="ghost" id="btnPepites">💎 Mes pépites <span id="badgePepites" class="pastille hidden">0</span></button><button class="favToggle" data-fav="btnPepites" title="Épingler sur l'accueil">☆</button></span>
+          <span class="favoriGroup"><button class="ghost" id="btnVocal" style="border-color:var(--teal);color:var(--teal)">🔴 Salons en direct</button><button class="favToggle" data-fav="btnVocal" title="Épingler sur l'accueil">☆</button></span>
           <button class="ghost" id="btnContactDev" title="Envoyer un message au développeur">✉️ Contacter le développeur</button>
           <button class="ghost" id="btnKidMode" aria-pressed="false" title="Mode enfant : uniquement des films pour enfants">🐻 Mode enfant</button>
-          <button class="ghost" id="btnProfile">Profil</button>
+          <span class="favoriGroup"><button class="ghost" id="btnProfile">Profil</button><button class="favToggle" data-fav="btnProfile" title="Épingler sur l'accueil">☆</button></span>
           <button class="ghost hidden" id="btnModeration">Modération</button>
           <button class="ghost hidden" id="btnAdminAccess" style="border-color:var(--beam); color:var(--beam)">⚙️ Administration</button>
-          <button class="ghost" id="btnSuggestion" style="border-color:var(--teal); color:var(--teal)">💡 Suggérer un film</button>
+          <span class="favoriGroup"><button class="ghost" id="btnSuggestion" style="border-color:var(--teal); color:var(--teal)">💡 Suggérer un film</button><button class="favToggle" data-fav="btnSuggestion" title="Épingler sur l'accueil">☆</button></span>
           <button class="ghost" id="btnFilmsSuggeres" style="border-color:var(--ticket); color:var(--ticket)">🎟️ Suggestions retenues</button>
           <button class="ghost hidden" id="btnSuggARepost" style="border-color:var(--beam); color:var(--beam)">
             🎉 Suggestion retenue à publier <span id="badgeSuggARepost" class="pastille hidden">0</span>
@@ -2054,6 +2081,9 @@ let autoriserSpectateurGlobal = false;
 // Réglable depuis la console admin (onglet Réglages) : affiche (ou masque entièrement) le
 // bandeau « amis en ligne » et le compteur associé sur le menu principal.
 let afficherAmisEnLigneGlobal = true;
+// Réglable depuis la console admin (onglet Réglages) : affiche (ou masque) la carte « votre
+// position au classement » sur le menu principal (voir chargerClassementAccueil).
+let afficherClassementAccueilGlobal = true;
 /** Combine le réglage admin et le rôle du compte pour décider si la radio doit être visible. */
 function majVisibiliteRadio(){
   const masquer = !afficherRadioGlobal || (me && me.role === "enfant");
@@ -2327,6 +2357,18 @@ function setCredits(n){
 }
 let state = {code:null, mode:"ffa", isHost:false, hintCosts:{}, bought:{}, answered:false, timerId:null, freeHintsRemaining: 0, allHintsFree: false, coeursMax: 3, kidMode:false};
 
+/** Reprend la partie en cours après une actualisation de la page (F5, onglet rechargé…) : sans
+ *  ça, `state.code` repart à `null` à chaque rechargement et le joueur retombe sur le menu même
+ *  s'il était en pleine manche. Le code du salon est retrouvé ici depuis l'onglet (sessionStorage,
+ *  propre à cet onglet) ; la reprise elle-même est faite par resynchroniserSalon() dès la connexion
+ *  Socket.IO établie (voir socket.on("connect", ...)) — qui vérifie aussi que le salon existe
+ *  toujours côté serveur avant d'y remettre le joueur, sinon retour propre au menu. */
+const PARTIE_COURANTE_CLE = "michben_partie_courante";
+try {
+  const partieSauvee = JSON.parse(sessionStorage.getItem(PARTIE_COURANTE_CLE) || "null");
+  if (partieSauvee?.code) { state.code = partieSauvee.code; state.mode = partieSauvee.mode || state.mode; }
+} catch {}
+
 /* ---------- Mode enfant ---------- */
 /** Applique l'état du mode enfant à l'écran : halo vert, bouton, bandeau. */
 function appliquerModeEnfant(){
@@ -2543,6 +2585,32 @@ const show = id => {
   if (id === "menu") rafraichirSuggestionsARepost();
   // La page Profil affiche le détail (statut de chaque suggestion) et sa propre pastille.
   if (id === "profile") chargerMesSuggestionsProfil();
+
+  // Mémorise la page affichée pour qu'une actualisation (F5) y ramène directement le joueur au
+  // lieu de le renvoyer systématiquement au menu (voir la reprise plus bas, sur "connect").
+  try {
+    if (inGame && state.code) {
+      sessionStorage.setItem(PARTIE_COURANTE_CLE, JSON.stringify({ code: state.code, mode: state.mode }));
+    } else if (!state.code) {
+      sessionStorage.removeItem(PARTIE_COURANTE_CLE);
+    }
+    if (PAGES_RESTAURABLES.includes(id)) sessionStorage.setItem(DERNIERE_PAGE_CLE, id);
+  } catch {}
+};
+const DERNIERE_PAGE_CLE = "michben_derniere_page";
+const PAGES_RESTAURABLES = ["menu", "vocal", "board", "profile", "friends", "exchange", "quetes"];
+/** Ramène le joueur à la page qu'il consultait avant une actualisation — seulement pour ces pages
+ *  « sûres », qui rechargent elles-mêmes tout leur contenu au clic normal sur leur bouton de menu
+ *  (voir les fonctions associées ci-dessous). Une partie en cours (round/lobby/waiting/between)
+ *  est reprise séparément par resynchroniserSalon(), avec vérification que le salon existe encore. */
+const RESTAURATION_PAGE = {
+  menu: () => show("menu"),
+  vocal: () => $("btnVocal").click(),
+  board: () => $("btnBoard").click(),
+  profile: () => $("btnProfile").click(),
+  friends: () => $("btnFriends").click(),
+  exchange: () => $("btnExchange").click(),
+  quetes: () => $("btnQuetes").click(),
 };
 /** Photo du joueur si l'administration lui en a attribué une, émoji sinon. */
 const vignette = (j) => j?.photo
@@ -2852,10 +2920,10 @@ fetch("/api/config").then(r => r.json())
     afficherRadioGlobal = c.afficherRadio !== false;
     autoriserSpectateurGlobal = c.autoriserSpectateur === true;
     afficherAmisEnLigneGlobal = c.afficherAmisEnLigne !== false;
-    if (!afficherAmisEnLigneGlobal) {
-      $("teteAffiche").classList.add("hidden");
-      $("btnOnlineUsers").classList.add("hidden");
-    }
+    if (!afficherAmisEnLigneGlobal) $("btnOnlineUsers").classList.add("hidden");
+    afficherClassementAccueilGlobal = c.afficherClassementAccueil !== false;
+    if (!afficherClassementAccueilGlobal) $("classementAccueil").classList.add("hidden");
+    else chargerClassementAccueil();
     majVisibiliteRadio();
     appliquerTheme(c.theme);
     // Serveur TURN optionnel (voir server.js) : s'ajoute aux serveurs STUN pour les salons vocaux,
@@ -4271,30 +4339,23 @@ function majPresence(n){
   $("onlineNb").textContent = n;
   $("onlineCount").textContent = n > 1 ? "amis en ligne" : "ami en ligne";
 }
-socket.on("presence", ({enLigne}) => { majPresence(enLigne); chargerTeteAffiche(); });
+socket.on("presence", ({enLigne}) => majPresence(enLigne));
 fetch("/api/presence").then(r => r.json()).then(d => majPresence(d.enLigne)).catch(() => {});
 
-/** Bandeau « en tête d'affiche » : les joueurs en ligne, bien visibles en haut du menu. */
-async function chargerTeteAffiche(){
-  if (!afficherAmisEnLigneGlobal) return;   // fonctionnalité masquée depuis la console admin
-  const users = await fetch("/api/presence/users").then(r => r.ok ? r.json() : []).catch(() => []);
-  const autres = (users || []).filter(u => !me || u.id !== me.id);
-  $("teteAffiche").classList.toggle("hidden", !autres.length);
-  if (!autres.length) return;
-  $("listeTeteAffiche").innerHTML = autres.map(u => `
-    <div class="teteAvatar" data-fiche="${esc(u.id)}" data-pseudo="${esc(u.pseudo)}"
-      data-avatar="${u.avatar||"🎬"}" data-photo="${esc(u.photo||"")}">
-      <div class="cadre">
-        ${u.photo ? `<img src="${esc(u.photo)}" alt="">` : (u.avatar || "🎬")}
-        <span class="dot on"></span>
-      </div>
-      <span>${esc(u.pseudo)}</span>
-    </div>`).join("");
-  $("listeTeteAffiche").querySelectorAll("[data-fiche]").forEach(el => el.onclick = () =>
-    ouvrirJoueur(el.dataset.fiche, el.dataset.pseudo, el.dataset.avatar, el.dataset.photo || null));
+/** Carte « votre position au classement », en haut du menu (remplace l'ancien bandeau « Vos amis
+ *  en ligne », qui faisait doublon avec le compteur juste en dessous — voir btnOnlineUsers). */
+async function chargerClassementAccueil(){
+  if (!afficherClassementAccueilGlobal) return;   // fonctionnalité masquée depuis la console admin
+  const r = await fetch("/api/mon-classement").then(x => x.ok ? x.json() : null).catch(() => null);
+  const carte = $("classementAccueil");
+  if (!r || !r.rang) { carte.classList.add("hidden"); return; }
+  carte.classList.remove("hidden");
+  $("classementAccueilTexte").textContent =
+    `#${r.rang} sur ${r.total} joueur${r.total > 1 ? "s" : ""} · ${r.score} pts`;
 }
-chargerTeteAffiche();
-setInterval(chargerTeteAffiche, 20000);
+$("classementAccueil").onclick = () => $("btnBoard").click();
+chargerClassementAccueil();
+setInterval(chargerClassementAccueil, 60000);
 
 /* ---------- Espace échange ---------- */
 let points = 0, tauxTicket = 250, choixEchange = 0, saisonInfo = null;
@@ -5442,6 +5503,13 @@ async function verifierRetourVocal(){
   const r = await fetch("/api/vocal/retour").then(x => x.ok ? x.json() : null).catch(() => null);
   retourVocalCourant = r?.retour || null;
   const bulle = $("retourVocalBulle");
+  // Une invitation déjà annoncée par un « toast » (voir vocal:invite-recue) ne doit pas en plus
+  // afficher cette bannière pour le même code : les deux se recouvraient, avec un clic sur
+  // « Rejoindre » qui atterrissait sur le mauvais bouton.
+  if (retourVocalCourant?.motif === "invite" && invitationsToastEnCours?.has(retourVocalCourant.code)) {
+    bulle.classList.add("hidden");
+    return;
+  }
   if (!retourVocalCourant){ bulle.classList.add("hidden"); return; }
   $("retourVocalTitre").textContent = retourVocalCourant.motif === "invite"
     ? `${retourVocalCourant.de} vous invite dans son salon vocal`
@@ -5768,19 +5836,32 @@ $("closeInviterVocalBtn").onclick = () => $("inviterVocalModal").classList.remov
 $("inviterVocalModal").onclick = e => { if (e.target.id === "inviterVocalModal") $("inviterVocalModal").classList.remove("active"); };
 
 /** Invitation reçue à rejoindre le salon vocal d'un ami. */
+// Codes pour lesquels une invitation « toast » est déjà affichée à l'écran — sert à ne pas
+// aussi afficher la bannière de retour (voir verifierRetourVocal) pour la même invitation :
+// les deux se recouvraient sinon (même zone en haut de l'écran), et un clic sur « Rejoindre »
+// atterrissait sur le mauvais bouton, donnant l'impression que rejoindre ne fonctionnait pas.
+const invitationsToastEnCours = new Set();
 socket.on("vocal:invite-recue", ({ code, titre, de, avatar, photo }) => {
+  invitationsToastEnCours.add(code);
   const el = document.createElement("div");
   el.className = "invitation";
   el.innerHTML = `<b>${photo ? `<img class="pfp" src="${esc(photo)}" alt="">` : (avatar||"🎬")} ${esc(de)}</b> vous invite dans son salon vocal
     <small>${esc(titre || "Salon vocal")} · code ${esc(code)}</small>
     <span><button data-oui>Rejoindre</button><button data-non class="ghost">Plus tard</button></span>`;
   document.body.append(el);
-  const fermer = () => el.remove();
+  const fermer = () => { invitationsToastEnCours.delete(code); el.remove(); };
   el.querySelector("[data-non]").onclick = fermer;
   el.querySelector("[data-oui]").onclick = () => {
     fermer();
-    show("vocal");
-    rejoindreSalonVocalParCode(code);
+    // Pendant une partie en cours, on reste sur l'écran de jeu : la connexion vocale se fait en
+    // arrière-plan (même logique que la bannière de retour — voir btnRetourVocalRejoindre) plutôt
+    // que d'interrompre la partie affichée en pleine manche.
+    if (enPartieActuellement) {
+      rejoindreSalonVocalParCode(code, { rester: true });
+    } else {
+      show("vocal");
+      rejoindreSalonVocalParCode(code);
+    }
   };
 });
 
@@ -6512,8 +6593,58 @@ $("plusOptionsModal").onclick = e => { if (e.target.id === "plusOptionsModal") $
 // se passe" au premier plan. Ferme donc systématiquement la fenêtre dès qu'un bouton y est cliqué
 // (le bouton fermer lui-même ne fait rien de plus, ce qui ne pose aucun problème).
 $("plusOptionsModal").querySelector(".modal-body").addEventListener("click", e => {
+  if (e.target.closest(".favToggle")) return; // épingler un raccourci ne doit pas fermer la fenêtre
   if (e.target.closest("button")) $("plusOptionsModal").classList.remove("active");
 });
+
+/** Raccourcis épinglés sur l'accueil : jusqu'à 4 options de « Plus d'options » choisies par le
+ *  joueur (l'étoile ☆/⭐ à côté de chacune), pour y accéder sans rouvrir le menu à chaque fois.
+ *  Purement côté client (localStorage) — aucun réglage serveur, propre à chaque appareil. */
+const FAVORIS_ACCUEIL_CLE = "michben_favoris_accueil";
+const FAVORIS_ACCUEIL_MAX = 4;
+function favorisAccueilActuels(){
+  try { return JSON.parse(localStorage.getItem(FAVORIS_ACCUEIL_CLE) || "[]"); } catch { return []; }
+}
+function majEtoilesFavorisAccueil(){
+  const favoris = favorisAccueilActuels();
+  $("plusOptionsModal").querySelectorAll(".favToggle").forEach(b => {
+    const actif = favoris.includes(b.dataset.fav);
+    b.textContent = actif ? "⭐" : "☆";
+    b.classList.toggle("actif", actif);
+  });
+}
+function rendreFavorisAccueil(){
+  const favoris = favorisAccueilActuels().filter(id => document.getElementById(id));
+  const zone = $("favorisAccueil");
+  if (!favoris.length){ zone.classList.add("hidden"); zone.innerHTML = ""; return; }
+  zone.classList.remove("hidden");
+  zone.innerHTML = favoris.map(id => {
+    const libelle = document.getElementById(id)?.textContent.trim() || id;
+    return `<button class="ghost" data-favori-accueil="${esc(id)}">${esc(libelle)}</button>`;
+  }).join("");
+  zone.querySelectorAll("[data-favori-accueil]").forEach(b => b.onclick = () =>
+    document.getElementById(b.dataset.favoriAccueil)?.click());
+}
+$("plusOptionsModal").querySelectorAll(".favToggle").forEach(b => {
+  b.onclick = (e) => {
+    e.stopPropagation();
+    let favoris = favorisAccueilActuels();
+    if (favoris.includes(b.dataset.fav)) {
+      favoris = favoris.filter(f => f !== b.dataset.fav);
+    } else {
+      if (favoris.length >= FAVORIS_ACCUEIL_MAX) {
+        alert(`Vous pouvez épingler jusqu'à ${FAVORIS_ACCUEIL_MAX} raccourcis sur l'accueil — désépinglez-en un d'abord.`);
+        return;
+      }
+      favoris.push(b.dataset.fav);
+    }
+    try { localStorage.setItem(FAVORIS_ACCUEIL_CLE, JSON.stringify(favoris)); } catch {}
+    majEtoilesFavorisAccueil();
+    rendreFavorisAccueil();
+  };
+});
+majEtoilesFavorisAccueil();
+rendreFavorisAccueil();
 
 function ouvrirConfirmationMode(mode){
   modeAConfirmer = mode;
@@ -6938,7 +7069,15 @@ socket.on("connect_error", err => {
 
 socket.on("connect", () => {
   $("authError").textContent = "";
-  if (me && me.pseudoChosen && $("landing").classList.contains("hidden") === false) show("menu");
+  if (me && me.pseudoChosen && $("landing").classList.contains("hidden") === false) {
+    // Une partie en cours (state.code retrouvé depuis sessionStorage, voir plus haut) est
+    // reprise par resynchroniserSalon() juste en dessous, qui vérifie que le salon existe
+    // toujours côté serveur — on ne force donc pas une autre page dans ce cas.
+    let derniere = null;
+    try { derniere = sessionStorage.getItem(DERNIERE_PAGE_CLE); } catch {}
+    if (!state.code && derniere && RESTAURATION_PAGE[derniere]) RESTAURATION_PAGE[derniere]();
+    else if (!state.code) show("menu");
+  }
   resynchroniserSalon();
 });
 

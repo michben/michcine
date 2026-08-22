@@ -858,7 +858,11 @@
         </label>
         <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer;font-size:15px;color:var(--chalk);text-transform:none;letter-spacing:0">
           <input type="checkbox" id="rAfficherAmisEnLigne" style="width:auto">
-          Afficher le bandeau « amis en ligne » et son compteur sur le menu principal
+          Afficher le compteur « amis en ligne » sur le menu principal
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer;font-size:15px;color:var(--chalk);text-transform:none;letter-spacing:0">
+          <input type="checkbox" id="rAfficherClassementAccueil" style="width:auto">
+          Afficher la carte « votre position au classement » sur le menu principal
         </label>
         <div class="row">
           <button id="btnSaveApparence">Enregistrer ces réglages</button>
@@ -1805,6 +1809,7 @@ async function chargerReglages(){
   $("rAfficherRadio").checked = reglages.afficherRadio !== false;
   $("rAutoriserSpectateur").checked = reglages.autoriserSpectateur === true;
   $("rAfficherAmisEnLigne").checked = reglages.afficherAmisEnLigne !== false;
+  $("rAfficherClassementAccueil").checked = reglages.afficherClassementAccueil !== false;
   renderLogosCinema();
 
   $("listeIndices").innerHTML = Object.entries(reglages.indices).map(([cle, v]) => `
@@ -1861,6 +1866,7 @@ async function enregistrerReglages(msgEl){
   corps.afficherRadio = $("rAfficherRadio").checked;
   corps.autoriserSpectateur = $("rAutoriserSpectateur").checked;
   corps.afficherAmisEnLigne = $("rAfficherAmisEnLigne").checked;
+  corps.afficherClassementAccueil = $("rAfficherClassementAccueil").checked;
   Object.assign(corps.indices.poster, {
     zoom: Number($("rZoom").value), flou: Number($("rFlou").value), cadrage: $("rCadrage").value,
   });
@@ -2774,6 +2780,7 @@ async function loadReports(){
       modes: "▶️ Bouton « Commencer la partie »",
       actions: "☰ Bouton « Plus d'options » (échange, classement, amis, profil, administration…)",
       rejoindre: "🔑 Rejoindre un salon",
+      stats: "🎬 Compteurs (films dans le jeu / joueurs inscrits)",
     };
     let ordreMenuActuel = [];
 
@@ -3330,17 +3337,5 @@ $("btnGrantAll").onclick = async () => {
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 </script>
 
-<script>
-async function autoLogin() {
-    const res = await fetch("/api/admin/check");
-    const status = await res.json();
-    if (status.isAdmin || status.isMod) {
-        // Try to unlock with a generic token if the user is verified by session
-        $("token").value = "session-granted";
-        $("btnAuth").click();
-    }
-}
-autoLogin();
-</script>
 </body>
 </html>
