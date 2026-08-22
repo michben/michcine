@@ -25,7 +25,7 @@ import { mountAuth, mountPasserelleEntrante, userFromCookie, addRankedPoints,
          estModerateur, estEnfant, definirRole, ROLES, chargerUtilisateurs,
          relations, demanderAmi, accepterAmi, retirerAmi, bloquer,
          chercherJoueurs, statutRelation, estBloque, emailAValider, partageJeuActif,
-         leaderboard, reinitialiserClassement, definirPhoto, fichePublique, pseudoDe,
+         leaderboard, monClassement, reinitialiserClassement, definirPhoto, fichePublique, pseudoDe,
          retirerPoints, grantPointsDon, ajouterXp, infoNiveau, validerManuellement,
          verifierCode, rattacherParrain, infoParrainage, verifierCodeParrain,
          parrainageManquant, parrainageObligatoire, genererCodeAdmin,
@@ -120,9 +120,13 @@ const REGLAGES_DEFAUT = {
   // Un ami peut-il regarder la partie d'un autre ami en direct (lecture seule) ? Désactivé par
   // défaut — réglable depuis la console admin (onglet Réglages).
   autoriserSpectateur: false,
-  // Affiche (ou masque entièrement) le bandeau « amis en ligne » et le compteur associé sur le
-  // menu principal — réglable depuis la console admin (onglet Réglages).
+  // Affiche (ou masque entièrement) le compteur « amis en ligne » sur le menu principal —
+  // réglable depuis la console admin (onglet Réglages). L'ancien bandeau « Vos amis en ligne »
+  // (avatars en tête d'affiche), qui faisait doublon avec ce compteur, a été retiré.
   afficherAmisEnLigne: true,
+  // Affiche (ou masque) la carte « votre position au classement » sur le menu principal, qui a
+  // pris la place de l'ancien bandeau ci-dessus — réglable depuis la console admin (onglet Réglages).
+  afficherClassementAccueil: true,
   // Plafond (en %) de la part de films français dans une manche tirée au sort — le reste
   // (international + non classés) comble la différence. Sert à rééquilibrer un catalogue trop
   // riche en films français, sans jamais raccourcir une partie si le vivier international est
@@ -163,7 +167,7 @@ const REGLAGES_DEFAUT = {
     couleurs: { ink: "#0A0C16", velvet: "#151A2E", card: "#1C2238", beam: "#F5B942",
                 ticket: "#E4586E", teal: "#4ECDC4", chalk: "#EDE8DC", muted: "#7C819B" },
     polices: { affiche: "Anton", corps: "Inter", etiquette: "Oswald" },
-    ordre: { menu: ["sorties", "cinemas", "niveau", "quotidien", "modes", "actions", "rejoindre"] },
+    ordre: { menu: ["modes", "sorties", "cinemas", "niveau", "quotidien", "actions", "rejoindre", "stats"] },
     // Couleurs propres à chaque grand module (espace échanges, classement, quêtes, sondages,
     // amis, salon vocal) : "" = pas de personnalisation, le module garde les couleurs globales
     // ci-dessus. Volontairement limité à l'accent principal et secondaire (et non les 8 couleurs
@@ -702,6 +706,7 @@ app.put("/api/admin/reglages", requireAdmin, (req, res) => {
   if (typeof r.afficherRadio === "boolean") REGLAGES.afficherRadio = r.afficherRadio;
   if (typeof r.autoriserSpectateur === "boolean") REGLAGES.autoriserSpectateur = r.autoriserSpectateur;
   if (typeof r.afficherAmisEnLigne === "boolean") REGLAGES.afficherAmisEnLigne = r.afficherAmisEnLigne;
+  if (typeof r.afficherClassementAccueil === "boolean") REGLAGES.afficherClassementAccueil = r.afficherClassementAccueil;
   REGLAGES.ratioFilmsFrancaisMax = borne(r.ratioFilmsFrancaisMax, 0, 100, REGLAGES.ratioFilmsFrancaisMax);
   REGLAGES.animationsAvancees = r.animationsAvancees !== false;
   REGLAGES.coeurs           = borne(r.coeurs, 1, 10, REGLAGES.coeurs);
@@ -756,7 +761,7 @@ const THEME_POLICES = {
   corps: ["Inter", "Roboto", "Poppins", "Montserrat", "Nunito"],
   etiquette: ["Oswald", "Barlow Condensed", "Teko", "Rajdhani", "Bebas Neue", "Montserrat"],
 };
-const THEME_MODULES_MENU = ["sorties", "cinemas", "niveau", "quotidien", "modes", "actions", "rejoindre"];
+const THEME_MODULES_MENU = ["sorties", "cinemas", "niveau", "quotidien", "modes", "actions", "rejoindre", "stats"];
 // Modules personnalisables individuellement (accent principal + secondaire uniquement — voir
 // REGLAGES_DEFAUT.theme.couleursCategories pour le détail du choix).
 const THEME_CATEGORIES = {
@@ -3904,6 +3909,15 @@ app.get("/api/leaderboard", (req, res) =>
   res.json(leaderboard(50, ["global", "enfant"].includes(req.query.type) ? req.query.type : "saison"))
 );
 
+/** Position exacte du compte connecté au classement (même hors du top 50 renvoyé par
+ *  /api/leaderboard) — pour la carte « votre position » affichée en haut du menu principal. */
+app.get("/api/mon-classement", (req, res) => {
+  const user = userFromCookie(req.headers.cookie);
+  if (!user) return res.json({ rang: null });
+  const type = ["global", "enfant"].includes(req.query.type) ? req.query.type : "saison";
+  res.json(monClassement(user.id, type) || { rang: null });
+});
+
 app.get("/api/saison", (req, res) => {
   const user = userFromCookie(req.headers.cookie);
   res.json({
@@ -3962,6 +3976,7 @@ app.get("/api/config", (_req, res) => res.json({
   afficherRadio: REGLAGES.afficherRadio,
   autoriserSpectateur: REGLAGES.autoriserSpectateur,
   afficherAmisEnLigne: REGLAGES.afficherAmisEnLigne,
+  afficherClassementAccueil: REGLAGES.afficherClassementAccueil,
   theme: REGLAGES.theme,
   // Priorité au réglage fait depuis la console admin (onglet Audio) ; les variables d'environnement
   // TURN_URL / TURN_USERNAME / TURN_CREDENTIAL ne servent plus que de valeur de secours au tout
@@ -6323,6 +6338,16 @@ if (!REGLAGES.passerelle || typeof REGLAGES.passerelle !== "object")
   REGLAGES.passerelle = structuredClone(REGLAGES_DEFAUT.passerelle);
 if (!REGLAGES.passerelleEntrante || typeof REGLAGES.passerelleEntrante !== "object")
   REGLAGES.passerelleEntrante = structuredClone(REGLAGES_DEFAUT.passerelleEntrante);
+// Réglages d'ordre du menu sauvegardés avant l'ajout du bloc « stats » (compteurs films/joueurs,
+// voir THEME_MODULES_MENU) : on les rétablit à l'ordre par défaut à jour plutôt que de les
+// compléter en fin de liste, sans quoi le nouveau bloc atterrirait tout en haut du menu (avant
+// même « Choisissez votre partie »), faute d'avoir jamais été positionné par appliquerTheme côté
+// client. Ne s'applique qu'une fois : dès qu'un admin réordonne les modules depuis sa console
+// (voir PUT /api/admin/theme), ce réglage à jour est sauvegardé et cette migration ne le
+// retouche plus jamais.
+if (Array.isArray(REGLAGES.theme?.ordre?.menu) && !REGLAGES.theme.ordre.menu.includes("stats")) {
+  REGLAGES.theme.ordre.menu = structuredClone(REGLAGES_DEFAUT.theme.ordre.menu);
+}
 if (!empreinteAdmin)
   console.warn("⚠️  Mot de passe d'administration par défaut : changez-le depuis /admin.html");
 await chargerUtilisateurs();

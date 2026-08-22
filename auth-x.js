@@ -948,6 +948,23 @@ export const leaderboard = (limit = 50, type = "saison") => {
     }));
 };
 
+/** Position d'un joueur précis dans un classement, même s'il n'est pas dans le top affiché par
+ *  leaderboard() (qui se limite à `limit` lignes) — pour la carte « votre position » sur l'accueil.
+ *  Retourne `null` si le compte n'a pas encore choisi de pseudo (voir pseudoChosen). */
+export const monClassement = (userId, type = "saison") => {
+  const u0 = users[userId];
+  if (!u0 || !u0.pseudoChosen) return null;
+  const champ = type === "global" ? "scoreGlobal" : "totalScore";
+  const parties = type === "global" ? "partiesGlobales" : "gamesPlayed";
+  const classe = Object.values(users)
+    .filter((u) => u.pseudoChosen && ((u[parties] || 0) > 0 || (u[champ] || 0) > 0))
+    .filter((u) => (type === "enfant") === (u.role === "enfant"))
+    .sort((a, b) => (b[champ] || 0) - (a[champ] || 0));
+  const idx = classe.findIndex((u) => u.id === userId);
+  if (idx === -1) return { rang: null, total: classe.length, score: u0[champ] || 0 };
+  return { rang: idx + 1, total: classe.length, score: classe[idx][champ] || 0 };
+};
+
 /** Remet à zéro le classement de saison, sans toucher au classement global. */
 export function reinitialiserClassement() {
   for (const u of Object.values(users)) { u.totalScore = 0; u.gamesPlayed = 0; }
