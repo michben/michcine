@@ -2611,8 +2611,13 @@ app.get("/api/admin/musique", requireAdmin, (req, res) => {
     }));
 });
 
-app.post("/api/admin/musique", requireAdmin, (req, res) => {
-    const { titre, url, fichier, ext } = req.body || {};
+/** Cœur commun à l'ajout d'une piste (lien direct ou fichier envoyé, encodé en base64) — utilisé
+ *  à la fois par la gestion complète de la playlist en console admin (POST /api/admin/musique,
+ *  ci-dessous) et par l'ajout rapide depuis un salon vocal en direct (voir vocal:radio-ajouter),
+ *  qui n'exige pas la clé d'administration mais seulement d'être hôte/cohôte de ce salon.
+ *  Retourne { piste } ou { error }, jamais les deux — jamais d'accès direct à la réponse HTTP ici,
+ *  pour rester utilisable aussi bien depuis une route Express que depuis un gestionnaire Socket.IO. */
+function ajouterPisteMusique({ titre, url, fichier, ext }) {
     const nom = String(titre || "").trim().slice(0, 80) || "Sans titre";
 
     if (fichier) {
@@ -2620,30 +2625,34 @@ app.post("/api/admin/musique", requireAdmin, (req, res) => {
             ? String(ext).toLowerCase() : "mp3";
         const base64Data = String(fichier).split(";base64,").pop();
         const octets = Buffer.from(base64Data, "base64");
-        if (octets.length > MUSIQUE_MAX_OCTETS)
-            return res.status(400).json({ error: "FICHIER_TROP_LOURD" });
+        if (octets.length > MUSIQUE_MAX_OCTETS) return { error: "FICHIER_TROP_LOURD" };
         if (!fs.existsSync(MUSIQUE_DIR)) fs.mkdirSync(MUSIQUE_DIR, { recursive: true });
         const nomFichier = `${crypto.randomUUID()}.${cleanExt}`;
         try {
             fs.writeFileSync(join(MUSIQUE_DIR, nomFichier), octets);
         } catch (e) {
-            return res.status(500).json({ error: "ECRITURE_IMPOSSIBLE" });
+            return { error: "ECRITURE_IMPOSSIBLE" };
         }
         const piste = { id: crypto.randomUUID(), titre: nom, type: "fichier",
             url: `/musique/${nomFichier}`, ajouteLe: new Date().toISOString() };
         playlisteMusique.push(piste);
         saveMusique();
-        return res.json({ ok: true, piste });
+        return { piste };
     }
 
     const lien = String(url || "").trim();
-    if (!/^https?:\/\/\S+$/i.test(lien))
-        return res.status(400).json({ error: "LIEN_INVALIDE" });
+    if (!/^https?:\/\/\S+$/i.test(lien)) return { error: "LIEN_INVALIDE" };
     const piste = { id: crypto.randomUUID(), titre: nom, type: "lien", url: lien,
         ajouteLe: new Date().toISOString() };
     playlisteMusique.push(piste);
     saveMusique();
-    res.json({ ok: true, piste });
+    return { piste };
+}
+
+app.post("/api/admin/musique", requireAdmin, (req, res) => {
+    const resultat = ajouterPisteMusique(req.body || {});
+    if (resultat.error) return res.status(400).json({ error: resultat.error });
+    res.json({ ok: true, piste: resultat.piste });
 });
 
 app.delete("/api/admin/musique/:id", requireAdmin, (req, res) => {
@@ -5824,6 +5833,22 @@ io.on("connection", (socket) => {
     salon.radio = { titre: piste.titre, url: piste.url, demarreLe: Date.now() };
     diffuserVocal(salon);
     cb?.({ ok: true });
+  });
+
+  /** Ajout rapide d'une piste depuis le salon lui-même — un lien direct, ou un fichier envoyé
+   *  depuis le téléphone (voir ajouterPisteMusique) — sans passer par la console admin. Réservé
+   *  à l'hôte/aux cohôtes, comme la diffusion elle-même. Volontairement séparé de la diffusion
+   *  du micro (voir vocal:parler/vocal:mute) : c'est justement cette lecture locale synchronisée
+   *  sur chaque appareil, plutôt qu'un relais par le micro, qui évite la dégradation du son que
+   *  provoque le traitement vocal (suppression de bruit, annulation d'écho) du navigateur. */
+  socket.on("vocal:radio-ajouter", ({ code, titre, url, fichier, ext }, cb) => {
+    const salon = salonsVocaux.get(code);
+    if (!salon || !estModoVocal(salon, user.id)) return cb?.({ ok: false });
+    const resultat = ajouterPisteMusique({ titre, url, fichier, ext });
+    if (resultat.error) return cb?.({ ok: false, error: resultat.error });
+    salon.radio = { titre: resultat.piste.titre, url: resultat.piste.url, demarreLe: Date.now() };
+    diffuserVocal(salon);
+    cb?.({ ok: true, piste: resultat.piste });
   });
 
   /** Message de groupe propre au salon vocal — permet d'échanger par écrit sans couper le micro de
