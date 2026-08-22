@@ -557,10 +557,6 @@
         <input id="audioTurnUsername" placeholder="Identifiant fourni par le service TURN">
         <label style="margin-top:10px">Mot de passe / clé</label>
         <input id="audioTurnCredential" type="password" placeholder="Clé fournie par le service TURN">
-        <div class="row" style="margin-top:14px">
-          <button id="btnAudioSave">Enregistrer l'espace audio</button>
-        </div>
-        <p class="msg" id="audioMsg"></p>
       </div>
       <div class="card">
         <p class="tag">🎙️ Salons vocaux</p>
@@ -575,8 +571,33 @@
         <input id="audioGraceMinutes" type="number" min="1" max="30">
         <p style="color:var(--muted);font-size:13px;margin:8px 0 0;line-height:1.6">
           Le temps laissé à l'hôte (ou à tout le monde) pour revenir après une coupure réseau ou
-          une mise en veille, avant que le salon ne se ferme pour de bon.
+          une mise en veille, avant que le salon ne se ferme pour de bon. Un salon totalement vide
+          (plus personne dedans) se ferme lui de toute façon en 10 secondes, quel que soit ce réglage.
         </p>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:14px;cursor:pointer">
+          <input type="checkbox" id="audioMonteeLibreDefaut" style="width:auto;cursor:pointer">
+          Montée libre par défaut à la création d'un salon (les auditeurs deviennent intervenants
+          sans avoir à demander)
+        </label>
+        <p style="color:var(--muted);font-size:13px;margin:8px 0 0;line-height:1.6">
+          Décoché par défaut : chaque joueur doit passer par une demande explicite (« ✋ Demander à
+          intervenir ») que l'hôte et les cohôtes reçoivent et valident. Ce réglage ne fixe que la
+          valeur de départ — l'hôte d'un salon reste toujours libre de l'activer ou de le désactiver
+          ensuite depuis sa propre console de modération, salon par salon.
+        </p>
+        <div class="row" style="margin-top:14px">
+          <button id="btnAudioSave">Enregistrer l'espace audio</button>
+        </div>
+        <p class="msg" id="audioMsg"></p>
+      </div>
+      <div class="card">
+        <p class="tag">🔴 Salons vocaux actuellement ouverts</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6">
+          Vue de modération : tous les salons en direct, y compris les salons privés (invisibles
+          pour les joueurs qui ne sont pas amis avec l'hôte).
+        </p>
+        <div class="row"><button class="ghost" id="btnVocalSalonsRafraichir">🔄 Rafraîchir</button></div>
+        <div id="vocalSalonsAdminListe" style="margin-top:12px"></div>
       </div>
     </div>
 
@@ -2839,6 +2860,8 @@ async function loadReports(){
       $("audioMaxParticipants").value = audio.maxParticipantsVocal ?? 40;
       $("audioMaxCohotes").value = audio.maxCohotesVocal ?? 3;
       $("audioGraceMinutes").value = audio.fermetureGraceMinutes ?? 3;
+      $("audioMonteeLibreDefaut").checked = audio.monteeLibreParDefaut === true;
+      chargerSalonsVocauxAdmin();
     }
 
     $("btnAudioSave").onclick = async () => {
@@ -2850,6 +2873,7 @@ async function loadReports(){
         maxParticipantsVocal: Number($("audioMaxParticipants").value),
         maxCohotesVocal: Number($("audioMaxCohotes").value),
         fermetureGraceMinutes: Number($("audioGraceMinutes").value),
+        monteeLibreParDefaut: $("audioMonteeLibreDefaut").checked,
       })});
       $("audioMsg").textContent = res.ok
         ? "Espace audio enregistré."
@@ -2857,6 +2881,26 @@ async function loadReports(){
       $("audioMsg").className = res.ok ? "msg ok" : "msg err";
       if (res.ok) loadAudio();
     };
+
+    /** Vue de modération : liste des salons vocaux actuellement ouverts, avec leurs participants —
+     *  indépendante de la liste publique « Salons en direct », qui masque les salons privés. */
+    const ROLE_LABEL_VOCAL = { hote: "hôte", cohote: "cohôte", intervenant: "intervenant", auditeur: "auditeur" };
+    async function chargerSalonsVocauxAdmin(){
+      const res = await api("/api/admin/vocal/salons");
+      if (!res.ok) { $("vocalSalonsAdminListe").innerHTML = `<p class="note">Chargement impossible.</p>`; return; }
+      const salons = await res.json();
+      $("vocalSalonsAdminListe").innerHTML = salons.length ? salons.map((s) => `
+        <div class="item">
+          <div>
+            <strong>${esc(s.titre)}</strong> — code <b>${esc(s.code)}</b>
+            ${s.prive ? " · 🔒 privé" : ""}${s.compteEnfant ? " · 🐻 enfant" : ""}${s.monteeLibre ? " · montée libre" : ""}
+            <small style="display:block;color:var(--muted)">
+              ${s.participants.map((p) => `${esc(p.pseudo)} (${ROLE_LABEL_VOCAL[p.role] || p.role}${p.mute ? ", micro coupé" : ""})`).join(" · ") || "aucun participant"}
+            </small>
+          </div>
+        </div>`).join("") : `<p class="note">Aucun salon vocal ouvert pour l'instant.</p>`;
+    }
+    $("btnVocalSalonsRafraichir").onclick = chargerSalonsVocauxAdmin;
 
     /* ---------- Partie classée ---------- */
     async function loadClassement() {

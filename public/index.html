@@ -72,6 +72,16 @@
      combien de joueurs chaque mode demande. */
   .mode .capacite{flex:0 0 auto;font-family:var(--font-code);font-size:12px;color:var(--muted);
     background:rgba(0,0,0,.28);padding:5px 10px;border-radius:999px;white-space:nowrap}
+  /* Le bouton "Commencer la partie" est la toute première action attendue d'un joueur sur ce menu :
+     il doit sauter aux yeux avant tout le reste, pas se fondre dans les autres cartes .mode. */
+  #btnCommencerPartie{background:linear-gradient(135deg,var(--beam),var(--ticket));border:none;
+    padding:22px 20px;box-shadow:0 10px 28px rgba(245,185,66,.35);transition:transform .15s ease,box-shadow .15s ease}
+  #btnCommencerPartie::before{display:none}
+  #btnCommencerPartie .ic{font-size:32px}
+  #btnCommencerPartie b{font-size:20px;color:#0A0C16}
+  #btnCommencerPartie small{color:rgba(10,12,22,.72)}
+  body.animations-actives #btnCommencerPartie:hover,
+  body.animations-actives #btnCommencerPartie:active{transform:translateY(-2px);box-shadow:0 14px 34px rgba(245,185,66,.5)}
   /* Bulle d'aide affichée après une pression longue (souris ou tactile) sur un élément
      marqué data-bulle — voir activerBullesAide() dans le script. */
   .bulleAide{position:fixed;z-index:400;max-width:250px;background:var(--velvet);color:var(--chalk);
@@ -6468,6 +6478,13 @@ document.querySelectorAll(".mode[data-mode]").forEach(btn => btn.onclick = () =>
 $("btnPlusOptions").onclick = () => $("plusOptionsModal").classList.add("active");
 $("closePlusOptionsBtn").onclick = () => $("plusOptionsModal").classList.remove("active");
 $("plusOptionsModal").onclick = e => { if (e.target.id === "plusOptionsModal") $("plusOptionsModal").classList.remove("active"); };
+// Chaque bouton de cette fenêtre change de page (classement, profil, échange…) : sans refermer la
+// fenêtre au clic, la nouvelle page s'affiche cachée derrière elle, avec l'impression que "rien ne
+// se passe" au premier plan. Ferme donc systématiquement la fenêtre dès qu'un bouton y est cliqué
+// (le bouton fermer lui-même ne fait rien de plus, ce qui ne pose aucun problème).
+$("plusOptionsModal").querySelector(".modal-body").addEventListener("click", e => {
+  if (e.target.closest("button")) $("plusOptionsModal").classList.remove("active");
+});
 
 function ouvrirConfirmationMode(mode){
   modeAConfirmer = mode;
