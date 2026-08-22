@@ -120,6 +120,9 @@ const REGLAGES_DEFAUT = {
   // Un ami peut-il regarder la partie d'un autre ami en direct (lecture seule) ? Désactivé par
   // défaut — réglable depuis la console admin (onglet Réglages).
   autoriserSpectateur: false,
+  // Affiche (ou masque entièrement) le bandeau « amis en ligne » et le compteur associé sur le
+  // menu principal — réglable depuis la console admin (onglet Réglages).
+  afficherAmisEnLigne: true,
   // Plafond (en %) de la part de films français dans une manche tirée au sort — le reste
   // (international + non classés) comble la différence. Sert à rééquilibrer un catalogue trop
   // riche en films français, sans jamais raccourcir une partie si le vivier international est
@@ -160,7 +163,7 @@ const REGLAGES_DEFAUT = {
     couleurs: { ink: "#0A0C16", velvet: "#151A2E", card: "#1C2238", beam: "#F5B942",
                 ticket: "#E4586E", teal: "#4ECDC4", chalk: "#EDE8DC", muted: "#7C819B" },
     polices: { affiche: "Anton", corps: "Inter", etiquette: "Oswald" },
-    ordre: { menu: ["sorties", "cinemas", "niveau", "quotidien", "modes", "actions", "admin", "repost", "rejoindre"] },
+    ordre: { menu: ["sorties", "cinemas", "niveau", "quotidien", "modes", "actions", "rejoindre"] },
     // Couleurs propres à chaque grand module (espace échanges, classement, quêtes, sondages,
     // amis, salon vocal) : "" = pas de personnalisation, le module garde les couleurs globales
     // ci-dessus. Volontairement limité à l'accent principal et secondaire (et non les 8 couleurs
@@ -693,6 +696,7 @@ app.put("/api/admin/reglages", requireAdmin, (req, res) => {
   REGLAGES.pubHeureRecharge = borne(r.pubHeureRecharge, 0, 23, REGLAGES.pubHeureRecharge);
   if (typeof r.afficherRadio === "boolean") REGLAGES.afficherRadio = r.afficherRadio;
   if (typeof r.autoriserSpectateur === "boolean") REGLAGES.autoriserSpectateur = r.autoriserSpectateur;
+  if (typeof r.afficherAmisEnLigne === "boolean") REGLAGES.afficherAmisEnLigne = r.afficherAmisEnLigne;
   REGLAGES.ratioFilmsFrancaisMax = borne(r.ratioFilmsFrancaisMax, 0, 100, REGLAGES.ratioFilmsFrancaisMax);
   REGLAGES.animationsAvancees = r.animationsAvancees !== false;
   REGLAGES.coeurs           = borne(r.coeurs, 1, 10, REGLAGES.coeurs);
@@ -747,7 +751,7 @@ const THEME_POLICES = {
   corps: ["Inter", "Roboto", "Poppins", "Montserrat", "Nunito"],
   etiquette: ["Oswald", "Barlow Condensed", "Teko", "Rajdhani", "Bebas Neue", "Montserrat"],
 };
-const THEME_MODULES_MENU = ["sorties", "cinemas", "niveau", "quotidien", "modes", "actions", "admin", "repost", "rejoindre"];
+const THEME_MODULES_MENU = ["sorties", "cinemas", "niveau", "quotidien", "modes", "actions", "rejoindre"];
 // Modules personnalisables individuellement (accent principal + secondaire uniquement — voir
 // REGLAGES_DEFAUT.theme.couleursCategories pour le détail du choix).
 const THEME_CATEGORIES = {
@@ -3934,6 +3938,7 @@ app.get("/api/config", (_req, res) => res.json({
   tipUrl: CONFIG.TIP_URL, maxPlayers: CONFIG.MAX_PLAYERS, pointsParTicket: CONFIG.POINTS_PAR_TICKET, animationsAvancees: REGLAGES.animationsAvancees,
   afficherRadio: REGLAGES.afficherRadio,
   autoriserSpectateur: REGLAGES.autoriserSpectateur,
+  afficherAmisEnLigne: REGLAGES.afficherAmisEnLigne,
   theme: REGLAGES.theme,
   // Priorité au réglage fait depuis la console admin (onglet Audio) ; les variables d'environnement
   // TURN_URL / TURN_USERNAME / TURN_CREDENTIAL ne servent plus que de valeur de secours au tout
