@@ -185,6 +185,11 @@ const REGLAGES_DEFAUT = {
   audio: {
     turnActif: false, turnUrl: "", turnUsername: "", turnCredential: "",
     maxParticipantsVocal: 40, maxCohotesVocal: 3, fermetureGraceMinutes: 3,
+    // Réglage par défaut appliqué à la CRÉATION d'un salon (l'hôte reste toujours libre de le
+    // changer ensuite depuis sa propre console de modération) : à false, un auditeur doit passer
+    // par une demande explicite ("✋ Demander à intervenir") que l'hôte et les cohôtes reçoivent
+    // et valident avant de pouvoir parler — jamais de montée automatique sans validation.
+    monteeLibreParDefaut: false,
   },
   // Petit bouton teaser (voir #btnLienExterne côté client, à côté du bouton "?") pour annoncer un
   // lien externe — pensé au départ pour un futur second jeu développé séparément. `cible` est une
@@ -835,8 +840,26 @@ app.put("/api/admin/audio", requireAdmin, (req, res) => {
   REGLAGES.audio.maxParticipantsVocal = borneValeur(a.maxParticipantsVocal, 2, 200, REGLAGES.audio.maxParticipantsVocal);
   REGLAGES.audio.maxCohotesVocal = borneValeur(a.maxCohotesVocal, 1, 10, REGLAGES.audio.maxCohotesVocal);
   REGLAGES.audio.fermetureGraceMinutes = borneValeur(a.fermetureGraceMinutes, 1, 30, REGLAGES.audio.fermetureGraceMinutes);
+  if (typeof a.monteeLibreParDefaut === "boolean") REGLAGES.audio.monteeLibreParDefaut = a.monteeLibreParDefaut;
   sauver("reglages", REGLAGES);
   res.json({ ok: true, audio: REGLAGES.audio });
+});
+
+/** Liste tous les salons vocaux actuellement ouverts, avec leurs participants — vue d'ensemble
+ *  pour la modération, indépendante de la liste publique « Salons en direct » (qui masque les
+ *  salons privés aux non-amis de l'hôte : l'administration, elle, doit tout voir). */
+app.get("/api/admin/vocal/salons", requireModerateur, (_req, res) => {
+  res.json([...salonsVocaux.values()].map((s) => ({
+    code: s.code,
+    titre: s.titre,
+    prive: s.prive,
+    monteeLibre: s.monteeLibre,
+    compteEnfant: Boolean(s.compteEnfant),
+    creeLe: s.creeLe,
+    participants: [...s.participants.values()].map((p) => ({
+      pseudo: p.pseudo, avatar: p.avatar, role: p.role, mute: p.mute,
+    })),
+  })));
 });
 
 /**
@@ -5571,7 +5594,9 @@ io.on("connection", (socket) => {
       // pas amis avec l'hôte ; la montée libre laisse un auditeur devenir intervenant sans avoir
       // à demander (et sans que l'hôte ait à valider) la parole.
       prive: false,
-      monteeLibre: false,
+      // Valeur de départ réglable depuis la console admin (onglet Audio) — l'hôte reste toujours
+      // libre de la changer ensuite depuis sa propre console de modération, salon par salon.
+      monteeLibre: REGLAGES.audio?.monteeLibreParDefaut === true,
       // Même séparation stricte que pour les salons de jeu (voir room:join) : un compte enfant ne
       // doit jamais se retrouver en direct vocal avec un adulte, ni l'inverse. Fixé une fois pour
       // toutes à la création — pas de mécanisme pour "convertir" un salon après coup.
