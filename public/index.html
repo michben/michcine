@@ -1310,6 +1310,16 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
             <button id="btnVocalRadioDiffuser" class="ghost">▶️ Diffuser</button>
             <button id="btnVocalRadioArreter" class="ghost">⏹️ Arrêter</button>
           </div>
+          <button class="ghost" id="btnVocalRadioAjouterToggle" style="margin-top:10px;font-size:13px">➕ Diffuser mon propre contenu (lien ou fichier)</button>
+          <div id="vocalRadioAjouter" class="hidden" style="margin-top:10px">
+            <p class="note" style="margin:0 0 8px">Un lien direct vers un fichier audio, ou un fichier envoyé depuis votre téléphone (mp3, wav, ogg, m4a — 8 Mo max). Rejoint la playlist commune et démarre aussitôt pour tout le salon.</p>
+            <input id="vocalRadioTitre" placeholder="Titre (facultatif)" maxlength="80" style="margin-bottom:8px">
+            <input id="vocalRadioLien" placeholder="https://exemple.com/musique.mp3" style="margin-bottom:8px">
+            <p class="note" style="margin:4px 0;text-align:center;opacity:0.7">— ou —</p>
+            <input type="file" id="vocalRadioFichier" accept="audio/*" style="margin-bottom:8px">
+            <div class="row"><button id="btnVocalRadioEnvoyer">Diffuser ceci au salon</button></div>
+            <p class="feedback bad" id="vocalRadioAjouterMsg"></p>
+          </div>
         </div>
       </div>
 
@@ -5766,6 +5776,50 @@ $("btnVocalRadioDiffuser").onclick = () => {
 $("btnVocalRadioArreter").onclick = () => {
   if (!vocalSalonActuel) return;
   socket.emit("vocal:radio", { code: vocalSalonActuel.code, pisteId: null }, () => {});
+};
+
+/** Ajout rapide d'une piste depuis le salon lui-même (lien direct ou fichier envoyé depuis le
+ *  téléphone) — pas besoin de passer par la console admin. Réservé à l'hôte/aux cohôtes, comme
+ *  la diffusion elle-même (voir estModoVocal côté serveur). Rejoint la playlist commune (voir
+ *  /api/musique) et démarre aussitôt pour tout le salon, sans jamais passer par le micro — c'est
+ *  cette lecture synchronisée en local sur chaque appareil (et non un relais audio par le micro,
+ *  bien plus mauvais en qualité à cause du traitement vocal du navigateur) qui garde un son propre. */
+$("btnVocalRadioAjouterToggle").onclick = () => $("vocalRadioAjouter").classList.toggle("hidden");
+$("btnVocalRadioEnvoyer").onclick = async () => {
+  if (!vocalSalonActuel) return;
+  const titre = $("vocalRadioTitre").value.trim();
+  const lien = $("vocalRadioLien").value.trim();
+  const fichierInput = $("vocalRadioFichier");
+  const msg = $("vocalRadioAjouterMsg");
+  msg.textContent = "";
+
+  const envoyer = (payload) => emitAvecDelai("vocal:radio-ajouter", { code: vocalSalonActuel.code, titre, ...payload }, (res) => {
+    if (!res?.ok) {
+      msg.textContent = res?.error === "FICHIER_TROP_LOURD" ? "Ce fichier dépasse 8 Mo — essayez un lien direct à la place."
+        : res?.error === "LIEN_INVALIDE" ? "Ce lien ne ressemble pas à une adresse valide (doit commencer par http:// ou https://)."
+        : res?.error === "TIMEOUT" ? "Le serveur ne répond pas — vérifiez votre connexion et réessayez."
+        : "Impossible de diffuser ce contenu.";
+      return;
+    }
+    msg.textContent = "";
+    $("vocalRadioTitre").value = ""; $("vocalRadioLien").value = ""; fichierInput.value = "";
+    $("vocalRadioAjouter").classList.add("hidden");
+    chargerMusiqueVocal();
+  });
+
+  if (fichierInput.files?.[0]) {
+    const fichier = fichierInput.files[0];
+    if (fichier.size > 8 * 1024 * 1024) { msg.textContent = "Ce fichier dépasse 8 Mo — essayez un lien direct à la place."; return; }
+    const ext = (fichier.name.split(".").pop() || "mp3").toLowerCase();
+    const lecteur = new FileReader();
+    lecteur.onload = () => envoyer({ fichier: lecteur.result, ext });
+    lecteur.onerror = () => { msg.textContent = "Impossible de lire ce fichier."; };
+    lecteur.readAsDataURL(fichier);
+  } else if (lien) {
+    envoyer({ url: lien });
+  } else {
+    msg.textContent = "Indiquez un lien ou choisissez un fichier.";
+  }
 };
 
 socket.on("vocal:update", (salon) => {
