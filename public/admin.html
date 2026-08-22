@@ -6,7 +6,7 @@
 <link rel="apple-touch-icon" href="/api/favicon">
 <meta name="theme-color" content="#0A0C16">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MichBen — Catalogue de thèmes</title>
+<title>MichBen — Catalogue de films</title>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root{--ink:#0A0C16;--velvet:#151A2E;--card:#1C2238;--beam:#F5B942;--ticket:#E4586E;--chalk:#EDE8DC;--muted:#7C819B;
@@ -92,7 +92,7 @@
 <body>
 <div class="wrap">
   <h1>Catalogue <em>MichBen</em></h1>
-  <p class="tag">Ajouter, modifier et supprimer les thèmes du jeu</p>
+  <p class="tag">Ajouter, modifier et supprimer les films du quiz</p>
 
   <section id="auth" class="card">
     <label for="token">Clé d'administration</label>
@@ -103,10 +103,12 @@
 
   <section id="app" class="hidden">
     <div class="tabs">
-      <button id="tabMovies" aria-selected="true">Thèmes</button>
+      <button id="tabMovies" aria-selected="true">Films</button>
       <button id="tabUsers" aria-selected="false">Joueurs</button>
       <button id="tabReports" aria-selected="false">Signalements</button>
             <button id="tabReglages" aria-selected="false">Réglages</button>
+      <button id="tabSorties" aria-selected="false">Sorties Ciné</button>
+            <button id="tabNowPlaying" aria-selected="false">Au Cinéma</button>
       <button id="tabSugg" aria-selected="false">Suggestions</button>
       <button id="tabCitations" aria-selected="false">Citations</button>
       <button id="tabRoue" aria-selected="false">Roue</button>
@@ -119,7 +121,9 @@
     </div>
     <select id="tabSelect" class="tabSelect" aria-label="Choisir une section">
       <optgroup label="🎬 Contenu du jeu">
-        <option value="movies">Thèmes</option>
+        <option value="movies">Films</option>
+        <option value="sorties">Sorties Ciné</option>
+        <option value="nowplaying">Au Cinéma</option>
         <option value="sugg">Suggestions</option>
         <option value="citations">Citations</option>
         <option value="musique">Musique</option>
@@ -141,8 +145,63 @@
 
     <div id="paneMovies">
     <div class="card">
+      <p class="tag">🐻 Importer des films enfants (TMDB)</p>
+      <p style="color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6">
+        Cherche sur TMDB des films d'animation et familiaux (Disney, Pixar, DreamWorks, etc.)
+        qui ne sont pas encore dans le catalogue, et les propose prêts à ajouter — synopsis,
+        affiche, réalisateur et acteurs déjà remplis, marqués « adapté aux enfants ».
+        Nécessite une clé TMDB renseignée dans l'onglet Réglages.
+      </p>
+      <div class="row">
+        <button id="btnTmdbKidsChercher">Chercher des films enfants</button>
+        <button class="ghost" id="btnTmdbKidsTout" disabled>Tout cocher / décocher</button>
+      </div>
+      <p class="msg" id="tmdbKidsMsg"></p>
+      <div id="tmdbKidsListe"></div>
+      <div class="row hidden" id="tmdbKidsAjouterRow">
+        <button id="btnTmdbKidsAjouter">Ajouter la sélection au catalogue</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <p class="tag">🌍 Importer des films par pays (TMDB)</p>
+      <p style="color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6">
+        Choisissez un pays d'origine : la recherche propose les films populaires de ce pays
+        qui ne sont pas encore dans le catalogue, prêts à ajouter — synopsis, affiche,
+        réalisateur et acteurs déjà remplis. Chaque film importé est automatiquement classé
+        « France » ou « international » selon le pays choisi, pour un tirage bien équilibré.
+        Nécessite une clé TMDB renseignée dans l'onglet Réglages.
+      </p>
+      <div class="row">
+        <select id="rTmdbPays" style="flex:1 1 auto"></select>
+        <button id="btnTmdbPaysChercher">Chercher</button>
+        <button class="ghost" id="btnTmdbPaysTout" disabled>Tout cocher / décocher</button>
+      </div>
+      <p class="msg" id="tmdbPaysMsg"></p>
+      <div id="tmdbPaysListe"></div>
+      <div class="row hidden" id="tmdbPaysAjouterRow">
+        <button id="btnTmdbPaysAjouter">Ajouter la sélection au catalogue</button>
+      </div>
+    </div>
+
+    <div class="card">
       <p class="tag">Sélection du catalogue</p>
       <p class="msg" id="stats"></p>
+      <div class="grid">
+        <div>
+          <label for="bulkLevel">Niveau concerné</label>
+          <select id="bulkLevel">
+            <option value="tous">Tous les niveaux</option>
+            <option value="facile">Facile</option>
+            <option value="moyen">Moyen</option>
+            <option value="difficile">Difficile</option>
+          </select>
+        </div>
+        <div>
+          <label for="bulkRating">Note minimale (sur 10)</label>
+          <input id="bulkRating" inputmode="decimal" placeholder="6.5">
+        </div>
+      </div>
       <div class="row">
         <button id="btnEnable">Activer la sélection</button>
         <button id="btnDisable" class="ghost">Désactiver</button>
@@ -151,15 +210,71 @@
     </div>
 
     <div class="card">
-      <p class="tag" id="formTitle">Nouveau thème</p>
-      <label for="title">Nom du thème</label>
-      <input id="title" placeholder="Animal, Pays, Métier…">
+      <p class="tag" id="formTitle">Nouveau film</p>
+      <label for="title">Titre</label>
+      <input id="title" placeholder="Le Parrain">
+      <label for="synopsis">Synopsis (sans citer le titre)</label>
+      <textarea id="synopsis" rows="4" placeholder="Le patriarche vieillissant d'une dynastie du crime…"></textarea>
+      <label for="acceptedAnswers">Réponses également acceptées (séparées par des virgules)</label>
+      <input id="acceptedAnswers" placeholder="the godfather, parrain">
+      <div class="grid">
+        <div><label for="year">Année</label><input id="year" inputmode="numeric" placeholder="1972"></div>
+        <div><label for="director">Réalisateur</label><input id="director" placeholder="Francis Ford Coppola"></div>
+      </div>
+      <label for="actors">Acteurs principaux</label>
+      <input id="actors" placeholder="Marlon Brando, Al Pacino">
+      <label for="poster">URL de l'affiche</label>
+      <input id="poster" placeholder="https://image.tmdb.org/t/p/w500/…">
+      <label for="still" style="margin-top:14px">Image d'indice (sans titre imprimé)</label>
+      <input id="still" placeholder="https://image.tmdb.org/t/p/w780/…">
 
       <label style="display:flex;align-items:center;gap:9px;text-transform:none;letter-spacing:0;font-size:15px;color:var(--chalk);margin-top:16px">
         <input type="checkbox" id="fKids" style="width:auto">
-        🐻 Thème adapté aux enfants (facile à deviner, sans ambiguïté)
+        🐻 Film adapté aux enfants (Disney, Pixar, familial…)
       </label>
+      <p class="msg" id="fKidsMsg" style="margin-top:4px"></p>
 
+      <label for="fOrigine" style="margin-top:14px">Origine (pour équilibrer le tirage des manches)</label>
+      <select id="fOrigine">
+        <option value="">Non classé</option>
+        <option value="france">🇫🇷 France</option>
+        <option value="international">🌍 International</option>
+      </select>
+
+      <div style="margin-top:20px;padding-top:18px;border-top:1px solid rgba(237,232,220,.12)">
+        <p class="tag" style="margin-bottom:8px">Cadrage de l'image d'indice pour ce série</p>
+        <label style="display:flex;align-items:center;gap:9px;text-transform:none;letter-spacing:0;font-size:15px;color:var(--chalk);margin-bottom:12px">
+          <input type="checkbox" id="fSuivreGlobal" checked style="width:auto">
+          Utiliser le réglage général
+        </label>
+
+        <div id="fCadrageBloc" class="hidden">
+          <div class="grid">
+            <div>
+              <label for="fZoom">Zoom : <b id="fZoomVal">160</b> %</label>
+              <input id="fZoom" type="range" min="100" max="400" step="10" value="160">
+            </div>
+            <div>
+              <label for="fFlou">Flou : <b id="fFlouVal">0</b></label>
+              <input id="fFlou" type="range" min="0" max="30" step="1" value="0">
+            </div>
+          </div>
+          <label for="fCadrage" style="margin-top:10px">Zone conservée</label>
+          <select id="fCadrage">
+            <option value="center">Centre</option>
+            <option value="top">Haut</option>
+            <option value="bottom">Bas</option>
+            <option value="left">Gauche</option>
+            <option value="right">Droite</option>
+          </select>
+        </div>
+
+        <p class="tag" style="margin:16px 0 8px">Ce que verra le joueur</p>
+        <div style="width:100%;max-width:280px;aspect-ratio:16/9;overflow:hidden;border-radius:10px;background:var(--card)">
+          <img id="fApercu" alt="" style="width:100%;height:100%;object-fit:cover;display:block">
+        </div>
+        <p class="msg" id="fApercuMsg" style="margin-top:8px"></p>
+      </div>
       <div class="row">
         <button id="btnSave">Enregistrer</button>
         <button id="btnCancel" class="ghost hidden">Annuler la modification</button>
@@ -168,10 +283,13 @@
     </div>
 
     <div class="card">
-      <p class="tag" id="countLabel">Thèmes au catalogue</p>
+      <p class="tag" id="countLabel">Films au catalogue</p>
       <p class="msg" id="kidsCounter" style="margin-top:-8px"></p>
       <div class="filters" id="filters">
         <button data-f="tous" aria-pressed="true">Tous</button>
+        <button data-f="facile" aria-pressed="false">Facile</button>
+        <button data-f="moyen" aria-pressed="false">Moyen</button>
+        <button data-f="difficile" aria-pressed="false">Difficile</button>
         <button data-f="kids" aria-pressed="false">🐻 Enfant</button>
         <button data-f="off" aria-pressed="false">Désactivés</button>
       </div>
@@ -181,7 +299,7 @@
 
     <div id="paneReports" class="hidden">
       <div class="card">
-        <p class="tag" id="reportCount">Signalements de thèmes</p>
+        <p class="tag" id="reportCount">Signalements de films</p>
         <div id="reportList"></div>
       </div>
 
@@ -191,6 +309,24 @@
           Messages privés signalés par un joueur. Consultables uniquement en cas de
           signalement — jamais autrement.</p>
         <div id="convList"></div>
+      </div>
+    </div>
+
+    
+    <div id="paneSorties" class="hidden">
+      <div class="card">
+        <p class="tag" id="sortiesCount">Sorties Ciné de la Semaine</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 8px;line-height:1.6">
+          Gérez les films affichés aux joueurs pour cette semaine. Ajoutez manuellement un film avec son lien TMDB pour forcer son affichage.
+        </p>
+        <div class="row" style="margin-bottom: 16px;">
+          <input type="text" id="tmdbUrlInput" placeholder="Ex: https://www.themoviedb.org/movie/12345-..." style="flex:1;">
+          <button id="btnAddCustomSortie">Ajouter via TMDB</button>
+        </div>
+        <div class="row">
+          <button id="btnLoadSorties">Rafraîchir les sorties</button>
+        </div>
+        <div id="sortiesList" style="margin-top: 16px;"></div>
       </div>
     </div>
 
@@ -488,20 +624,24 @@
       </div>
 
       <div class="card">
-        <p class="tag">⚔️ Battle de thèmes (VS)</p>
+        <p class="tag">⚔️ Battle de films (VS)</p>
         <p style="color:var(--muted);font-size:13px;margin:0 0 10px;line-height:1.6">
-          Oppose deux thèmes du catalogue au vote des joueurs — nom repris automatiquement, pas
+          Oppose deux films du catalogue au vote des joueurs — titre repris automatiquement, pas
           besoin de le retaper. Vous pouvez y attacher une petite récompense : donnée aussitôt à
           chaque joueur qui vote (individuelle), ou offerte à tous les votants d'un coup quand vous
           clôturez la battle avec « Désactiver » ci-dessous (collective).
         </p>
+        <div id="sdPepitesBloc" class="hidden" style="margin-bottom:10px">
+          <label style="margin-bottom:6px">💎 Suggestions — films les plus mis en pépite par les joueurs</label>
+          <div class="row" id="sdPepitesListe" style="flex-wrap:wrap"></div>
+        </div>
         <label for="sdBattleQuestion">Question (facultatif)</label>
-        <input id="sdBattleQuestion" placeholder="Quel thème préférez-vous ?" maxlength="120">
+        <input id="sdBattleQuestion" placeholder="Quel film mérite sa place au panthéon ?" maxlength="120">
         <div class="row" style="margin-top:12px">
-          <input id="sdFilmA" list="sdFilmsListe" placeholder="Thème A — commencez à taper un nom">
+          <input id="sdFilmA" list="sdFilmsListe" placeholder="Film A — commencez à taper un titre">
         </div>
         <div class="row" style="margin-top:10px">
-          <input id="sdFilmB" list="sdFilmsListe" placeholder="Thème B — commencez à taper un nom">
+          <input id="sdFilmB" list="sdFilmsListe" placeholder="Film B — commencez à taper un titre">
         </div>
         <datalist id="sdFilmsListe"></datalist>
         <p class="msg" id="sdBattleFilmsMsg" style="margin-top:6px"></p>
@@ -531,7 +671,69 @@
       </div>
     </div>
 
+    <div id="paneNowPlaying" class="hidden">
+      <div class="card">
+        <p class="tag" id="nowPlayingCount">Actuellement au cinéma</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 8px;line-height:1.6">
+          Gérez les films affichés aux joueurs pour la sélection "Actuellement au cinéma". Ajoutez manuellement un film avec son lien TMDB pour forcer son affichage.
+        </p>
+        <div class="row" style="margin-bottom: 16px;">
+          <input type="text" id="tmdbUrlInputNow" placeholder="Ex: https://www.themoviedb.org/movie/12345-..." style="flex:1;">
+          <button id="btnAddCustomNowPlaying">Ajouter via TMDB</button>
+        </div>
+        <div class="row">
+          <button id="btnLoadNowPlaying">Rafraîchir la liste</button>
+        </div>
+        <div id="nowPlayingListUI" style="margin-top: 16px;"></div>
+      </div>
+    </div>
+
     <div id="paneReglages" class="hidden">
+      <div class="card">
+        <p class="tag">Indices proposés aux joueurs</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 6px;line-height:1.6">
+          Décochez un indice pour le retirer du jeu. Les points sont retranchés du score de
+          la manche, les tickets débités du compte du joueur.</p>
+        <div id="listeIndices"></div>
+        <div class="row">
+          <button id="btnSaveIndices">Enregistrer ces réglages</button>
+        </div>
+        <p class="msg" id="indicesReglagesMsg"></p>
+      </div>
+
+      <div class="card">
+        <p class="tag">Cadrage de l'image d'indice</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6">
+          Un zoom supérieur à 100 % rogne les bords : le titre imprimé et les visages en gros
+          plan disparaissent souvent, ce qui rend l'indice utile sans livrer la réponse.</p>
+        <div class="grid">
+          <div>
+            <label for="rZoom">Zoom : <b id="rZoomVal">160</b> %</label>
+            <input id="rZoom" type="range" min="100" max="400" step="10">
+          </div>
+          <div>
+            <label for="rFlou">Flou : <b id="rFlouVal">0</b></label>
+            <input id="rFlou" type="range" min="0" max="30" step="1">
+          </div>
+        </div>
+        <label for="rCadrage" style="margin-top:12px">Zone conservée</label>
+        <select id="rCadrage">
+          <option value="center">Centre</option>
+          <option value="top">Haut</option>
+          <option value="bottom">Bas</option>
+          <option value="left">Gauche</option>
+          <option value="right">Droite</option>
+        </select>
+        <p class="tag" style="margin:18px 0 8px">Aperçu</p>
+        <div id="apercuCadre" style="width:100%;max-width:260px;aspect-ratio:16/9;overflow:hidden;border-radius:10px;background:var(--card)">
+          <img id="apercuImg" alt="" style="width:100%;height:100%;object-fit:cover;display:block">
+        </div>
+        <div class="row" style="margin-top:14px">
+          <button id="btnSaveCadrage">Enregistrer ces réglages</button>
+        </div>
+        <p class="msg" id="cadrageReglagesMsg"></p>
+      </div>
+
       <div class="card">
         <p class="tag">Rythme et économie</p>
         <div class="grid">
@@ -540,16 +742,14 @@
           <div><label for="rDepart">Tickets offerts à l'inscription</label><input id="rDepart" type="number" min="0" max="1000"></div>
           <div><label for="rPartie">Tickets gagnés par partie</label><input id="rPartie" type="number" min="0" max="100"></div>
           <div><label for="rTaux">Points pour 1 ticket (échange)</label><input id="rTaux" type="number" min="10" max="100000"></div>
-          <div><label for="rThemesParManche">Thèmes actifs par manche</label><input id="rThemesParManche" type="number" min="1" max="10"></div>
-          <div><label for="rPointsUnique">Points : réponse valide unique</label><input id="rPointsUnique" type="number" min="0" max="1000"></div>
-          <div><label for="rPointsDoublon">Points : réponse valide en doublon</label><input id="rPointsDoublon" type="number" min="0" max="1000"></div>
-          <div><label for="rDureeVote">Durée du vote collectif (secondes)</label><input id="rDureeVote" type="number" min="5" max="120"></div>
+          <div style="grid-column: 1 / -1;"><label for="rTmdbKey">Clé API TMDB (Pour les prochaines sorties cinéma)</label><input id="rTmdbKey" type="text" placeholder="Entrez votre clé API TheMovieDB"></div>
           <div style="grid-column: 1 / -1;">
-            <label for="rLettresExclues">Lettres jamais tirées (une par une, ex. W X Y Z)</label>
-            <input id="rLettresExclues" type="text" placeholder="W X Y Z">
+            <label for="rGeoapifyKey">Clé API Geoapify (pour « Cinéma le plus proche »)</label>
+            <input id="rGeoapifyKey" type="text" placeholder="Entrez votre clé API Geoapify">
             <p style="color:var(--muted);font-size:12px;margin:4px 0 0;line-height:1.5">
-              Ces lettres ne sortiront jamais au tirage — utile pour écarter celles trop rares en
-              français. Laissez vide pour autoriser tout l'alphabet.
+              Recommandée : sans elle, la recherche s'appuie uniquement sur OpenStreetMap (gratuit,
+              mais parfois indisponible depuis un serveur hébergé). Créez une clé gratuite (3000
+              requêtes/jour) sur <b>geoapify.com</b> → « MyProjects » → créer un projet → copier la clé.
             </p>
           </div>
           <div style="grid-column: 1 / -1;">
@@ -570,7 +770,11 @@
               comme le réapprovisionnement de la roue.
             </p>
           </div>
-          <div><label for="rGrace">Délai après le bouton STOP (s)</label><input id="rGrace" type="number" min="0" max="120"></div>
+          <div><label for="rGrace">Délai après la 1re bonne réponse (s)</label><input id="rGrace" type="number" min="0" max="120"></div>
+          <div>
+            <label for="rVitesse">Dévoilement du synopsis (ms) — 0 pour désactiver</label>
+            <input id="rVitesse" type="number" min="0" max="10000" step="100">
+          </div>
           <div><label for="rParties">Parties classées par 24 h (seau)</label><input id="rParties" type="number" min="1" max="100"></div>
           <div><label for="rDonMax">Don maximum par opération</label><input id="rDonMax" type="number" min="0" max="100000"></div>
           <div><label for="rDonJour">Plafond de dons par 24 h</label><input id="rDonJour" type="number" min="0" max="500000"></div>
@@ -579,6 +783,17 @@
           <div><label for="rDonTicketsXp">🎟️ Expérience gagnée par don de tickets</label><input id="rDonTicketsXp" type="number" min="0" max="1000"></div>
           <div><label for="rDonTicketsXpMax">🎟️ Dons récompensés en xp, maximum par 24 h</label><input id="rDonTicketsXpMax" type="number" min="0" max="1000"></div>
           <div><label for="rCoeurs">Cœurs par partie (erreurs tolérées)</label><input id="rCoeurs" type="number" min="1" max="10"></div>
+          <div style="grid-column: 1 / -1;">
+            <label for="rRatioFr">Films français : maximum par manche (%)</label>
+            <input id="rRatioFr" type="number" min="0" max="100">
+            <p style="color:var(--muted);font-size:12px;margin:4px 0 0;line-height:1.5">
+              Le reste (international + films non classés) comble la différence. Une partie
+              n'est jamais raccourcie si le vivier international manque : on repuise alors dans
+              le français. Ce plafond n'a d'effet que sur les films classés « France » /
+              « International » depuis l'onglet Films (champ « Origine ») — voir le résumé en
+              haut de cet onglet pour savoir combien restent à classer.
+            </p>
+          </div>
           <div><label for="rNivMax">Niveau maximum</label><input id="rNivMax" type="number" min="10" max="1000"></div>
           <div><label for="rXpBase">Expérience du premier niveau</label><input id="rXpBase" type="number" min="10" max="10000"></div>
           <div><label for="rXpCroiss">Croissance par niveau (1.04 = +4 %)</label><input id="rXpCroiss" type="number" min="1.01" max="2" step="0.01"></div>
@@ -594,6 +809,19 @@
       </div>
 
       <div class="card">
+        <p class="tag">Logos « Cinéma le plus proche »</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 16px;line-height:1.5">
+          Uploadez un logo pour chaque enseigne détectée automatiquement dans le nom du cinéma
+          (UGC, MK2, Gaumont, Pathé), et une image générique pour tous les autres cinémas
+          (« indépendants » — CGR, Cinéville, Kinepolis, salles locales…). Le logo s'affiche sur la
+          fiche du cinéma dans « Cinéma le plus proche ». Formats acceptés : PNG, JPG, WEBP, SVG,
+          GIF — 1 Mo maximum par image.
+        </p>
+        <div id="logosCinemaGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px"></div>
+        <p class="msg" id="logosCinemaMsg"></p>
+      </div>
+
+      <div class="card">
         <p class="tag">Apparence du site</p>
         <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer;font-size:15px;color:var(--chalk);text-transform:none;letter-spacing:0">
           <input type="checkbox" id="rAnimAvancees" style="width:auto">
@@ -606,6 +834,10 @@
         <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer;font-size:15px;color:var(--chalk);text-transform:none;letter-spacing:0">
           <input type="checkbox" id="rAutoriserSpectateur" style="width:auto">
           Autoriser à regarder la partie d'un ami en direct (lecture seule, désactivé par défaut)
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer;font-size:15px;color:var(--chalk);text-transform:none;letter-spacing:0">
+          <input type="checkbox" id="rAfficherAmisEnLigne" style="width:auto">
+          Afficher le bandeau « amis en ligne » et son compteur sur le menu principal
         </label>
         <div class="row">
           <button id="btnSaveApparence">Enregistrer ces réglages</button>
@@ -734,23 +966,23 @@
       </div>
 
       <div class="card">
-        <p class="tag">🔗↔️ Passerelle entrante (recevoir depuis MichBen Ciné Quizz)</p>
+        <p class="tag">🔗↔️ Passerelle entrante (recevoir depuis un autre jeu, ex. Le Nouveau Bac)</p>
         <p style="color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6">
           Le sens inverse de la carte ci-dessus : fait en sorte qu'un joueur qui clique sur son bouton
-          🔗 <b>depuis MichBen Ciné Quizz</b> arrive ici déjà connecté, avec le même compte (même
-          pseudo, même avatar). La clé secrète ci-dessous doit être <b>exactement la même</b> que
-          celle configurée dans la console admin de Ciné Quizz (carte « Passerelle de connexion »
-          là-bas) — c'est un secret partagé entre les deux sites, jamais transmis au navigateur.
-          Tant que ce n'est pas configuré des deux côtés, laissez cette section désactivée.
+          🔗 <b>depuis cet autre jeu</b> arrive ici déjà connecté, avec le même compte (même pseudo,
+          même avatar). La clé secrète ci-dessous doit être <b>exactement la même</b> que celle
+          configurée dans la console admin de cet autre jeu (sa carte « Passerelle de connexion ») —
+          c'est un secret partagé entre les deux sites, jamais transmis au navigateur. Tant que ce
+          n'est pas configuré des deux côtés, laissez cette section désactivée.
         </p>
         <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer;font-size:15px;color:var(--chalk);text-transform:none;letter-spacing:0">
           <input type="checkbox" id="passerelleEntranteActif" style="width:auto">
           Activer la passerelle entrante
         </label>
-        <label for="passerelleEntranteDomaineInput">Adresse de MichBen Ciné Quizz</label>
-        <input id="passerelleEntranteDomaineInput" type="text" placeholder="https://www.michbencine.fr">
-        <label style="margin-top:10px" for="passerelleEntranteCleInput">Clé secrète partagée (identique à celle de Ciné Quizz)</label>
-        <input id="passerelleEntranteCleInput" type="text" maxlength="200" placeholder="Collez ici la même clé que côté Ciné Quizz">
+        <label for="passerelleEntranteDomaineInput">Adresse de l'autre jeu</label>
+        <input id="passerelleEntranteDomaineInput" type="text" placeholder="https://newbac.onrender.com">
+        <label style="margin-top:10px" for="passerelleEntranteCleInput">Clé secrète partagée (identique à celle de l'autre jeu)</label>
+        <input id="passerelleEntranteCleInput" type="text" maxlength="200" placeholder="Collez ici la même clé que côté de l'autre jeu">
         <div class="row">
           <button id="btnSavePasserelleEntrante">Enregistrer</button>
         </div>
@@ -820,7 +1052,7 @@
         <p style="color:var(--muted);font-size:13px;margin:0 0 10px;line-height:1.6">
           Crée directement un compte avec identifiant et mot de passe, sans email à valider.
           Cochez « compte enfant » pour un compte restreint au mode enfant (uniquement des
-          thèmes pour enfants), avec son propre classement.
+          films pour enfants), avec son propre classement.
         </p>
         <label for="ccPseudo">Identifiant</label>
         <input id="ccPseudo" placeholder="Pseudo" maxlength="20">
@@ -880,6 +1112,7 @@
 
 <script>
 const $ = id => document.getElementById(id);
+const FIELDS = ["title","synopsis","acceptedAnswers","year","director","actors","poster","still"];
 let token = "", movies = [], editingId = null;
 
 const api = (path, options = {}) => fetch(path, {
@@ -889,7 +1122,7 @@ const api = (path, options = {}) => fetch(path, {
 
 $("btnAuth").onclick = async () => {
   token = $("token").value.trim();
-  const res = await api("/api/themes");
+  const res = await api("/api/movies");
   if (!res.ok) return ($("authMsg").textContent = "Clé refusée.");
   movies = await res.json();
   $("auth").classList.add("hidden"); $("app").classList.remove("hidden");
@@ -909,60 +1142,150 @@ function render(){
     filtre === "tous" ? true
     : filtre === "off" ? m.enabled === false
     : filtre === "kids" ? m.kids === true
-    : true);
+    : m.difficulty === filtre);
   const actifs = movies.filter(m => m.enabled !== false).length;
   $("countLabel").textContent =
     `${vus.length} affiché${vus.length>1?"s":""} · ${actifs} actifs sur ${movies.length}`;
 
-  // Compteur de thèmes enfants, toujours visible quel que soit le filtre en cours,
+  // Compteur de films enfants, toujours visible quel que soit le filtre en cours,
   // pour voir d'un coup d'œil où en est le catalogue « adapté aux enfants ».
   const kids = movies.filter(m => m.kids === true);
   const kidsActifs = kids.filter(m => m.enabled !== false).length;
   $("kidsCounter").textContent = kids.length
-    ? `🐻 ${kidsActifs} thème${kidsActifs>1?"s":""} enfant${kidsActifs>1?"s":""} actif${kidsActifs>1?"s":""} sur ${kids.length} au catalogue`
-    : `🐻 Aucun thème enfant pour l'instant — cochez la case en créant/modifiant un thème.`;
+    ? `🐻 ${kidsActifs} film${kidsActifs>1?"s":""} enfant${kidsActifs>1?"s":""} actif${kidsActifs>1?"s":""} sur ${kids.length} au catalogue`
+    : `🐻 Aucun film enfant pour l'instant — utilisez « Chercher des films enfants » ci-dessus, ou cochez la case en créant/modifiant un film.`;
   $("list").innerHTML = vus.map(m => `
     <div class="item ${m.enabled === false ? "off" : ""}">
+      <img src="${m.poster||""}" alt="" onerror="this.style.visibility='hidden'">
       <div>
-        <strong>${esc(m.nom)}${m.kids ? '<span class="lvl" style="border-color:#3DDC84;color:#3DDC84">🐻 enfant</span>' : ""}</strong>
+        <strong>${esc(m.title)}<span class="lvl">${m.difficulty||"?"}</span>${m.cadrageImage ? '<span class="lvl" style="border-color:var(--beam);color:var(--beam)">cadrage</span>' : ""}${m.kids ? '<span class="lvl" style="border-color:#3DDC84;color:#3DDC84">🐻 enfant</span>' : ""}${m.origine ? `<span class="lvl">${m.origine === "france" ? "🇫🇷 France" : "🌍 International"}</span>` : '<span class="lvl" style="opacity:.6">origine non classée</span>'}</strong>
+        <small>${m.year||"—"} · ${m.rating ? m.rating+"/10 · " : ""}${esc(m.director||"réalisateur non renseigné")}</small>
       </div>
       <button class="ghost" data-toggle="${m.id}">${m.enabled === false ? "Activer" : "Retirer"}</button>
       <button class="ghost" data-kids-toggle="${m.id}" style="${m.kids ? "border-color:#3DDC84;color:#3DDC84" : ""}">${m.kids ? "🐻 Retirer enfant" : "🐻 Marquer enfant"}</button>
+      <button class="ghost" data-origine-toggle="${m.id}" title="Cliquez pour faire tourner : non classé → France → International">
+        ${m.origine === "france" ? "🇫🇷 France" : m.origine === "international" ? "🌍 International" : "Origine : non classé"}</button>
       <button class="ghost" data-edit="${m.id}">Modifier</button>
       <button class="danger" data-del="${m.id}">Supprimer</button>
     </div>`).join("");
 
   $("list").querySelectorAll("[data-toggle]").forEach(b => b.onclick = async () => {
     const m = movies.find(x => x.id === Number(b.dataset.toggle));
-    const res = await api(`/api/themes/${m.id}`, {method:"PUT",
+    const res = await api(`/api/movies/${m.id}`, {method:"PUT",
       body: JSON.stringify({...m, enabled: m.enabled === false})});
     if (res.ok){ Object.assign(m, await res.json()); render(); loadStats(); }
   });
   $("list").querySelectorAll("[data-kids-toggle]").forEach(b => b.onclick = async () => {
     const m = movies.find(x => x.id === Number(b.dataset.kidsToggle));
-    const res = await api(`/api/themes/${m.id}`, {method:"PUT",
+    const res = await api(`/api/movies/${m.id}`, {method:"PUT",
       body: JSON.stringify({...m, kids: !m.kids})});
     if (res.ok){ Object.assign(m, await res.json()); render(); }
+  });
+  $("list").querySelectorAll("[data-origine-toggle]").forEach(b => b.onclick = async () => {
+    const m = movies.find(x => x.id === Number(b.dataset.origineToggle));
+    const suivant = m.origine === "" || !m.origine ? "france" : m.origine === "france" ? "international" : "";
+    const res = await api(`/api/movies/${m.id}`, {method:"PUT",
+      body: JSON.stringify({...m, origine: suivant})});
+    if (res.ok){ Object.assign(m, await res.json()); render(); loadStats(); }
   });
   $("list").querySelectorAll("[data-edit]").forEach(b => b.onclick = () => edit(Number(b.dataset.edit)));
   $("list").querySelectorAll("[data-del]").forEach(b => b.onclick = () => remove(Number(b.dataset.del)));
 }
 
+/* ---------- Cadrage propre à un série ---------- */
+function majApercuFilm(){
+  const url = $("still").value.trim() || $("poster").value.trim();
+  const img = $("fApercu");
+  img.src = url;
+  $("fApercuMsg").textContent = url ? "" : "Renseignez une image pour voir l'aperçu.";
+  $("fApercuMsg").className = "msg";
+
+  const global = $("fSuivreGlobal").checked;
+  $("fCadrageBloc").classList.toggle("hidden", global);
+
+  const source = global && reglages
+    ? reglages.indices.poster
+    : { zoom: $("fZoom").value, flou: $("fFlou").value, cadrage: $("fCadrage").value };
+
+  img.style.transform = `scale(${Number(source.zoom) / 100})`;
+  img.style.objectPosition = source.cadrage;
+  img.style.filter = Number(source.flou) ? `blur(${Number(source.flou) / 10}px)` : "";
+
+  if (global) $("fApercuMsg").textContent =
+    "Réglage général appliqué. Décochez pour ajuster ce série en particulier.";
+}
+
+for (const id of ["fSuivreGlobal","fZoom","fFlou","fCadrage","still","poster"])
+  $(id).addEventListener("input", () => {
+    $("fZoomVal").textContent = $("fZoom").value;
+    $("fFlouVal").textContent = $("fFlou").value;
+    majApercuFilm();
+  });
+
+/** Le formulaire lit et écrit le cadrage du série en cours d'édition. */
+function chargerCadrage(m){
+  const c = m?.cadrageImage;
+  $("fSuivreGlobal").checked = !c;
+  $("fZoom").value = c?.zoom ?? 160;
+  $("fFlou").value = c?.flou ?? 0;
+  $("fCadrage").value = c?.cadrage ?? "center";
+  $("fZoomVal").textContent = $("fZoom").value;
+  $("fFlouVal").textContent = $("fFlou").value;
+  majApercuFilm();
+}
+
+const cadrageSaisi = () => $("fSuivreGlobal").checked ? null : {
+  zoom: Number($("fZoom").value), flou: Number($("fFlou").value), cadrage: $("fCadrage").value,
+};
+
+/**
+ * Pré-coche « Film adapté aux enfants » quand le titre évoque un studio ou
+ * un classique familial connu. Reste modifiable à la main : ce n'est qu'une
+ * suggestion de départ, jamais imposée une fois que l'admin y a touché.
+ */
+const MOTS_CLES_ENFANT = [
+  "disney", "pixar", "dreamworks", "illumination", "ghibli", "aardman", "laika",
+  "l'age de glace", "l'âge de glace", "ice age", "cars", "toy story", "reine des neiges",
+  "frozen", "vaiana", "moana", "coco", "luca", "ratatouille", "wall-e", "rebelle",
+  "brave", "monstres", "nemo", "dory", "aladdin", "roi lion", "lion king", "blanche neige",
+  "cendrillon", "raiponce", "tangled", "encanto", "zootopie", "zootopia", "rox et rouky",
+  "bambi", "dumbo", "les indestructibles", "incredibles", "shrek", "kung fu panda",
+  "madagascar", "comment dresser son dragon", "dragons", "vice-versa", "inside out",
+  "là-haut", "up", "peter pan", "pinocchio", "pat patrouille", "paw patrol", "minions",
+  "gru", "despicable me", "sacré-cœur", "kirikou", "azur et asmar", "arthur et les minimoys",
+];
+const suggererKids = (titre) => {
+  const t = String(titre || "").toLowerCase();
+  return MOTS_CLES_ENFANT.some((mot) => t.includes(mot));
+};
+let fKidsTouche = false;
+$("fKids").addEventListener("change", () => { fKidsTouche = true; });
+$("title").addEventListener("input", () => {
+  if (editingId || fKidsTouche) return;   // ne pré-remplit que pour un nouveau film, jamais après modification manuelle
+  $("fKids").checked = suggererKids($("title").value);
+});
+
 function edit(id){
   const m = movies.find(x => x.id === id);
   editingId = id;
-  $("title").value = m.nom;
+  FIELDS.forEach(f => $(f).value = Array.isArray(m[f]) ? m[f].filter(a=>a!==m.title).join(", ") : (m[f] ?? ""));
+  chargerCadrage(m);
   $("fKids").checked = !!m.kids;
-  $("formTitle").textContent = `Modifier : ${m.nom}`;
+  fKidsTouche = true;
+  $("fOrigine").value = m.origine || "";
+  $("formTitle").textContent = `Modifier : ${m.title}`;
   $("btnCancel").classList.remove("hidden");
   window.scrollTo({top:0, behavior:"smooth"});
 }
 
 function resetForm(){
   editingId = null;
-  $("title").value = "";
+  FIELDS.forEach(f => $(f).value = "");
+  chargerCadrage(null);
   $("fKids").checked = false;
-  $("formTitle").textContent = "Nouveau thème";
+  fKidsTouche = false;
+  $("fOrigine").value = "";
+  $("formTitle").textContent = "Nouveau film";
   $("btnCancel").classList.add("hidden");
 }
 $("btnCancel").onclick = resetForm;
@@ -971,18 +1294,204 @@ async function loadStats(){
   const res = await api("/api/admin/stats");
   if (!res.ok) return;
   const s = await res.json();
-  $("stats").textContent = `${s.actifs} thèmes actifs sur ${s.total} au catalogue`;
+  const o = s.parOrigine || { france: 0, international: 0, nonClasse: 0 };
+  $("stats").textContent = `${s.actifs} films actifs sur ${s.total} — `
+    + Object.entries(s.parNiveau).map(([n,v]) => `${n} ${v.actifs}/${v.total}`).join(", ")
+    + ` — origine : 🇫🇷 ${o.france} · 🌍 ${o.international} · non classés ${o.nonClasse}`
+    + (o.nonClasse > 0 ? ` (à classer depuis les fiches ci-dessous, pour un tirage vraiment équilibré)` : "");
   $("stats").className = "msg";
 }
 
+/* ---------- Import de films enfants depuis TMDB ---------- */
+let tmdbKidsSuggestions = [];
+
+$("btnTmdbKidsChercher").onclick = async () => {
+  $("tmdbKidsMsg").textContent = "Recherche en cours sur TMDB…";
+  $("tmdbKidsMsg").className = "msg";
+  $("tmdbKidsListe").innerHTML = "";
+  $("tmdbKidsAjouterRow").classList.add("hidden");
+  $("btnTmdbKidsTout").disabled = true;
+
+  const res = await api("/api/admin/movies/tmdb-kids-suggestions?pages=5&limite=40");
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok){
+    $("tmdbKidsMsg").textContent = data.error === "NO_KEY"
+      ? "Aucune clé TMDB configurée : renseignez-la dans l'onglet Réglages."
+      : "Échec de la recherche TMDB.";
+    $("tmdbKidsMsg").className = "msg err";
+    return;
+  }
+
+  tmdbKidsSuggestions = data.movies || [];
+  if (!tmdbKidsSuggestions.length){
+    $("tmdbKidsMsg").textContent = "Aucun nouveau film enfant trouvé — le catalogue est déjà à jour, ou aucun résultat.";
+    $("tmdbKidsMsg").className = "msg";
+    return;
+  }
+
+  $("tmdbKidsMsg").textContent =
+    `${tmdbKidsSuggestions.length} film${tmdbKidsSuggestions.length>1?"s":""} trouvé${tmdbKidsSuggestions.length>1?"s":""}. Décochez ceux à exclure, puis ajoutez la sélection.`;
+  $("tmdbKidsMsg").className = "msg ok";
+
+  $("tmdbKidsListe").innerHTML = tmdbKidsSuggestions.map((m, i) => `
+    <div class="item">
+      <input type="checkbox" data-tmdb-kid="${i}" checked style="width:auto;flex:0 0 auto">
+      <img src="${m.poster||""}" alt="" onerror="this.style.visibility='hidden'">
+      <div>
+        <strong>${esc(m.title)}<span class="lvl">${m.difficulty||"?"}</span></strong>
+        <small>${m.year||"—"} · ${m.rating ? m.rating+"/10 · " : ""}${esc(m.director||"réalisateur non renseigné")}</small>
+      </div>
+    </div>`).join("");
+
+  $("btnTmdbKidsTout").disabled = false;
+  $("tmdbKidsAjouterRow").classList.remove("hidden");
+};
+
+$("btnTmdbKidsTout").onclick = () => {
+  const cases = $("tmdbKidsListe").querySelectorAll("[data-tmdb-kid]");
+  const toutesCochees = [...cases].every(c => c.checked);
+  cases.forEach(c => { c.checked = !toutesCochees; });
+};
+
+$("btnTmdbKidsAjouter").onclick = async () => {
+  const choisis = [...$("tmdbKidsListe").querySelectorAll("[data-tmdb-kid]")]
+    .filter(c => c.checked)
+    .map(c => tmdbKidsSuggestions[Number(c.dataset.tmdbKid)]);
+  if (!choisis.length){
+    $("tmdbKidsMsg").textContent = "Cochez au moins un film à ajouter.";
+    $("tmdbKidsMsg").className = "msg err"; return;
+  }
+  $("tmdbKidsMsg").textContent = "Ajout en cours…";
+  $("tmdbKidsMsg").className = "msg";
+
+  const res = await api("/api/admin/movies/tmdb-kids-importer", {method:"POST", body: JSON.stringify({movies: choisis})});
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok){
+    $("tmdbKidsMsg").textContent = "Échec de l'ajout.";
+    $("tmdbKidsMsg").className = "msg err"; return;
+  }
+
+  $("tmdbKidsMsg").textContent =
+    `${data.ajoutes} film${data.ajoutes>1?"s":""} ajouté${data.ajoutes>1?"s":""} au catalogue` +
+    (data.ignores ? ` (${data.ignores} déjà présent${data.ignores>1?"s":""}, ignoré${data.ignores>1?"s":""}).` : ".");
+  $("tmdbKidsMsg").className = "msg ok";
+  $("tmdbKidsListe").innerHTML = "";
+  $("tmdbKidsAjouterRow").classList.add("hidden");
+  $("btnTmdbKidsTout").disabled = true;
+  tmdbKidsSuggestions = [];
+
+  const liste = await api("/api/movies");
+  if (liste.ok){ movies = await liste.json(); render(); }
+  loadStats();
+};
+
+/* ---------- Import de films par pays depuis TMDB ---------- */
+const PAYS_IMPORT_TMDB = {
+  FR: "France", US: "États-Unis", GB: "Royaume-Uni", CA: "Canada", IT: "Italie", ES: "Espagne",
+  DE: "Allemagne", BE: "Belgique", CH: "Suisse", JP: "Japon", KR: "Corée du Sud", CN: "Chine",
+  HK: "Hong Kong", IN: "Inde", BR: "Brésil", MX: "Mexique", AU: "Australie", SE: "Suède",
+  DK: "Danemark", NO: "Norvège", NL: "Pays-Bas", RU: "Russie", PL: "Pologne", TR: "Turquie",
+  IR: "Iran", TH: "Thaïlande", EG: "Égypte", SN: "Sénégal", MA: "Maroc", DZ: "Algérie",
+  TN: "Tunisie", AR: "Argentine", CO: "Colombie", ZA: "Afrique du Sud", NG: "Nigeria",
+};
+$("rTmdbPays").innerHTML = Object.entries(PAYS_IMPORT_TMDB)
+  .map(([code, nom]) => `<option value="${code}">${nom}</option>`).join("");
+
+let tmdbPaysSuggestions = [];
+
+$("btnTmdbPaysChercher").onclick = async () => {
+  const pays = $("rTmdbPays").value;
+  $("tmdbPaysMsg").textContent = "Recherche en cours sur TMDB…";
+  $("tmdbPaysMsg").className = "msg";
+  $("tmdbPaysListe").innerHTML = "";
+  $("tmdbPaysAjouterRow").classList.add("hidden");
+  $("btnTmdbPaysTout").disabled = true;
+
+  const res = await api(`/api/admin/movies/tmdb-pays-suggestions?pays=${pays}&pages=2&limite=24`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok){
+    $("tmdbPaysMsg").textContent = data.error === "NO_KEY"
+      ? "Aucune clé TMDB configurée : renseignez-la dans l'onglet Réglages."
+      : "Échec de la recherche TMDB.";
+    $("tmdbPaysMsg").className = "msg err";
+    return;
+  }
+
+  tmdbPaysSuggestions = data.movies || [];
+  if (!tmdbPaysSuggestions.length){
+    $("tmdbPaysMsg").textContent = "Aucun nouveau film trouvé pour ce pays — le catalogue est déjà à jour, ou aucun résultat.";
+    $("tmdbPaysMsg").className = "msg";
+    return;
+  }
+
+  $("tmdbPaysMsg").textContent =
+    `${tmdbPaysSuggestions.length} film${tmdbPaysSuggestions.length>1?"s":""} trouvé${tmdbPaysSuggestions.length>1?"s":""} (${data.paysNom||""}). Décochez ceux à exclure, puis ajoutez la sélection.`;
+  $("tmdbPaysMsg").className = "msg ok";
+
+  $("tmdbPaysListe").innerHTML = tmdbPaysSuggestions.map((m, i) => `
+    <div class="item">
+      <input type="checkbox" data-tmdb-pays="${i}" checked style="width:auto;flex:0 0 auto">
+      <img src="${m.poster||""}" alt="" onerror="this.style.visibility='hidden'">
+      <div>
+        <strong>${esc(m.title)}<span class="lvl">${m.difficulty||"?"}</span></strong>
+        <small>${m.year||"—"} · ${m.rating ? m.rating+"/10 · " : ""}${esc(m.director||"réalisateur non renseigné")}</small>
+      </div>
+    </div>`).join("");
+
+  $("btnTmdbPaysTout").disabled = false;
+  $("tmdbPaysAjouterRow").classList.remove("hidden");
+};
+
+$("btnTmdbPaysTout").onclick = () => {
+  const cases = $("tmdbPaysListe").querySelectorAll("[data-tmdb-pays]");
+  const toutesCochees = [...cases].every(c => c.checked);
+  cases.forEach(c => { c.checked = !toutesCochees; });
+};
+
+$("btnTmdbPaysAjouter").onclick = async () => {
+  const choisis = [...$("tmdbPaysListe").querySelectorAll("[data-tmdb-pays]")]
+    .filter(c => c.checked)
+    .map(c => tmdbPaysSuggestions[Number(c.dataset.tmdbPays)]);
+  if (!choisis.length){
+    $("tmdbPaysMsg").textContent = "Cochez au moins un film à ajouter.";
+    $("tmdbPaysMsg").className = "msg err"; return;
+  }
+  $("tmdbPaysMsg").textContent = "Ajout en cours…";
+  $("tmdbPaysMsg").className = "msg";
+
+  const res = await api("/api/admin/movies/tmdb-pays-importer", {method:"POST", body: JSON.stringify({movies: choisis})});
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok){
+    $("tmdbPaysMsg").textContent = "Échec de l'ajout.";
+    $("tmdbPaysMsg").className = "msg err"; return;
+  }
+
+  $("tmdbPaysMsg").textContent =
+    `${data.ajoutes} film${data.ajoutes>1?"s":""} ajouté${data.ajoutes>1?"s":""} au catalogue` +
+    (data.ignores ? ` (${data.ignores} déjà présent${data.ignores>1?"s":""}, ignoré${data.ignores>1?"s":""}).` : ".");
+  $("tmdbPaysMsg").className = "msg ok";
+  $("tmdbPaysListe").innerHTML = "";
+  $("tmdbPaysAjouterRow").classList.add("hidden");
+  $("btnTmdbPaysTout").disabled = true;
+  tmdbPaysSuggestions = [];
+
+  const liste2 = await api("/api/movies");
+  if (liste2.ok){ movies = await liste2.json(); render(); }
+  loadStats();
+};
+
 async function bulk(enabled){
-  const res = await api("/api/admin/themes/bulk", {method:"POST", body: JSON.stringify({ enabled })});
+  const res = await api("/api/admin/movies/bulk", {method:"POST", body: JSON.stringify({
+    difficulty: $("bulkLevel").value,
+    minRating: $("bulkRating").value || 0,
+    enabled,
+  })});
   const data = await res.json();
   $("bulkMsg").textContent = res.ok
-    ? `${data.touched} thèmes ${enabled ? "activés" : "désactivés"} — ${data.actifs} actifs au total.`
+    ? `${data.touched} séries ${enabled ? "activés" : "désactivés"} — ${data.actifs} actifs au total.`
     : "Échec.";
   $("bulkMsg").className = res.ok ? "msg ok" : "msg err";
-  const liste = await api("/api/themes");
+  const liste = await api("/api/movies");
   if (liste.ok){ movies = await liste.json(); render(); }
   loadStats();
 }
@@ -990,14 +1499,23 @@ $("btnEnable").onclick = () => bulk(true);
 $("btnDisable").onclick = () => bulk(false);
 
 $("btnSave").onclick = async () => {
-  const body = { nom: $("title").value.trim(), kids: $("fKids").checked };
-  if (!body.nom){
-    $("formMsg").textContent = "Le nom du thème est obligatoire.";
+  // On repart de la fiche existante (si modification) pour ne pas écraser les champs que ce
+  // formulaire ne présente pas — note, votes, tmdbId, difficulté, activation, origine… — avec
+  // les valeurs par défaut du serveur : c'était le cas jusqu'ici, et chaque modification via ce
+  // formulaire remettait silencieusement le film à "difficile" et le réactivait.
+  const existant = editingId ? movies.find(m => m.id === editingId) : null;
+  const body = { ...(existant || {}) };
+  for (const f of FIELDS) body[f] = $(f).value.trim();
+  body.cadrageImage = cadrageSaisi();
+  body.kids = $("fKids").checked;
+  body.origine = $("fOrigine").value;
+  if (!body.title || !body.synopsis){
+    $("formMsg").textContent = "Le titre et le synopsis sont obligatoires.";
     $("formMsg").className = "msg err"; return;
   }
   const res = editingId
-    ? await api(`/api/themes/${editingId}`, {method:"PUT", body:JSON.stringify(body)})
-    : await api("/api/themes", {method:"POST", body:JSON.stringify(body)});
+    ? await api(`/api/movies/${editingId}`, {method:"PUT", body:JSON.stringify(body)})
+    : await api("/api/movies", {method:"POST", body:JSON.stringify(body)});
   if (!res.ok){
     $("formMsg").textContent = "Enregistrement refusé par le serveur.";
     $("formMsg").className = "msg err"; return;
@@ -1005,15 +1523,15 @@ $("btnSave").onclick = async () => {
   const saved = await res.json();
   if (editingId) movies = movies.map(m => m.id === editingId ? saved : m);
   else movies.push(saved);
-  $("formMsg").textContent = `${saved.nom} enregistré.`;
+  $("formMsg").textContent = `${saved.title} enregistré.`;
   $("formMsg").className = "msg ok";
   resetForm(); render();
 };
 
 async function remove(id){
   const m = movies.find(x => x.id === id);
-  if (!confirm(`Supprimer « ${m.nom} » du catalogue ?`)) return;
-  const res = await api(`/api/themes/${id}`, {method:"DELETE"});
+  if (!confirm(`Supprimer « ${m.title} » du catalogue ?`)) return;
+  const res = await api(`/api/movies/${id}`, {method:"DELETE"});
   if (!res.ok) return;
   movies = movies.filter(x => x.id !== id);
   if (editingId === id) resetForm();
@@ -1033,6 +1551,8 @@ function tab(which){
                                       ["users","tabUsers","paneUsers"],
                                       ["reports","tabReports","paneReports"],
                                       ["reglages","tabReglages","paneReglages"],
+                                      ["sorties","tabSorties","paneSorties"],
+                                      ["nowplaying","tabNowPlaying","paneNowPlaying"],
                                       ["sondages","tabSondages","paneSondages"]]) {
     $(onglet).setAttribute("aria-selected", which === nom);
     $(volet).classList.toggle("hidden", which !== nom);
@@ -1051,7 +1571,9 @@ function tab(which){
   if (which === "users") { loadUsers(); chargerCompteurEnfant(); }
   if (which === "reports"){ loadReports(); loadConversations(); }
   if (which === "reglages"){ etatSecurite(); chargerReglages(); chargerAide(); chargerAnnonce(); chargerLienExterne(); chargerPasserelle(); chargerPasserelleEntrante(); chargerMaintenance(); chargerContactDev(); }
-  if (which === "sondages") { loadSondages(); remplirThemesListe(); }
+  if (which === "sorties") loadSorties();
+  if (which === "nowplaying") loadNowPlaying();
+  if (which === "sondages") { loadSondages(); remplirFilmsListe(); chargerSuggestionsPepites(); }
 }
 $("tabMovies").onclick = () => tab("movies");
 $("tabSugg").onclick = () => tab("sugg");
@@ -1065,22 +1587,185 @@ $("tabClassement").onclick = () => tab("classement");
 $("tabUsers").onclick = () => tab("users");
 $("tabReports").onclick = () => tab("reports");
 $("tabReglages").onclick = () => tab("reglages");
+$("tabSorties").onclick = () => tab("sorties");
+$("tabNowPlaying").onclick = () => tab("nowplaying");
 $("tabSondages").onclick = () => tab("sondages");
 $("tabSelect").onchange = () => tab($("tabSelect").value);
+
+
+$("btnLoadSorties").onclick = loadSorties;
+
+$("btnAddCustomSortie").onclick = async () => {
+    const url = $("tmdbUrlInput").value.trim();
+    const match = url.match(/movie\/(\d+)/);
+    if (!match) return alert("Lien TMDB invalide. Utilisez un lien comme https://www.themoviedb.org/movie/12345");
+    const id = Number(match[1]);
+    await api("/api/admin/sorties/custom", { method: "POST", body: JSON.stringify({ id }) });
+    $("tmdbUrlInput").value = "";
+    loadSorties();
+};
+
+window.toggleHideSortie = async (id, currentlyHidden) => {
+    const endpoint = currentlyHidden ? "/api/admin/sorties/unhide" : "/api/admin/sorties/hide";
+    await api(endpoint, { method: "POST", body: JSON.stringify({ id }) });
+    loadSorties();
+};
+
+window.removeCustomSortie = async (id) => {
+    await api("/api/admin/sorties/remove-custom", { method: "POST", body: JSON.stringify({ id }) });
+    loadSorties();
+};
+
+window.toggleKidsSortie = async (id) => {
+    await api("/api/admin/sorties/kids-toggle", { method: "POST", body: JSON.stringify({ id }) });
+    loadSorties();
+};
+
+async function loadSorties() {
+  $("sortiesList").innerHTML = "<p class='msg'>Chargement des sorties TMDB...</p>";
+  try {
+    const res = await api("/api/movies/upcoming");
+    const data = await res.json();
+    if (data.error && data.error === "NO_KEY") {
+      $("sortiesList").innerHTML = "<p class='msg err'>Erreur: La clé API TMDB n'est pas configurée dans les Réglages.</p>";
+      return;
+    }
+    if (!data.movies || data.movies.length === 0) {
+      $("sortiesList").innerHTML = "<p class='msg'>Aucune sortie trouvée.</p>";
+      return;
+    }
+    
+    $("sortiesList").innerHTML = data.movies.map((m, i) => `
+      <div class="urow ${m.hidden ? 'banned' : ''}" style="align-items:flex-start">
+        <img src="${m.poster || ''}" style="width:50px;height:75px;object-fit:cover;border-radius:4px;background:#333;margin-right:10px;">
+        <div class="who" style="flex:1;">
+          <strong>${esc(m.title)} ${m.custom ? '<span class="chip" style="color:var(--teal);border-color:var(--teal);">Ajouté</span>' : ''} ${m.hidden ? '<span class="chip">Masqué</span>' : ''} ${m.kidsOk ? '<span class="chip" style="color:#3ecf8e;border-color:#3ecf8e;">👶 Adapté enfants</span>' : ''}</strong>
+          <small>⭐ ${m.vote ? m.vote.toFixed(1) : '?'} / 10</small>
+          <div style="margin-top:4px;font-size:13px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">
+            ${esc(m.overview || "Aucun synopsis disponible.")}
+          </div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:5px;">
+            <button class="ghost" onclick="importSortie(${i})">Pré-remplir</button>
+            <button class="ghost" onclick="toggleHideSortie(${m.id}, ${m.hidden})">${m.hidden ? 'Afficher' : 'Masquer'}</button>
+            <button class="ghost" onclick="toggleKidsSortie(${m.id})">${m.kidsOk ? 'Retirer du mode enfant' : '👶 Adapté enfants'}</button>
+            ${m.custom ? `<button class="danger" onclick="removeCustomSortie(${m.id})">Retirer</button>` : ''}
+        </div>
+      </div>
+    `).join("");
+
+    window.lastSorties = data.movies;
+  } catch (e) {
+    $("sortiesList").innerHTML = "<p class='msg err'>Impossible de charger les sorties.</p>";
+  }
+}
+
+window.importSortie = function(idx) {
+  const m = window.lastSorties[idx];
+  $("tabMovies").click();
+  resetForm();
+  $("title").value = m.title || "";
+  $("synopsis").value = m.overview || "";
+  $("poster").value = m.poster || "";
+  $("still").value = m.poster || "";
+  $("year").value = new Date().getFullYear();
+  $("formTitle").textContent = "Nouveau film (Importé depuis Sorties Ciné)";
+  window.scrollTo({top:0, behavior:"smooth"});
+};
+
+
+$("btnLoadNowPlaying").onclick = loadNowPlaying;
+
+$("btnAddCustomNowPlaying").onclick = async () => {
+    const url = $("tmdbUrlInputNow").value.trim();
+    const match = url.match(/movie\/(\d+)/);
+    if (!match) return alert("Lien TMDB invalide. Utilisez un lien comme https://www.themoviedb.org/movie/12345");
+    const id = Number(match[1]);
+    await api("/api/admin/nowplaying/custom", { method: "POST", body: JSON.stringify({ id }) });
+    $("tmdbUrlInputNow").value = "";
+    loadNowPlaying();
+};
+
+window.toggleHideNowPlaying = async (id, currentlyHidden) => {
+    const endpoint = currentlyHidden ? "/api/admin/nowplaying/unhide" : "/api/admin/nowplaying/hide";
+    await api(endpoint, { method: "POST", body: JSON.stringify({ id }) });
+    loadNowPlaying();
+};
+
+window.removeCustomNowPlaying = async (id) => {
+    await api("/api/admin/nowplaying/remove-custom", { method: "POST", body: JSON.stringify({ id }) });
+    loadNowPlaying();
+};
+
+window.toggleKidsNowPlaying = async (id) => {
+    await api("/api/admin/nowplaying/kids-toggle", { method: "POST", body: JSON.stringify({ id }) });
+    loadNowPlaying();
+};
+
+async function loadNowPlaying() {
+  $("nowPlayingListUI").innerHTML = "<p class='msg'>Chargement des films à l'affiche...</p>";
+  try {
+    const res = await api("/api/movies/now_playing");
+    const data = await res.json();
+    if (data.error && data.error === "NO_KEY") {
+      $("nowPlayingListUI").innerHTML = "<p class='msg err'>Erreur: La clé API TMDB n'est pas configurée dans les Réglages.</p>";
+      return;
+    }
+    if (!data.movies || data.movies.length === 0) {
+      $("nowPlayingListUI").innerHTML = "<p class='msg'>Aucun film trouvé.</p>";
+      return;
+    }
+    
+    $("nowPlayingListUI").innerHTML = data.movies.map((m, i) => `
+      <div class="urow ${m.hidden ? 'banned' : ''}" style="align-items:flex-start">
+        <img src="${m.poster || ''}" style="width:50px;height:75px;object-fit:cover;border-radius:4px;background:#333;margin-right:10px;">
+        <div class="who" style="flex:1;">
+          <strong>${esc(m.title)} ${m.custom ? '<span class="chip" style="color:var(--teal);border-color:var(--teal);">Ajouté</span>' : ''} ${m.hidden ? '<span class="chip">Masqué</span>' : ''} ${m.kidsOk ? '<span class="chip" style="color:#3ecf8e;border-color:#3ecf8e;">👶 Adapté enfants</span>' : ''}</strong>
+          <small>⭐ ${m.vote ? m.vote.toFixed(1) : '?'} / 10</small>
+          <div style="margin-top:4px;font-size:13px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">
+            ${esc(m.overview || "Aucun synopsis disponible.")}
+          </div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:5px;">
+            <button class="ghost" onclick="importNowPlaying(${i})">Pré-remplir</button>
+            <button class="ghost" onclick="toggleHideNowPlaying(${m.id}, ${m.hidden})">${m.hidden ? 'Afficher' : 'Masquer'}</button>
+            <button class="ghost" onclick="toggleKidsNowPlaying(${m.id})">${m.kidsOk ? 'Retirer du mode enfant' : '👶 Adapté enfants'}</button>
+            ${m.custom ? `<button class="danger" onclick="removeCustomNowPlaying(${m.id})">Retirer</button>` : ''}
+        </div>
+      </div>
+    `).join("");
+
+    window.lastNowPlaying = data.movies;
+  } catch (e) {
+    $("nowPlayingListUI").innerHTML = "<p class='msg err'>Impossible de charger les films.</p>";
+  }
+}
+
+window.importNowPlaying = function(idx) {
+  const m = window.lastNowPlaying[idx];
+  $("tabMovies").click();
+  resetForm();
+  $("title").value = m.title || "";
+  $("synopsis").value = m.overview || "";
+  $("poster").value = m.poster || "";
+  $("still").value = m.poster || "";
+  $("year").value = new Date().getFullYear();
+  $("formTitle").textContent = "Nouveau film (Importé depuis Au Cinéma)";
+  window.scrollTo({top:0, behavior:"smooth"});
+};
 
 /* ---------- Réglages du jeu ---------- */
 let reglages = null;
 
-const CHAMPS = { rAdsterraKey:"adsterraApiKey",
+const CHAMPS = { rTmdbKey:"tmdbApiKey", rGeoapifyKey:"geoapifyApiKey", rAdsterraKey:"adsterraApiKey",
                  rPubMax:"pubMaxParCycle", rPubHeure:"pubHeureRecharge",
                  rDuree:"roundDuration", rBase:"basePoints", rDepart:"creditsDepart",
                  rPartie:"creditsParPartie", rTaux:"pointsParTicket", rGrace:"graceApresPremier",
-                 rThemesParManche:"themesParManche", rPointsUnique:"pointsReponseUnique",
-                 rPointsDoublon:"pointsReponseDoublon", rDureeVote:"dureeVoteSecondes",
-                 rParties:"partiesClasseesParJour",
+                 rVitesse:"vitesseSynopsis", rParties:"partiesClasseesParJour",
                  rDonMax:"transfertMax", rDonJour:"transfertParJour", rCoeurs:"coeurs",
                  rDonTicketsMax:"donTicketsMax", rDonTicketsJour:"donTicketsParJour",
                  rDonTicketsXp:"donTicketsXp", rDonTicketsXpMax:"donTicketsXpParJourMax",
+                 rRatioFr:"ratioFilmsFrancaisMax",
                  rNivMax:"niveauMax", rXpBase:"xpBase", rXpCroiss:"xpCroissance",
                  rXpPartie:"xpParPartie", rXpBonne:"xpParBonneReponse", rXpVict:"xpParVictoire" };
 
@@ -1089,29 +1774,75 @@ async function chargerReglages(){
   if (!res.ok) return;
   reglages = await res.json();
   for (const [champ, cle] of Object.entries(CHAMPS)) $(champ).value = reglages[cle];
-  $("rLettresExclues").value = (reglages.lettresExclues || []).join(" ");
+
+  const p = reglages.indices.poster;
+  $("rZoom").value = p.zoom; $("rZoomVal").textContent = p.zoom;
+  $("rFlou").value = p.flou; $("rFlouVal").textContent = p.flou;
+  $("rCadrage").value = p.cadrage;
+  majApercu();
   $("rAnimAvancees").checked = reglages.animationsAvancees !== false;
   $("rAfficherRadio").checked = reglages.afficherRadio !== false;
   $("rAutoriserSpectateur").checked = reglages.autoriserSpectateur === true;
+  $("rAfficherAmisEnLigne").checked = reglages.afficherAmisEnLigne !== false;
+  renderLogosCinema();
+
+  $("listeIndices").innerHTML = Object.entries(reglages.indices).map(([cle, v]) => `
+    <div class="urow">
+      <div class="who">
+        <label style="display:flex;align-items:center;gap:8px;margin:0;text-transform:none;letter-spacing:0;font-size:15px;color:var(--chalk)">
+          <input type="checkbox" data-actif="${cle}" ${v.actif ? "checked" : ""} style="width:auto">
+          <input type="text" data-libelle="${cle}" value="${esc(v.libelle)}" style="flex:1;min-width:120px">
+        </label>
+      </div>
+      <input type="number" min="0" max="5000" data-points="${cle}" value="${v.points}" aria-label="Points" title="Points retranchés">
+      <input type="number" min="0" max="50" data-tickets="${cle}" value="${v.tickets}" aria-label="Tickets" title="Tickets débités">
+    </div>`).join("");
 }
+
+/** Aperçu du recadrage, avec une affiche réelle du catalogue. */
+function majApercu(){
+  const avecImage = movies.find(m => m.still || m.poster);
+  $("apercuImg").src = avecImage ? (avecImage.still || avecImage.poster) : "";
+  $("apercuImg").style.transform = `scale(${$("rZoom").value / 100})`;
+  $("apercuImg").style.objectPosition = $("rCadrage").value;
+  const f = Number($("rFlou").value);
+  $("apercuImg").style.filter = f ? `blur(${f / 10}px)` : "";
+}
+for (const id of ["rZoom","rFlou","rCadrage"])
+  $(id).addEventListener("input", () => {
+    $("rZoomVal").textContent = $("rZoom").value;
+    $("rFlouVal").textContent = $("rFlou").value;
+    majApercu();
+  });
 
 /**
  * Un seul et même enregistrement pour TOUS les champs de l'onglet Réglages, quelle que soit la
- * carte visuelle où ils se trouvent (Rythme et économie, Apparence du site…) : plusieurs boutons
- * y donnent accès (voir plus bas) pour que chaque carte ait le sien sous la main, sans dupliquer
- * la logique d'enregistrement elle-même.
+ * carte visuelle où ils se trouvent (Rythme et économie, Indices, Cadrage, Apparence du site…) :
+ * plusieurs boutons y donnent accès (voir plus bas) pour que chaque carte ait le sien sous la
+ * main, sans dupliquer la logique d'enregistrement elle-même.
  */
 async function enregistrerReglages(msgEl){
-  const corps = {};
+  const corps = { indices: {} };
   for (const [champ, cle] of Object.entries(CHAMPS)) {
-    if (cle === "adsterraApiKey") corps[cle] = $(champ).value.trim();
+    if (cle === "tmdbApiKey" || cle === "geoapifyApiKey" || cle === "adsterraApiKey") corps[cle] = $(champ).value.trim();
     else corps[cle] = Number($(champ).value);
   }
-  corps.lettresExclues = $("rLettresExclues").value
-    .split(/[\s,]+/).map(l => l.trim().toUpperCase()).filter(Boolean);
+
+  for (const cle of Object.keys(reglages.indices)) {
+    corps.indices[cle] = {
+      actif:   $("listeIndices").querySelector(`[data-actif="${cle}"]`).checked,
+      libelle: $("listeIndices").querySelector(`[data-libelle="${cle}"]`).value,
+      points:  Number($("listeIndices").querySelector(`[data-points="${cle}"]`).value),
+      tickets: Number($("listeIndices").querySelector(`[data-tickets="${cle}"]`).value),
+    };
+  }
   corps.animationsAvancees = $("rAnimAvancees").checked;
   corps.afficherRadio = $("rAfficherRadio").checked;
   corps.autoriserSpectateur = $("rAutoriserSpectateur").checked;
+  corps.afficherAmisEnLigne = $("rAfficherAmisEnLigne").checked;
+  Object.assign(corps.indices.poster, {
+    zoom: Number($("rZoom").value), flou: Number($("rFlou").value), cadrage: $("rCadrage").value,
+  });
 
   const res = await api("/api/admin/reglages", {method:"PUT", body: JSON.stringify(corps)});
   const cible = msgEl || $("reglagesMsg");
@@ -1124,6 +1855,8 @@ async function enregistrerReglages(msgEl){
 
 $("btnSaveReglages").onclick = () => enregistrerReglages($("reglagesMsg"));
 $("btnSaveApparence").onclick = () => enregistrerReglages($("apparenceReglagesMsg"));
+$("btnSaveIndices").onclick = () => enregistrerReglages($("indicesReglagesMsg"));
+$("btnSaveCadrage").onclick = () => enregistrerReglages($("cadrageReglagesMsg"));
 
 $("btnResetReglages").onclick = async () => {
   if (!confirm("Rétablir tous les réglages par défaut ?")) return;
@@ -1232,7 +1965,7 @@ $("btnSavePasserelle").onclick = async () => {
   $("passerelleMsg").className = res.ok ? "msg ok" : "msg err";
 };
 
-/* ---------- Passerelle entrante (SSO depuis MichBen Ciné Quizz) ---------- */
+/* ---------- Passerelle entrante (SSO depuis un autre jeu) ---------- */
 async function chargerPasserelleEntrante(){
   const res = await api("/api/admin/passerelle-entrante");
   if (!res.ok) return;
@@ -1374,6 +2107,73 @@ $("btnChangerMdp").onclick = async () => {
   etatSecurite();
 };
 
+/* ---------- Logos des enseignes de cinéma (« Cinéma le plus proche ») ---------- */
+const LOGOS_CINEMA_DEFS = [
+  { cle: "ugc", libelle: "UGC" },
+  { cle: "mk2", libelle: "MK2" },
+  { cle: "gaumont", libelle: "Gaumont" },
+  { cle: "pathe", libelle: "Pathé" },
+  { cle: "independant", libelle: "Cinémas indépendants" },
+];
+
+function renderLogosCinema(){
+  const logos = reglages.logosCinema || {};
+  $("logosCinemaGrid").innerHTML = LOGOS_CINEMA_DEFS.map(({ cle, libelle }) => `
+    <div style="background:var(--card);border-radius:10px;padding:10px;text-align:center">
+      <div style="width:100%;aspect-ratio:1;border-radius:8px;background:#222;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:8px">
+        ${logos[cle] ? `<img src="${logos[cle]}" alt="${esc(libelle)}" style="width:100%;height:100%;object-fit:contain;padding:6px;box-sizing:border-box">` : `<span style="font-size:12px;color:var(--muted)">Aucun logo</span>`}
+      </div>
+      <p style="font-size:13px;font-weight:700;margin:0 0 8px">${esc(libelle)}</p>
+      <input type="file" data-logo-input="${cle}" accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif" style="background:transparent;border:none;padding:0;font-size:12px;width:100%">
+      <div class="row" style="margin-top:8px;gap:6px">
+        <button data-logo-upload="${cle}" style="flex:1;padding:7px 8px;font-size:12px">Uploader</button>
+        ${logos[cle] ? `<button data-logo-retirer="${cle}" class="ghost" style="flex:0 0 auto;padding:7px 10px;font-size:12px">✕</button>` : ""}
+      </div>
+    </div>`).join("");
+
+  $("logosCinemaGrid").querySelectorAll("[data-logo-upload]").forEach(btn => btn.onclick = () => {
+    const cle = btn.dataset.logoUpload;
+    const file = $("logosCinemaGrid").querySelector(`[data-logo-input="${cle}"]`).files[0];
+    if (!file) {
+      $("logosCinemaMsg").textContent = "Sélectionnez d'abord une image.";
+      $("logosCinemaMsg").className = "msg err";
+      return;
+    }
+    if (file.size > 1_000_000) {
+      $("logosCinemaMsg").textContent = "Image trop lourde (1 Mo maximum) — réduisez-la puis réessayez.";
+      $("logosCinemaMsg").className = "msg err";
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      $("logosCinemaMsg").textContent = "Upload en cours...";
+      $("logosCinemaMsg").className = "msg";
+      const res = await api("/api/admin/logos-cinema", { method: "POST", body: JSON.stringify({ cle, image: e.target.result }) });
+      if (res.ok) {
+        reglages.logosCinema = (await res.json()).logosCinema;
+        renderLogosCinema();
+        $("logosCinemaMsg").textContent = "Logo mis à jour.";
+        $("logosCinemaMsg").className = "msg ok";
+      } else {
+        $("logosCinemaMsg").textContent = "Erreur lors de l'upload (image invalide ou trop lourde).";
+        $("logosCinemaMsg").className = "msg err";
+      }
+    };
+    reader.readAsDataURL(file);
+  });
+
+  $("logosCinemaGrid").querySelectorAll("[data-logo-retirer]").forEach(btn => btn.onclick = async () => {
+    const cle = btn.dataset.logoRetirer;
+    const res = await api("/api/admin/logos-cinema", { method: "POST", body: JSON.stringify({ cle, image: "" }) });
+    if (res.ok) {
+      reglages.logosCinema = (await res.json()).logosCinema;
+      renderLogosCinema();
+      $("logosCinemaMsg").textContent = "Logo retiré.";
+      $("logosCinemaMsg").className = "msg ok";
+    }
+  });
+}
+
 /* ---------- Conversations signalées ---------- */
 $("btnUploadFavicon").onclick = () => {
   const file = $("favInput").files[0];
@@ -1443,7 +2243,7 @@ async function loadReports(){
       </div>
       ${r.statut === "traite" ? '<span class="chip">traité</span>' :
         `<button class="ghost" data-clore="${r.id}">Classer</button>
-         <button class="danger" data-retirer="${r.id}">Retirer le thème</button>`}
+         <button class="danger" data-retirer="${r.id}">Retirer le film</button>`}
     </div>`).join("") || "";
 
   const agir = async (id, corps) => {
@@ -1453,7 +2253,7 @@ async function loadReports(){
   $("reportList").querySelectorAll("[data-clore]").forEach(b =>
     b.onclick = () => agir(b.dataset.clore, {statut:"traite"}));
   $("reportList").querySelectorAll("[data-retirer]").forEach(b =>
-    b.onclick = () => confirm("Retirer ce thème du catalogue ?") && agir(b.dataset.retirer, {retirerTheme:true}));
+    b.onclick = () => confirm("Retirer ce film du catalogue ?") && agir(b.dataset.retirer, {retirerFilm:true}));
 }
 
 
@@ -1946,11 +2746,12 @@ async function loadReports(){
     }
 
     const APPARENCE_MODULES = {
+      sorties: "🍿 Sorties Ciné / Actuellement au cinéma",
+      cinemas: "📍 Cinéma le plus proche",
       niveau: "🏅 Barre de niveau",
-      quotidien: "🎡 Roue du jour",
-      modes: "🎮 Modes de jeu (Solo, Duel, Chacun pour soi…)",
-      actions: "🔗 Espace échange, Classement, Quêtes, Amis…",
-      admin: "⚙️ Modération, Administration, Suggestions",
+      quotidien: "🎂 Nés aujourd'hui / 🎡 Roue du jour",
+      modes: "▶️ Bouton « Commencer la partie »",
+      actions: "☰ Bouton « Plus d'options » (échange, classement, amis, profil, administration…)",
       rejoindre: "🔑 Rejoindre un salon",
     };
     let ordreMenuActuel = [];
@@ -2354,11 +3155,28 @@ $("btnSdCreer").onclick = async () => {
   loadSondages();
 };
 
-/* ---------- Battle de thèmes (VS) ---------- */
-/** Le datalist se reconstruit à chaque ouverture de l'onglet : la liste des thèmes
- *  peut avoir changé (ajout, suppression...) depuis la dernière visite. */
-function remplirThemesListe(){
-  $("sdFilmsListe").innerHTML = movies.map(m => `<option value="${esc(m.nom)}">`).join("");
+/* ---------- Battle de films (VS) ---------- */
+/** Le datalist se reconstruit à chaque ouverture de l'onglet : la liste des films
+ *  peut avoir changé (import, ajout manuel...) depuis la dernière visite. */
+function remplirFilmsListe(){
+  $("sdFilmsListe").innerHTML = movies.map(m => `<option value="${esc(m.title)}">`).join("");
+}
+
+/** Suggestions de battle : les films que les joueurs mettent le plus souvent en pépite —
+ *  un raccourci pour préremplir Film A / Film B sans avoir à chercher un titre au hasard. */
+async function chargerSuggestionsPepites(){
+  const res = await api("/api/admin/pepites/top");
+  if (!res.ok) { $("sdPepitesBloc").classList.add("hidden"); return; }
+  const liste = await res.json();
+  $("sdPepitesBloc").classList.toggle("hidden", !liste.length);
+  $("sdPepitesListe").innerHTML = liste.map(f => `
+    <button type="button" class="ghost" data-pepite-titre="${esc(f.title)}" style="padding:6px 12px;font-size:13px">
+      💎 ${esc(f.title)} <small>(${f.pepites})</small>
+    </button>`).join("");
+  $("sdPepitesListe").querySelectorAll("[data-pepite-titre]").forEach(b => b.onclick = () => {
+    if (!$("sdFilmA").value.trim()) $("sdFilmA").value = b.dataset.pepiteTitre;
+    else $("sdFilmB").value = b.dataset.pepiteTitre;
+  });
 }
 
 $("sdRecompenseActif").onchange = () => {
@@ -2366,12 +3184,12 @@ $("sdRecompenseActif").onchange = () => {
 };
 
 $("btnSdBattleCreer").onclick = async () => {
-  const nomA = $("sdFilmA").value.trim();
-  const nomB = $("sdFilmB").value.trim();
-  const themeA = movies.find(m => m.nom === nomA);
-  const themeB = movies.find(m => m.nom === nomB);
-  if (!themeA || !themeB){
-    $("sdBattleFilmsMsg").textContent = "Choisissez deux thèmes existants dans la liste (un nom par champ).";
+  const titreA = $("sdFilmA").value.trim();
+  const titreB = $("sdFilmB").value.trim();
+  const filmA = movies.find(m => m.title === titreA);
+  const filmB = movies.find(m => m.title === titreB);
+  if (!filmA || !filmB){
+    $("sdBattleFilmsMsg").textContent = "Choisissez deux films existants dans la liste (un titre par champ).";
     $("sdBattleFilmsMsg").className = "msg err";
     return;
   }
@@ -2387,8 +3205,7 @@ $("btnSdBattleCreer").onclick = async () => {
 
   const res = await api("/api/admin/sondages", {method:"POST", body: JSON.stringify({
     question: $("sdBattleQuestion").value.trim(),
-    optionA: { texte: themeA.nom, emoji: "🅰️" },
-    optionB: { texte: themeB.nom, emoji: "🅱️" },
+    filmA: filmA.id, filmB: filmB.id,
     recompense,
   })});
   if (!res.ok){
@@ -2471,16 +3288,13 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
 
 <script>
 async function autoLogin() {
-  try {
     const res = await fetch("/api/admin/check");
-    if (!res.ok) return;
     const status = await res.json();
     if (status.isAdmin || status.isMod) {
         // Try to unlock with a generic token if the user is verified by session
         $("token").value = "session-granted";
         $("btnAuth").click();
     }
-  } catch (e) { /* pas de session admin détectée — l'écran de connexion manuelle reste affiché */ }
 }
 autoLogin();
 </script>
