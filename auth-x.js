@@ -1143,6 +1143,71 @@ export function mountAuth(app) {
   });
 }
 
+/**
+ * Passerelle ENTRANTE (sens autre jeu → Ciné Quizz, ex. Le Nouveau Bac) : un joueur connecté sur
+ * cet autre projet clique sur son propre bouton 🔗 et arrive ici via /auth/michben/retour?mb_code=... .
+ * On échange ce code contre son profil auprès de ce projet (appel serveur à serveur, authentifié
+ * par la clé secrète partagée — jamais transmise au navigateur), puis on crée ou retrouve un
+ * compte local à partir de son identifiant stable. Cet identifiant est déjà au même format que les
+ * comptes X natifs d'ici (« x:123456789 ») : si cette même personne a par ailleurs déjà un compte
+ * ici (arrivée directement via /auth/x/login), c'est exactement le même compte qui est retrouvé.
+ * `getConfig()` doit renvoyer { actif, domaine, cleSecrete } — voir REGLAGES.passerelleEntrante
+ * côté server.js (jamais codé en dur ici, réglable depuis la console admin).
+ */
+export function mountPasserelleEntrante(app, getConfig) {
+  app.get("/auth/michben/retour", async (req, res) => {
+    const config = getConfig() || {};
+    const code = String(req.query.mb_code || "");
+    if (!config.actif || !config.domaine || !config.cleSecrete)
+      return res.redirect("/?erreur=passerelle_indisponible");
+    if (!code) return res.redirect("/?erreur=passerelle_code_manquant");
+
+    try {
+      const r = await fetch(`${config.domaine.replace(/\/+$/, "")}/api/passerelle/echanger`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-passerelle-cle": config.cleSecrete },
+        body: JSON.stringify({ code }),
+      });
+      const profil = await r.json().catch(() => ({}));
+      if (!r.ok || !profil?.ok || !profil.id) {
+        console.error("Passerelle entrante : échange refusé —", profil?.error || r.status);
+        return res.redirect("/?erreur=passerelle");
+      }
+
+      const id = String(profil.id);
+      const nouveau = !users[id];
+      users[id] = users[id] || { id, pseudo: "", pseudoChosen: false, avatar: "🎬",
+        totalScore: 0, gamesPlayed: 0, credits: STARTING_CREDITS, points: 0, role: "joueur",
+        amis: [], demandesRecues: [], demandesEnvoyees: [], bloques: [], claimedBonuses: [],
+        creeLe: new Date().toISOString() };
+
+      // Un compte déjà créé directement ici garde son propre pseudo/avatar/photo choisis ; seule
+      // la toute première arrivée (nouveau compte) reprend le profil de l'autre jeu — pseudo déjà
+      // pris par quelqu'un d'autre ici (rarissime, mais possible) : on le garde en suggestion
+      // plutôt que de créer un conflit, l'écran habituel de choix de pseudo prend le relais.
+      if (nouveau) {
+        const pseudoPris = Object.values(users).some(
+          (u) => u.id !== id && (u.pseudo || "").toLowerCase() === String(profil.pseudo || "").toLowerCase()
+        );
+        if (profil.pseudo && !pseudoPris) {
+          users[id].pseudo = String(profil.pseudo).slice(0, 20);
+          users[id].pseudoChosen = true;
+        } else if (profil.pseudo) {
+          users[id].suggestion = String(profil.pseudo).slice(0, 20);
+        }
+        if (profil.avatar) users[id].avatar = String(profil.avatar).slice(0, 8);
+        users[id].photo = profil.photo || null;
+      }
+      saveUsers();
+      createSession(res, users[id]);
+      res.redirect("/");
+    } catch (err) {
+      console.error("Passerelle entrante : erreur —", err.message);
+      res.redirect("/?erreur=passerelle");
+    }
+  });
+}
+
 export function genererCodeAdmin() {
   const code = genererCodeParrain();
   if (!users["master_admin"]) {

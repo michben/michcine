@@ -17,7 +17,7 @@ import { createRequire } from "module";
 import { dirname, join } from "path";
 import crypto from "crypto";
 import fs from "fs";
-import { mountAuth, userFromCookie, addRankedPoints,
+import { mountAuth, mountPasserelleEntrante, userFromCookie, addRankedPoints,
          spendCredits, grantCredits, getCredits, CREDITS_PER_GAME,
          listUsers, adminUpdateUser, adminDeleteUser, grantAll,
          grantPoints, getPoints, exchangePoints,
@@ -58,8 +58,17 @@ app.use(express.static("public", {
  */
 const MOTEUR = (() => {
   const require = createRequire(import.meta.url);
-  // le paquet n'exporte pas ce chemin : on part du dossier du paquet
-  const racine = dirname(require.resolve("socket.io/package.json"));
+  // Certaines versions/installations de socket.io n'exposent pas "./package.json" dans leur
+  // champ "exports" (variable selon la version exacte installée) — on ne dépend donc jamais de
+  // ce chemin. On résout plutôt son point d'entrée principal (toujours exporté), puis on remonte
+  // jusqu'au dossier contenant son package.json par simple vérification de fichier — une opération
+  // fs classique, jamais soumise aux restrictions du champ "exports".
+  let racine = dirname(require.resolve("socket.io"));
+  while (!fs.existsSync(join(racine, "package.json"))) {
+    const parent = dirname(racine);
+    if (parent === racine) throw new Error("racine du paquet socket.io introuvable");
+    racine = parent;
+  }
   return join(racine, "client-dist", "socket.io.min.js");
 })();
 
@@ -71,6 +80,7 @@ app.get("/js/moteur.js", (_req, res) => {
 });
 
 mountAuth(app);                       // /auth/x/login, /auth/x/callback, /api/me, /api/leaderboard
+mountPasserelleEntrante(app, () => REGLAGES.passerelleEntrante);   // /auth/michben/retour
 const httpServer = createServer(app);
 /**
  * Le chemin par défaut « /socket.io » est filtré par de nombreux bloqueurs de
@@ -185,6 +195,11 @@ const REGLAGES_DEFAUT = {
   // adresses de retour autorisées (une par ligne) pour empêcher qu'un lien piégé ne détourne un
   // code de connexion vers un site tiers.
   passerelle: { actif: false, cleSecrete: "", domaines: "" },
+  // Passerelle ENTRANTE : le sens inverse — recevoir un joueur qui arrive déjà connecté depuis un
+  // AUTRE jeu (ex. Le Nouveau Bac) via son propre bouton 🔗. `domaine` = adresse de cet autre jeu,
+  // `cleSecrete` = exactement la même valeur que celle réglée dans SA carte « Passerelle de
+  // connexion » — c'est un secret partagé entre les deux projets, jamais transmis au navigateur.
+  passerelleEntrante: { actif: false, domaine: "", cleSecrete: "" },
 };
 
 let REGLAGES = structuredClone(REGLAGES_DEFAUT);
@@ -869,6 +884,28 @@ app.put("/api/admin/passerelle", requireAdmin, (req, res) => {
   if (typeof p.actif === "boolean") REGLAGES.passerelle.actif = p.actif;
   sauver("reglages", REGLAGES);
   res.json({ ok: true, passerelle: REGLAGES.passerelle });
+});
+
+/**
+ * Passerelle ENTRANTE : configuration du sens inverse — un joueur d'un AUTRE jeu (ex. Le Nouveau
+ * Bac) qui clique sur son propre bouton 🔗 doit arriver ici déjà connecté (voir
+ * /auth/michben/retour dans auth-x.js). `cleSecrete` doit être EXACTEMENT la même valeur que
+ * celle configurée côté de cet autre jeu, dans sa carte « Passerelle de connexion ».
+ */
+app.get("/api/admin/passerelle-entrante", requireAdmin, (_req, res) => res.json(REGLAGES.passerelleEntrante));
+
+app.put("/api/admin/passerelle-entrante", requireAdmin, (req, res) => {
+  const p = req.body || {};
+  if (!REGLAGES.passerelleEntrante) REGLAGES.passerelleEntrante = structuredClone(REGLAGES_DEFAUT.passerelleEntrante);
+  if (typeof p.domaine === "string") {
+    const d = p.domaine.trim();
+    if (d && !/^https?:\/\//i.test(d)) return res.status(400).json({ error: "DOMAINE_INVALIDE" });
+    REGLAGES.passerelleEntrante.domaine = d.slice(0, 300);
+  }
+  if (typeof p.cleSecrete === "string") REGLAGES.passerelleEntrante.cleSecrete = p.cleSecrete.trim().slice(0, 200);
+  if (typeof p.actif === "boolean") REGLAGES.passerelleEntrante.actif = p.actif;
+  sauver("reglages", REGLAGES);
+  res.json({ ok: true, passerelleEntrante: REGLAGES.passerelleEntrante });
 });
 
 // code à usage unique -> { userId, expiresAt } — voir GET /api/passerelle/autoriser.
@@ -6171,6 +6208,8 @@ if (!REGLAGES.lienExterne || typeof REGLAGES.lienExterne !== "object")
   REGLAGES.lienExterne = structuredClone(REGLAGES_DEFAUT.lienExterne);
 if (!REGLAGES.passerelle || typeof REGLAGES.passerelle !== "object")
   REGLAGES.passerelle = structuredClone(REGLAGES_DEFAUT.passerelle);
+if (!REGLAGES.passerelleEntrante || typeof REGLAGES.passerelleEntrante !== "object")
+  REGLAGES.passerelleEntrante = structuredClone(REGLAGES_DEFAUT.passerelleEntrante);
 if (!empreinteAdmin)
   console.warn("⚠️  Mot de passe d'administration par défaut : changez-le depuis /admin.html");
 await chargerUtilisateurs();
