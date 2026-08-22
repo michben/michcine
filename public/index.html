@@ -1237,6 +1237,7 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
         <label for="vocalTitreCreation">Créer un salon</label>
         <input id="vocalTitreCreation" placeholder="Le titre de votre salon (facultatif)" maxlength="60">
         <div class="row"><button id="btnVocalCreer">🎙️ Ouvrir mon salon</button></div>
+        <p class="feedback bad" id="vocalErreurCreation"></p>
       </div>
       <div class="card">
         <label for="vocalCode">Rejoindre avec un code</label>
@@ -1300,6 +1301,9 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
         </label>
         <div id="vocalDemandesListe"></div>
         <div id="vocalConsoleParticipants"></div>
+        <div class="row hidden" id="vocalFermerZone" style="margin-top:14px">
+          <button class="danger" id="btnVocalFermer">🔒 Fermer le salon pour tout le monde</button>
+        </div>
       </div>
 
       <!-- Options du bas, regroupées dans une seule barre compacte plutôt que plusieurs cartes
@@ -2542,6 +2546,11 @@ if (!window.tempsReelDispo) {
   });
   // le bouton reste cliquable : mieux vaut un message clair qu'un bouton mort
   $("btnJoin").title = "Le multijoueur exige la connexion temps réel.";
+  // Le salon vocal dépend entièrement du temps réel (signalisation WebRTC comprise) : sans lui,
+  // cliquer sur ces boutons ne pouvait auparavant rien afficher du tout — d'où ce message explicite.
+  $("btnVocalCreer").disabled = true;
+  $("btnVocalRejoindre").disabled = true;
+  $("vocalErreurCreation").textContent = "Indisponible : le temps réel est bloqué par votre navigateur ou votre réseau.";
 }
 
 /** Suggestion actuellement proposée au repost (via la notif ou la vérification au chargement). */
@@ -5342,10 +5351,35 @@ $("btnVocal").onclick = () => {
 };
 $("btnVocalRetourMenu").onclick = () => show("menu");
 
+/** Enveloppe socket.emit avec un délai maximum : sans ça, une connexion temps réel absente ou
+ *  coupée fait attendre indéfiniment le callback, ce qui donne l'impression qu'un clic sur
+ *  « Ouvrir mon salon » ou « Rejoindre » ne fait absolument rien — le symptôme le plus difficile
+ *  à diagnostiquer pour un joueur, puisque rien ne s'affiche pour expliquer ce qui bloque. */
+function emitAvecDelai(evenement, donnees, cb, delaiMs = 6000){
+  let repondu = false;
+  const minuteur = setTimeout(() => {
+    if (repondu) return;
+    repondu = true;
+    cb?.({ ok: false, error: "TIMEOUT" });
+  }, delaiMs);
+  socket.emit(evenement, donnees, (res) => {
+    if (repondu) return;
+    repondu = true;
+    clearTimeout(minuteur);
+    cb?.(res);
+  });
+}
+
 $("btnVocalCreer").onclick = () => {
+  $("vocalErreurCreation").textContent = "";
   const titre = $("vocalTitreCreation").value.trim();
-  socket.emit("vocal:creer", { titre }, (res) => {
-    if (!res?.ok) return;
+  emitAvecDelai("vocal:creer", { titre }, (res) => {
+    if (!res?.ok){
+      $("vocalErreurCreation").textContent = res?.error === "TIMEOUT"
+        ? "Le serveur ne répond pas — vérifiez votre connexion et réessayez."
+        : "Impossible d'ouvrir un salon pour l'instant.";
+      return;
+    }
     chargerMusiqueVocal();
     renderVocalSalon(res.salon);
     afficherVocalSalonVue();
@@ -5353,10 +5387,12 @@ $("btnVocalCreer").onclick = () => {
 };
 
 function rejoindreSalonVocalParCode(code){
-  socket.emit("vocal:rejoindre", { code }, (res) => {
+  emitAvecDelai("vocal:rejoindre", { code }, (res) => {
     if (!res?.ok){
       $("vocalErreur").textContent = res?.error === "SALON_COMPLET" ? "Ce salon est complet."
-        : res?.error === "SALON_INTROUVABLE" ? "Aucun salon avec ce code." : "Impossible de rejoindre ce salon.";
+        : res?.error === "SALON_INTROUVABLE" ? "Aucun salon avec ce code."
+        : res?.error === "TIMEOUT" ? "Le serveur ne répond pas — vérifiez votre connexion et réessayez."
+        : "Impossible de rejoindre ce salon.";
       return;
     }
     $("vocalErreur").textContent = "";
@@ -5538,6 +5574,9 @@ $("btnVocalReactionsToggle").onclick = () => {
 function renderConsoleVocal(salon, monRole){
   $("vocalReglagePrive").checked = Boolean(salon.prive);
   $("vocalReglageMonteeLibre").checked = Boolean(salon.monteeLibre);
+  // Réservé à l'hôte (pas aux cohôtes) : fermer tout le salon est une action définitive pour
+  // tout le monde, contrairement aux réglages ci-dessus qu'un cohôte peut aussi ajuster.
+  $("vocalFermerZone").classList.toggle("hidden", monRole !== "hote");
 
   const demandeurs = salon.demandesMontee
     .map(id => salon.participants.find(p => p.userId === id)).filter(Boolean);
@@ -5586,6 +5625,12 @@ $("btnVocalDemander").onclick = () => {
   socket.emit("vocal:demander-intervenir", { code: vocalSalonActuel.code }, (res) => {
     if (res?.ok) renderVocalSalon(vocalSalonActuel); // masque aussitôt le bouton, sans attendre le prochain vocal:update
   });
+};
+
+$("btnVocalFermer").onclick = () => {
+  if (!vocalSalonActuel) return;
+  if (!confirm("Fermer ce salon pour tout le monde ? Cette action est définitive.")) return;
+  socket.emit("vocal:fermer", { code: vocalSalonActuel.code }, () => {});
 };
 
 $("vocalReglagePrive").onchange = (e) => {
@@ -5638,7 +5683,8 @@ socket.on("vocal:ferme", (info) => {
     chargerSalonsVocauxOuverts();
   }
   bandeauNotif(`<span style="font-size:24px">🎙️</span><span><b>Salon vocal fermé</b>
-    <small>${info?.raison === "HOTE_PARTI" ? "L'hôte a quitté le salon." : "Le salon est vide."}</small></span>`);
+    <small>${info?.raison === "FERME_PAR_HOTE" ? "L'hôte a fermé le salon."
+      : info?.raison === "HOTE_PARTI" ? "L'hôte a quitté le salon." : "Le salon est vide."}</small></span>`);
 });
 socket.on("vocal:exclu", () => {
   vocalSalonActuel = null;
