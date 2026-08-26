@@ -168,6 +168,13 @@ const REGLAGES_DEFAUT = {
     poster:   { actif: true, points: 250, tickets: 2, libelle: "Photo du film",
                 zoom: 160, cadrage: "center", flou: 0 },
   },
+  // Réactions emoji volantes (console admin, onglet Réglages) : la même liste et la même durée
+  // d'affichage servent à la fois pendant une partie (#emojiBar) et dans un salon vocal
+  // (#vocalEmojiBar) — un seul réglage pour les deux, voir afficherReactionVolante côté client.
+  reactions: {
+    emojis: ["👋", "❤️", "💯", "🩸", "😂", "😭"],
+    dureeAffichageMs: 2300,
+  },
   // Personnalisation graphique (console admin, onglet « Apparence ») : couleurs, polices et
   // ordre des modules du menu principal. Vide par défaut = apparence d'origine inchangée.
   theme: {
@@ -744,6 +751,20 @@ app.put("/api/admin/reglages", requireAdmin, (req, res) => {
   // au moins un indice doit rester actif, sinon la boutique est vide
   if (!Object.values(REGLAGES.indices).some((i) => i.actif))
     REGLAGES.indices.year.actif = true;
+
+  // Réactions emoji (voir REGLAGES_DEFAUT.reactions) : liste bornée en nombre et en « longueur
+  // visuelle » (certains emojis comme ❤️ ou 🩸 tiennent sur plusieurs points de code) plutôt qu'en
+  // octets, pour ne jamais couper un emoji au milieu tout en repoussant un texte arbitraire.
+  if (!REGLAGES.reactions || typeof REGLAGES.reactions !== "object")
+    REGLAGES.reactions = structuredClone(REGLAGES_DEFAUT.reactions);
+  if (Array.isArray(r.reactions?.emojis)) {
+    const emojisValides = r.reactions.emojis
+      .map((e) => String(e || "").trim())
+      .filter((e) => e && [...e].length <= 4)
+      .slice(0, 16);
+    if (emojisValides.length) REGLAGES.reactions.emojis = emojisValides;
+  }
+  REGLAGES.reactions.dureeAffichageMs = borne(r.reactions?.dureeAffichageMs, 800, 8000, REGLAGES.reactions.dureeAffichageMs);
 
   sauver("reglages", REGLAGES);
   res.json(REGLAGES);
@@ -3711,6 +3732,64 @@ app.get("/api/movies/now_playing", async (req, res) => {
   }
 });
 
+/**
+ * Recherche de films dans le salon vocal (voir #btnVocalRechercheFilm côté client) : soit une
+ * poignée de catégories toutes prêtes (populaires, mieux notés…), soit une recherche libre par
+ * titre — toutes deux interrogent TMDB directement plutôt que le seul catalogue local (movies.json),
+ * puisqu'il s'agit ici de proposer un film à regarder ensemble, pas forcément un film du quiz.
+ * Liste de catégories fermée (comme PAYS_IMPORT_TMDB plus haut) : jamais de chemin d'API arbitraire
+ * construit à partir d'une valeur venue du client.
+ */
+const TMDB_CATEGORIES_PREDEFINIES = {
+  populaires: "movie/popular",
+  "mieux-notes": "movie/top_rated",
+  "au-cinema": "movie/now_playing",
+  prochainement: "movie/upcoming",
+};
+
+function simplifierResultatsTmdb(resultats) {
+  return (resultats || []).slice(0, 12).map((m) => ({
+    id: m.id,
+    title: m.title,
+    annee: (m.release_date || "").slice(0, 4) || null,
+    poster: m.poster_path ? `https://image.tmdb.org/t/p/w200${m.poster_path}` : null,
+  }));
+}
+
+app.get("/api/tmdb/predefini/:categorie", async (req, res) => {
+  const tmdbKey = REGLAGES.tmdbApiKey;
+  if (!tmdbKey) return res.json({ ok: false, error: "NO_KEY", resultats: [] });
+  const chemin = TMDB_CATEGORIES_PREDEFINIES[req.params.categorie];
+  if (!chemin) return res.status(400).json({ ok: false, error: "CATEGORIE_INCONNUE", resultats: [] });
+  try {
+    const url = `https://api.themoviedb.org/3/${chemin}?api_key=${tmdbKey}&language=fr-FR&region=FR`;
+    const r = await fetch(url);
+    if (!r.ok) return res.json({ ok: false, error: "API_ERROR", resultats: [] });
+    const data = await r.json();
+    res.json({ ok: true, resultats: simplifierResultatsTmdb(data.results) });
+  } catch (e) {
+    console.error("Erreur recherche TMDB (prédéfini) :", e);
+    res.json({ ok: false, error: "INTERNAL_ERROR", resultats: [] });
+  }
+});
+
+app.get("/api/tmdb/recherche", async (req, res) => {
+  const tmdbKey = REGLAGES.tmdbApiKey;
+  if (!tmdbKey) return res.json({ ok: false, error: "NO_KEY", resultats: [] });
+  const q = String(req.query.q || "").trim().slice(0, 60);
+  if (q.length < 2) return res.status(400).json({ ok: false, error: "TROP_COURT", resultats: [] });
+  try {
+    const url = `https://api.themoviedb.org/3/search/movie?api_key=${tmdbKey}&language=fr-FR&include_adult=false&query=${encodeURIComponent(q)}`;
+    const r = await fetch(url);
+    if (!r.ok) return res.json({ ok: false, error: "API_ERROR", resultats: [] });
+    const data = await r.json();
+    res.json({ ok: true, resultats: simplifierResultatsTmdb(data.results) });
+  } catch (e) {
+    console.error("Erreur recherche TMDB (libre) :", e);
+    res.json({ ok: false, error: "INTERNAL_ERROR", resultats: [] });
+  }
+});
+
 /** Bande-annonce YouTube d'un film TMDB, utilisée par le lecteur vidéo des « Sorties de la
  *  semaine » : cherche d'abord une bande-annonce officielle en VF, puis retente en VO si
  *  TMDB n'en propose aucune (fréquent pour les sorties très récentes). Appelée à la demande,
@@ -4036,6 +4115,7 @@ app.get("/api/config", (_req, res) => res.json({
   afficherAmisEnLigne: REGLAGES.afficherAmisEnLigne,
   afficherClassementAccueil: REGLAGES.afficherClassementAccueil,
   theme: REGLAGES.theme,
+  reactions: REGLAGES.reactions,
   // Priorité au réglage fait depuis la console admin (onglet Audio) ; les variables d'environnement
   // TURN_URL / TURN_USERNAME / TURN_CREDENTIAL ne servent plus que de valeur de secours au tout
   // premier démarrage (voir l'initialisation de REGLAGES.audio plus bas dans ce fichier).
@@ -6419,6 +6499,8 @@ if (!REGLAGES.passerelle || typeof REGLAGES.passerelle !== "object")
   REGLAGES.passerelle = structuredClone(REGLAGES_DEFAUT.passerelle);
 if (!REGLAGES.passerelleEntrante || typeof REGLAGES.passerelleEntrante !== "object")
   REGLAGES.passerelleEntrante = structuredClone(REGLAGES_DEFAUT.passerelleEntrante);
+if (!REGLAGES.reactions || typeof REGLAGES.reactions !== "object" || !Array.isArray(REGLAGES.reactions.emojis) || !REGLAGES.reactions.emojis.length)
+  REGLAGES.reactions = structuredClone(REGLAGES_DEFAUT.reactions);
 // Réglages d'ordre du menu sauvegardés avant l'ajout du bloc « stats » (compteurs films/joueurs,
 // voir THEME_MODULES_MENU) : on les rétablit à l'ordre par défaut à jour plutôt que de les
 // compléter en fin de liste, sans quoi le nouveau bloc atterrirait tout en haut du menu (avant
