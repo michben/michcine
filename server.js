@@ -174,7 +174,8 @@ const REGLAGES_DEFAUT = {
     couleurs: { ink: "#0A0C16", velvet: "#151A2E", card: "#1C2238", beam: "#F5B942",
                 ticket: "#E4586E", teal: "#4ECDC4", chalk: "#EDE8DC", muted: "#7C819B" },
     polices: { affiche: "Anton", corps: "Inter", etiquette: "Oswald" },
-    ordre: { menu: ["modes", "sorties", "cinemas", "niveau", "quotidien", "actions", "rejoindre", "stats"] },
+    ordre: { menu: ["modes", "sorties", "cinemas", "niveau", "quotidien", "actions", "rejoindre", "stats"],
+             vocal: ["vocal-hote", "vocal-intervenants", "vocal-auditeurs"] },
     // Couleurs propres à chaque grand module (espace échanges, classement, quêtes, sondages,
     // amis, salon vocal) : "" = pas de personnalisation, le module garde les couleurs globales
     // ci-dessus. Volontairement limité à l'accent principal et secondaire (et non les 8 couleurs
@@ -769,6 +770,9 @@ const THEME_POLICES = {
   etiquette: ["Oswald", "Barlow Condensed", "Teko", "Rajdhani", "Bebas Neue", "Montserrat"],
 };
 const THEME_MODULES_MENU = ["sorties", "cinemas", "niveau", "quotidien", "modes", "actions", "rejoindre", "stats"];
+// Disposition des cases du salon vocal (hôte/cohôtes, intervenants, auditeurs), réordonnable depuis
+// la même console admin — voir REGLAGES_DEFAUT.theme.ordre.vocal et appliquerTheme() côté client.
+const THEME_MODULES_VOCAL = ["vocal-hote", "vocal-intervenants", "vocal-auditeurs"];
 // Modules personnalisables individuellement (accent principal + secondaire uniquement — voir
 // REGLAGES_DEFAUT.theme.couleursCategories pour le détail du choix).
 const THEME_CATEGORIES = {
@@ -805,6 +809,12 @@ app.put("/api/admin/theme", requireAdmin, (req, res) => {
     const manquants = THEME_MODULES_MENU.filter((id) => !filtre.includes(id));
     REGLAGES.theme.ordre.menu = [...filtre, ...manquants];
   }
+  const ordreVocal = t.ordre?.vocal;
+  if (Array.isArray(ordreVocal)) {
+    const filtre = ordreVocal.filter((id) => THEME_MODULES_VOCAL.includes(id));
+    const manquants = THEME_MODULES_VOCAL.filter((id) => !filtre.includes(id));
+    REGLAGES.theme.ordre.vocal = [...filtre, ...manquants];
+  }
   const couleursCategories = t.couleursCategories;
   if (couleursCategories && typeof couleursCategories === "object") {
     for (const cat of Object.keys(THEME_CATEGORIES)) {
@@ -832,6 +842,7 @@ app.post("/api/admin/theme/defaut", requireAdmin, (_req, res) => {
 app.get("/api/admin/theme/options", requireAdmin, (_req, res) => {
   res.json({
     couleurs: THEME_COULEURS_CLES, polices: THEME_POLICES, modulesMenu: THEME_MODULES_MENU,
+    modulesVocal: THEME_MODULES_VOCAL,
     categories: THEME_CATEGORIES, couleursCategorieCles: THEME_COULEURS_CATEGORIE_CLES,
   });
 });
@@ -1510,6 +1521,32 @@ app.post("/api/signets/:movieId/toggle", (req, res) => {
     else { mesIds.splice(i, 1); signet = false; }
     saveSignets();
     res.json({ ok: true, signet });
+});
+
+/** Catalogue des films, pour le parcourir et le rechercher en dehors d'une manche — mettre un
+ *  film de côté (signet), en pépite, ou le signaler sans attendre de tomber dessus en jouant.
+ *  Champs volontairement limités à l'essentiel (titre, année, affiche, identifiant TMDB pour la
+ *  bande-annonce) : jamais de synopsis ni de réponses acceptées ici, qui n'ont rien à y faire —
+ *  seuls masquerReponse()/les routes de manche renvoient ces champs sensibles, jamais celle-ci.
+ *  Un compte enfant (ou la bascule "Mode enfant" — voir kids) ne voit que le catalogue enfant,
+ *  comme partout ailleurs dans le jeu (voir /api/solo/start). */
+app.get("/api/films/parcourir", (req, res) => {
+    const user = userFromCookie(req.headers.cookie);
+    const modeEnfant = user?.role === "enfant" ? true : req.query.kids === "1";
+    const recherche = String(req.query.q || "").trim().toLowerCase();
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const parPage = 30;
+
+    let vivier = movies.filter((m) => m.enabled !== false);
+    if (modeEnfant) vivier = vivier.filter((m) => m.kids === true);
+    if (recherche) vivier = vivier.filter((m) => String(m.title || "").toLowerCase().includes(recherche));
+    vivier = [...vivier].sort((a, b) => String(a.title || "").localeCompare(String(b.title || ""), "fr"));
+
+    const total = vivier.length;
+    const debut = (page - 1) * parPage;
+    const films = vivier.slice(debut, debut + parPage)
+        .map((m) => ({ id: m.id, title: m.title, year: m.year, poster: m.poster, tmdbId: m.tmdbId || null }));
+    res.json({ films, total, page, pages: Math.max(1, Math.ceil(total / parPage)) });
 });
 
 /* ------------------------------------------------------------------ */
@@ -4581,24 +4618,30 @@ function consommerPartieClassee(userId) {
 /**
  * Une partie classée gagnée (terminée sans avoir perdu tous ses cœurs) réapprovisionne le seau
  * d'une partie bonus, comme une victoire méritée qui redonne une chance de continuer à jouer.
- * Plafonné pour que le seau ne grossisse pas indéfiniment à force d'enchaîner les victoires.
+ * Plafonné pour que le seau ne grossisse pas indéfiniment à force d'enchaîner les victoires — voir
+ * RANKED_BONUS_MAX ci-dessous, partagé avec les dons entre amis.
  *
  * Une victoire doit TOUJOURS être comptée sur le quota quotidien classique (voir l'appel à
  * enregistrerParticipationClassee côté appelant), jamais sur la réserve bonus : sinon la victoire
  * consommerait aussitôt le jeton qu'elle vient elle-même de rapporter, et la réserve ne pourrait
  * jamais dépasser 1 quel que soit le nombre de victoires enchaînées.
  */
-const RANKED_BONUS_VICTOIRE_MAX = 3;
+const RANKED_BONUS_MAX = 3;   // parties bonus max en réserve (victoires + dons confondus) : 5 + 3 = 8 au total
 function recompenserVictoireClassee(userId) {
-  if ((bonusPartiesClassees[userId] || 0) >= RANKED_BONUS_VICTOIRE_MAX) return;
+  if ((bonusPartiesClassees[userId] || 0) >= RANKED_BONUS_MAX) return;
   accorderPartiesClasseesBonus(userId, 1);
 }
 
 /**
  * Don d'une partie classée à un ami : le donneur cède une des parties encore disponibles dans son
- * propre seau. Seule condition, comme demandé : le seau du destinataire doit être totalement vide
- * (aucune partie classée disponible pour lui, sinon le don est refusé — jamais accepté puis perdu
- * en silence, ce qui gâcherait la partie donnée de bonne foi par le donneur).
+ * propre seau, et le destinataire la reçoit TOUJOURS en bonus, par-dessus son quota quotidien
+ * classique (voir partiesRestantes) — même s'il lui reste encore des parties de son quota normal.
+ * Un joueur a ainsi droit à ses 5 parties habituelles ET jusqu'à 3 parties en dons/bonus en plus,
+ * soit 8 parties au total au lieu de devoir attendre que son seau soit vide pour en profiter.
+ *
+ * Seule limite : la réserve bonus (RANKED_BONUS_MAX, partagée avec les récompenses de victoire)
+ * ne doit pas grossir indéfiniment — un don refusé pour réserve pleine n'est pas perdu pour le
+ * donneur, qui garde sa partie disponible pour la retenter plus tard ou l'offrir à quelqu'un d'autre.
  *
  * Le don retire une partie chez le donneur exactement comme s'il venait d'en jouer une (voir
  * consommerPartieClassee, qui puise d'abord dans sa propre réserve bonus) et en accorde une, en
@@ -4607,8 +4650,9 @@ function recompenserVictoireClassee(userId) {
 function donnerPartieClassee(donneurId, destinataireId) {
   if (donneurId === destinataireId) return { ok: false, error: "SOI_MEME" };
   if (partiesRestantes(donneurId) <= 0) return { ok: false, error: "AUCUNE_PARTIE" };
-  const dispoDestinataire = partiesRestantes(destinataireId);
-  if (dispoDestinataire > 0) return { ok: false, error: "SEAU_NON_VIDE", disponibles: dispoDestinataire };
+  const reserveDestinataire = bonusPartiesClassees[destinataireId] || 0;
+  if (reserveDestinataire >= RANKED_BONUS_MAX)
+    return { ok: false, error: "RESERVE_PLEINE", max: RANKED_BONUS_MAX };
   consommerPartieClassee(donneurId);
   accorderPartiesClasseesBonus(destinataireId, 1);
   return { ok: true };
@@ -6384,6 +6428,16 @@ if (!REGLAGES.passerelleEntrante || typeof REGLAGES.passerelleEntrante !== "obje
 // retouche plus jamais.
 if (Array.isArray(REGLAGES.theme?.ordre?.menu) && !REGLAGES.theme.ordre.menu.includes("stats")) {
   REGLAGES.theme.ordre.menu = structuredClone(REGLAGES_DEFAUT.theme.ordre.menu);
+}
+// Réglages d'ordre du salon vocal (voir THEME_MODULES_VOCAL, ajouté avec la personnalisation de la
+// disposition des cases hôte/intervenants/auditeurs) : les configs sauvegardées avant cet ajout n'ont
+// jamais eu de clé « vocal » sous ordre (celle-ci n'existait pas), donc on l'initialise ici à l'ordre
+// par défaut au lieu de la laisser vide, sans quoi appliquerTheme ne réordonnerait jamais rien côté
+// client. Comme pour le menu, ne s'applique qu'une fois : dès qu'un admin sauvegarde un ordre depuis
+// la console (voir PUT /api/admin/theme), ce réglage à jour est conservé tel quel.
+if (!Array.isArray(REGLAGES.theme?.ordre?.vocal) || THEME_MODULES_VOCAL.some((id) => !REGLAGES.theme.ordre.vocal.includes(id))) {
+  if (!REGLAGES.theme.ordre) REGLAGES.theme.ordre = {};
+  REGLAGES.theme.ordre.vocal = structuredClone(REGLAGES_DEFAUT.theme.ordre.vocal);
 }
 if (!empreinteAdmin)
   console.warn("⚠️  Mot de passe d'administration par défaut : changez-le depuis /admin.html");
