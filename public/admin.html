@@ -885,6 +885,26 @@
       </div>
 
       <div class="card">
+        <p class="tag">👋 Réactions emoji</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6">
+          La même liste et la même durée d'affichage servent pour les réactions pendant une partie
+          et dans un salon vocal. Un émoji par ligne (glissez-déposez pour réordonner, ▲▼ sinon) ;
+          laissez au moins un émoji.
+        </p>
+        <div id="listeReactionsEmojis" style="margin-bottom:10px"></div>
+        <div class="row" style="margin-bottom:14px">
+          <input id="rNouvelEmoji" placeholder="Ajouter un émoji (ex : 🎉)" maxlength="4" style="max-width:220px">
+          <button class="ghost" id="btnAjouterEmojiReaction" type="button">Ajouter</button>
+        </div>
+        <label for="rReactionDuree">Durée d'affichage à l'écran (millisecondes)</label>
+        <input type="number" id="rReactionDuree" min="800" max="8000" step="100">
+        <div class="row">
+          <button id="btnSaveReactions">Enregistrer ces réglages</button>
+        </div>
+        <p class="msg" id="reactionsMsg"></p>
+      </div>
+
+      <div class="card">
         <p class="tag">Bouton d'aide « ? » pour les joueurs</p>
         <p style="color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6">
           Ce bouton est masqué par défaut. Rédigez le message ici — règles du jeu, annonce, ce que
@@ -1802,6 +1822,50 @@ const CHAMPS = { rTmdbKey:"tmdbApiKey", rGeoapifyKey:"geoapifyApiKey", rAdsterra
                  rNivMax:"niveauMax", rXpBase:"xpBase", rXpCroiss:"xpCroissance",
                  rXpPartie:"xpParPartie", rXpBonne:"xpParBonneReponse", rXpVict:"xpParVictoire" };
 
+/** Liste des émojis de réaction (voir REGLAGES.reactions côté serveur, partagée entre les
+ *  réactions de partie et celles du salon vocal) — mêmes flèches ▲▼ que l'ordre des modules
+ *  ci-dessus, plus un bouton « Retirer » et un champ pour en ajouter un nouveau. */
+let reactionsEmojisActuels = [];
+function rendreListeReactionsEmojis(){
+  $("listeReactionsEmojis").innerHTML = reactionsEmojisActuels.map((e, i) => `
+    <div class="item" data-item="${esc(e)}">
+      <div style="font-size:22px">${esc(e)}</div>
+      <div style="display:flex;gap:6px">
+        <button class="ghost" data-move-emoji="${i}" data-dir="haut" ${i === 0 ? "disabled" : ""}>▲</button>
+        <button class="ghost" data-move-emoji="${i}" data-dir="bas" ${i === reactionsEmojisActuels.length - 1 ? "disabled" : ""}>▼</button>
+        <button class="danger" data-retirer-emoji="${i}" ${reactionsEmojisActuels.length <= 1 ? "disabled" : ""}>Retirer</button>
+      </div>
+    </div>`).join("");
+  $("listeReactionsEmojis").querySelectorAll("[data-move-emoji]").forEach((btn) => {
+    btn.onclick = () => {
+      const i = Number(btn.dataset.moveEmoji);
+      const j = btn.dataset.dir === "haut" ? i - 1 : i + 1;
+      if (j < 0 || j >= reactionsEmojisActuels.length) return;
+      [reactionsEmojisActuels[i], reactionsEmojisActuels[j]] = [reactionsEmojisActuels[j], reactionsEmojisActuels[i]];
+      rendreListeReactionsEmojis();
+    };
+  });
+  $("listeReactionsEmojis").querySelectorAll("[data-retirer-emoji]").forEach((btn) => {
+    btn.onclick = () => {
+      if (reactionsEmojisActuels.length <= 1) return;   // au moins un émoji doit rester, sinon la barre serait vide
+      reactionsEmojisActuels.splice(Number(btn.dataset.retirerEmoji), 1);
+      rendreListeReactionsEmojis();
+    };
+  });
+}
+$("btnAjouterEmojiReaction").onclick = () => {
+  const v = $("rNouvelEmoji").value.trim();
+  if (!v) return;
+  if (reactionsEmojisActuels.length >= 16) {
+    $("reactionsMsg").textContent = "16 émojis maximum.";
+    $("reactionsMsg").className = "msg err";
+    return;
+  }
+  reactionsEmojisActuels.push(v);
+  $("rNouvelEmoji").value = "";
+  rendreListeReactionsEmojis();
+};
+
 async function chargerReglages(){
   const res = await api("/api/admin/reglages");
   if (!res.ok) return;
@@ -1819,6 +1883,11 @@ async function chargerReglages(){
   $("rAfficherAmisEnLigne").checked = reglages.afficherAmisEnLigne !== false;
   $("rAfficherClassementAccueil").checked = reglages.afficherClassementAccueil !== false;
   renderLogosCinema();
+
+  reactionsEmojisActuels = Array.isArray(reglages.reactions?.emojis) && reglages.reactions.emojis.length
+    ? [...reglages.reactions.emojis] : ["👋", "❤️", "💯", "🩸", "😂", "😭"];
+  rendreListeReactionsEmojis();
+  $("rReactionDuree").value = reglages.reactions?.dureeAffichageMs ?? 2300;
 
   $("listeIndices").innerHTML = Object.entries(reglages.indices).map(([cle, v]) => `
     <div class="urow">
@@ -1875,6 +1944,7 @@ async function enregistrerReglages(msgEl){
   corps.autoriserSpectateur = $("rAutoriserSpectateur").checked;
   corps.afficherAmisEnLigne = $("rAfficherAmisEnLigne").checked;
   corps.afficherClassementAccueil = $("rAfficherClassementAccueil").checked;
+  corps.reactions = { emojis: reactionsEmojisActuels, dureeAffichageMs: Number($("rReactionDuree").value) };
   Object.assign(corps.indices.poster, {
     zoom: Number($("rZoom").value), flou: Number($("rFlou").value), cadrage: $("rCadrage").value,
   });
@@ -1890,6 +1960,7 @@ async function enregistrerReglages(msgEl){
 
 $("btnSaveReglages").onclick = () => enregistrerReglages($("reglagesMsg"));
 $("btnSaveApparence").onclick = () => enregistrerReglages($("apparenceReglagesMsg"));
+$("btnSaveReactions").onclick = () => enregistrerReglages($("reactionsMsg"));
 $("btnSaveIndices").onclick = () => enregistrerReglages($("indicesReglagesMsg"));
 $("btnSaveCadrage").onclick = () => enregistrerReglages($("cadrageReglagesMsg"));
 

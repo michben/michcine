@@ -1340,6 +1340,27 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
         </div>
       </div>
 
+      <!-- Options du bas, regroupées dans une seule barre compacte plutôt que plusieurs cartes
+           empilées : micro / demande d'intervention / réactions (repliées, voir #vocalEmojiBar) /
+           recherche d'un film / quitter, toujours dans le flux normal de la page (jamais en position
+           fixe, voir la note sur .radioBar plus haut) pour ne jamais chevaucher le clavier mobile ou
+           le chat. Remontée juste sous la radio du salon et juste au-dessus des cases participants
+           (hôte/intervenants/auditeurs), à la demande d'un joueur : plus rapide à atteindre qu'après
+           avoir fait défiler toute la liste des participants. -->
+      <div class="card vocalBarreBas" id="vocalBarreBas">
+        <div class="vocalBarreRangee">
+          <button id="btnVocalMute" class="hidden">🎙️ Activer mon micro</button>
+          <button id="btnVocalDemander" class="ghost hidden">✋ Demander à intervenir</button>
+          <button id="btnVocalBaisserMain" class="ghost hidden">✋ Baisser la main</button>
+          <button id="btnVocalReactionsToggle" class="ghost" type="button" aria-pressed="false">👋 Réactions</button>
+          <button id="btnVocalRechercheFilm" class="ghost" type="button">🔍 Chercher un film</button>
+          <button id="btnVocalQuitter" class="ghost danger">🚪 Quitter</button>
+        </div>
+        <p class="note" id="vocalDemandeEnvoyee" style="margin:10px 0 0;text-align:center" hidden>Votre demande a été envoyée à l'hôte.</p>
+        <p class="feedback" id="vocalMicMsg" style="margin:8px 0 0;text-align:center"></p>
+        <div id="vocalEmojiBar" class="emojis hidden" style="margin-top:14px"></div>
+      </div>
+
       <!-- Sons reçus des autres participants (WebRTC) — invisible, un <audio> par personne connectée.
            position:absolute + taille 0 plutôt que display:none : certains navigateurs mobiles sont
            moins fiables pour lire un <audio> totalement retiré du rendu. -->
@@ -1378,23 +1399,6 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
         <div class="row hidden" id="vocalFermerZone" style="margin-top:14px">
           <button class="danger" id="btnVocalFermer">🔒 Fermer le salon pour tout le monde</button>
         </div>
-      </div>
-
-      <!-- Options du bas, regroupées dans une seule barre compacte plutôt que plusieurs cartes
-           empilées : micro / demande d'intervention / réactions (repliées, voir #vocalEmojiBar) /
-           quitter, toujours dans le flux normal de la page (jamais en position fixe, voir la note
-           sur .radioBar plus haut) pour ne jamais chevaucher le clavier mobile ou le chat. -->
-      <div class="card vocalBarreBas" id="vocalBarreBas">
-        <div class="vocalBarreRangee">
-          <button id="btnVocalMute" class="hidden">🎙️ Activer mon micro</button>
-          <button id="btnVocalDemander" class="ghost hidden">✋ Demander à intervenir</button>
-          <button id="btnVocalBaisserMain" class="ghost hidden">✋ Baisser la main</button>
-          <button id="btnVocalReactionsToggle" class="ghost" type="button" aria-pressed="false">👋 Réactions</button>
-          <button id="btnVocalQuitter" class="ghost danger">🚪 Quitter</button>
-        </div>
-        <p class="note" id="vocalDemandeEnvoyee" style="margin:10px 0 0;text-align:center" hidden>Votre demande a été envoyée à l'hôte.</p>
-        <p class="feedback" id="vocalMicMsg" style="margin:8px 0 0;text-align:center"></p>
-        <div id="vocalEmojiBar" class="emojis hidden" style="margin-top:14px"></div>
       </div>
 
       <div class="card">
@@ -1702,6 +1706,27 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
           style="width:100%;resize:vertical;background:var(--card);border:1px solid rgba(237,232,220,.14);color:var(--chalk);border-radius:10px;padding:13px 14px;font:inherit;font-size:16px;margin-top:10px"></textarea>
         <div class="row" style="margin-top:10px"><button id="btnParcourirReportEnvoyer">Envoyer</button></div>
         <p class="feedback" id="parcourirReportMsg"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODALE : RECHERCHE D'UN FILM DEPUIS LE SALON VOCAL (recherches prédéfinies + TMDB) -->
+  <div class="modal-overlay" id="vocalRechercheFilmModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>🔍 Chercher un film</h2>
+        <button class="close-btn" id="closeVocalRechercheFilmBtn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="note" style="margin:0 0 10px">Trouvez un film à proposer au salon — recherche rapide ou recherche libre dans la base TMDB.</p>
+        <div class="row" id="vocalRechercheFilmPredefinies" style="flex-wrap:wrap;gap:8px;margin-bottom:12px"></div>
+        <div class="row" style="gap:8px">
+          <input id="vocalRechercheFilmInput" placeholder="Chercher un titre sur TMDB…" style="flex:1">
+          <button id="btnVocalRechercheFilmLancer" style="flex:0 0 auto">Chercher</button>
+        </div>
+        <p class="feedback" id="vocalRechercheFilmMsg" style="margin:8px 0 0"></p>
+        <div id="vocalRechercheFilmListe" style="margin-top:12px"></div>
+        <p class="note hidden" id="vocalRechercheFilmVide">Aucun résultat.</p>
       </div>
     </div>
   </div>
@@ -2082,20 +2107,34 @@ $("closeHistoriqueBtn").onclick = () => $("historiqueModal").classList.remove("a
 $("historiqueModal").onclick = e => { if (e.target.id === "historiqueModal") $("historiqueModal").classList.remove("active"); };
 
 /* Réactions emoji pendant une partie multijoueur : un choix simple de quelques emojis,
-   affichés en bulle montante avec le pseudo de l'auteur pour tout le salon. */
-const EMOJIS_REACTION = ["👋", "❤️", "💯", "🩸", "😂", "😭"];
-$("emojiBar").innerHTML = EMOJIS_REACTION
-  .map(e => `<button type="button" data-emoji="${e}">${e}</button>`).join("");
-let derniereReactionEnvoyee = 0;
-$("emojiBar").querySelectorAll("[data-emoji]").forEach(btn => {
-  btn.onclick = () => {
-    if (!state.code) return;
-    const maintenant = Date.now();
-    if (maintenant - derniereReactionEnvoyee < 700) return;   // évite le matraquage côté client aussi
-    derniereReactionEnvoyee = maintenant;
-    socket.emit("reaction", { code: state.code, emoji: btn.dataset.emoji });
-  };
-});
+   affichés en bulle montante avec le pseudo de l'auteur pour tout le salon. Liste et durée
+   d'affichage personnalisables depuis la console admin (onglet Réglages, voir REGLAGES.reactions
+   côté serveur) — valeurs de départ ci-dessous, remplacées dès que /api/config répond (voir plus
+   bas) ; on ne bloque pas l'affichage initial en attendant ce résultat réseau. */
+let EMOJIS_REACTION = ["👋", "❤️", "💯", "🩸", "😂", "😭"];
+let REACTION_DUREE_AFFICHAGE_MS = 2300;
+
+/** (Re)construit une barre d'emojis de réaction et rebranche ses clics — appelée une première fois
+ *  avec les valeurs par défaut ci-dessus, puis une seconde fois si la console admin a personnalisé
+ *  la liste (voir le .then() de /api/config), pour les deux barres qui existent dans le jeu (la
+ *  partie multijoueur #emojiBar et le salon vocal #vocalEmojiBar — voir plus bas). */
+function construireBarreReactions(idBarre, evenement, obtenirCode){
+  const barre = $(idBarre);
+  barre.innerHTML = EMOJIS_REACTION
+    .map(e => `<button type="button" data-emoji="${e}">${e}</button>`).join("");
+  let derniereEnvoyee = 0;
+  barre.querySelectorAll("[data-emoji]").forEach(btn => {
+    btn.onclick = () => {
+      const code = obtenirCode();
+      if (!code) return;
+      const maintenant = Date.now();
+      if (maintenant - derniereEnvoyee < 700) return;   // évite le matraquage côté client aussi
+      derniereEnvoyee = maintenant;
+      socket.emit(evenement, { code, emoji: btn.dataset.emoji });
+    };
+  });
+}
+construireBarreReactions("emojiBar", "reaction", () => state.code);
 
 /** Fait monter l'emoji reçu à l'écran, avec le pseudo de son auteur, puis le retire. */
 function afficherReactionVolante(emoji, pseudo){
@@ -2105,7 +2144,7 @@ function afficherReactionVolante(emoji, pseudo){
   el.style.bottom = "150px";
   el.innerHTML = `${emoji}<small>${esc(pseudo || "")}</small>`;
   document.body.appendChild(el);
-  setTimeout(() => el.remove(), 2300);
+  setTimeout(() => el.remove(), REACTION_DUREE_AFFICHAGE_MS);
 }
 socket.on("reaction", ({ emoji, pseudo }) => afficherReactionVolante(emoji, pseudo));
 
@@ -3011,6 +3050,16 @@ fetch("/api/config").then(r => r.json())
     else chargerClassementAccueil();
     majVisibiliteRadio();
     appliquerTheme(c.theme);
+    // Réactions emoji personnalisables (console admin, onglet Réglages) : si l'admin a choisi une
+    // liste différente ou une autre durée d'affichage, on reconstruit les deux barres qui ont déjà
+    // été montées plus haut avec les valeurs par défaut, plutôt que d'attendre cette réponse réseau
+    // pour les afficher une première fois.
+    if (Array.isArray(c.reactions?.emojis) && c.reactions.emojis.length){
+      EMOJIS_REACTION = c.reactions.emojis;
+      construireBarreReactions("emojiBar", "reaction", () => state.code);
+      construireBarreReactions("vocalEmojiBar", "vocal:reaction", () => vocalSalonActuel?.code);
+    }
+    if (Number.isFinite(c.reactions?.dureeAffichageMs)) REACTION_DUREE_AFFICHAGE_MS = c.reactions.dureeAffichageMs;
     // Serveur TURN optionnel (voir server.js) : s'ajoute aux serveurs STUN pour les salons vocaux,
     // utile quand la connexion directe échoue sur un réseau très restrictif.
     if (c.turn && c.turn.urls) VOCAL_ICE_SERVERS.push(c.turn);
@@ -6048,19 +6097,9 @@ $("vocalChatInput").addEventListener("keydown", (e) => { if (e.key === "Enter") 
 
 /** Réactions emoji publiques dans le salon vocal — même rendu volant que les réactions de partie
  *  (afficherReactionVolante), mais sous un événement dédié (vocal:reaction) pour ne jamais se
- *  confondre avec les réactions envoyées pendant une partie de jeu. */
-$("vocalEmojiBar").innerHTML = EMOJIS_REACTION
-  .map(e => `<button type="button" data-emoji="${e}">${e}</button>`).join("");
-let derniereReactionVocaleEnvoyee = 0;
-$("vocalEmojiBar").querySelectorAll("[data-emoji]").forEach(btn => {
-  btn.onclick = () => {
-    if (!vocalSalonActuel) return;
-    const maintenant = Date.now();
-    if (maintenant - derniereReactionVocaleEnvoyee < 700) return;
-    derniereReactionVocaleEnvoyee = maintenant;
-    socket.emit("vocal:reaction", { code: vocalSalonActuel.code, emoji: btn.dataset.emoji });
-  };
-});
+ *  confondre avec les réactions envoyées pendant une partie de jeu. Même liste/durée personnalisable
+ *  que la barre de partie ci-dessus (voir construireBarreReactions). */
+construireBarreReactions("vocalEmojiBar", "vocal:reaction", () => vocalSalonActuel?.code);
 socket.on("vocal:reaction", ({ emoji, pseudo }) => afficherReactionVolante(emoji, pseudo));
 
 /** Réactions repliées par défaut dans la barre du bas : un coup d'œil sur les icônes suffit,
@@ -6069,6 +6108,79 @@ $("btnVocalReactionsToggle").onclick = () => {
   const masque = $("vocalEmojiBar").classList.toggle("hidden");
   $("btnVocalReactionsToggle").setAttribute("aria-pressed", String(!masque));
 };
+
+/** Recherche d'un film à proposer au salon (voir #btnVocalRechercheFilm) : soit une poignée de
+ *  recherches prédéfinies (populaires, mieux notés…), soit une recherche libre par titre — les deux
+ *  interrogent TMDB côté serveur (voir /api/tmdb/predefini et /api/tmdb/recherche) plutôt que le
+ *  catalogue local du quiz, puisqu'il s'agit ici de proposer un film à regarder ensemble, pas
+ *  forcément un film qui existe déjà dans le jeu. Le résultat choisi est simplement partagé dans le
+ *  tchat du salon (aucun lien direct avec le quiz ou le catalogue). */
+const VOCAL_RECHERCHE_CATEGORIES = [
+  { id: "populaires", label: "🔥 Populaires" },
+  { id: "mieux-notes", label: "⭐ Les mieux notés" },
+  { id: "au-cinema", label: "🎬 Au cinéma" },
+  { id: "prochainement", label: "📅 Prochainement" },
+];
+$("vocalRechercheFilmPredefinies").innerHTML = VOCAL_RECHERCHE_CATEGORIES
+  .map(c => `<button class="ghost" type="button" data-cat="${c.id}">${c.label}</button>`).join("");
+
+function rendreResultatsRechercheFilm(resultats){
+  const liste = $("vocalRechercheFilmListe");
+  $("vocalRechercheFilmVide").classList.toggle("hidden", resultats.length > 0);
+  liste.innerHTML = resultats.map(f => `
+    <div class="histoItem">
+      ${f.poster ? `<img src="${esc(f.poster)}" alt="">` : ""}
+      <div class="info">
+        <b>${esc(f.title)}</b>
+        <small>${esc(f.annee || "Année inconnue")}</small>
+        <div class="row" style="margin-top:6px">
+          <button class="ghost" type="button" data-partager-titre="${esc(f.title)}" data-partager-annee="${esc(f.annee || "")}">📢 Partager dans le salon</button>
+        </div>
+      </div>
+    </div>`).join("");
+  liste.querySelectorAll("[data-partager-titre]").forEach(btn => {
+    btn.onclick = () => {
+      if (!vocalSalonActuel) return;
+      const annee = btn.dataset.partagerAnnee;
+      socket.emit("vocal:chat-envoyer", {
+        code: vocalSalonActuel.code,
+        texte: `🎬 Je propose : ${btn.dataset.partagerTitre}${annee ? ` (${annee})` : ""}`,
+      }, () => {});
+      $("vocalRechercheFilmModal").classList.remove("active");
+    };
+  });
+}
+
+async function lancerRechercheFilmVocal(url){
+  $("vocalRechercheFilmMsg").textContent = "Recherche en cours…";
+  $("vocalRechercheFilmListe").innerHTML = "";
+  $("vocalRechercheFilmVide").classList.add("hidden");
+  try {
+    const data = await fetch(url).then(r => r.json());
+    if (!data.ok){
+      $("vocalRechercheFilmMsg").textContent = data.error === "NO_KEY"
+        ? "Recherche de films indisponible pour l'instant (non configurée côté administration)."
+        : "Recherche impossible pour l'instant, réessayez plus tard.";
+      return;
+    }
+    $("vocalRechercheFilmMsg").textContent = "";
+    rendreResultatsRechercheFilm(data.resultats || []);
+  } catch {
+    $("vocalRechercheFilmMsg").textContent = "Erreur réseau — vérifiez votre connexion.";
+  }
+}
+$("vocalRechercheFilmPredefinies").querySelectorAll("[data-cat]").forEach(btn => {
+  btn.onclick = () => lancerRechercheFilmVocal(`/api/tmdb/predefini/${btn.dataset.cat}`);
+});
+$("btnVocalRechercheFilmLancer").onclick = () => {
+  const q = $("vocalRechercheFilmInput").value.trim();
+  if (q.length < 2){ $("vocalRechercheFilmMsg").textContent = "Tapez au moins 2 lettres."; return; }
+  lancerRechercheFilmVocal(`/api/tmdb/recherche?q=${encodeURIComponent(q)}`);
+};
+$("vocalRechercheFilmInput").addEventListener("keydown", (e) => { if (e.key === "Enter") $("btnVocalRechercheFilmLancer").click(); });
+$("btnVocalRechercheFilm").onclick = () => $("vocalRechercheFilmModal").classList.add("active");
+$("closeVocalRechercheFilmBtn").onclick = () => $("vocalRechercheFilmModal").classList.remove("active");
+$("vocalRechercheFilmModal").onclick = (e) => { if (e.target.id === "vocalRechercheFilmModal") $("vocalRechercheFilmModal").classList.remove("active"); };
 
 function renderConsoleVocal(salon, monRole){
   $("vocalReglagePrive").checked = Boolean(salon.prive);
@@ -6171,7 +6283,15 @@ async function basculerMicroVocal(){
   socket.emit("vocal:mute", { code: vocalSalonActuel.code, mute: !ouvrir });
 }
 $("btnVocalMute").onclick = basculerMicroVocal;
-$("btnVocalMicFlottant").onclick = basculerMicroVocal;
+// #btnVocalMicFlottant est défini beaucoup plus bas dans la page (près de #helpBtn, hors des
+// <section>, pour rester visible sur tout l'écran) : à cet endroit du script, le HTML n'a pas
+// encore été lu par le navigateur, donc $() ne trouve rien et renvoie l'objet inerte de secours —
+// le clic ne faisait alors RIEN de visible sur le vrai bouton (bug remonté par un joueur : le
+// bouton restait figé quel que soit l'état du micro). On attend DOMContentLoaded pour être sûr que
+// le bouton existe réellement avant d'y attacher le clic.
+document.addEventListener("DOMContentLoaded", () => {
+  $("btnVocalMicFlottant").onclick = basculerMicroVocal;
+});
 
 /** Affiche/masque et met à jour le micro flottant : visible dès qu'un rôle capable de parler
  *  (hôte/cohôte/intervenant) est actif dans un salon vocal, sur n'importe quelle page SAUF l'écran
