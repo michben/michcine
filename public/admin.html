@@ -527,6 +527,14 @@
         </p>
         <div id="apparenceOrdre"></div>
       </div>
+      <div class="card">
+        <p class="tag">🎙️ Disposition du salon vocal</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6">
+          Change l'ordre des trois blocs affichés dans un salon vocal (hôte &amp; cohôtes,
+          intervenants, auditeurs). Utilisez ▲▼ pour déplacer un bloc.
+        </p>
+        <div id="apparenceOrdreVocal"></div>
+      </div>
       <div class="row">
         <button id="btnApparenceSave">Enregistrer l'apparence</button>
         <button class="ghost" id="btnApparenceReset">Réinitialiser l'apparence</button>
@@ -2784,6 +2792,33 @@ async function loadReports(){
     };
     let ordreMenuActuel = [];
 
+    const VOCAL_MODULES = {
+      "vocal-hote": "🎤 Hôte & cohôtes",
+      "vocal-intervenants": "🗣️ Intervenants",
+      "vocal-auditeurs": "👂 Auditeurs",
+    };
+    let ordreVocalActuel = [];
+
+    function rendreOrdreVocal(){
+      $("apparenceOrdreVocal").innerHTML = ordreVocalActuel.map((id, i) => `
+        <div class="item" data-item="${esc(id)}">
+          <div>${esc(VOCAL_MODULES[id] || id)}</div>
+          <div style="display:flex;gap:6px">
+            <button class="ghost" data-move-vocal="${esc(id)}" data-dir="haut" ${i === 0 ? "disabled" : ""}>▲</button>
+            <button class="ghost" data-move-vocal="${esc(id)}" data-dir="bas" ${i === ordreVocalActuel.length - 1 ? "disabled" : ""}>▼</button>
+          </div>
+        </div>`).join("");
+      $("apparenceOrdreVocal").querySelectorAll("[data-move-vocal]").forEach((btn) => {
+        btn.onclick = () => {
+          const i = ordreVocalActuel.indexOf(btn.dataset.moveVocal);
+          const j = btn.dataset.dir === "haut" ? i - 1 : i + 1;
+          if (j < 0 || j >= ordreVocalActuel.length) return;
+          [ordreVocalActuel[i], ordreVocalActuel[j]] = [ordreVocalActuel[j], ordreVocalActuel[i]];
+          rendreOrdreVocal();
+        };
+      });
+    }
+
     function rendreOrdreModules(){
       $("apparenceOrdre").innerHTML = ordreMenuActuel.map((id, i) => `
         <div class="item" data-item="${esc(id)}">
@@ -2825,6 +2860,11 @@ async function loadReports(){
       const sauve = Array.isArray(theme.ordre?.menu) ? theme.ordre.menu.filter((id) => modulesConnus.includes(id)) : [];
       ordreMenuActuel = [...sauve, ...modulesConnus.filter((id) => !sauve.includes(id))];
       rendreOrdreModules();
+
+      const modulesVocalConnus = Object.keys(VOCAL_MODULES);
+      const sauveVocal = Array.isArray(theme.ordre?.vocal) ? theme.ordre.vocal.filter((id) => modulesVocalConnus.includes(id)) : [];
+      ordreVocalActuel = [...sauveVocal, ...modulesVocalConnus.filter((id) => !sauveVocal.includes(id))];
+      rendreOrdreVocal();
     }
 
     $("btnApparenceSave").onclick = async () => {
@@ -2841,7 +2881,7 @@ async function loadReports(){
         });
       });
       const res = await api("/api/admin/theme", { method: "PUT",
-        body: JSON.stringify({ couleurs, polices, ordre: { menu: ordreMenuActuel }, couleursCategories }) });
+        body: JSON.stringify({ couleurs, polices, ordre: { menu: ordreMenuActuel, vocal: ordreVocalActuel }, couleursCategories }) });
       $("apparenceMsg").textContent = res.ok
         ? "Apparence enregistrée. Elle s'appliquera au prochain chargement de page pour chaque joueur."
         : "Enregistrement refusé.";

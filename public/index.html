@@ -28,10 +28,18 @@
   input{width:100%;background:var(--card);border:1px solid rgba(237,232,220,.14);color:var(--chalk);border-radius:10px;padding:13px 14px;font:inherit;font-size:16px}
   input:focus-visible,button:focus-visible{outline:2px solid var(--beam);outline-offset:2px}
   #joinCode{font-family:'JetBrains Mono',monospace;letter-spacing:.5em;text-transform:uppercase;font-size:20px}
-  button{font:inherit;font-weight:700;border:0;border-radius:10px;padding:13px 18px;cursor:pointer;background:var(--beam);color:#161207}
-  button.ghost{background:transparent;color:var(--chalk);border:1px solid rgba(237,232,220,.22)}
+  button{font:inherit;font-weight:700;border:0;border-radius:12px;padding:13px 18px;cursor:pointer;
+    background:var(--beam);
+    background:linear-gradient(180deg, color-mix(in srgb, var(--beam) 100%, white 12%), var(--beam));
+    color:#161207;box-shadow:0 2px 0 rgba(0,0,0,.15), 0 3px 8px rgba(0,0,0,.18);
+    transition:transform .12s ease, box-shadow .12s ease, filter .12s ease}
+  button:hover:not(:disabled){filter:brightness(1.04)}
+  button:active:not(:disabled){transform:translateY(1px);box-shadow:0 1px 0 rgba(0,0,0,.15), 0 1px 4px rgba(0,0,0,.16)}
+  button.ghost{background:rgba(237,232,220,.03);color:var(--chalk);border:1px solid rgba(237,232,220,.22);box-shadow:none}
+  button.ghost:hover:not(:disabled){background:rgba(237,232,220,.07);border-color:rgba(237,232,220,.32)}
+  button.ghost:active:not(:disabled){transform:translateY(1px)}
   button.danger{color:var(--ticket);border-color:rgba(228,88,110,.45)}
-  button:disabled{opacity:.45;cursor:not-allowed}
+  button:disabled{opacity:.45;cursor:not-allowed;transform:none !important;box-shadow:none}
   .row{display:flex;gap:10px;margin-top:14px}.row>*{flex:1}
   /* Radio d'ambiance : visible dès la page d'accueil, en haut de chaque écran, et jamais superposée à rien
      puisqu'elle suit le flux normal de la page (pas de position fixe). */
@@ -727,8 +735,8 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
   background:var(--ticket);display:flex;align-items:center;justify-content:center;font-size:11px;border:2px solid var(--ink)}
 .vocalParticipant .vocalNom{font-size:11.5px;color:var(--chalk);line-height:1.2;word-break:break-word}
 .vocalParticipant .vocalRoleTag{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
-#btnVocalMute{transition:background .15s ease,color .15s ease}
-#btnVocalMute.micro-ouvert{background:var(--teal);color:#0A2015;border-color:var(--teal)}
+#btnVocalMute,#btnVocalMicFlottant{transition:background .15s ease,color .15s ease}
+#btnVocalMute.micro-ouvert,#btnVocalMicFlottant.micro-ouvert{background:var(--teal);color:#0A2015;border-color:var(--teal)}
 #vocalDemandesListe .urowVocal,#vocalConsoleParticipants .urowVocal{display:flex;align-items:center;gap:10px;
   padding:10px 0;border-top:1px solid rgba(237,232,220,.1);flex-wrap:wrap}
 #vocalDemandesListe .urowVocal .qui,#vocalConsoleParticipants .urowVocal .qui{display:flex;align-items:center;gap:8px;flex:1 1 140px}
@@ -1204,6 +1212,15 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
   <section id="menu" class="hidden">
     <h2 id="hello">Bonjour</h2>
 
+    <!-- Bulle « salon vocal ouvert » : n'apparaît que s'il y a au moins un salon actif visible pour
+         ce compte (mêmes règles de visibilité que /api/vocal/salons — amis, salons publics, jamais
+         les salons enfant/adulte mélangés). Un clic rejoint directement s'il n'y en a qu'un seul,
+         sinon ouvre la liste pour choisir. Voir rafraichirSalonVocalAccueil(). -->
+    <div id="salonVocalAccueil" class="card hidden" style="margin:0 0 12px;padding:12px 14px;cursor:pointer;border-color:rgba(78,205,196,.4)">
+      <p class="tag" style="margin:0 0 4px;color:var(--teal)">🔴 Salon vocal en direct</p>
+      <p class="note" id="salonVocalAccueilTexte" style="margin:0;font-size:14px;font-weight:600;opacity:1">—</p>
+    </div>
+
     <!-- Position au classement : remplace l'ancien bandeau « Vos amis en ligne », qui faisait
          doublon avec le compteur juste en dessous (voir btnOnlineUsers). -->
     <div id="classementAccueil" class="card hidden" style="margin:0 0 12px;padding:12px 14px;cursor:pointer">
@@ -1328,17 +1345,22 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
            moins fiables pour lire un <audio> totalement retiré du rendu. -->
       <div id="vocalAudioDistant" style="position:absolute;width:0;height:0;overflow:hidden"></div>
 
-      <div class="card">
-        <p class="tag" style="margin:0 0 10px">🎤 Hôte & cohôtes</p>
-        <div id="vocalListeHote" class="vocalGrille"></div>
-      </div>
-      <div class="card">
-        <p class="tag" style="margin:0 0 10px">🗣️ Intervenants</p>
-        <div id="vocalListeIntervenants" class="vocalGrille"></div>
-      </div>
-      <div class="card">
-        <p class="tag" style="margin:0 0 10px">👂 Auditeurs</p>
-        <div id="vocalListeAuditeurs" class="vocalGrille"></div>
+      <!-- Enveloppe dédiée aux trois cases réordonnables (voir theme.ordre.vocal et appliquerTheme) :
+           en limitant la réorganisation à cette enveloppe plutôt qu'à tout #vocalSalon, les cases ne
+           risquent jamais de se retrouver déplacées après la console de modération ou le tchat. -->
+      <div id="vocalCasesWrapper">
+        <div class="card" data-module="vocal-hote">
+          <p class="tag" style="margin:0 0 10px">🎤 Hôte & cohôtes</p>
+          <div id="vocalListeHote" class="vocalGrille"></div>
+        </div>
+        <div class="card" data-module="vocal-intervenants">
+          <p class="tag" style="margin:0 0 10px">🗣️ Intervenants</p>
+          <div id="vocalListeIntervenants" class="vocalGrille"></div>
+        </div>
+        <div class="card" data-module="vocal-auditeurs">
+          <p class="tag" style="margin:0 0 10px">👂 Auditeurs</p>
+          <div id="vocalListeAuditeurs" class="vocalGrille"></div>
+        </div>
       </div>
 
       <div class="card hidden" id="vocalConsole">
@@ -1366,6 +1388,7 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
         <div class="vocalBarreRangee">
           <button id="btnVocalMute" class="hidden">🎙️ Activer mon micro</button>
           <button id="btnVocalDemander" class="ghost hidden">✋ Demander à intervenir</button>
+          <button id="btnVocalBaisserMain" class="ghost hidden">✋ Baisser la main</button>
           <button id="btnVocalReactionsToggle" class="ghost" type="button" aria-pressed="false">👋 Réactions</button>
           <button id="btnVocalQuitter" class="ghost danger">🚪 Quitter</button>
         </div>
@@ -1557,16 +1580,17 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
           <span class="favoriGroup"><button class="ghost" id="btnQuetes">Quêtes <span id="badgeQuetes" class="pastille hidden">0</span></button><button class="favToggle" data-fav="btnQuetes" title="Épingler sur l'accueil">☆</button></span>
           <span class="favoriGroup"><button class="ghost" id="btnSondages">🍿 Sondages <span id="badgeSondages" class="pastille hidden">0</span></button><button class="favToggle" data-fav="btnSondages" title="Épingler sur l'accueil">☆</button></span>
           <span class="favoriGroup"><button class="ghost" id="btnFriends">Amis <span id="badgeAmis" class="pastille hidden">0</span></button><button class="favToggle" data-fav="btnFriends" title="Épingler sur l'accueil">☆</button></span>
+          <span class="favoriGroup"><button class="ghost" id="btnParcourirFilms">🎞️ Parcourir les films</button><button class="favToggle" data-fav="btnParcourirFilms" title="Épingler sur l'accueil">☆</button></span>
           <span class="favoriGroup"><button class="ghost" id="btnSignets">🔖 Mes signets</button><button class="favToggle" data-fav="btnSignets" title="Épingler sur l'accueil">☆</button></span>
           <span class="favoriGroup"><button class="ghost" id="btnPepites">💎 Mes pépites <span id="badgePepites" class="pastille hidden">0</span></button><button class="favToggle" data-fav="btnPepites" title="Épingler sur l'accueil">☆</button></span>
           <span class="favoriGroup"><button class="ghost" id="btnVocal" style="border-color:var(--teal);color:var(--teal)">🔴 Salons en direct</button><button class="favToggle" data-fav="btnVocal" title="Épingler sur l'accueil">☆</button></span>
-          <button class="ghost" id="btnContactDev" title="Envoyer un message au développeur">✉️ Contacter le développeur</button>
-          <button class="ghost" id="btnKidMode" aria-pressed="false" title="Mode enfant : uniquement des films pour enfants">🐻 Mode enfant</button>
+          <span class="favoriGroup"><button class="ghost" id="btnContactDev" title="Envoyer un message au développeur">✉️ Contacter le développeur</button><button class="favToggle" data-fav="btnContactDev" title="Épingler sur l'accueil">☆</button></span>
+          <span class="favoriGroup"><button class="ghost" id="btnKidMode" aria-pressed="false" title="Mode enfant : uniquement des films pour enfants">🐻 Mode enfant</button><button class="favToggle" data-fav="btnKidMode" title="Épingler sur l'accueil">☆</button></span>
           <span class="favoriGroup"><button class="ghost" id="btnProfile">Profil</button><button class="favToggle" data-fav="btnProfile" title="Épingler sur l'accueil">☆</button></span>
           <button class="ghost hidden" id="btnModeration">Modération</button>
           <button class="ghost hidden" id="btnAdminAccess" style="border-color:var(--beam); color:var(--beam)">⚙️ Administration</button>
           <span class="favoriGroup"><button class="ghost" id="btnSuggestion" style="border-color:var(--teal); color:var(--teal)">💡 Suggérer un film</button><button class="favToggle" data-fav="btnSuggestion" title="Épingler sur l'accueil">☆</button></span>
-          <button class="ghost" id="btnFilmsSuggeres" style="border-color:var(--ticket); color:var(--ticket)">🎟️ Suggestions retenues</button>
+          <span class="favoriGroup"><button class="ghost" id="btnFilmsSuggeres" style="border-color:var(--ticket); color:var(--ticket)">🎟️ Suggestions retenues</button><button class="favToggle" data-fav="btnFilmsSuggeres" title="Épingler sur l'accueil">☆</button></span>
           <button class="ghost hidden" id="btnSuggARepost" style="border-color:var(--beam); color:var(--beam)">
             🎉 Suggestion retenue à publier <span id="badgeSuggARepost" class="pastille hidden">0</span>
           </button>
@@ -1639,6 +1663,45 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
         <div id="pepitesListe"></div>
         <p class="note hidden" id="pepitesVide">Aucune pépite pour l'instant — marquez-en une à la fin d'une question !</p>
         <div class="row" id="pepitesPartageRow" style="margin-top:14px"><button class="ghost" id="btnPartagerPepites">📤 Partager mes pépites</button></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODALE : PARCOURIR LES FILMS (catalogue complet, en dehors d'une manche) -->
+  <div class="modal-overlay" id="parcourirFilmsModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>🎞️ Parcourir les films</h2>
+        <button class="close-btn" id="closeParcourirFilmsBtn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="note" style="margin:0 0 10px">Cherchez un film du jeu pour le mettre de côté (🔖), en pépite (💎), ou le signaler (🚩) — sans attendre de tomber dessus en jouant.</p>
+        <input id="parcourirFilmsRecherche" placeholder="Rechercher un titre…" style="margin-bottom:10px">
+        <div id="parcourirFilmsListe"></div>
+        <p class="note hidden" id="parcourirFilmsVide">Aucun film ne correspond à cette recherche.</p>
+        <div class="row" id="parcourirFilmsPagination" style="margin-top:12px;justify-content:center;align-items:center;gap:10px">
+          <button class="ghost" id="btnParcourirFilmsPrec">◀ Précédent</button>
+          <span class="note" id="parcourirFilmsPageTexte" style="margin:0"></span>
+          <button class="ghost" id="btnParcourirFilmsSuiv">Suivant ▶</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODALE : SIGNALER UN FILM (depuis « Parcourir les films ») -->
+  <div class="modal-overlay" id="parcourirReportModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>🚩 Signaler ce film</h2>
+        <button class="close-btn" id="closeParcourirReportBtn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="note" style="margin:0 0 10px" id="parcourirReportTitre"></p>
+        <select id="parcourirReportMotif"></select>
+        <textarea id="parcourirReportComment" maxlength="300" rows="3" placeholder="Précisions (facultatif)"
+          style="width:100%;resize:vertical;background:var(--card);border:1px solid rgba(237,232,220,.14);color:var(--chalk);border-radius:10px;padding:13px 14px;font:inherit;font-size:16px;margin-top:10px"></textarea>
+        <div class="row" style="margin-top:10px"><button id="btnParcourirReportEnvoyer">Envoyer</button></div>
+        <p class="feedback" id="parcourirReportMsg"></p>
       </div>
     </div>
   </div>
@@ -2567,9 +2630,11 @@ function majSpectateursCorner(){
   }
 }
 
+let pageAffichee = null; // id de la page actuellement visible — voir majMicFlottant()
 const show = id => {
   ["landing","validation","parrainage","profile","board","exchange","friends","quetes","moderation","menu","vocal","lobby","waiting","round","between","over","regarder","roue"]
     .forEach(s => $(s).classList.toggle("hidden", s !== id));
+  pageAffichee = id;
   window.scrollTo({top: 0, behavior: "instant"});
 
   const inGame = ["round", "between", "lobby", "waiting"].includes(id);
@@ -2583,6 +2648,7 @@ const show = id => {
   // Le bouton d'aide "?" reste masqué tant que l'administration ne l'a pas activé (voir chargerAide()),
   // et aussi pendant une partie pour ne jamais recouvrir la rangée de boutons du bas.
   $("helpBtn")?.classList.toggle("hidden", inGame || !aideActive);
+  majMicFlottant(id);
   enPartieActuellement = inGame;
   majSpectateursCorner();
   // Vérifiée à chaque navigation (pas seulement vers le menu) pour que la bannière de retour au
@@ -2902,6 +2968,16 @@ function appliquerTheme(theme){
         if (el) conteneur.appendChild(el);
       });
     }
+    // Disposition des cases du salon vocal (hôte/cohôtes, intervenants, auditeurs) : même mécanisme
+    // que l'ordre des blocs de la page d'accueil, réglable depuis la console admin.
+    const ordreVocal = theme.ordre?.vocal;
+    if (Array.isArray(ordreVocal)) {
+      const conteneur = document.getElementById("vocalCasesWrapper");
+      ordreVocal.forEach(id => {
+        const el = conteneur?.querySelector(`[data-module="${id}"]`);
+        if (el) conteneur.appendChild(el);
+      });
+    }
     // Couleurs propres à chaque module (espace échanges, classement, quêtes, sondages, amis,
     // salon vocal) : posées directement sur le conteneur du module, qui prend le dessus sur les
     // couleurs globales (--beam/--teal) pour tout ce qu'il contient, sans toucher au reste du site.
@@ -3007,6 +3083,40 @@ $("popLienExterne").onclick = (e) => { if (e.target.id === "popLienExterne") fer
 let me = null;
 const AVATAR_LIST = AVATARS;
 
+/** Parrainage automatique via lien d'invitation (voir « Partager l'application » dans le profil) :
+ *  le code voyage dans l'URL (?invit=ABC123), on le range de côté dès l'arrivée sur la page — avant
+ *  même la connexion X, qui fait un aller-retour complet vers twitter.com et efface les paramètres —
+ *  puis on l'applique tout seul dès qu'on connaît le compte, sans jamais montrer l'écran de saisie
+ *  manuelle du code à la personne invitée : « juste l'inscription suffit ». */
+const CODE_PARRAIN_LIEN_CLE = "michben_code_parrain_lien";
+(() => {
+  const brut = new URLSearchParams(location.search).get("invit");
+  if (brut && /^[A-Z0-9]{6}$/i.test(brut)) {
+    try { sessionStorage.setItem(CODE_PARRAIN_LIEN_CLE, brut.toUpperCase()); } catch {}
+    const url = new URL(location.href);
+    url.searchParams.delete("invit");
+    history.replaceState(null, "", url.toString());
+  }
+})();
+let parrainageAutoEnCours = null;
+function tenterParrainageAutoDepuisLien(){
+  if (parrainageAutoEnCours) return parrainageAutoEnCours;
+  parrainageAutoEnCours = (async () => {
+    let code = null;
+    try { code = sessionStorage.getItem(CODE_PARRAIN_LIEN_CLE); } catch {}
+    if (!code || (me && me.parrainId)) return false;
+    let reussi = false;
+    try {
+      const res = await fetch("/api/parrainage/rejoindre", {method:"POST",
+        headers:{"Content-Type":"application/json"}, body: JSON.stringify({code})});
+      if (res.ok) { if (me) me.parrainId = true; reussi = true; }
+    } catch {}
+    try { sessionStorage.removeItem(CODE_PARRAIN_LIEN_CLE); } catch {} // un seul essai, code valide ou non
+    return reussi;
+  })();
+  return parrainageAutoEnCours;
+}
+
 async function loadSession(){
   try {
     const res = await fetch("/api/me", { credentials: "same-origin" });
@@ -3017,6 +3127,7 @@ async function loadSession(){
     me = await res.json();
     setCredits(me.credits ?? 0);
     setPoints(me.points ?? 0);
+    if (await tenterParrainageAutoDepuisLien()) socket.connect();
     if (!me.pseudoChosen) return firstVisit();
     majBadgeAmis();
     chargerQuetes(); // Met à jour le niveau au chargement
@@ -3424,7 +3535,7 @@ async function offrirPoints(id, pseudo){
 
 /* ---------- Don de partie classée ---------- */
 async function offrirPartieClassee(id, pseudo){
-  if (!confirm(`Offrir une de vos parties classées disponibles à ${pseudo} ?\n\nLe don n'est possible que si son seau est actuellement complètement vide.`)) return;
+  if (!confirm(`Offrir une de vos parties classées disponibles à ${pseudo} ?\n\nCette partie s'ajoute à ses parties habituelles, même s'il lui en reste encore.`)) return;
 
   const res = await fetch("/api/parties-classees/donner", {method:"POST",
     headers:{"Content-Type":"application/json"}, body: JSON.stringify({id})});
@@ -3432,7 +3543,7 @@ async function offrirPartieClassee(id, pseudo){
   if (!res.ok){
     const messages = {
       AUCUNE_PARTIE: "Votre propre seau est vide : vous n'avez aucune partie classée disponible à offrir pour l'instant.",
-      SEAU_NON_VIDE: `Le seau de ${pseudo} n'est pas vide (il lui reste encore ${data.disponibles || 0} partie${(data.disponibles||0)>1?"s":""} classée${(data.disponibles||0)>1?"s":""} disponible${(data.disponibles||0)>1?"s":""}) — le don n'est possible que lorsque son seau est complètement vide.`,
+      RESERVE_PLEINE: `${pseudo} a déjà atteint la réserve maximum de parties bonus (${data.max ?? 3}) — le don n'est possible que lorsqu'il en aura utilisé au moins une.`,
       PAS_AMI: "Vous ne pouvez offrir une partie classée qu'à vos amis.",
       BLOQUE: "Don impossible avec ce joueur.",
       SOI_MEME: "Impossible de vous offrir une partie à vous-même.",
@@ -3636,7 +3747,11 @@ async function chargerParrainage(){
            ${p.usagesRestants > 0
              ? `<b style="color:var(--beam)">${p.usagesRestants}</b> invitation${p.usagesRestants>1?"s":""} restante${p.usagesRestants>1?"s":""} sur ${p.usagesMax}`
              : "Toutes vos invitations ont été utilisées."}</p>
-         ${p.usagesRestants > 0 ? '<button class="ghost" id="btnCopierCode">Copier le code</button>' : ""}
+         ${p.usagesRestants > 0 ? `<div class="row" style="margin-top:0">
+             <button class="ghost" id="btnCopierCode">Copier le code</button>
+             <button id="btnPartagerAppli">📤 Partager l'appli</button>
+           </div>
+           <p class="note" style="margin:10px 0 0">Le lien fait tout : la personne qui l'ouvre n'a qu'à s'inscrire, votre code s'applique tout seul.</p>` : ""}
        </div>`
     : `<div class="codeCadre">
          <p class="note" style="margin:0">Votre code d'invitation se débloque après
@@ -3645,11 +3760,26 @@ async function chargerParrainage(){
          <p class="note" style="margin:0">${p.parties} sur ${p.partiesRequises} — encore ${reste} partie${reste>1?"s":""}.</p>
        </div>`;
 
-  if (p.code && p.usagesRestants > 0) $("btnCopierCode").onclick = () => {
-    navigator.clipboard?.writeText(p.code);
-    $("btnCopierCode").textContent = "Copié ✓";
-    setTimeout(() => $("btnCopierCode").textContent = "Copier le code", 2000);
-  };
+  if (p.code && p.usagesRestants > 0) {
+    $("btnCopierCode").onclick = () => {
+      navigator.clipboard?.writeText(p.code);
+      $("btnCopierCode").textContent = "Copié ✓";
+      setTimeout(() => $("btnCopierCode").textContent = "Copier le code", 2000);
+    };
+    $("btnPartagerAppli").onclick = async () => {
+      const lien = `${location.origin}/?invit=${encodeURIComponent(p.code)}`;
+      const texte = `Rejoins-moi sur MichBen Ciné Quizz ! 🎬 En ouvrant ce lien, pas besoin de code : ${lien}`;
+      if (navigator.share) {
+        try { await navigator.share({ title: "MichBen Ciné Quizz", text: texte, url: lien }); return; }
+        catch { /* partage annulé : on retombe sur la copie */ }
+      }
+      try {
+        await navigator.clipboard?.writeText(texte);
+        $("btnPartagerAppli").textContent = "Copié ✓";
+        setTimeout(() => $("btnPartagerAppli").textContent = "📤 Partager l'appli", 2000);
+      } catch {}
+    };
+  }
 
   const ligne = (j, prefixe) => `<div class="amiLigne">
     <span class="dot ${j.online ? "on" : ""}"></span>
@@ -4368,6 +4498,28 @@ async function chargerClassementAccueil(){
 $("classementAccueil").onclick = () => $("btnBoard").click();
 chargerClassementAccueil();
 setInterval(chargerClassementAccueil, 60000);
+
+/** Bulle « salon vocal en direct » sur la page d'accueil : signale qu'au moins un salon est ouvert
+ *  et permet d'y accéder directement — rejoint tout de suite s'il n'y en a qu'un, sinon ouvre la
+ *  liste pour choisir (voir /api/vocal/salons, déjà utilisé par l'écran du salon vocal). */
+async function rafraichirSalonVocalAccueil(){
+  const liste = await fetch("/api/vocal/salons").then(r => r.ok ? r.json() : []).catch(() => []);
+  const carte = $("salonVocalAccueil");
+  if (!liste.length){ carte.classList.add("hidden"); carte.dataset.code = ""; return; }
+  carte.classList.remove("hidden");
+  $("salonVocalAccueilTexte").textContent = liste.length === 1
+    ? `${esc(liste[0].titre)} — animé par ${esc(liste[0].hote)} · ${liste[0].participants} participant${liste[0].participants>1?"s":""}`
+    : `${liste.length} salons ouverts en ce moment — touchez pour choisir`;
+  carte.dataset.code = liste.length === 1 ? liste[0].code : "";
+}
+$("salonVocalAccueil").onclick = () => {
+  const code = $("salonVocalAccueil").dataset.code;
+  show("vocal");
+  if (code) rejoindreSalonVocalParCode(code);
+  else { afficherVocalListe(); chargerSalonsVocauxOuverts(); }
+};
+rafraichirSalonVocalAccueil();
+setInterval(rafraichirSalonVocalAccueil, 30000);
 
 /* ---------- Espace échange ---------- */
 let points = 0, tauxTicket = 250, choixEchange = 0, saisonInfo = null;
@@ -5131,6 +5283,123 @@ $("btnPartagerPepites").onclick = async () => {
 $("btnSignets").onclick = () => { $("signetsModal").classList.add("active"); afficherSignets(); };
 $("closeSignetsBtn").onclick = () => $("signetsModal").classList.remove("active");
 
+/* ---------- Parcourir les films (catalogue complet, en dehors d'une manche) ----------
+ * Les signets/pépites/signalements ne s'ajoutaient jusqu'ici qu'à la fin d'une question, au fil
+ * du hasard des manches jouées — impossible d'agir sur un film précis qu'on a en tête sans tomber
+ * dessus en jouant. Réutilise les mêmes routes déjà en place (/api/signets, /api/pepites,
+ * /api/reports), juste depuis une recherche dans le catalogue plutôt que depuis l'écran de manche. */
+let parcourirFilmsPage = 1, parcourirFilmsRechercheActuelle = "", parcourirFilmsIdEnCours = null;
+
+async function chargerParcourirFilms(){
+  $("parcourirFilmsListe").innerHTML = "<p class='note'>Chargement…</p>";
+  await Promise.all([rafraichirSignets(), rafraichirPepites()]);
+  const params = new URLSearchParams({ page: String(parcourirFilmsPage) });
+  if (parcourirFilmsRechercheActuelle) params.set("q", parcourirFilmsRechercheActuelle);
+  if (state.kidMode) params.set("kids", "1");
+  const d = await fetch(`/api/films/parcourir?${params}`).then(r => r.ok ? r.json() : null).catch(() => null);
+  const films = d?.films || [];
+  $("parcourirFilmsVide").classList.toggle("hidden", films.length > 0);
+  $("parcourirFilmsListe").innerHTML = films.map(f => `
+    <div class="histoItem" data-trailer="${f.tmdbId||""}" data-titre="${esc(f.title||"")}" style="${f.tmdbId ? "cursor:pointer" : ""}" title="${f.tmdbId ? "Voir la bande-annonce" : ""}">
+      ${f.poster ? `<img src="${esc(f.poster)}" alt="" onerror="this.remove()">` : ""}
+      <div class="info">
+        <b>${esc(f.title || "")}${f.year ? ` (${f.year})` : ""}</b>
+      </div>
+      <span style="display:flex;gap:4px;flex:0 0 auto">
+        <button class="ghost" style="padding:6px 9px" data-signet="${f.id}" title="Mettre de côté" aria-pressed="${mesSignetsIds.has(f.id)}">${mesSignetsIds.has(f.id) ? "🔖" : "🏷️"}</button>
+        <button class="ghost" style="padding:6px 9px" data-pepite="${f.id}" title="Marquer en pépite" aria-pressed="${mesPepitesIds.has(f.id)}">${mesPepitesIds.has(f.id) ? "💎" : "🔹"}</button>
+        <button class="ghost" style="padding:6px 9px" data-signaler="${f.id}" data-titre-film="${esc(f.title||"")}" title="Signaler un problème">🚩</button>
+      </span>
+    </div>`).join("");
+  $("parcourirFilmsPageTexte").textContent = d ? `Page ${d.page} sur ${d.pages} (${d.total} film${d.total>1?"s":""})` : "";
+  $("btnParcourirFilmsPrec").disabled = !d || d.page <= 1;
+  $("btnParcourirFilmsSuiv").disabled = !d || d.page >= d.pages;
+
+  $("parcourirFilmsListe").querySelectorAll("[data-trailer]").forEach(el => {
+    if (!el.dataset.trailer) return;
+    el.onclick = (e) => { if (e.target.closest("button")) return; ouvrirTrailer(el.dataset.trailer, el.dataset.titre); };
+  });
+  $("parcourirFilmsListe").querySelectorAll("button[data-signet]").forEach(b => b.onclick = async (e) => {
+    e.stopPropagation();
+    if (!me){ alert("Connectez-vous pour mettre des films de côté."); return; }
+    const id = Number(b.dataset.signet);
+    const res = await fetch(`/api/signets/${id}/toggle`, { method: "POST" }).then(r => r.json()).catch(() => null);
+    if (!res) return;
+    if (res.signet) mesSignetsIds.add(id); else mesSignetsIds.delete(id);
+    if (filmCourant === id) majBoutonSignet();
+    chargerParcourirFilms();
+  });
+  $("parcourirFilmsListe").querySelectorAll("button[data-pepite]").forEach(b => b.onclick = async (e) => {
+    e.stopPropagation();
+    if (!me){ alert("Connectez-vous pour marquer des pépites."); return; }
+    const id = Number(b.dataset.pepite);
+    const res = await fetch(`/api/pepites/${id}/toggle`, { method: "POST" });
+    const data = await res.json().catch(() => null);
+    if (!res.ok){
+      if (data?.error === "MAX_PEPITES_ATTEINT")
+        alert(`Vous avez déjà vos ${data.max} pépites — retirez-en une dans « Mes pépites » pour en ajouter une autre.`);
+      return;
+    }
+    if (data.pepite) mesPepitesIds.add(id); else mesPepitesIds.delete(id);
+    $("badgePepites").textContent = mesPepitesIds.size;
+    $("badgePepites").classList.toggle("hidden", mesPepitesIds.size === 0);
+    if (filmCourant === id) majBoutonPepite();
+    chargerParcourirFilms();
+  });
+  $("parcourirFilmsListe").querySelectorAll("button[data-signaler]").forEach(b => b.onclick = (e) => {
+    e.stopPropagation();
+    if (!me){ alert("Connectez-vous pour signaler un film."); return; }
+    parcourirFilmsIdEnCours = Number(b.dataset.signaler);
+    $("parcourirReportTitre").textContent = `Film : ${b.dataset.titreFilm}`;
+    $("parcourirReportComment").value = "";
+    $("parcourirReportMsg").textContent = "";
+    $("parcourirReportModal").classList.add("active");
+  });
+}
+
+$("btnParcourirFilms").onclick = () => {
+  parcourirFilmsPage = 1;
+  parcourirFilmsRechercheActuelle = "";
+  $("parcourirFilmsRecherche").value = "";
+  $("parcourirFilmsModal").classList.add("active");
+  chargerParcourirFilms();
+};
+$("closeParcourirFilmsBtn").onclick = () => $("parcourirFilmsModal").classList.remove("active");
+$("parcourirFilmsModal").onclick = e => { if (e.target.id === "parcourirFilmsModal") $("parcourirFilmsModal").classList.remove("active"); };
+
+let parcourirFilmsRechercheId = null;
+$("parcourirFilmsRecherche").addEventListener("input", () => {
+  clearTimeout(parcourirFilmsRechercheId);
+  parcourirFilmsRechercheId = setTimeout(() => {
+    parcourirFilmsRechercheActuelle = $("parcourirFilmsRecherche").value.trim();
+    parcourirFilmsPage = 1;
+    chargerParcourirFilms();
+  }, 350); // léger délai pour ne pas interroger le serveur à chaque frappe
+});
+$("btnParcourirFilmsPrec").onclick = () => { parcourirFilmsPage = Math.max(1, parcourirFilmsPage - 1); chargerParcourirFilms(); };
+$("btnParcourirFilmsSuiv").onclick = () => { parcourirFilmsPage += 1; chargerParcourirFilms(); };
+
+$("closeParcourirReportBtn").onclick = () => $("parcourirReportModal").classList.remove("active");
+$("parcourirReportModal").onclick = e => { if (e.target.id === "parcourirReportModal") $("parcourirReportModal").classList.remove("active"); };
+// Réutilise le même catalogue de motifs que le signalement en pleine manche (voir plus haut,
+// fetch("/api/reports/motifs")) plutôt que de le recharger une seconde fois.
+$("btnParcourirFilms").addEventListener("click", () => {
+  if ($("parcourirReportMotif").innerHTML) return;
+  $("parcourirReportMotif").innerHTML = Object.entries(motifs).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("");
+}, { once: false });
+$("btnParcourirReportEnvoyer").onclick = async () => {
+  if (parcourirFilmsIdEnCours == null) return;
+  const res = await fetch("/api/reports", { method: "POST", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ movieId: parcourirFilmsIdEnCours, motif: $("parcourirReportMotif").value,
+                            commentaire: $("parcourirReportComment").value }) });
+  const data = await res.json().catch(() => ({}));
+  $("parcourirReportMsg").textContent = res.ok
+    ? (data.deja ? "Vous avez déjà signalé ce film." : "Merci, le signalement a été transmis.")
+    : "Signalement impossible.";
+  $("parcourirReportMsg").className = res.ok ? "feedback good" : "feedback bad";
+  if (res.ok) setTimeout(() => $("parcourirReportModal").classList.remove("active"), 1200);
+};
+
 /* ---------- Sondages "vs" (pop-corn salé ou sucré ?, etc.) ---------- */
 let sondagesActifs = [];
 
@@ -5198,6 +5467,32 @@ function renderSondages(){
 let vocalSalonActuel = null;   // dernier état reçu du serveur (payload publicVocal), ou null si pas dans un salon
 let vocalMusiquePourRadio = []; // catalogue /api/musique, chargé une seule fois pour le sélecteur radio
 
+/** Signal sonore discret pour hôte/cohôte/intervenant : prévient sans avoir à garder l'œil rivé sur
+ *  l'écran qu'un nouvel auditeur vient d'arriver, ou qu'une demande d'intervention vient d'être
+ *  envoyée. Deux notes différentes pour les distinguer à l'oreille. Généré directement (petit
+ *  bip synthétisé), sans fichier audio à charger — reste très bref et volontairement discret. */
+let vocalBipCtx = null;
+function vocalJouerBip(frequence, duree){
+  try {
+    if (!vocalBipCtx) vocalBipCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = vocalBipCtx;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = frequence;
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.12, ctx.currentTime + 0.015); // volume bas, volontairement discret
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duree);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + duree + 0.05);
+  } catch {} // pas grave si ça échoue (contexte audio indisponible) : purement un confort, jamais bloquant
+}
+let vocalDerniersAuditeursIds = new Set();
+let vocalDerniereDemandesCount = 0;
+let vocalDerniereSalleCode = null;
+
 /* ----- Son réel entre les joueurs (WebRTC, connexion directe pair-à-pair) -----
  * Le serveur ne fait que relayer les messages de négociation ("vocal:rtc-signal") — le son ne
  * transite jamais par lui. Sans service de relais payant (TURN), la connexion directe échoue
@@ -5258,16 +5553,26 @@ function vocalCreerPeer(peerId){
   };
   pc.onicecandidate = (e) => { if (e.candidate) vocalEmettreSignal(peerId, { type: "ice", candidate: e.candidate }); };
   pc.ontrack = (e) => vocalAttacherAudioDistant(peerId, e.streams[0]);
-  // Suit l'état de la connexion directe vers ce participant : si elle échoue, on tente une reprise
-  // (restartIce) une seule fois, puis on affiche un message clair si ça ne suffit pas — plutôt que
-  // de laisser un silence total sans aucune explication (voir vocalMajBanniereConnexion).
+  pc._tentativesReprise = 0;
+  // Suit l'état de la connexion directe vers ce participant : si elle échoue, on tente plusieurs
+  // reprises (restartIce, avec un court délai croissant entre chaque essai — une coupure réseau
+  // brève a le temps de se résorber), puis en dernier recours on referme et recrée entièrement la
+  // connexion (utile quand restartIce lui-même ne suffit plus, par ex. après une longue mise en
+  // veille de l'appareil). Un message clair s'affiche seulement si tout ça a échoué — plutôt que de
+  // laisser un silence total sans aucune explication (voir vocalMajBanniereConnexion).
   pc.oniceconnectionstatechange = () => {
     vocalEtatPeers.set(peerId, pc.iceConnectionState);
-    if (pc.iceConnectionState === "failed" && !pc._reprisTente){
-      pc._reprisTente = true;
-      try { pc.restartIce?.(); } catch {}
+    if (pc.iceConnectionState === "failed"){
+      pc._tentativesReprise++;
+      if (pc._tentativesReprise <= 3){
+        setTimeout(() => { try { pc.restartIce?.(); } catch {} }, pc._tentativesReprise * 1000);
+      } else if (pc._tentativesReprise === 4 && vocalSalonActuel){
+        // restartIce a épuisé ses chances : on repart de zéro pour ce participant.
+        vocalFermerPeer(peerId);
+        if (vocalSalonActuel.participants?.some(p => p.userId === peerId)) vocalCreerPeer(peerId);
+      }
     }
-    if (pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed") pc._reprisTente = false;
+    if (pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed") pc._tentativesReprise = 0;
     vocalMajBanniereConnexion();
   };
   if (vocalLocalStream) vocalLocalStream.getTracks().forEach(t => pc.addTrack(t, vocalLocalStream));
@@ -5290,6 +5595,7 @@ function vocalFermerToutesLesConnexions(){
   vocalEtatPeers.clear();
   if (vocalLocalStream){ vocalLocalStream.getTracks().forEach(t => t.stop()); vocalLocalStream = null; }
   vocalArreterVAD();
+  vocalDesactiverMediaSession();
   vocalMicOuvert = false;
   $("vocalAudioDistant").innerHTML = "";
 }
@@ -5388,6 +5694,46 @@ function vocalArreterVAD(){
   if (vocalAudioCtx){ vocalAudioCtx.close().catch(() => {}); vocalAudioCtx = null; }
 }
 
+/** Signale au système d'exploitation qu'un appel vocal est en cours (Media Session API) : sur les
+ *  navigateurs qui la prennent en charge, cela réduit — sans l'éliminer complètement — le risque que
+ *  l'appareil mette le son en pause quand l'onglet passe en arrière-plan, et affiche des informations
+ *  utiles sur l'écran verrouillé / les contrôles multimédia du téléphone. Important : cette API ne
+ *  peut pas garantir qu'aucune autre application ne vienne couper ou interrompre le son — c'est une
+ *  politique du système d'exploitation (économie de batterie, gestion audio) que JavaScript ne peut
+ *  pas entièrement contourner depuis un site web. */
+function vocalActiverMediaSession(){
+  if (!("mediaSession" in navigator)) return;
+  try {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: "Salon vocal en cours",
+      artist: vocalSalonActuel?.titre || "MichBen Ciné Quizz",
+    });
+    navigator.mediaSession.playbackState = "playing";
+    for (const action of ["play", "pause", "stop"]) {
+      try { navigator.mediaSession.setActionHandler(action, () => {}); } catch {}
+    }
+  } catch {}
+}
+function vocalDesactiverMediaSession(){
+  if (!("mediaSession" in navigator)) return;
+  try {
+    navigator.mediaSession.playbackState = "none";
+    navigator.mediaSession.metadata = null;
+    for (const action of ["play", "pause", "stop"]) {
+      try { navigator.mediaSession.setActionHandler(action, null); } catch {}
+    }
+  } catch {}
+}
+// Sur mobile, l'AudioContext utilisé pour la détection de voix (VAD) peut être suspendu par le
+// système quand l'onglet repasse en arrière-plan puis au premier plan : on le relance dès que
+// possible pour que l'anneau qui pulse continue de fonctionner (le son du salon lui-même, porté par
+// les connexions WebRTC directes, n'a pas besoin de ça pour continuer à circuler).
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && vocalAudioCtx && vocalAudioCtx.state === "suspended"){
+    vocalAudioCtx.resume().catch(() => {});
+  }
+});
+
 /** Demande le micro au tout premier clic sur "activer mon micro" (geste utilisateur, indispensable
  *  pour que le navigateur affiche la demande d'autorisation), puis ajoute la piste à toutes les
  *  connexions déjà ouvertes. En cas de refus ou d'appareil sans micro, le salon reste utilisable :
@@ -5399,6 +5745,7 @@ async function vocalDemanderMicro(){
     for (const pc of vocalPeers.values())
       vocalLocalStream.getTracks().forEach(t => pc.addTrack(t, vocalLocalStream));
     vocalDemarrerVAD(vocalLocalStream);
+    vocalActiverMediaSession();
     $("vocalMicMsg").textContent = "";
   } catch {
     vocalMicIndisponible = true;
@@ -5553,10 +5900,12 @@ $("btnVocalQuitter").onclick = () => {
   if (vocalSalonActuel) socket.emit("vocal:quitter", { code: vocalSalonActuel.code }, () => {});
   vocalSalonActuel = null;
   vocalMicOuvert = false;
+  vocalDerniereSalleCode = null;
   $("vocalAudio").pause();
   vocalFermerToutesLesConnexions();
   afficherVocalListe();
   chargerSalonsVocauxOuverts();
+  majMicFlottant(pageAffichee);
 };
 
 async function chargerMusiqueVocal(){
@@ -5603,10 +5952,29 @@ function renderVocalSalon(salon){
   else if (vocalMicOuvert && vocalLocalStream) vocalLocalStream.getAudioTracks().forEach(t => t.enabled = true);
   $("btnVocalMute").textContent = vocalMicOuvert ? "🔴 Couper mon micro" : "🎙️ Activer mon micro";
   $("btnVocalMute").classList.toggle("micro-ouvert", vocalMicOuvert);
+  majMicFlottant(pageAffichee);
 
   const demandeEnvoyee = monRole === "auditeur" && salon.demandesMontee.includes(me?.id);
   $("btnVocalDemander").classList.toggle("hidden", monRole !== "auditeur" || demandeEnvoyee);
+  $("btnVocalBaisserMain").classList.toggle("hidden", !demandeEnvoyee);
   $("vocalDemandeEnvoyee").hidden = !demandeEnvoyee;
+
+  // Signal sonore discret pour hôte/cohôte/intervenant (voir vocalJouerBip) : un nouvel auditeur
+  // vient d'arriver (note aiguë), ou une nouvelle demande d'intervention vient d'être envoyée (note
+  // plus grave, réservée à hôte/cohôte qui peuvent y répondre) — jamais sur le tout premier rendu
+  // après avoir rejoint le salon (rejointDepuis), pour ne pas sonner pour tout le monde déjà présent.
+  const auditeursIdsActuels = new Set(auditeurs.map(p => p.userId));
+  const demandesActuelles = salon.demandesMontee.length;
+  const rejointDepuis = vocalDerniereSalleCode === salon.code;
+  if (rejointDepuis && peutParler){
+    const nouvelAuditeur = [...auditeursIdsActuels].some(id => !vocalDerniersAuditeursIds.has(id));
+    if (nouvelAuditeur) vocalJouerBip(880, 0.1);
+    if ((monRole === "hote" || monRole === "cohote") && demandesActuelles > vocalDerniereDemandesCount)
+      vocalJouerBip(660, 0.15);
+  }
+  vocalDerniersAuditeursIds = auditeursIdsActuels;
+  vocalDerniereDemandesCount = demandesActuelles;
+  vocalDerniereSalleCode = salon.code;
 
   // Radio : diffusion en cours (synchronisée sur demarreLe) ou sélecteur pour la lancer (modérateurs seulement).
   const modo = monRole === "hote" || monRole === "cohote";
@@ -5758,6 +6126,18 @@ $("btnVocalDemander").onclick = () => {
   });
 };
 
+/** Baisser la main : annule une demande d'intervention envoyée par erreur ou qui n'a plus lieu
+ *  d'être, sans attendre que l'hôte y réponde (voir vocal:annuler-demande, déjà géré côté serveur). */
+$("btnVocalBaisserMain").onclick = () => {
+  if (!vocalSalonActuel) return;
+  socket.emit("vocal:annuler-demande", { code: vocalSalonActuel.code });
+  // Masque tout de suite les deux indicateurs, comme pour la demande elle-même : pas besoin
+  // d'attendre le prochain vocal:update pour voir l'effet du clic.
+  const salon = vocalSalonActuel;
+  salon.demandesMontee = salon.demandesMontee.filter(id => id !== me?.id);
+  renderVocalSalon(salon);
+};
+
 $("btnVocalFermer").onclick = () => {
   if (!vocalSalonActuel) return;
   if (!confirm("Fermer ce salon pour tout le monde ? Cette action est définitive.")) return;
@@ -5776,7 +6156,9 @@ $("vocalReglageMonteeLibre").onchange = (e) => {
 // Un seul bouton, pas de "maintenir pour parler" : un clic ouvre le micro (il reste ouvert en
 // continu), un second clic le referme. L'anneau qui pulse chez les autres se déclenche tout seul
 // selon le son détecté (voir vocalDemarrerVAD), sans rien avoir à maintenir enfoncé.
-$("btnVocalMute").onclick = async () => {
+// Extrait en fonction partagée pour que le bouton du salon (#btnVocalMute) et le micro flottant
+// (#btnVocalMicFlottant, visible sur n'importe quelle page) fassent exactement la même chose.
+async function basculerMicroVocal(){
   if (!vocalSalonActuel) return;
   const ouvrir = !vocalMicOuvert;
   if (ouvrir){
@@ -5787,7 +6169,26 @@ $("btnVocalMute").onclick = async () => {
     vocalLocalStream.getAudioTracks().forEach(t => t.enabled = false);
   }
   socket.emit("vocal:mute", { code: vocalSalonActuel.code, mute: !ouvrir });
-};
+}
+$("btnVocalMute").onclick = basculerMicroVocal;
+$("btnVocalMicFlottant").onclick = basculerMicroVocal;
+
+/** Affiche/masque et met à jour le micro flottant : visible dès qu'un rôle capable de parler
+ *  (hôte/cohôte/intervenant) est actif dans un salon vocal, sur n'importe quelle page SAUF l'écran
+ *  du salon lui-même (où #btnVocalMute fait déjà exactement le même travail — jamais les deux à la
+ *  fois). Appelée à chaque changement de page (show()) et à chaque mise à jour du salon
+ *  (renderVocalSalon()), pour ne jamais afficher un état de micro périmé. */
+function majMicFlottant(pageActuelle){
+  const btn = $("btnVocalMicFlottant");
+  if (!btn) return;
+  const moi = vocalSalonActuel?.participants?.find?.(p => p.userId === me?.id);
+  const peutParler = Boolean(moi && ["hote","cohote","intervenant"].includes(moi.role));
+  const visible = peutParler && pageActuelle !== "vocal";
+  btn.classList.toggle("hidden", !visible);
+  if (!visible) return;
+  btn.textContent = vocalMicOuvert ? "🔴 Micro ouvert" : "🎙️ Micro coupé";
+  btn.classList.toggle("micro-ouvert", vocalMicOuvert);
+}
 
 $("btnVocalRadioDiffuser").onclick = () => {
   const pisteId = $("vocalRadioSelect").value;
@@ -5851,12 +6252,14 @@ socket.on("vocal:ferme", (info) => {
   if (!vocalSalonActuel) return;
   vocalSalonActuel = null;
   vocalMicOuvert = false;
+  vocalDerniereSalleCode = null;
   $("vocalAudio").pause();
   vocalFermerToutesLesConnexions();
   if (!$("vocal").classList.contains("hidden")){
     afficherVocalListe();
     chargerSalonsVocauxOuverts();
   }
+  majMicFlottant(pageAffichee);
   bandeauNotif(`<span style="font-size:24px">🎙️</span><span><b>Salon vocal fermé</b>
     <small>${info?.raison === "FERME_PAR_HOTE" ? "L'hôte a fermé le salon."
       : info?.raison === "HOTE_PARTI" ? "L'hôte a quitté le salon." : "Le salon est vide."}</small></span>`);
@@ -5864,12 +6267,14 @@ socket.on("vocal:ferme", (info) => {
 socket.on("vocal:exclu", () => {
   vocalSalonActuel = null;
   vocalMicOuvert = false;
+  vocalDerniereSalleCode = null;
   $("vocalAudio").pause();
   vocalFermerToutesLesConnexions();
   if (!$("vocal").classList.contains("hidden")){
     afficherVocalListe();
     chargerSalonsVocauxOuverts();
   }
+  majMicFlottant(pageAffichee);
   bandeauNotif(`<span style="font-size:24px">🚪</span><span><b>Vous avez été exclu du salon vocal</b></span>`);
 });
 
@@ -7136,7 +7541,9 @@ socket.on("connect_error", err => {
     NO_PSEUDO: "Choisissez d'abord un pseudo.",
   };
   if (err.message === "NO_PSEUDO" && me) return firstVisit();
-  if (err.message === "PARRAINAGE_REQUIS") return show("parrainage");
+  if (err.message === "PARRAINAGE_REQUIS") {
+    return tenterParrainageAutoDepuisLien().then(reussi => reussi ? socket.connect() : show("parrainage"));
+  }
   if (err.message === "BANNED") { $("authError").textContent = raisons.BANNED; return show("landing"); }
 
   $("authError").textContent =
@@ -7179,6 +7586,7 @@ function resynchroniserSalonVocal(){
       vocalMicOuvert = false;
       $("vocalAudio").pause();
       vocalFermerToutesLesConnexions();
+      majMicFlottant(pageAffichee);
       return;
     }
     renderVocalSalon(res.salon);
@@ -7508,6 +7916,16 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
     <!-- COIN "REGARDÉ PAR" : liste des amis qui suivent la partie en direct, visible
          seulement pendant une partie et seulement s'il y a au moins un spectateur. -->
     <div id="spectateursCorner" class="hidden"></div>
+
+    <!-- MICRO FLOTTANT : reste visible sur n'importe quelle page (menu, partie, profil…) tant que le
+         joueur a un rôle qui parle (hôte/cohôte/intervenant) dans un salon vocal actif — pour couper
+         ou réactiver son micro sans devoir revenir sur l'écran du salon. Masqué sur l'écran du salon
+         lui-même (le bouton #btnVocalMute y suffit déjà) pour ne jamais afficher les deux à la fois.
+         Voir majMicFlottant(), appelée depuis show() et renderVocalSalon(). -->
+    <button class="hidden" id="btnVocalMicFlottant"
+      style="position:fixed;left:14px;bottom:14px;z-index:999;padding:10px 16px;border-radius:999px;
+      box-shadow:0 6px 18px rgba(0,0,0,.35);font-size:14px"
+      title="Couper ou activer votre micro du salon vocal">🎙️</button>
 
     <!-- BOUTON FLOTTANT ET MODALE D'AIDE : masqué tant que l'administration ne l'a pas activé
          depuis la console admin (onglet Réglages) — voir chargerAide() ci-dessous. -->
