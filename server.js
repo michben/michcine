@@ -3855,6 +3855,28 @@ function simplifierResultatsYoutube(items) {
       vignette: it.snippet?.thumbnails?.medium?.url || it.snippet?.thumbnails?.default?.url || null,
     }));
 }
+/** Traduit une erreur brute renvoyée par l'API YouTube (statut HTTP + corps JSON) en un couple
+ *  (code court, message clair en français) — sert à la fois aux logs serveur et au bouton
+ *  « Tester la clé » de la console admin, pour que l'administrateur puisse comprendre et corriger
+ *  le problème lui-même sans avoir besoin de lire les logs techniques du serveur. */
+function interpreterErreurYoutube(statutHttp, data) {
+  const raison = data?.error?.errors?.[0]?.reason || data?.error?.status || "";
+  const messageBrut = data?.error?.message || "";
+  if (raison === "quotaExceeded" || /quota/i.test(messageBrut)) {
+    return { code: "QUOTA_DEPASSE", message: "Le quota gratuit quotidien de l'API YouTube est épuisé pour aujourd'hui — il se réinitialise automatiquement le lendemain (minuit, heure du Pacifique). Rien à faire, ça se rétablit tout seul." };
+  }
+  if (statutHttp === 403 && /has not been used|disabled|not enabled/i.test(messageBrut)) {
+    return { code: "API_NON_ACTIVEE", message: "La clé est valide mais l'API « YouTube Data API v3 » n'est pas activée sur le projet Google Cloud associé. Dans console.cloud.google.com, ouvrez le projet de cette clé → « API et services » → « Bibliothèque » → cherchez « YouTube Data API v3 » → cliquez sur « Activer »." };
+  }
+  if (statutHttp === 400 || /API key not valid/i.test(messageBrut)) {
+    return { code: "CLE_INVALIDE", message: "La clé n'est pas reconnue par Google (invalide ou mal copiée). Vérifiez qu'il n'y a pas d'espace avant/après en la recollant depuis console.cloud.google.com → « Identifiants »." };
+  }
+  if (statutHttp === 403) {
+    return { code: "ACCES_REFUSE", message: "Google refuse cette clé pour cette requête (souvent une restriction sur la clé, par exemple « restriction par site web/HTTP referrer », incompatible avec un appel fait depuis le serveur). Dans console.cloud.google.com → « Identifiants » → cette clé → « Restrictions relatives à l'application », choisissez « Aucune » ou « Adresses IP », puis réessayez." };
+  }
+  return { code: "ERREUR_INCONNUE", message: messageBrut || `Erreur Google non identifiée (code HTTP ${statutHttp}).` };
+}
+
 app.get("/api/youtube/recherche", async (req, res) => {
   const youtubeKey = REGLAGES.youtubeApiKey;
   if (!youtubeKey) return res.json({ ok: false, error: "NO_KEY", resultats: [] });
@@ -3863,12 +3885,37 @@ app.get("/api/youtube/recherche", async (req, res) => {
   try {
     const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=12&safeSearch=moderate&q=${encodeURIComponent(q)}&key=${youtubeKey}`;
     const r = await fetch(url);
-    if (!r.ok) return res.json({ ok: false, error: "API_ERROR", resultats: [] });
+    if (!r.ok) {
+      const data = await r.json().catch(() => null);
+      const { code, message } = interpreterErreurYoutube(r.status, data);
+      console.error(`Erreur recherche YouTube (${code}) :`, message, data?.error || "");
+      return res.json({ ok: false, error: "API_ERROR", resultats: [] });
+    }
     const data = await r.json();
     res.json({ ok: true, resultats: simplifierResultatsYoutube(data.items) });
   } catch (e) {
     console.error("Erreur recherche YouTube :", e);
     res.json({ ok: false, error: "INTERNAL_ERROR", resultats: [] });
+  }
+});
+
+/** Diagnostic réservé à l'administration : lance une recherche de test avec la clé YouTube
+ *  actuellement enregistrée et renvoie l'explication exacte en cas d'échec (voir
+ *  interpreterErreurYoutube ci-dessus), pour que l'administrateur puisse corriger le réglage
+ *  sans avoir à consulter les logs techniques du serveur (Render, etc.). */
+app.get("/api/admin/youtube/tester", requireAdmin, async (req, res) => {
+  const youtubeKey = REGLAGES.youtubeApiKey;
+  if (!youtubeKey) return res.json({ ok: false, code: "NO_KEY", message: "Aucune clé YouTube n'est enregistrée." });
+  try {
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=1&q=test&key=${youtubeKey}`;
+    const r = await fetch(url);
+    if (!r.ok) {
+      const data = await r.json().catch(() => null);
+      return res.json({ ok: false, ...interpreterErreurYoutube(r.status, data) });
+    }
+    return res.json({ ok: true, message: "La clé fonctionne correctement — la recherche YouTube est bien active dans le salon vocal." });
+  } catch (e) {
+    return res.json({ ok: false, code: "RESEAU", message: "Impossible de contacter Google depuis le serveur pour l'instant, réessayez plus tard." });
   }
 });
 
