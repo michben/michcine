@@ -1322,22 +1322,29 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
       </div>
 
       <div class="card" id="vocalRadioCard">
-        <p class="tag" style="margin:0 0 8px">📻 Radio du salon</p>
+        <p class="tag" style="margin:0 0 8px">📻 Radio & vidéo du salon</p>
         <p class="note" id="vocalRadioTexte" style="margin:0 0 10px">Aucune piste diffusée pour l'instant.</p>
         <div class="row" style="margin:0 0 10px">
-          <button id="btnVocalRadioVolMoins" class="ghost" style="flex:0 0 auto;padding:10px 12px" title="Diminuer le volume de la radio">🔉➖</button>
+          <button id="btnVocalRadioReculer" class="ghost" style="flex:0 0 auto;padding:10px 12px" title="Reculer de 15 secondes">⏪ 15s</button>
+          <button id="btnVocalRadioVolMoins" class="ghost" style="flex:0 0 auto;padding:10px 12px" title="Diminuer le volume">🔉➖</button>
           <span id="vocalRadioVolLabel" class="tag" style="margin:0;min-width:34px;text-align:center">50%</span>
-          <button id="btnVocalRadioVolPlus" class="ghost" style="flex:0 0 auto;padding:10px 12px" title="Augmenter le volume de la radio">🔊➕</button>
+          <button id="btnVocalRadioVolPlus" class="ghost" style="flex:0 0 auto;padding:10px 12px" title="Augmenter le volume">🔊➕</button>
+          <button id="btnVocalRadioAvancer" class="ghost" style="flex:0 0 auto;padding:10px 12px" title="Avancer de 15 secondes">15s ⏩</button>
         </div>
         <audio id="vocalAudio" style="width:100%;display:none" controls></audio>
+        <video id="vocalVideo" style="width:100%;display:none;border-radius:10px;background:#000" controls playsinline></video>
+        <div id="vocalYoutubeWrap" class="hidden" style="position:relative;width:100%;padding-top:56.25%;border-radius:10px;overflow:hidden;background:#000">
+          <div id="vocalYoutubePlayer" style="position:absolute;inset:0;width:100%;height:100%"></div>
+        </div>
         <div id="vocalRadioChoix" class="hidden">
           <select id="vocalRadioSelect"></select>
           <div class="row">
             <button id="btnVocalRadioDiffuser" class="ghost">▶️ Diffuser</button>
             <button id="btnVocalRadioArreter" class="ghost">⏹️ Arrêter</button>
           </div>
-          <button class="ghost" id="btnVocalRadioAjouterToggle" style="margin-top:10px;font-size:13px">➕ Diffuser mon propre contenu (lien ou fichier)</button>
+          <button class="ghost" id="btnVocalRadioAjouterToggle" style="margin-top:10px;font-size:13px">➕ Diffuser mon propre contenu (musique ou vidéo)</button>
           <div id="vocalRadioAjouter" class="hidden" style="margin-top:10px">
+            <p class="note" style="margin:0 0 4px"><b>🎵 Musique</b></p>
             <p class="note" style="margin:0 0 8px">Un lien direct vers un fichier audio, ou un fichier envoyé depuis votre téléphone (mp3, wav, ogg, m4a — 8 Mo max). Rejoint la playlist commune et démarre aussitôt pour tout le salon.</p>
             <input id="vocalRadioTitre" placeholder="Titre (facultatif)" maxlength="80" style="margin-bottom:8px">
             <input id="vocalRadioLien" placeholder="https://exemple.com/musique.mp3" style="margin-bottom:8px">
@@ -1345,6 +1352,19 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
             <input type="file" id="vocalRadioFichier" accept="audio/*" style="margin-bottom:8px">
             <div class="row"><button id="btnVocalRadioEnvoyer">Diffuser ceci au salon</button></div>
             <p class="feedback bad" id="vocalRadioAjouterMsg"></p>
+
+            <p class="note" style="margin:16px 0 4px;padding-top:12px;border-top:1px solid rgba(237,232,220,.12)"><b>🎬 Vidéo</b></p>
+            <p class="note" style="margin:0 0 8px">Un lien YouTube, un lien direct vers un fichier vidéo, ou un fichier envoyé depuis votre téléphone (mp4, webm, mov — 15 Mo max). L'écran apparaît ici même, pour tout le salon.</p>
+            <input id="vocalVideoTitre" placeholder="Titre (facultatif)" maxlength="80" style="margin-bottom:8px">
+            <input id="vocalVideoYoutubeLien" placeholder="https://www.youtube.com/watch?v=..." style="margin-bottom:8px">
+            <div class="row"><button id="btnVocalVideoYoutubeEnvoyer" class="ghost">▶️ Diffuser cette vidéo YouTube</button></div>
+            <p class="note" style="margin:8px 0;text-align:center;opacity:0.7">— ou —</p>
+            <input id="vocalVideoLien" placeholder="https://exemple.com/video.mp4" style="margin-bottom:8px">
+            <div class="row"><button id="btnVocalVideoLienEnvoyer" class="ghost">▶️ Diffuser ce lien vidéo</button></div>
+            <p class="note" style="margin:8px 0;text-align:center;opacity:0.7">— ou —</p>
+            <input type="file" id="vocalVideoFichier" accept="video/*" style="margin-bottom:8px">
+            <div class="row"><button id="btnVocalVideoFichierEnvoyer" class="ghost">▶️ Diffuser ce fichier vidéo</button></div>
+            <p class="feedback bad" id="vocalVideoAjouterMsg"></p>
           </div>
         </div>
       </div>
@@ -2136,6 +2156,11 @@ $("historiqueModal").onclick = e => { if (e.target.id === "historiqueModal") $("
    bas) ; on ne bloque pas l'affichage initial en attendant ce résultat réseau. */
 let EMOJIS_REACTION = ["👋", "❤️", "💯", "🩸", "😂", "😭"];
 let REACTION_DUREE_AFFICHAGE_MS = 2300;
+// Déclaré ici (bien avant sa définition "officielle" plus bas, voir /* ---------- Session ---------- */) :
+// construireBarreReactions() ci-dessous s'exécute tout de suite et lit déjà `me` (voir
+// vocalMajBoutonPhotoReaction) — une variable "let" déclarée seulement plus bas lèverait une
+// erreur (zone morte temporelle) à ce tout premier appel et casserait l'exécution du script.
+let me = null;
 
 /** (Re)construit une barre d'emojis de réaction et rebranche ses clics — appelée une première fois
  *  avec les valeurs par défaut ci-dessus, puis une seconde fois si la console admin a personnalisé
@@ -2143,8 +2168,13 @@ let REACTION_DUREE_AFFICHAGE_MS = 2300;
  *  partie multijoueur #emojiBar et le salon vocal #vocalEmojiBar — voir plus bas). */
 function construireBarreReactions(idBarre, evenement, obtenirCode){
   const barre = $(idBarre);
+  // Bouton spécial en plus des emojis : envoie la photo de profil de l'expéditeur comme réaction
+  // (voir `photo: true` côté serveur) — visible seulement si le compte a bien une photo, réglé
+  // juste après par vocalMajBoutonPhotoReaction(), qui reste dynamique (visible/caché dès que la
+  // photo change, sans avoir à reconstruire toute la barre).
   barre.innerHTML = EMOJIS_REACTION
-    .map(e => `<button type="button" data-emoji="${e}">${e}</button>`).join("");
+    .map(e => `<button type="button" data-emoji="${e}">${e}</button>`).join("")
+    + `<button type="button" data-photo-reaction class="hidden" title="Envoyer ma photo en réaction">📸</button>`;
   let derniereEnvoyee = 0;
   barre.querySelectorAll("[data-emoji]").forEach(btn => {
     btn.onclick = () => {
@@ -2156,20 +2186,43 @@ function construireBarreReactions(idBarre, evenement, obtenirCode){
       socket.emit(evenement, { code, emoji: btn.dataset.emoji });
     };
   });
+  const btnPhoto = barre.querySelector("[data-photo-reaction]");
+  if (btnPhoto) btnPhoto.onclick = () => {
+    const code = obtenirCode();
+    if (!code || !me?.photo) return;
+    const maintenant = Date.now();
+    if (maintenant - derniereEnvoyee < 700) return;
+    derniereEnvoyee = maintenant;
+    socket.emit(evenement, { code, photo: true });
+  };
+  vocalMajBoutonPhotoReaction();
 }
 construireBarreReactions("emojiBar", "reaction", () => state.code);
 
-/** Fait monter l'emoji reçu à l'écran, avec le pseudo de son auteur, puis le retire. */
-function afficherReactionVolante(emoji, pseudo){
+/** Affiche/cache le bouton "envoyer ma photo en réaction" dans toutes les barres de réaction déjà
+ *  construites, selon que le compte a une photo de profil ou non — appelé à la construction de
+ *  chaque barre, et chaque fois que le profil local (me) est rafraîchi (photo ajoutée/retirée). */
+function vocalMajBoutonPhotoReaction(){
+  document.querySelectorAll("[data-photo-reaction]").forEach(btn => {
+    btn.classList.toggle("hidden", !me?.photo);
+    if (me?.photo) btn.innerHTML = `<img src="${esc(me.photo)}" alt="" style="width:20px;height:20px;border-radius:50%;object-fit:cover;vertical-align:middle">`;
+  });
+}
+
+/** Fait monter l'emoji (ou la photo de profil, voir plus haut) reçu à l'écran, avec le pseudo de
+ *  son auteur, puis le retire. */
+function afficherReactionVolante(emoji, pseudo, photo){
   const el = document.createElement("div");
   el.className = "flyEmoji";
   el.style.left = (35 + Math.random() * 30) + "%";
   el.style.bottom = "150px";
-  el.innerHTML = `${emoji}<small>${esc(pseudo || "")}</small>`;
+  el.innerHTML = (photo
+    ? `<img src="${esc(photo)}" alt="" style="width:1em;height:1em;border-radius:50%;object-fit:cover;vertical-align:middle;display:inline-block">`
+    : (emoji || "")) + `<small>${esc(pseudo || "")}</small>`;
   document.body.appendChild(el);
   setTimeout(() => el.remove(), REACTION_DUREE_AFFICHAGE_MS);
 }
-socket.on("reaction", ({ emoji, pseudo }) => afficherReactionVolante(emoji, pseudo));
+socket.on("reaction", ({ emoji, pseudo, photo }) => afficherReactionVolante(emoji, pseudo, photo));
 
 /** Le serveur tient à jour la liste des amis en train de nous regarder jouer en direct. */
 socket.on("spectateurs:liste", ({ noms }) => {
@@ -2440,9 +2493,17 @@ let vocalRadioVolume = (() => {
   const v = parseFloat(localStorage.getItem("michben_vocal_radio_volume"));
   return Number.isFinite(v) && v >= 0 && v <= 1 ? v : 0.5;
 })();
+// Lecteur YouTube (voir vocalChargerYoutube, bien plus bas) : déclaré ici, tout en haut, car
+// majVolumeRadioVocal() s'exécute une première fois tout de suite ci-dessous — une variable "let"
+// déclarée plus bas dans le script lèverait une erreur (zone morte temporelle) à ce tout premier
+// appel, ce qui casserait l'exécution de tout le reste du script.
+let vocalYoutubePlayer = null;
 function majVolumeRadioVocal(){
   const audio = $("vocalAudio");
   if (audio) audio.volume = vocalRadioVolume;
+  const video = $("vocalVideo");
+  if (video) video.volume = vocalRadioVolume;
+  if (vocalYoutubePlayer) { try { vocalYoutubePlayer.setVolume(Math.round(vocalRadioVolume * 100)); } catch {} }
   const lbl = $("vocalRadioVolLabel");
   if (lbl) lbl.textContent = Math.round(vocalRadioVolume * 100) + "%";
 }
@@ -2761,6 +2822,16 @@ const show = id => {
 };
 const DERNIERE_PAGE_CLE = "michben_derniere_page";
 const PAGES_RESTAURABLES = ["menu", "vocal", "board", "profile", "friends", "exchange", "quetes"];
+/** Salon vocal dans lequel on se trouve (et micro ouvert ou non) : contrairement à un changement
+ *  de page classique, changer d'application ou mettre le téléphone en veille peut aller jusqu'à
+ *  faire recharger complètement la page par le système (mémoire libérée sur un onglet en arrière-
+ *  plan) — tout l'état en mémoire (vocalSalonActuel, la connexion micro…) disparaît alors avec la
+ *  page, et resynchroniserSalonVocal() ne peut rien pour un état qui n'existe plus. On garde donc
+ *  cette trace à part, dans sessionStorage (qui survit à un rechargement, contrairement aux
+ *  variables JS), pour qu'un retour sur l'onglet rejoigne le salon ET rouvre le micro tout seul
+ *  (voir la reprise automatique sur "connect" plus bas) plutôt que de laisser le joueur atterrir
+ *  sur la liste des salons, en silence, sans se douter qu'il en a été éjecté. */
+const VOCAL_SALON_COURANT_CLE = "michben_vocal_salon_courant";
 /** Ramène le joueur à la page qu'il consultait avant une actualisation — seulement pour ces pages
  *  « sûres », qui rechargent elles-mêmes tout leur contenu au clic normal sur leur bouton de menu
  *  (voir les fonctions associées ci-dessous). Une partie en cours (round/lobby/waiting/between)
@@ -3177,7 +3248,6 @@ $("lienExterneFermer").onclick = fermerLienExterne;
 $("popLienExterne").onclick = (e) => { if (e.target.id === "popLienExterne") fermerLienExterne(); };
 
 /* ---------- Session ---------- */
-let me = null;
 const AVATAR_LIST = AVATARS;
 
 /** Parrainage automatique via lien d'invitation (voir « Partager l'application » dans le profil) :
@@ -3222,6 +3292,7 @@ async function loadSession(){
       return show("landing");
     }
     me = await res.json();
+    vocalMajBoutonPhotoReaction();
     setCredits(me.credits ?? 0);
     setPoints(me.points ?? 0);
     if (await tenterParrainageAutoDepuisLien()) socket.connect();
@@ -3377,6 +3448,7 @@ $("btnValider").onclick = async () => {
     return;
   }
   me = data;
+  vocalMajBoutonPhotoReaction();
   socket.disconnect().connect();
   if (!me.pseudoChosen) return firstVisit();
   $("hello").textContent = `Bonjour ${me.pseudo}`;
@@ -3417,6 +3489,7 @@ async function authMail(chemin){
   if (!res.ok) return ($("mailError").textContent = MESSAGES_MAIL[data.error] || "Connexion impossible.");
 
   me = data;
+  vocalMajBoutonPhotoReaction();
   $("mdp").value = "";
   $("mailError").textContent = "";
   setCredits(me.credits ?? 0);
@@ -3449,6 +3522,7 @@ async function authEnfant(){
   if (!res.ok) return ($("ccError").textContent = MESSAGES_MAIL[data.error] || "Identifiant ou mot de passe incorrect.");
 
   me = data;
+  vocalMajBoutonPhotoReaction();
   $("ccMdp").value = "";
   $("ccError").textContent = "";
   setCredits(me.credits ?? 0);
@@ -5693,8 +5767,14 @@ function vocalFermerToutesLesConnexions(){
   if (vocalLocalStream){ vocalLocalStream.getTracks().forEach(t => t.stop()); vocalLocalStream = null; }
   vocalArreterVAD();
   vocalDesactiverMediaSession();
+  // On quitte vraiment le salon (par opposition à une coupure temporaire en cours de résync) :
+  // plus la peine de se souvenir d'y revenir tout seul après une prochaine actualisation (voir
+  // VOCAL_SALON_COURANT_CLE / la reprise automatique sur "connect" plus bas).
+  try { sessionStorage.removeItem(VOCAL_SALON_COURANT_CLE); } catch {}
   vocalMicOuvert = false;
   $("vocalAudioDistant").innerHTML = "";
+  $("vocalVideo")?.pause();
+  vocalArreterYoutube();
 }
 
 function vocalEmettreSignal(to, signal){
@@ -6085,6 +6165,10 @@ function renderVocalSalon(salon){
   $("btnVocalMute").textContent = vocalMicOuvert ? "🔴 Couper mon micro" : "🎙️ Activer mon micro";
   $("btnVocalMute").classList.toggle("micro-ouvert", vocalMicOuvert);
   majMicFlottant(pageAffichee);
+  // Voir VOCAL_SALON_COURANT_CLE : mémorise qu'on est dans ce salon (et si le micro y est ouvert)
+  // pour qu'un rechargement complet de la page (mise en veille, changement d'appli) puisse nous y
+  // ramener tout seul, micro rouvert, sans repasser par la liste des salons.
+  try { sessionStorage.setItem(VOCAL_SALON_COURANT_CLE, JSON.stringify({ code: salon.code, micOuvert: vocalMicOuvert })); } catch {}
 
   // Lever/baisser la main : signal d'attention réservé à l'hôte/aux cohôtes/intervenants (voir
   // vocal:main-toggle) — distinct de « Demander à intervenir » ci-dessous, qui ne concerne que les
@@ -6116,52 +6200,165 @@ function renderVocalSalon(salon){
   vocalDerniereDemandesCount = demandesActuelles;
   vocalDerniereSalleCode = salon.code;
 
-  // Radio : diffusion en cours (synchronisée sur demarreLe) ou sélecteur pour la lancer (modérateurs seulement).
+  // Radio/vidéo : diffusion en cours (synchronisée sur demarreLe) ou sélecteur pour la lancer
+  // (modérateurs seulement) — voir vocalMajLectureRadioOuVideo, qui branche sur salon.radio.type
+  // (audio/vidéo/YouTube) pour afficher le bon lecteur au même endroit.
   const modo = monRole === "hote" || monRole === "cohote";
-  const audio = $("vocalAudio");
-  audio.volume = vocalRadioVolume; // au cas où l'élément <audio> aurait été recréé/réinitialisé entretemps
-  if (salon.radio){
-    $("vocalRadioTexte").textContent = `🎶 En cours : ${salon.radio.titre} — cliquez ▶️ si la lecture ne démarre pas toute seule.`;
-    audio.style.display = "";
-    if (audio.dataset.url !== salon.radio.url){
-      audio.src = salon.radio.url;
-      audio.dataset.url = salon.radio.url;
-      // Poser currentTime avant que le navigateur ait pu lire les métadonnées (durée, format) du
-      // fichier échoue souvent en silence : on attend ce signal plutôt que de le tenter tout de
-      // suite, pour rester synchronisé avec les autres sans empêcher la lecture de démarrer.
-      audio.addEventListener("loadedmetadata", () => {
-        if (audio.dataset.url !== salon.radio.url) return; // une autre piste a démarré entretemps
-        const ecoule = Math.max(0, (Date.now() - salon.radio.demarreLe) / 1000);
-        try { audio.currentTime = ecoule; } catch {}
-      }, { once: true });
-      // Signale clairement pourquoi rien ne s'entend (lien mort, fichier corrompu, format non
-      // supporté par ce navigateur…) plutôt que de laisser un silence total sans explication —
-      // c'était le principal signalement remonté : « ça ne marche même en cliquant sur lecture ».
-      audio.onerror = () => {
-        const raison = raisonDepuisMediaError(audio.error);
-        const libelles = { reseau: "fichier inaccessible", decodage: "fichier corrompu",
-          format: "format non lisible par ce navigateur", inconnue: "erreur de lecture inconnue" };
-        $("vocalRadioTexte").textContent = `⚠️ Lecture impossible (${libelles[raison]}).` +
-          (modo ? " Essayez un autre lien ou fichier." : " Prévenez l'hôte du salon.");
-      };
-    } else {
-      const elapsed = Math.max(0, (Date.now() - salon.radio.demarreLe) / 1000);
-      if (audio.readyState >= 1 && Math.abs((audio.currentTime || 0) - elapsed) > 3) audio.currentTime = elapsed;
-    }
-    audio.play().catch(() => {}); // lecture auto parfois bloquée sans geste : les contrôles restent visibles pour lancer à la main
-  } else {
-    $("vocalRadioTexte").textContent = "Aucune piste diffusée pour l'instant.";
-    audio.pause();
-    audio.style.display = "none";
-    audio.removeAttribute("src");
-    audio.dataset.url = "";
-  }
-  $("vocalRadioChoix").classList.toggle("hidden", !modo);
+  vocalMajLectureRadioOuVideo(salon, modo);
 
   // Console de modération : hôte et cohôtes seulement.
   $("vocalConsole").classList.toggle("hidden", !modo);
   if (modo) renderConsoleVocal(salon, monRole);
 }
+
+/** Affiche, au même endroit (la carte "Radio & vidéo du salon"), le bon lecteur selon le type de
+ *  contenu diffusé : <audio> pour une piste musicale, <video> pour un lien/fichier vidéo, ou le
+ *  lecteur YouTube officiel pour une vidéo YouTube — un seul à la fois, synchronisé pour tout le
+ *  monde sur le temps écoulé depuis le début de la diffusion (voir demarreLe côté serveur). */
+function vocalMajLectureRadioOuVideo(salon, modo){
+  const audio = $("vocalAudio"), video = $("vocalVideo"), ytWrap = $("vocalYoutubeWrap");
+  audio.volume = vocalRadioVolume; // au cas où l'élément aurait été recréé/réinitialisé entretemps
+  video.volume = vocalRadioVolume;
+  const media = salon.radio;
+
+  if (!media){
+    $("vocalRadioTexte").textContent = "Aucune piste diffusée pour l'instant.";
+    audio.pause(); audio.style.display = "none"; audio.removeAttribute("src"); audio.dataset.url = "";
+    video.pause(); video.style.display = "none"; video.removeAttribute("src"); video.dataset.url = "";
+    ytWrap.classList.add("hidden");
+    vocalArreterYoutube();
+    $("vocalRadioChoix").classList.toggle("hidden", !modo);
+    return;
+  }
+
+  $("vocalRadioTexte").textContent = `🎶 En cours : ${media.titre} — cliquez ▶️ si la lecture ne démarre pas toute seule.`;
+
+  if (media.type === "youtube"){
+    audio.pause(); audio.style.display = "none";
+    video.pause(); video.style.display = "none";
+    ytWrap.classList.remove("hidden");
+    vocalChargerYoutube(media.youtubeId, media.demarreLe);
+  } else if (media.type === "video"){
+    ytWrap.classList.add("hidden");
+    vocalArreterYoutube();
+    audio.pause(); audio.style.display = "none";
+    video.style.display = "";
+    vocalSyncMedia(video, media, modo);
+  } else {
+    ytWrap.classList.add("hidden");
+    vocalArreterYoutube();
+    video.pause(); video.style.display = "none";
+    audio.style.display = "";
+    vocalSyncMedia(audio, media, modo);
+  }
+  $("vocalRadioChoix").classList.toggle("hidden", !modo);
+}
+
+/** Cale un <audio> ou <video> sur le temps écoulé depuis le début de la diffusion (voir demarreLe
+ *  côté serveur) — factorisé ici car radio et vidéo (lien/fichier) suivent exactement le même
+ *  principe : chaque appareil charge le même contenu et se resynchronise tout seul. */
+function vocalSyncMedia(el, media, modo){
+  if (el.dataset.url !== media.url){
+    el.src = media.url;
+    el.dataset.url = media.url;
+    // Poser currentTime avant que le navigateur ait pu lire les métadonnées (durée, format) échoue
+    // souvent en silence : on attend ce signal plutôt que de le tenter tout de suite, pour rester
+    // synchronisé avec les autres sans empêcher la lecture de démarrer.
+    el.addEventListener("loadedmetadata", () => {
+      if (el.dataset.url !== media.url) return; // un autre contenu a démarré entretemps
+      const ecoule = Math.max(0, (Date.now() - media.demarreLe) / 1000);
+      try { el.currentTime = ecoule; } catch {}
+    }, { once: true });
+    // Signale clairement pourquoi rien ne s'affiche/s'entend (lien mort, fichier corrompu, format
+    // non supporté…) plutôt que de laisser un silence total sans explication.
+    el.onerror = () => {
+      const raison = raisonDepuisMediaError(el.error);
+      const libelles = { reseau: "fichier inaccessible", decodage: "fichier corrompu",
+        format: "format non lisible par ce navigateur", inconnue: "erreur de lecture inconnue" };
+      $("vocalRadioTexte").textContent = `⚠️ Lecture impossible (${libelles[raison]}).` +
+        (modo ? " Essayez un autre lien ou fichier." : " Prévenez l'hôte du salon.");
+    };
+  } else {
+    const elapsed = Math.max(0, (Date.now() - media.demarreLe) / 1000);
+    if (el.readyState >= 1 && Math.abs((el.currentTime || 0) - elapsed) > 3) el.currentTime = elapsed;
+  }
+  el.play().catch(() => {}); // lecture auto parfois bloquée sans geste : les contrôles restent visibles pour lancer à la main
+}
+
+/** Vidéo YouTube : passe par l'API officielle (chargée à la demande, voir plus bas) puisqu'un lien
+ *  direct vers le flux vidéo n'existe pas pour YouTube — même principe de synchronisation par temps
+ *  écoulé que pour la radio/vidéo (voir demarreLe), transposé aux méthodes de cette API. */
+let vocalYoutubeApiChargee = false, vocalYoutubeApiPrete = false;
+let vocalYoutubeIdActuel = null, vocalYoutubeIdEnAttente = null;
+function vocalChargerApiYoutubeSiBesoin(){
+  if (vocalYoutubeApiChargee) return;
+  vocalYoutubeApiChargee = true;
+  const script = document.createElement("script");
+  script.src = "https://www.youtube.com/iframe_api";
+  document.head.appendChild(script);
+}
+window.onYouTubeIframeAPIReady = function(){
+  vocalYoutubeApiPrete = true;
+  // On ne reprend la vidéo en attente que si elle correspond toujours à ce qui est diffusé
+  // maintenant : le salon a pu passer à autre chose pendant que l'API chargeait (chargement
+  // réseau, potentiellement lent sur mobile).
+  if (vocalYoutubeIdEnAttente && vocalSalonActuel?.radio?.type === "youtube"
+      && vocalSalonActuel.radio.youtubeId === vocalYoutubeIdEnAttente.id){
+    vocalChargerYoutube(vocalYoutubeIdEnAttente.id, vocalYoutubeIdEnAttente.demarreLe);
+  }
+  vocalYoutubeIdEnAttente = null;
+};
+function vocalChargerYoutube(youtubeId, demarreLe){
+  vocalChargerApiYoutubeSiBesoin();
+  if (!vocalYoutubeApiPrete || typeof YT === "undefined" || !YT.Player){
+    vocalYoutubeIdEnAttente = { id: youtubeId, demarreLe };
+    return;
+  }
+  const debut = Math.max(0, Math.floor((Date.now() - demarreLe) / 1000));
+  if (vocalYoutubePlayer && vocalYoutubeIdActuel === youtubeId){
+    // Déjà la bonne vidéo en cours : on ne fait que se recaler si l'écart devient trop visible.
+    try {
+      const t = vocalYoutubePlayer.getCurrentTime();
+      if (Math.abs(t - debut) > 4) vocalYoutubePlayer.seekTo(debut, true);
+      vocalYoutubePlayer.playVideo();
+    } catch {}
+    return;
+  }
+  vocalYoutubeIdActuel = youtubeId;
+  // Important : l'API remplace l'élément cible par un iframe qui NE garde PAS le même id — on ne
+  // peut donc créer le lecteur qu'une seule fois pour toute la session, jamais une deuxième fois
+  // avec `new YT.Player(...)` (voir vocalArreterYoutube, qui ne détruit jamais l'instance).
+  if (vocalYoutubePlayer){
+    try { vocalYoutubePlayer.loadVideoById({ videoId: youtubeId, startSeconds: debut }); return; } catch {}
+  }
+  vocalYoutubePlayer = new YT.Player("vocalYoutubePlayer", {
+    videoId: youtubeId,
+    playerVars: { start: debut, autoplay: 1, playsinline: 1 },
+    events: { onReady: (e) => { try { e.target.setVolume(Math.round(vocalRadioVolume * 100)); e.target.playVideo(); } catch {} } },
+  });
+}
+function vocalArreterYoutube(){
+  vocalYoutubeIdActuel = null;
+  if (vocalYoutubePlayer){ try { vocalYoutubePlayer.pauseVideo(); } catch {} }
+}
+
+/** Reculer/avancer de 15 secondes dans le contenu actuellement diffusé (radio ou vidéo) — une
+ *  action purement locale à chaque appareil, comme le ferait n'importe quel lecteur, puisque la
+ *  lecture n'est de toute façon pas relayée par le serveur (chacun charge le même contenu et se
+ *  cale sur le temps écoulé, voir vocalSyncMedia). */
+function vocalSauterMedia(deltaSecondes){
+  if (!vocalSalonActuel?.radio) return;
+  if (vocalSalonActuel.radio.type === "youtube"){
+    if (!vocalYoutubePlayer) return;
+    try { vocalYoutubePlayer.seekTo(Math.max(0, vocalYoutubePlayer.getCurrentTime() + deltaSecondes), true); } catch {}
+    return;
+  }
+  const el = vocalSalonActuel.radio.type === "video" ? $("vocalVideo") : $("vocalAudio");
+  if (!el || el.style.display === "none") return;
+  try { el.currentTime = Math.max(0, (el.currentTime || 0) + deltaSecondes); } catch {}
+}
+$("btnVocalRadioReculer").onclick = () => vocalSauterMedia(-15);
+$("btnVocalRadioAvancer").onclick = () => vocalSauterMedia(15);
 
 /** Discussion écrite propre au salon vocal : un historique court (voir VOCAL_CHAT_HISTORIQUE_MAX
  *  côté serveur) est renvoyé à chaque mise à jour du salon, pour qu'un participant qui rejoint en
@@ -6192,7 +6389,7 @@ $("vocalChatInput").addEventListener("keydown", (e) => { if (e.key === "Enter") 
  *  confondre avec les réactions envoyées pendant une partie de jeu. Même liste/durée personnalisable
  *  que la barre de partie ci-dessus (voir construireBarreReactions). */
 construireBarreReactions("vocalEmojiBar", "vocal:reaction", () => vocalSalonActuel?.code);
-socket.on("vocal:reaction", ({ emoji, pseudo }) => afficherReactionVolante(emoji, pseudo));
+socket.on("vocal:reaction", ({ emoji, pseudo, photo }) => afficherReactionVolante(emoji, pseudo, photo));
 
 /** Réactions repliées par défaut dans la barre du bas : un coup d'œil sur les icônes suffit,
  *  pas besoin de les garder affichées en permanence — voir la refonte de #vocalBarreBas. */
@@ -6483,6 +6680,56 @@ $("btnVocalRadioEnvoyer").onclick = async () => {
   } else {
     msg.textContent = "Indiquez un lien ou choisissez un fichier.";
   }
+};
+
+/** Diffuse une vidéo YouTube, un lien vidéo direct, ou un fichier vidéo envoyé depuis le téléphone
+ *  — même esprit que la musique juste au-dessus, mais chacun a sa propre validation (voir
+ *  vocal:video-youtube/-lien/-fichier côté serveur) donc son propre message d'erreur. */
+function vocalMessageErreurVideo(res){
+  return res?.error === "LIEN_YOUTUBE_INVALIDE" ? "Ce lien ne ressemble pas à une vidéo YouTube valide."
+    : res?.error === "LIEN_INVALIDE" ? "Ce lien ne ressemble pas à une adresse valide (doit commencer par http:// ou https://)."
+    : res?.error === "FICHIER_TROP_LOURD" ? "Ce fichier dépasse 15 Mo — essayez un lien direct à la place."
+    : res?.error === "FICHIER_INVALIDE" ? "Impossible de lire ce fichier."
+    : res?.error === "TIMEOUT" ? "Le serveur ne répond pas — vérifiez votre connexion et réessayez."
+    : "Impossible de diffuser cette vidéo.";
+}
+function vocalApresEnvoiVideo(res, msg){
+  if (!res?.ok) { msg.textContent = vocalMessageErreurVideo(res); return; }
+  msg.textContent = "";
+  $("vocalVideoTitre").value = ""; $("vocalVideoYoutubeLien").value = "";
+  $("vocalVideoLien").value = ""; $("vocalVideoFichier").value = "";
+  $("vocalRadioAjouter").classList.add("hidden");
+}
+$("btnVocalVideoYoutubeEnvoyer").onclick = () => {
+  if (!vocalSalonActuel) return;
+  const titre = $("vocalVideoTitre").value.trim();
+  const url = $("vocalVideoYoutubeLien").value.trim();
+  const msg = $("vocalVideoAjouterMsg");
+  if (!url) { msg.textContent = "Indiquez un lien YouTube."; return; }
+  emitAvecDelai("vocal:video-youtube", { code: vocalSalonActuel.code, titre, url }, (res) => vocalApresEnvoiVideo(res, msg));
+};
+$("btnVocalVideoLienEnvoyer").onclick = () => {
+  if (!vocalSalonActuel) return;
+  const titre = $("vocalVideoTitre").value.trim();
+  const url = $("vocalVideoLien").value.trim();
+  const msg = $("vocalVideoAjouterMsg");
+  if (!url) { msg.textContent = "Indiquez un lien vidéo."; return; }
+  emitAvecDelai("vocal:video-lien", { code: vocalSalonActuel.code, titre, url }, (res) => vocalApresEnvoiVideo(res, msg));
+};
+$("btnVocalVideoFichierEnvoyer").onclick = () => {
+  if (!vocalSalonActuel) return;
+  const titre = $("vocalVideoTitre").value.trim();
+  const fichierInput = $("vocalVideoFichier");
+  const msg = $("vocalVideoAjouterMsg");
+  const fichier = fichierInput.files?.[0];
+  if (!fichier) { msg.textContent = "Choisissez un fichier vidéo."; return; }
+  if (fichier.size > 15 * 1024 * 1024) { msg.textContent = "Ce fichier dépasse 15 Mo — essayez un lien direct à la place."; return; }
+  const ext = (fichier.name.split(".").pop() || "mp4").toLowerCase();
+  const lecteur = new FileReader();
+  lecteur.onload = () => emitAvecDelai("vocal:video-fichier", { code: vocalSalonActuel.code, titre, fichier: lecteur.result, ext },
+    (res) => vocalApresEnvoiVideo(res, msg));
+  lecteur.onerror = () => { msg.textContent = "Impossible de lire ce fichier."; };
+  lecteur.readAsDataURL(fichier);
 };
 
 socket.on("vocal:update", (salon) => {
@@ -6986,6 +7233,7 @@ $("btnSaveProfile").onclick = async () => {
   }
   const premiere = !me.pseudoChosen;
   me = await res.json();
+  vocalMajBoutonPhotoReaction();
   setCredits(me.credits ?? credits);
   $("hello").textContent = `Bonjour ${me.pseudo}`;
   if (premiere){
@@ -7806,7 +8054,45 @@ socket.on("connect", () => {
   }
   resynchroniserSalon();
   resynchroniserSalonVocal();
+  vocalAutoRejoindreApresRechargement();
 });
+
+/** Reprise après un rechargement COMPLET de la page (pas juste une coupure réseau) pendant qu'on
+ *  était dans un salon vocal : sur mobile, changer d'application ou verrouiller l'écran peut aller
+ *  jusqu'à faire recharger la page par le système pour libérer de la mémoire — tout l'état JS
+ *  (vocalSalonActuel, la connexion micro…) disparaît alors avec elle, ce qu'aucune reconnexion
+ *  Socket.IO ne peut réparer puisqu'il n'y a plus rien en mémoire à réparer. On se fie donc à
+ *  VOCAL_SALON_COURANT_CLE (sessionStorage, qui survit au rechargement) pour rejoindre le même
+ *  salon tout seul, et rouvrir le micro tout seul s'il l'était, plutôt que de laisser le joueur
+ *  atterrir sur la liste des salons sans explication. Sans objet si resynchroniserSalonVocal()
+ *  vient déjà de reprendre un salon encore en mémoire (vocalSalonActuel non vide). */
+function vocalAutoRejoindreApresRechargement(){
+  if (vocalSalonActuel) return;
+  let sauvegarde = null;
+  try { sauvegarde = JSON.parse(sessionStorage.getItem(VOCAL_SALON_COURANT_CLE) || "null"); } catch {}
+  if (!sauvegarde?.code) return;
+  if (!enPartieActuellement) show("vocal");
+  rejoindreSalonVocalParCode(sauvegarde.code, { rester: enPartieActuellement });
+  if (!sauvegarde.micOuvert) return;
+  // Attend que le salon soit bien reçu (accusé de réception asynchrone) avant de redemander le
+  // micro : sans ça, vocalPeers ne serait pas encore prêt à recevoir la nouvelle piste.
+  const attendre = setInterval(() => {
+    if (!vocalSalonActuel || vocalSalonActuel.code !== sauvegarde.code) return;
+    clearInterval(attendre);
+    vocalRouvrirMicroSilencieusement();
+  }, 150);
+  setTimeout(() => clearInterval(attendre), 8000);
+}
+
+/** Redemande le micro (déjà autorisé, donc sans nouvelle demande de permission dans l'immense
+ *  majorité des cas) après une reprise automatique, SANS émettre vocal:mute : le serveur a déjà
+ *  restitué le bon état ("mute" false, voir vocal:rejoindre côté serveur) — il ne s'agit que de
+ *  reconstituer la piste audio locale elle-même, perdue avec la page précédente. */
+async function vocalRouvrirMicroSilencieusement(){
+  const stream = await vocalDemanderMicro();
+  if (!stream) return; // refusé/indisponible : message déjà affiché par vocalDemanderMicro
+  stream.getAudioTracks().forEach(t => t.enabled = true);
+}
 
 /** Même problème que resynchroniserSalon() (voir juste en dessous), mais côté salon vocal : sans
  *  ça, une coupure wifi/4G d'une seconde (très courante en mobilité) retirait silencieusement le
