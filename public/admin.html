@@ -774,13 +774,18 @@
           <div style="grid-column: 1 / -1;"><label for="rTmdbKey">Clé API TMDB (Pour les prochaines sorties cinéma)</label><input id="rTmdbKey" type="text" placeholder="Entrez votre clé API TheMovieDB"></div>
           <div style="grid-column: 1 / -1;">
             <label for="rYoutubeKey">Clé API YouTube (pour la recherche de vidéos dans le salon vocal)</label>
-            <input id="rYoutubeKey" type="text" placeholder="Entrez votre clé API YouTube Data v3">
+            <div class="row" style="gap:8px">
+              <input id="rYoutubeKey" type="text" placeholder="Entrez votre clé API YouTube Data v3" style="flex:1">
+              <button type="button" id="btnTesterYoutubeKey" style="flex:0 0 auto">Tester la clé</button>
+            </div>
+            <p id="resultatTestYoutube" style="font-size:13px;margin:6px 0 0;line-height:1.5"></p>
             <p style="color:var(--muted);font-size:12px;margin:4px 0 0;line-height:1.5">
               Permet aux joueurs de chercher une vidéo par mots-clés directement depuis le salon vocal,
               plutôt que de devoir coller un lien YouTube trouvé ailleurs (qui reste toujours possible,
               même sans cette clé). Gratuite : sur <b>console.cloud.google.com</b> → créer un projet →
               « API et services » → activer <b>« YouTube Data API v3 »</b> → « Identifiants » → créer une
-              clé API → copier la clé ici.
+              clé API → copier la clé ici. Après avoir collé la clé, cliquez d'abord sur
+              « Enregistrer », puis sur « Tester la clé » pour vérifier qu'elle fonctionne.
             </p>
           </div>
           <div style="grid-column: 1 / -1;">
@@ -1968,6 +1973,21 @@ async function enregistrerReglages(msgEl){
   cible.className = res.ok ? "msg ok" : "msg err";
   if (res.ok) chargerReglages();
 }
+
+$("btnTesterYoutubeKey").onclick = async () => {
+  const zone = $("resultatTestYoutube");
+  zone.textContent = "Test en cours…";
+  zone.style.color = "var(--muted)";
+  try {
+    const res = await api("/api/admin/youtube/tester");
+    const data = await res.json();
+    zone.textContent = data.message || (data.ok ? "La clé fonctionne." : "Échec du test (raison inconnue).");
+    zone.style.color = data.ok ? "#4caf50" : "#e2574c";
+  } catch {
+    zone.textContent = "Impossible de contacter le serveur pour lancer le test.";
+    zone.style.color = "#e2574c";
+  }
+};
 
 $("btnSaveReglages").onclick = () => enregistrerReglages($("reglagesMsg"));
 $("btnSaveApparence").onclick = () => enregistrerReglages($("apparenceReglagesMsg"));
