@@ -39,7 +39,7 @@ import { mountAuth, mountPasserelleEntrante, userFromCookie, addRankedPoints,
          marquerCoffreReclame, nombreComptes } from "./auth-x.js";
 
 const app = express();
-app.use(express.json({ limit: '15mb' })); // Limite augmentée pour l'upload d'images et de musique
+app.use(express.json({ limit: '25mb' })); // Limite augmentée pour l'upload d'images, de musique et de courtes vidéos
 /**
  * Les pages HTML ne doivent jamais rester en cache : sinon un joueur garde
  * l'ancienne version après une mise à jour et croit le jeu cassé.
@@ -2602,6 +2602,36 @@ const MUSIQUE_EXT_AUTORISEES = ["mp3", "mpeg", "ogg", "oga", "opus", "wav", "m4a
 // décode d'abord, puis on compare la taille réelle du fichier obtenu à cette limite.
 const MUSIQUE_MAX_OCTETS = 8 * 1024 * 1024;
 
+/** Le stockage local (voir MUSIQUE_DIR) ne survit pas à un redéploiement sur la plupart des
+ *  hébergements (disque « éphémère ») : le fichier lui-même disparaît alors que la playlist,
+ *  elle, peut encore le lister — ce qui se voit comme une piste qui « marchait avant et plus
+ *  maintenant », de façon aléatoire selon quand a eu lieu le dernier redéploiement. On vérifie
+ *  donc systématiquement que le fichier existe réellement avant de proposer une piste envoyée
+ *  par fichier — un lien direct (type "lien"), lui, n'est jamais concerné par ce problème. */
+function fichierMusiqueExiste(piste) {
+    if (piste.type !== "fichier") return true;
+    try { return fs.existsSync(join(process.cwd(), "public", piste.url)); }
+    catch { return false; }
+}
+
+// Vidéos diffusées en direct dans un salon vocal (YouTube, lien web, ou fichier envoyé depuis le
+// téléphone) — contrairement à la musique, ce n'est pas une playlist partagée mais un envoi
+// ponctuel : voir vocal:video-fichier. Mêmes limites de taille qu'un fichier musical, un peu plus
+// larges pour laisser la place à quelques secondes d'image en plus.
+const VIDEO_DIR = join(process.cwd(), "public", "videos");
+const VIDEO_EXT_AUTORISEES = ["mp4", "webm", "mov", "m4v", "ogg", "ogv"];
+const VIDEO_MAX_OCTETS = 15 * 1024 * 1024;
+
+/** Reconnaît un lien YouTube sous ses formes les plus courantes (page normale, lien court youtu.be,
+ *  lien d'intégration, Shorts) et en extrait le seul identifiant qui compte pour la lecture — on ne
+ *  stocke et ne renvoie jamais l'URL telle quelle, seulement cet identifiant à 11 caractères, pour
+ *  ne jamais avoir à faire confiance à un format d'URL particulier côté client. */
+function extraireIdYoutube(url) {
+    const s = String(url || "").trim();
+    const m = s.match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+    return m ? m[1] : null;
+}
+
 // Avis des joueurs sur chaque piste (pouce vers le haut / vers le bas), remonté dans l'admin.
 // Un vote par joueur et par piste : trackId -> { userId: "up" | "down" }. Revoter change ou retire l'avis.
 const VOTES_MUSIQUE_FILE = new URL("./votesMusique.json", import.meta.url);
@@ -2616,7 +2646,10 @@ function comptageVotes(trackId) {
 
 app.get("/api/musique", (req, res) => {
     const user = userFromCookie(req.headers.cookie);
-    res.json(playlisteMusique.map(({ id, titre, url }) => ({
+    // Voir fichierMusiqueExiste : une piste envoyée par fichier dont le fichier a disparu (le plus
+    // souvent après un redéploiement, sur un disque non persistant) est retirée de la liste plutôt
+    // que proposée puis silencieusement muette au moment de la lecture.
+    res.json(playlisteMusique.filter(fichierMusiqueExiste).map(({ id, titre, url }) => ({
         id, titre, url,
         monAvis: user ? (votesMusique[id]?.[user.id] || null) : null,
     })));
@@ -2675,6 +2708,7 @@ app.get("/api/admin/musique", requireAdmin, (req, res) => {
         }));
         return {
             ...p, ...comptageVotes(p.id), votants,
+            fichierManquant: !fichierMusiqueExiste(p),
             erreur: e ? { count: e.count, message: RAISONS_ERREUR_MUSIQUE[e.raison] || RAISONS_ERREUR_MUSIQUE.inconnue,
                           derniereFois: e.derniereFois } : null,
         };
@@ -6024,7 +6058,8 @@ io.on("connection", (socket) => {
     }
     const piste = playlisteMusique.find((p) => p.id === pisteId);
     if (!piste) return cb?.({ ok: false, error: "PISTE_INTROUVABLE" });
-    salon.radio = { titre: piste.titre, url: piste.url, demarreLe: Date.now() };
+    if (!fichierMusiqueExiste(piste)) return cb?.({ ok: false, error: "FICHIER_INTROUVABLE" });
+    salon.radio = { titre: piste.titre, url: piste.url, type: "audio", demarreLe: Date.now() };
     diffuserVocal(salon);
     cb?.({ ok: true });
   });
@@ -6040,9 +6075,66 @@ io.on("connection", (socket) => {
     if (!salon || !estModoVocal(salon, user.id)) return cb?.({ ok: false });
     const resultat = ajouterPisteMusique({ titre, url, fichier, ext });
     if (resultat.error) return cb?.({ ok: false, error: resultat.error });
-    salon.radio = { titre: resultat.piste.titre, url: resultat.piste.url, demarreLe: Date.now() };
+    salon.radio = { titre: resultat.piste.titre, url: resultat.piste.url, type: "audio", demarreLe: Date.now() };
     diffuserVocal(salon);
     cb?.({ ok: true, piste: resultat.piste });
+  });
+
+  /** Diffuse une vidéo YouTube à tout le salon — même mécanisme de synchronisation par temps
+   *  écoulé que la radio (voir vocal:radio) : le serveur ne retient que l'identifiant de la vidéo
+   *  et l'heure de démarrage, la lecture réelle est gérée côté client par l'API officielle
+   *  YouTube (voir vocalChargerYoutube), jamais par un lien direct vers le flux vidéo — YouTube ne
+   *  le permet pas, et nous n'essayons pas de le contourner. */
+  socket.on("vocal:video-youtube", ({ code, url, titre }, cb) => {
+    const salon = salonsVocaux.get(code);
+    if (!salon || !estModoVocal(salon, user.id)) return cb?.({ ok: false });
+    const youtubeId = extraireIdYoutube(url);
+    if (!youtubeId) return cb?.({ ok: false, error: "LIEN_YOUTUBE_INVALIDE" });
+    salon.radio = {
+      titre: String(titre || "").trim().slice(0, 80) || "Vidéo YouTube",
+      type: "youtube", youtubeId, demarreLe: Date.now(),
+    };
+    diffuserVocal(salon);
+    cb?.({ ok: true });
+  });
+
+  /** Diffuse une vidéo depuis un lien web direct (mp4, webm…) — même principe que vocal:radio :
+   *  chaque appareil charge le même fichier et se cale sur le temps écoulé, sans jamais faire
+   *  transiter la vidéo par le serveur. */
+  socket.on("vocal:video-lien", ({ code, url, titre }, cb) => {
+    const salon = salonsVocaux.get(code);
+    if (!salon || !estModoVocal(salon, user.id)) return cb?.({ ok: false });
+    const lien = String(url || "").trim();
+    if (!/^https?:\/\/\S+$/i.test(lien)) return cb?.({ ok: false, error: "LIEN_INVALIDE" });
+    salon.radio = { titre: String(titre || "").trim().slice(0, 80) || "Vidéo", type: "video", url: lien, demarreLe: Date.now() };
+    diffuserVocal(salon);
+    cb?.({ ok: true });
+  });
+
+  /** Diffuse une vidéo envoyée depuis le téléphone (fichier encodé en base64, comme pour la
+   *  musique — voir ajouterPisteMusique), écrite sur disque puis diffusée aussitôt. Contrairement
+   *  à la musique, une vidéo envoyée ainsi n'entre pas dans une playlist partagée : c'est un envoi
+   *  ponctuel, propre à ce moment du salon. Comme pour la musique (voir fichierMusiqueExiste), le
+   *  fichier ne survivra pas forcément à un redéploiement sur un hébergement à disque non
+   *  persistant — sans conséquence ici puisque le salon lui-même ne survit pas non plus. */
+  socket.on("vocal:video-fichier", ({ code, titre, fichier, ext }, cb) => {
+    const salon = salonsVocaux.get(code);
+    if (!salon || !estModoVocal(salon, user.id)) return cb?.({ ok: false });
+    const cleanExt = VIDEO_EXT_AUTORISEES.includes(String(ext || "").toLowerCase()) ? String(ext).toLowerCase() : "mp4";
+    const base64Data = String(fichier || "").split(";base64,").pop();
+    const octets = Buffer.from(base64Data, "base64");
+    if (!octets.length) return cb?.({ ok: false, error: "FICHIER_INVALIDE" });
+    if (octets.length > VIDEO_MAX_OCTETS) return cb?.({ ok: false, error: "FICHIER_TROP_LOURD" });
+    if (!fs.existsSync(VIDEO_DIR)) fs.mkdirSync(VIDEO_DIR, { recursive: true });
+    const nomFichier = `${crypto.randomUUID()}.${cleanExt}`;
+    try { fs.writeFileSync(join(VIDEO_DIR, nomFichier), octets); }
+    catch { return cb?.({ ok: false, error: "ECRITURE_IMPOSSIBLE" }); }
+    salon.radio = {
+      titre: String(titre || "").trim().slice(0, 80) || "Vidéo",
+      type: "video", url: `/videos/${nomFichier}`, demarreLe: Date.now(),
+    };
+    diffuserVocal(salon);
+    cb?.({ ok: true });
   });
 
   /** Message de groupe propre au salon vocal — permet d'échanger par écrit sans couper le micro de
@@ -6080,18 +6172,27 @@ io.on("connection", (socket) => {
    *  comme le chat du salon. Liste validée contre REGLAGES.reactions.emojis (personnalisable
    *  depuis la console admin) et non plus une liste figée à part : sinon, un émoji ajouté ou
    *  réordonné depuis l'admin apparaissait bien dans la barre côté client mais était silencieusement
-   *  rejeté ici — la réaction ne partait jamais, sans le moindre message d'erreur. */
+   *  rejeté ici — la réaction ne partait jamais, sans le moindre message d'erreur.
+   *  `photo: true` : réaction spéciale qui envoie la photo de profil de l'expéditeur au lieu d'un
+   *  emoji — jamais son URL fournie par le client (on lit toujours `user.photo`, la valeur du
+   *  compte authentifié), pour qu'on ne puisse jamais faire apparaître la photo de quelqu'un
+   *  d'autre. Refusée en silence si le compte n'a pas de photo (rien à envoyer). */
   let derniereReactionVocale = 0;
-  socket.on("vocal:reaction", ({ code, emoji }) => {
+  socket.on("vocal:reaction", ({ code, emoji, photo }) => {
     const salon = salonsVocaux.get(code);
     const moi = salon?.participants.get(user.id);
-    if (!salon || !moi || !REGLAGES.reactions.emojis.includes(emoji)) return;
+    if (!salon || !moi) return;
+    const estPhoto = photo === true && Boolean(user.photo);
+    if (!estPhoto && !REGLAGES.reactions.emojis.includes(emoji)) return;
     if (Date.now() - derniereReactionVocale < 700) return; // évite le matraquage
     derniereReactionVocale = Date.now();
+    const payload = estPhoto
+      ? { photo: user.photo, pseudo: user.pseudo, avatar: user.avatar }
+      : { emoji, pseudo: user.pseudo, avatar: user.avatar };
     for (const p of salon.participants.values()) {
       if (p.userId !== user.id && estBloque(p.userId, user.id)) continue;
       const s = [...io.of("/").sockets.values()].find((sk) => sk.data.user?.id === p.userId);
-      if (s) s.emit("vocal:reaction", { emoji, pseudo: user.pseudo, avatar: user.avatar });
+      if (s) s.emit("vocal:reaction", payload);
     }
   });
 
@@ -6254,16 +6355,24 @@ io.on("connection", (socket) => {
   socket.on("disconnect", () => quitterSalonVocal(socket, { involontaire: true }));
 
   /** Réactions émoji pendant la partie, relayées à tout le salon (liste REGLAGES.reactions.emojis,
-   *  personnalisable depuis la console admin, aussi utilisée par les bots — voir botDire()). */
+   *  personnalisable depuis la console admin, aussi utilisée par les bots — voir botDire()).
+   *  `photo: true` : réaction spéciale qui envoie la photo de profil de l'expéditeur au lieu d'un
+   *  emoji — jamais son URL fournie par le client, toujours `user.photo` (le compte authentifié),
+   *  pour qu'on ne puisse jamais faire apparaître la photo de quelqu'un d'autre. Refusée en
+   *  silence si le compte n'a pas de photo. */
   let derniereReaction = 0;
 
-  socket.on("reaction", ({ code, emoji }) => {
+  socket.on("reaction", ({ code, emoji, photo }) => {
     const room = rooms.get(code);
     const player = room?.players.get(socket.data.user.id);
-    if (!room || !player || !REGLAGES.reactions.emojis.includes(emoji)) return;
+    if (!room || !player) return;
+    const estPhoto = photo === true && Boolean(user.photo);
+    if (!estPhoto && !REGLAGES.reactions.emojis.includes(emoji)) return;
     if (Date.now() - derniereReaction < 700) return;   // évite le matraquage
     derniereReaction = Date.now();
-    io.to(room.code).emit("reaction", { emoji, pseudo: player.pseudo, avatar: player.avatar });
+    io.to(room.code).emit("reaction", estPhoto
+      ? { photo: user.photo, pseudo: player.pseudo, avatar: player.avatar }
+      : { emoji, pseudo: player.pseudo, avatar: player.avatar });
   });
 
   /** Invite un ami dans le salon en cours. Il reçoit une notification. */
