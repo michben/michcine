@@ -2725,8 +2725,14 @@ function ajouterPisteMusique({ titre, url, fichier, ext }) {
     const nom = String(titre || "").trim().slice(0, 80) || "Sans titre";
 
     if (fichier) {
-        const cleanExt = MUSIQUE_EXT_AUTORISEES.includes(String(ext || "").toLowerCase())
-            ? String(ext).toLowerCase() : "mp3";
+        // Un format non reconnu était auparavant renommé de force en ".mp3" (voir le commentaire de
+        // MUSIQUE_EXT_AUTORISEES plus haut) : le fichier semblait envoyé avec succès, mais le
+        // navigateur recevait ensuite un Content-Type qui ne correspondait pas à son contenu réel et
+        // refusait de le lire — silencieusement, ce qui donnait l'impression d'un envoi qui « marche
+        // une fois puis plus » de façon aléatoire. On refuse maintenant clairement ce cas, avec un
+        // message explicite, plutôt que de mentir sur le format.
+        const cleanExt = String(ext || "").toLowerCase();
+        if (!MUSIQUE_EXT_AUTORISEES.includes(cleanExt)) return { error: "FORMAT_NON_SUPPORTE" };
         const base64Data = String(fichier).split(";base64,").pop();
         const octets = Buffer.from(base64Data, "base64");
         if (octets.length > MUSIQUE_MAX_OCTETS) return { error: "FICHIER_TROP_LOURD" };
@@ -4250,6 +4256,10 @@ app.post("/api/points/donner", (req, res) => {
 
   notifier(cible, { type: "don", de: user.pseudo, avatar: user.avatar,
                     photo: user.photo || null, montant });
+  // Si donneur et receveur sont tous deux dans le même salon vocal en ce moment, le don devient un
+  // petit moment visible par tout le salon (voir diffuserDonVocal) — comme les réactions emoji.
+  diffuserDonVocal(user.id, cible, { type: "points", de: user.pseudo, avatar: user.avatar,
+                    photo: user.photo || null, cible: cibleFiche?.pseudo || "", montant });
 
   res.json({ ok: true, points: getPoints(user.id), montant, restant: statutDonsJour(user.id).restant });
 });
@@ -4270,7 +4280,10 @@ app.post("/api/parties-classees/donner", (req, res) => {
   const resultat = donnerPartieClassee(user.id, cible);
   if (!resultat.ok) return res.status(400).json(resultat);
 
+  const cibleFiche = fichePublique(cible, user.id);
   notifier(cible, { type: "don_partie", de: user.pseudo, avatar: user.avatar, photo: user.photo || null });
+  diffuserDonVocal(user.id, cible, { type: "partie", de: user.pseudo, avatar: user.avatar,
+                    photo: user.photo || null, cible: cibleFiche?.pseudo || "" });
   res.json({ ok: true, partiesRestantes: partiesRestantes(user.id) });
 });
 
@@ -4345,6 +4358,8 @@ app.post("/api/tickets/donner", (req, res) => {
 
   notifier(cible, { type: "don_tickets", de: user.pseudo, avatar: user.avatar,
                     photo: user.photo || null, montant });
+  diffuserDonVocal(user.id, cible, { type: "tickets", de: user.pseudo, avatar: user.avatar,
+                    photo: user.photo || null, cible: cibleFiche?.pseudo || "", montant });
 
   res.json({ ok: true, credits: getCredits(user.id), montant, xpGagnee, niveau,
              restant: statutDonsTicketsJour(user.id).restant });
@@ -4420,6 +4435,30 @@ function borneValeur(v, min, max, defaut) {
 const MAX_COHOTES_VOCAL = () => borneValeur(REGLAGES.audio?.maxCohotesVocal, 1, 10, 3);
 const MAX_PARTICIPANTS_VOCAL = () => borneValeur(REGLAGES.audio?.maxParticipantsVocal, 2, 200, 40);
 const salonsVocaux = new Map(); // code -> salon
+
+/** Retrouve le salon vocal (s'il y en a un) où se trouve actuellement ce joueur — utilisé pour
+ *  rendre un don (points/tickets/partie classée, voir plus bas) visible par tout le salon quand
+ *  donneur et receveur s'y trouvent tous les deux au moment du don (voir diffuserDonVocal). */
+function salonVocalDuJoueur(userId) {
+  for (const salon of salonsVocaux.values()) {
+    if (salon.participants.has(userId)) return salon;
+  }
+  return null;
+}
+
+/** Si le donneur et le receveur d'un don sont actuellement tous les deux dans le même salon vocal,
+ *  diffuse un petit effet visuel (façon réaction volante, voir vocal:reaction) à tout le salon —
+ *  un don fait "en direct" devient ainsi un moment visible par tous, comme les réactions emoji,
+ *  plutôt qu'une simple notification privée pour le seul receveur. Ne fait rien si l'un des deux
+ *  n'est pas dans ce salon (le don reste alors une notification privée, comme avant). */
+function diffuserDonVocal(donneurId, cibleId, payload) {
+  const salon = salonVocalDuJoueur(donneurId);
+  if (!salon || !salon.participants.has(cibleId)) return;
+  for (const p of salon.participants.values()) {
+    const s = [...io.of("/").sockets.values()].find((sk) => sk.data.user?.id === p.userId);
+    if (s) s.emit("vocal:don", payload);
+  }
+}
 
 /** Personnes coupées involontairement (réseau, onglet fermé…) d'un salon vocal toujours actif :
  *  on leur garde un accès rapide pour y revenir depuis la page d'accueil plutôt que de les laisser
@@ -6120,7 +6159,12 @@ io.on("connection", (socket) => {
   socket.on("vocal:video-fichier", ({ code, titre, fichier, ext }, cb) => {
     const salon = salonsVocaux.get(code);
     if (!salon || !estModoVocal(salon, user.id)) return cb?.({ ok: false });
-    const cleanExt = VIDEO_EXT_AUTORISEES.includes(String(ext || "").toLowerCase()) ? String(ext).toLowerCase() : "mp4";
+    // Comme pour la musique (voir ajouterPisteMusique) : un format non reconnu n'est plus renommé
+    // de force en ".mp4" — ce mensonge sur le format faisait échouer la lecture silencieusement
+    // (Content-Type ne correspondant pas au contenu réel), pour certains fichiers seulement, ce qui
+    // ressemblait à un bug aléatoire. On refuse maintenant clairement, avec un message explicite.
+    const cleanExt = String(ext || "").toLowerCase();
+    if (!VIDEO_EXT_AUTORISEES.includes(cleanExt)) return cb?.({ ok: false, error: "FORMAT_NON_SUPPORTE" });
     const base64Data = String(fichier || "").split(";base64,").pop();
     const octets = Buffer.from(base64Data, "base64");
     if (!octets.length) return cb?.({ ok: false, error: "FICHIER_INVALIDE" });
@@ -6141,7 +6185,7 @@ io.on("connection", (socket) => {
    *  personne, ou pour ceux qui préfèrent taper. Réservé aux participants actuels du salon. Un
    *  historique court est conservé (voir VOCAL_CHAT_HISTORIQUE_MAX) pour qu'un participant qui
    *  rejoint en cours de route retrouve un peu de contexte, pas juste les messages à venir. */
-  socket.on("vocal:chat-envoyer", ({ code, texte }, cb) => {
+  socket.on("vocal:chat-envoyer", ({ code, texte, filmTmdbId, filmTitre, filmPoster }, cb) => {
     const salon = salonsVocaux.get(code);
     const moi = salon?.participants.get(user.id);
     if (!salon || !moi) return cb?.({ ok: false });
@@ -6149,10 +6193,18 @@ io.on("connection", (socket) => {
     const message = String(texte || "").trim().slice(0, 300);
     if (!message) return cb?.({ ok: false, error: "VIDE" });
 
+    // Film proposé (voir #btnVocalRechercheFilm / "📢 Partager dans le salon") : en plus du texte,
+    // on retient l'identifiant TMDB du film pour que les autres joueurs puissent ouvrir directement
+    // sa fiche (bande-annonce, affiche…) depuis le message, sans avoir à le rechercher eux-mêmes.
+    // Uniquement un identifiant numérique TMDB — jamais une chaîne arbitraire du client.
+    const idTmdb = /^\d+$/.test(String(filmTmdbId || "")) ? String(filmTmdbId) : null;
+
     salon.chat = salon.chat || [];
     salon.chat.push({
       id: crypto.randomUUID(), userId: user.id, pseudo: user.pseudo,
       avatar: user.avatar, photo: user.photo || null, texte: message, at: Date.now(),
+      ...(idTmdb ? { filmTmdbId: idTmdb, filmTitre: String(filmTitre || "").trim().slice(0, 120),
+                     filmPoster: String(filmPoster || "").trim().slice(0, 300) || null } : {}),
     });
     if (salon.chat.length > VOCAL_CHAT_HISTORIQUE_MAX) salon.chat = salon.chat.slice(-VOCAL_CHAT_HISTORIQUE_MAX);
 
