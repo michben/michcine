@@ -279,9 +279,6 @@ const BOT_NOMS = [
 ];
 const nomBotAleatoire = () => BOT_NOMS[Math.floor(Math.random() * BOT_NOMS.length)];
 
-/** Emojis disponibles pour les réactions rapides (joueurs humains ET bots — voir plus bas). */
-const EMOJIS = ["👋", "❤️", "💯", "🩸", "😂", "😭"];
-
 /**
  * Petites piques et taquineries envoyées par les bots pendant la partie, pour qu'ils paraissent
  * un peu plus « vivants » qu'un simple curseur qui répond dans le vide. Le ton monte avec le
@@ -335,7 +332,10 @@ function botDire(room, bot, categorie, probabilite = 0.4) {
 
     const enEmoji = Math.random() < 0.4;
     if (enEmoji) {
-      const emoji = EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
+      // Liste personnalisable depuis la console admin (voir REGLAGES.reactions) : les bots réagissent
+      // avec les mêmes émojis que ceux proposés aux joueurs humains, jamais une liste figée à part.
+      const emojisDispo = REGLAGES.reactions.emojis;
+      const emoji = emojisDispo[Math.floor(Math.random() * emojisDispo.length)];
       io.to(room.code).emit("reaction", { emoji, pseudo: bot.pseudo, avatar: bot.avatar });
       return;
     }
@@ -4411,7 +4411,7 @@ function publicVocal(salon) {
     hostId: salon.hostId,
     participants: [...salon.participants.values()].map((p) => ({
       userId: p.userId, pseudo: p.pseudo, avatar: p.avatar, photo: p.photo,
-      role: p.role, mute: p.mute, parle: p.parle,
+      role: p.role, mute: p.mute, parle: p.parle, mainLevee: Boolean(p.mainLevee),
     })),
     demandesMontee: [...salon.demandesMontee],
     radio: salon.radio,
@@ -5850,6 +5850,20 @@ io.on("connection", (socket) => {
     diffuserVocal(salon);
   });
 
+  /** Lever/baisser la main : simple signal d'attention (✋ superposée sur la photo, voir
+   *  publicVocal/carteParticipantVocal), réservé à l'hôte/aux cohôtes/intervenants — jamais aux
+   *  auditeurs, qui ont déjà leur propre demande d'intervention juste au-dessus (vocal:demander-
+   *  intervenir), un mécanisme différent (demander à devenir intervenant, pas juste signaler qu'on
+   *  veut la parole). */
+  socket.on("vocal:main-toggle", ({ code }, cb) => {
+    const salon = salonsVocaux.get(code);
+    const moi = salon?.participants.get(user.id);
+    if (!moi || !["hote", "cohote", "intervenant"].includes(moi.role)) return cb?.({ ok: false });
+    moi.mainLevee = !moi.mainLevee;
+    diffuserVocal(salon);
+    cb?.({ ok: true, salon: publicVocal(salon) });
+  });
+
   socket.on("vocal:promouvoir", ({ code, userId }, cb) => {
     const salon = salonsVocaux.get(code);
     if (!salon || !estModoVocal(salon, user.id)) return cb?.({ ok: false });
@@ -5875,13 +5889,19 @@ io.on("connection", (socket) => {
   /** L'hôte ou un cohôte choisit si le salon reste privé (absent de la liste publique « Salons en
    *  direct » pour qui n'est pas ami avec l'hôte — voir /api/vocal/salons) et si la montée est
    *  libre (un auditeur devient intervenant sans avoir à demander ni à être validé). */
-  socket.on("vocal:reglages", ({ code, prive, monteeLibre }, cb) => {
+  socket.on("vocal:reglages", ({ code, prive, monteeLibre, titre }, cb) => {
     const salon = salonsVocaux.get(code);
     if (!salon || !estModoVocal(salon, user.id)) return cb?.({ ok: false });
     if (typeof prive === "boolean") salon.prive = prive;
     if (typeof monteeLibre === "boolean") salon.monteeLibre = monteeLibre;
+    // Renommer le salon : possible à tout moment, pas seulement à la création (voir vocal:creer) —
+    // réservé à l'hôte/aux cohôtes, comme les autres réglages ci-dessus.
+    if (typeof titre === "string") {
+      const t = titre.trim().slice(0, 60);
+      if (t) salon.titre = t;
+    }
     diffuserVocal(salon);
-    cb?.({ ok: true, prive: salon.prive, monteeLibre: salon.monteeLibre });
+    cb?.({ ok: true, prive: salon.prive, monteeLibre: salon.monteeLibre, titre: salon.titre });
   });
 
   /** Fait redescendre un intervenant en simple auditeur — jamais un hôte ou un cohôte via cette
@@ -5894,6 +5914,7 @@ io.on("connection", (socket) => {
     cible.role = "auditeur";
     cible.parle = false;
     cible.mute = true; // redescendu = plus le droit de parler, micro refermé au cas où
+    cible.mainLevee = false; // le signal « main levée » est réservé à hôte/cohôte/intervenant (voir vocal:main-toggle)
     diffuserVocal(salon);
     cb?.({ ok: true });
   });
@@ -6019,12 +6040,15 @@ io.on("connection", (socket) => {
   /** Réactions emoji publiques dans un salon vocal — même principe que les réactions volantes en
    *  partie (voir socket.on("reaction", ...)), mais sous un nom d'événement distinct : les deux
    *  espaces (partie et salon vocal) ne doivent jamais se marcher dessus. Respecte le blocage,
-   *  comme le chat du salon. */
+   *  comme le chat du salon. Liste validée contre REGLAGES.reactions.emojis (personnalisable
+   *  depuis la console admin) et non plus une liste figée à part : sinon, un émoji ajouté ou
+   *  réordonné depuis l'admin apparaissait bien dans la barre côté client mais était silencieusement
+   *  rejeté ici — la réaction ne partait jamais, sans le moindre message d'erreur. */
   let derniereReactionVocale = 0;
   socket.on("vocal:reaction", ({ code, emoji }) => {
     const salon = salonsVocaux.get(code);
     const moi = salon?.participants.get(user.id);
-    if (!salon || !moi || !EMOJIS.includes(emoji)) return;
+    if (!salon || !moi || !REGLAGES.reactions.emojis.includes(emoji)) return;
     if (Date.now() - derniereReactionVocale < 700) return; // évite le matraquage
     derniereReactionVocale = Date.now();
     for (const p of salon.participants.values()) {
@@ -6192,14 +6216,14 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", () => quitterSalonVocal(socket, { involontaire: true }));
 
-  /** Réactions émoji pendant la partie, relayées à tout le salon (liste EMOJIS commune, définie
-   *  plus haut, aussi utilisée par les bots — voir botDire()). */
+  /** Réactions émoji pendant la partie, relayées à tout le salon (liste REGLAGES.reactions.emojis,
+   *  personnalisable depuis la console admin, aussi utilisée par les bots — voir botDire()). */
   let derniereReaction = 0;
 
   socket.on("reaction", ({ code, emoji }) => {
     const room = rooms.get(code);
     const player = room?.players.get(socket.data.user.id);
-    if (!room || !player || !EMOJIS.includes(emoji)) return;
+    if (!room || !player || !REGLAGES.reactions.emojis.includes(emoji)) return;
     if (Date.now() - derniereReaction < 700) return;   // évite le matraquage
     derniereReaction = Date.now();
     io.to(room.code).emit("reaction", { emoji, pseudo: player.pseudo, avatar: player.avatar });
