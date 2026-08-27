@@ -452,14 +452,34 @@
   .vocalBarreBas .vocalBarreRangee{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
   .vocalBarreBas .vocalBarreRangee button{flex:1 1 calc(50% - 8px);min-width:130px;font-size:14px;padding:12px 10px}
   #btnVocalReactionsToggle[aria-pressed="true"]{background:var(--card);border-color:var(--beam);color:var(--beam)}
-  .flyEmoji{position:fixed;z-index:55;pointer-events:none;font-size:34px;
-    animation:monte 2.2s ease-out forwards}
+  /* Blocs réductibles du salon vocal (radio, console de modération) : un petit trait cliquable
+     sur le côté droit du bloc, à la demande d'un joueur — voir rendreBlocReductible() plus bas. */
+  .cardReductible{position:relative;padding-right:36px}
+  .cardReductible .traitReduction{position:absolute;top:20px;right:14px;width:6px;height:32px;
+    border:none;border-radius:4px;background:rgba(237,232,220,.28);cursor:pointer;padding:0}
+  .cardReductible .traitReduction:hover,.cardReductible .traitReduction:focus-visible{background:var(--beam)}
+  .cardReductible.blocReduit{opacity:.72}
+  .cardReductible.blocReduit>*:not(.tag):not(.traitReduction){display:none}
+  /* Réactions volantes (emoji ou photo de profil, voir afficherReactionVolante) : une trajectoire
+     "baladeuse" plutôt qu'une simple ligne droite vers le haut — deux points de passage aléatoires
+     (--dx1/--dx2/--dx3, --rot1/--rot2, fournis en JS à chaque réaction) donnent un mouvement
+     différent à chaque fois. En cas de "combo" (plusieurs taps rapprochés sur la même réaction,
+     voir vocalComboReactions), la classe .combo agrandit l'effet et affiche un compteur ×N. */
+  .flyEmoji{position:fixed;z-index:55;pointer-events:none;font-size:34px;text-align:center;
+    animation:balade var(--duree,2.3s) cubic-bezier(.22,.68,.35,1) forwards;
+    --dx1:0px;--dx2:0px;--dx3:0px;--rot1:0deg;--rot2:0deg;--taille:1}
   .flyEmoji small{display:block;font-size:11px;color:var(--muted);text-align:center;
     font-family:'Inter',sans-serif}
-  @keyframes monte{
-    0%{opacity:0;transform:translateY(0) scale(.6)}
-    12%{opacity:1;transform:translateY(-14px) scale(1.15)}
-    100%{opacity:0;transform:translateY(-190px) scale(.9)}}
+  .flyEmoji.combo{font-size:calc(34px * var(--taille));filter:drop-shadow(0 0 10px var(--beam))}
+  .flyEmoji.combo small{color:var(--beam);font-weight:700}
+  .flyEmoji .comboCompteur{position:absolute;top:-8px;right:-16px;font-size:14px;color:var(--beam);
+    font-family:'Inter',sans-serif;-webkit-text-stroke:3px var(--ink);paint-order:stroke fill}
+  @keyframes balade{
+    0%{opacity:0;transform:translate(0,0) scale(.6) rotate(0deg)}
+    12%{opacity:1;transform:translate(calc(var(--dx1) * .3),-40px) scale(calc(1.1 * var(--taille))) rotate(var(--rot1))}
+    55%{opacity:1;transform:translate(var(--dx1),-46vh) scale(var(--taille)) rotate(var(--rot2))}
+    85%{opacity:.9;transform:translate(var(--dx2),-78vh) scale(var(--taille)) rotate(calc(var(--rot1) * -1))}
+    100%{opacity:0;transform:translate(var(--dx3),-100vh) scale(calc(.85 * var(--taille))) rotate(0deg)}}
   /* La pause doit rendre le synopsis réellement illisible : un simple voile
      opaque se contourne en jouant sur le contraste ou en sélectionnant le
      texte. On floute donc la page elle-même, en plus du voile. */
@@ -2209,16 +2229,43 @@ function vocalMajBoutonPhotoReaction(){
   });
 }
 
-/** Fait monter l'emoji (ou la photo de profil, voir plus haut) reçu à l'écran, avec le pseudo de
- *  son auteur, puis le retire. */
+/** Historique des réactions reçues récemment, pour détecter un "combo" : si un même joueur tape
+ *  plusieurs fois de suite sur la même réaction (même emoji, ou sa photo) en peu de temps, l'effet
+ *  à l'écran devient plus gros et plus vif avec un compteur ×N, plutôt que d'empiler des dizaines
+ *  de petits emojis identiques. Clé "pseudo|signature" -> {compte, expire}. */
+const vocalComboReactions = new Map();
+const VOCAL_COMBO_FENETRE_MS = 2600;
+
+/** Fait "se balader" l'emoji (ou la photo de profil, voir plus haut) reçu sur l'écran — une
+ *  trajectoire différente à chaque fois (deux points de passage aléatoires, voir .flyEmoji/@keyframes
+ *  balade), avec le pseudo de son auteur — puis le retire. */
 function afficherReactionVolante(emoji, pseudo, photo){
+  const maintenant = Date.now();
+  // Petit nettoyage au passage : évite d'accumuler indéfiniment des entrées expirées.
+  for (const [cle, v] of vocalComboReactions) { if (v.expire <= maintenant) vocalComboReactions.delete(cle); }
+
+  const signature = photo ? `photo:${photo}` : `emoji:${emoji}`;
+  const cleCombo = `${pseudo || "?"}|${signature}`;
+  const precedent = vocalComboReactions.get(cleCombo);
+  const combo = (precedent && precedent.expire > maintenant) ? precedent.compte + 1 : 1;
+  vocalComboReactions.set(cleCombo, { compte: combo, expire: maintenant + VOCAL_COMBO_FENETRE_MS });
+  const enCombo = combo >= 2;
+  const ampleur = enCombo ? 1.7 : 1; // trajectoire plus large et plus vive en cas de combo
+
   const el = document.createElement("div");
-  el.className = "flyEmoji";
-  el.style.left = (35 + Math.random() * 30) + "%";
-  el.style.bottom = "150px";
+  el.className = "flyEmoji" + (enCombo ? " combo" : "");
+  el.style.left = (12 + Math.random() * 66) + "%";
+  el.style.bottom = (110 + Math.random() * 60) + "px";
+  el.style.setProperty("--dx1", Math.round((Math.random() - 0.5) * 130 * ampleur) + "px");
+  el.style.setProperty("--dx2", Math.round((Math.random() - 0.5) * 160 * ampleur) + "px");
+  el.style.setProperty("--dx3", Math.round((Math.random() - 0.5) * 100 * ampleur) + "px");
+  el.style.setProperty("--rot1", Math.round((Math.random() - 0.5) * 24 * ampleur) + "deg");
+  el.style.setProperty("--rot2", Math.round((Math.random() - 0.5) * 24 * ampleur) + "deg");
+  el.style.setProperty("--duree", (REACTION_DUREE_AFFICHAGE_MS / 1000) + "s");
+  if (enCombo) el.style.setProperty("--taille", String(Math.min(2, 1 + combo * 0.18)));
   el.innerHTML = (photo
     ? `<img src="${esc(photo)}" alt="" style="width:1em;height:1em;border-radius:50%;object-fit:cover;vertical-align:middle;display:inline-block">`
-    : (emoji || "")) + `<small>${esc(pseudo || "")}</small>`;
+    : (emoji || "")) + (enCombo ? `<b class="comboCompteur">×${combo}</b>` : "") + `<small>${esc(pseudo || "")}</small>`;
   document.body.appendChild(el);
   setTimeout(() => el.remove(), REACTION_DUREE_AFFICHAGE_MS);
 }
@@ -2518,6 +2565,37 @@ $("btnVocalRadioVolPlus").onclick = () => {
   localStorage.setItem("michben_vocal_radio_volume", String(vocalRadioVolume));
   majVolumeRadioVocal();
 };
+
+/** Blocs réductibles du salon vocal : ajoute un petit trait cliquable sur le côté droit du bloc
+ *  (voir .cardReductible / .traitReduction plus haut) qui, au clic, réduit le bloc (mode "veille
+ *  visuelle" — seul son titre reste visible, le reste est masqué) puis le rouvre au clic suivant.
+ *  Le choix est mémorisé (localStorage) pour retrouver le bloc dans le même état à la prochaine
+ *  visite du salon. Réutilisable pour n'importe quel autre bloc du salon si besoin plus tard. */
+function rendreBlocReductible(idCarte, cleStockage){
+  const carte = $(idCarte);
+  if (!carte) return;
+  carte.classList.add("cardReductible");
+  const trait = document.createElement("button");
+  trait.type = "button";
+  trait.className = "traitReduction";
+  trait.setAttribute("aria-label", "Réduire ou afficher ce bloc");
+  carte.appendChild(trait);
+  const appliquer = (reduit) => {
+    carte.classList.toggle("blocReduit", reduit);
+    trait.setAttribute("aria-pressed", reduit ? "true" : "false");
+    trait.title = reduit ? "Afficher ce bloc" : "Réduire ce bloc (mise en veille visuelle)";
+  };
+  let reduit = false;
+  try { reduit = localStorage.getItem(cleStockage) === "1"; } catch {}
+  appliquer(reduit);
+  trait.onclick = () => {
+    reduit = !reduit;
+    appliquer(reduit);
+    try { localStorage.setItem(cleStockage, reduit ? "1" : "0"); } catch {}
+  };
+}
+rendreBlocReductible("vocalRadioCard", "michben_vocal_radio_reduit");
+rendreBlocReductible("vocalConsole", "michben_vocal_console_reduit");
 
 /** Porte-monnaie : historique horodaté des tickets et points, avec leur provenance. */
 async function ouvrirPorteMonnaie(){
@@ -5647,12 +5725,17 @@ function vocalJouerBip(frequence, duree){
   try {
     if (!vocalBipCtx) vocalBipCtx = new (window.AudioContext || window.webkitAudioContext)();
     const ctx = vocalBipCtx;
+    // Sur mobile, le contexte peut rester "suspendu" (politique anti-lecture-automatique des
+    // navigateurs) même après un premier geste ailleurs sur la page — le bip restait alors
+    // totalement silencieux, sans aucune erreur visible. On le relance systématiquement ici.
+    if (ctx.state === "suspended") ctx.resume().catch(() => {});
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = "sine";
     osc.frequency.value = frequence;
     gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.12, ctx.currentTime + 0.015); // volume bas, volontairement discret
+    // Volume remonté (0.12 → 0.38) : signalé inaudible, notamment sur haut-parleur de téléphone.
+    gain.gain.exponentialRampToValueAtTime(0.38, ctx.currentTime + 0.015);
     gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duree);
     osc.connect(gain);
     gain.connect(ctx.destination);
@@ -5660,6 +5743,16 @@ function vocalJouerBip(frequence, duree){
     osc.stop(ctx.currentTime + duree + 0.05);
   } catch {} // pas grave si ça échoue (contexte audio indisponible) : purement un confort, jamais bloquant
 }
+// Débloque/relance le contexte audio du bip dès la première interaction dans le salon (certains
+// navigateurs mobiles n'autorisent vraiment le son qu'après un geste de l'utilisateur) : ainsi, au
+// moment où quelqu'un rejoint le salon (un événement serveur, jamais un geste de CET utilisateur-ci),
+// le contexte a toutes les chances d'être déjà prêt plutôt que de jouer un bip silencieux.
+document.getElementById("vocalSalon")?.addEventListener("pointerdown", () => {
+  try {
+    if (!vocalBipCtx) vocalBipCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (vocalBipCtx.state === "suspended") vocalBipCtx.resume().catch(() => {});
+  } catch {}
+}, { passive: true });
 let vocalDerniersAuditeursIds = new Set();
 let vocalDerniereDemandesCount = 0;
 let vocalDerniereSalleCode = null;
@@ -6192,9 +6285,11 @@ function renderVocalSalon(salon){
   const rejointDepuis = vocalDerniereSalleCode === salon.code;
   if (rejointDepuis && peutParler){
     const nouvelAuditeur = [...auditeursIdsActuels].some(id => !vocalDerniersAuditeursIds.has(id));
-    if (nouvelAuditeur) vocalJouerBip(880, 0.1);
+    // Deux notes (façon "ding-dong") plutôt qu'un seul bref bip : plus reconnaissable à l'oreille
+    // et donc plus audible en pratique, même sur un haut-parleur de téléphone.
+    if (nouvelAuditeur) { vocalJouerBip(880, 0.16); setTimeout(() => vocalJouerBip(1174, 0.18), 130); }
     if ((monRole === "hote" || monRole === "cohote") && demandesActuelles > vocalDerniereDemandesCount)
-      vocalJouerBip(660, 0.15);
+      vocalJouerBip(660, 0.22);
   }
   vocalDerniersAuditeursIds = auditeursIdsActuels;
   vocalDerniereDemandesCount = demandesActuelles;
