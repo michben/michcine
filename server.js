@@ -110,6 +110,9 @@ const REGLAGES_DEFAUT = {
   roundDuration: 60,                 // secondes
   basePoints: 1000,
   tmdbApiKey: "",
+  youtubeApiKey: "", // Recherche YouTube depuis le salon vocal (voir /api/youtube/recherche) — clé
+                     // gratuite (YouTube Data API v3) à créer sur console.cloud.google.com. Sans
+                     // clé, il reste possible de coller un lien YouTube directement, comme avant.
   geoapifyApiKey: "",   // « Cinéma le plus proche » — clé gratuite (3000 requêtes/jour) sur geoapify.com,
                         // utilisée en priorité pour la fiabilité (Overpass/OSM sert de repli sans clé).
   adsterraApiKey: "",   // Réservée pour un usage futur (ex. récupération de statistiques via l'API
@@ -714,6 +717,7 @@ app.put("/api/admin/reglages", requireAdmin, (req, res) => {
   REGLAGES.donTicketsXp     = borne(r.donTicketsXp, 0, 1000, REGLAGES.donTicketsXp);
   REGLAGES.donTicketsXpParJourMax = borne(r.donTicketsXpParJourMax, 0, 1000, REGLAGES.donTicketsXpParJourMax);
   if (typeof r.tmdbApiKey === 'string') REGLAGES.tmdbApiKey = r.tmdbApiKey;
+  if (typeof r.youtubeApiKey === 'string') REGLAGES.youtubeApiKey = r.youtubeApiKey;
   if (typeof r.geoapifyApiKey === 'string') REGLAGES.geoapifyApiKey = r.geoapifyApiKey;
   if (typeof r.adsterraApiKey === 'string') REGLAGES.adsterraApiKey = r.adsterraApiKey;
   REGLAGES.pubMaxParCycle   = borne(r.pubMaxParCycle, 1, 50, REGLAGES.pubMaxParCycle);
@@ -3826,6 +3830,44 @@ app.get("/api/tmdb/recherche", async (req, res) => {
     res.json({ ok: true, resultats: simplifierResultatsTmdb(data.results) });
   } catch (e) {
     console.error("Erreur recherche TMDB (libre) :", e);
+    res.json({ ok: false, error: "INTERNAL_ERROR", resultats: [] });
+  }
+});
+
+/** Recherche YouTube depuis le salon vocal (voir #btnVocalRechercheVideo côté client) : un moteur
+ *  simple et léger pour choisir une vidéo à diffuser sans avoir à la chercher sur YouTube puis
+ *  copier-coller le lien. Nécessite une clé YouTube Data API v3, gratuite (créée sur
+ *  console.cloud.google.com, voir REGLAGES.youtubeApiKey réglable depuis la console admin) — sans
+ *  clé, coller un lien YouTube directement reste possible comme avant (voir vocal:video-youtube),
+ *  cette recherche n'est qu'un confort en plus, jamais une obligation. */
+function decoderEntitesHtml(s) {
+  return String(s || "").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<").replace(/&gt;/g, ">");
+}
+function simplifierResultatsYoutube(items) {
+  return (items || [])
+    .filter((it) => it.id?.videoId)
+    .slice(0, 12)
+    .map((it) => ({
+      videoId: it.id.videoId,
+      titre: decoderEntitesHtml(it.snippet?.title),
+      chaine: decoderEntitesHtml(it.snippet?.channelTitle),
+      vignette: it.snippet?.thumbnails?.medium?.url || it.snippet?.thumbnails?.default?.url || null,
+    }));
+}
+app.get("/api/youtube/recherche", async (req, res) => {
+  const youtubeKey = REGLAGES.youtubeApiKey;
+  if (!youtubeKey) return res.json({ ok: false, error: "NO_KEY", resultats: [] });
+  const q = String(req.query.q || "").trim().slice(0, 80);
+  if (q.length < 2) return res.status(400).json({ ok: false, error: "TROP_COURT", resultats: [] });
+  try {
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=12&safeSearch=moderate&q=${encodeURIComponent(q)}&key=${youtubeKey}`;
+    const r = await fetch(url);
+    if (!r.ok) return res.json({ ok: false, error: "API_ERROR", resultats: [] });
+    const data = await r.json();
+    res.json({ ok: true, resultats: simplifierResultatsYoutube(data.items) });
+  } catch (e) {
+    console.error("Erreur recherche YouTube :", e);
     res.json({ ok: false, error: "INTERNAL_ERROR", resultats: [] });
   }
 });
