@@ -4393,6 +4393,22 @@ const salonsVocaux = new Map(); // code -> salon
 const retourVocalDisponible = new Map(); // userId -> { code, titre, at }
 const RETOUR_VOCAL_VALIDITE_MS = 15 * 60 * 1000;
 
+/** Micro qui « reste en sourdine » quand un joueur change d'application ou de page : le vrai
+ *  coupable n'était pas le micro lui-même, mais le fait qu'une coupure de connexion involontaire
+ *  (mise en veille, changement d'app — très fréquent sur mobile, la connexion WebSocket est
+ *  suspendue par le système) supprimait entièrement son entrée dans le salon (voir
+ *  quitterSalonVocal), si bien qu'au retour, vocal:rejoindre le faisait recommencer à zéro :
+ *  micro remis en sourdine, rôle perdu, main baissée — même si le joueur, lui, n'avait rien
+ *  demandé de tout ça. On garde donc une courte mémoire de son état juste avant la coupure, pour
+ *  le lui restituer telle quelle s'il revient à temps (même délai que la grâce du salon
+ *  lui-même, voir VOCAL_SALON_VIDE_GRACE_MS) — sinon (trop longtemps parti) il repart bien sur
+ *  des valeurs par défaut, comme avant. */
+const vocalEtatRecent = new Map(); // "code:userId" -> { role, mute, mainLevee, expire }
+setInterval(() => {
+  const maintenant = Date.now();
+  for (const [cle, etat] of vocalEtatRecent) if (etat.expire < maintenant) vocalEtatRecent.delete(cle);
+}, 60 * 1000);
+
 function genererCodeVocal() {
   let code;
   do {
@@ -4470,6 +4486,16 @@ function quitterSalonVocal(socket, { involontaire = false } = {}) {
   for (const salon of salonsVocaux.values()) {
     if (!salon.participants.has(userId)) continue;
     const etaitHote = salon.hostId === userId;
+    const participantSortant = salon.participants.get(userId);
+    // Coupure involontaire (pas un clic sur "Quitter") : on garde une courte mémoire de son état
+    // — micro ouvert ou non, rôle, main levée — pour le lui restituer s'il revient à temps (voir
+    // vocal:rejoindre) plutôt que de le faire recommencer à zéro (voir vocalEtatRecent ci-dessus).
+    if (involontaire) {
+      vocalEtatRecent.set(`${salon.code}:${userId}`, {
+        role: participantSortant.role, mute: participantSortant.mute,
+        mainLevee: Boolean(participantSortant.mainLevee), expire: Date.now() + VOCAL_SALON_VIDE_GRACE_MS(),
+      });
+    }
     salon.participants.delete(userId);
     salon.demandesMontee.delete(userId);
     socket.leave(`vocal:${salon.code}`);
@@ -5789,9 +5815,20 @@ io.on("connection", (socket) => {
     // VOCAL_SALON_VIDE_GRACE_MS) retrouve directement son rôle plutôt que d'atterrir en simple
     // auditeur dans son propre salon.
     const redevientHote = salon.hostId === user.id && !salon.participants.has(user.id);
+    // Retour rapide après une coupure involontaire (changement d'application, mise en veille…) :
+    // on restitue le micro/rôle/main levée d'avant plutôt que de tout réinitialiser (voir
+    // vocalEtatRecent) — sans ça, chaque petite coupure réseau (très fréquente sur mobile en
+    // arrière-plan) remettait le micro en sourdine sans que le joueur n'ait rien demandé.
+    const cleEtatRecent = `${salon.code}:${user.id}`;
+    const etatRecent = vocalEtatRecent.get(cleEtatRecent);
+    vocalEtatRecent.delete(cleEtatRecent);
+    const etatEncoreValide = etatRecent && etatRecent.expire > Date.now();
     salon.participants.set(user.id, {
       userId: user.id, pseudo: user.pseudo, avatar: user.avatar, photo: user.photo || null,
-      role: redevientHote ? "hote" : "auditeur", mute: true, parle: false,
+      role: redevientHote ? "hote" : (etatEncoreValide ? etatRecent.role : "auditeur"),
+      mute: etatEncoreValide ? etatRecent.mute : true,
+      parle: false,
+      mainLevee: etatEncoreValide ? etatRecent.mainLevee : false,
     });
     socket.join(`vocal:${salon.code}`);
     diffuserVocal(salon);
