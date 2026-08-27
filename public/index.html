@@ -734,9 +734,10 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
 .vocalParticipant .vocalMute{position:absolute;bottom:-2px;right:-2px;width:20px;height:20px;border-radius:50%;
   background:var(--ticket);display:flex;align-items:center;justify-content:center;font-size:11px;border:2px solid var(--ink)}
 /* Petite main superposée en haut à gauche de la photo (voir mainLevee côté serveur) : juste assez
-   grande pour reconnaître qui a levé la main, sans jamais cacher le visage ni le rôle en dessous. */
-.vocalParticipant .vocalMainLevee{position:absolute;top:-4px;left:-4px;width:18px;height:18px;border-radius:50%;
-  background:var(--beam);display:flex;align-items:center;justify-content:center;font-size:10px;border:2px solid var(--ink)}
+   grande pour reconnaître qui a levé la main, sans jamais cacher le visage ni le rôle en dessous.
+   Rien qu'un emoji, sans pastille colorée derrière (demande explicite : pas de rond jaune). */
+.vocalParticipant .vocalMainLevee{position:absolute;top:-6px;left:-6px;font-size:18px;line-height:1;
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
 .vocalParticipant .vocalNom{font-size:11.5px;color:var(--chalk);line-height:1.2;word-break:break-word}
 .vocalParticipant .vocalRoleTag{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
 #btnVocalMute,#btnVocalMicFlottant,#btnVocalLeverMain{transition:background .15s ease,color .15s ease}
@@ -1318,12 +1319,16 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
       <div class="card" style="text-align:center">
         <p class="tag" id="vocalTitreSalon" style="margin:0 0 4px">Salon</p>
         <div class="marquee" id="vocalMarquee" style="margin-bottom:10px"></div>
-        <div class="row" style="justify-content:center"><button class="ghost" id="btnVocalInviter">🎙️ Inviter des amis</button></div>
       </div>
 
       <div class="card" id="vocalRadioCard">
         <p class="tag" style="margin:0 0 8px">📻 Radio du salon</p>
         <p class="note" id="vocalRadioTexte" style="margin:0 0 10px">Aucune piste diffusée pour l'instant.</p>
+        <div class="row" style="margin:0 0 10px">
+          <button id="btnVocalRadioVolMoins" class="ghost" style="flex:0 0 auto;padding:10px 12px" title="Diminuer le volume de la radio">🔉➖</button>
+          <span id="vocalRadioVolLabel" class="tag" style="margin:0;min-width:34px;text-align:center">50%</span>
+          <button id="btnVocalRadioVolPlus" class="ghost" style="flex:0 0 auto;padding:10px 12px" title="Augmenter le volume de la radio">🔊➕</button>
+        </div>
         <audio id="vocalAudio" style="width:100%;display:none" controls></audio>
         <div id="vocalRadioChoix" class="hidden">
           <select id="vocalRadioSelect"></select>
@@ -1389,6 +1394,18 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
         </div>
       </div>
 
+      <!-- Remontée juste sous les auditeurs (à la demande d'un joueur) : plus rapide à atteindre
+           qu'après avoir fait défiler toute la console de modération, qui n'est de toute façon
+           visible que pour l'hôte/les cohôtes. -->
+      <div class="card">
+        <p class="tag" style="margin:0 0 10px">💬 Discussion du salon</p>
+        <div id="vocalChatMessages" class="vocalChatMessages"></div>
+        <div class="row" style="margin-top:10px">
+          <input id="vocalChatInput" placeholder="Écrire un message…" maxlength="300" autocomplete="off" style="flex:1">
+          <button id="btnVocalChatEnvoyer" style="flex:0 0 auto">➤</button>
+        </div>
+      </div>
+
       <div class="card hidden" id="vocalConsole">
         <p class="tag" style="margin:0 0 10px">🎛️ Console de modération</p>
         <label for="vocalReglageTitre" style="display:block;margin:0 0 6px;text-transform:none;letter-spacing:0;font-size:14px">✏️ Titre du salon</label>
@@ -1411,13 +1428,9 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
         </div>
       </div>
 
-      <div class="card">
-        <p class="tag" style="margin:0 0 10px">💬 Discussion du salon</p>
-        <div id="vocalChatMessages" class="vocalChatMessages"></div>
-        <div class="row" style="margin-top:10px">
-          <input id="vocalChatInput" placeholder="Écrire un message…" maxlength="300" autocomplete="off" style="flex:1">
-          <button id="btnVocalChatEnvoyer" style="flex:0 0 auto">➤</button>
-        </div>
+      <!-- Tout en bas de la page du salon, à la demande d'un joueur. -->
+      <div class="card" style="text-align:center">
+        <div class="row" style="justify-content:center"><button class="ghost" id="btnVocalInviter">🎙️ Inviter des amis</button></div>
       </div>
     </div>
   </section>
@@ -2419,6 +2432,31 @@ function ajusterVolumeMusique(delta){
 }
 $("btnMusiqueVolMoins").onclick = () => ajusterVolumeMusique(-0.1);
 $("btnMusiqueVolPlus").onclick = () => ajusterVolumeMusique(0.1);
+
+/** Volume de la radio du salon vocal (#vocalAudio) — distinct du volume de la radio d'ambiance de
+ *  la page d'accueil (musiqueVolume ci-dessus) : chacun peut régler le sien sans affecter l'autre.
+ *  Mêmes boutons ➖/➕ que pour la radio d'ambiance et la lecture à voix haute, pour rester cohérent. */
+let vocalRadioVolume = (() => {
+  const v = parseFloat(localStorage.getItem("michben_vocal_radio_volume"));
+  return Number.isFinite(v) && v >= 0 && v <= 1 ? v : 0.5;
+})();
+function majVolumeRadioVocal(){
+  const audio = $("vocalAudio");
+  if (audio) audio.volume = vocalRadioVolume;
+  const lbl = $("vocalRadioVolLabel");
+  if (lbl) lbl.textContent = Math.round(vocalRadioVolume * 100) + "%";
+}
+majVolumeRadioVocal();
+$("btnVocalRadioVolMoins").onclick = () => {
+  vocalRadioVolume = Math.max(0, Math.round((vocalRadioVolume - 0.1) * 10) / 10);
+  localStorage.setItem("michben_vocal_radio_volume", String(vocalRadioVolume));
+  majVolumeRadioVocal();
+};
+$("btnVocalRadioVolPlus").onclick = () => {
+  vocalRadioVolume = Math.min(1, Math.round((vocalRadioVolume + 0.1) * 10) / 10);
+  localStorage.setItem("michben_vocal_radio_volume", String(vocalRadioVolume));
+  majVolumeRadioVocal();
+};
 
 /** Porte-monnaie : historique horodaté des tickets et points, avec leur provenance. */
 async function ouvrirPorteMonnaie(){
@@ -5791,6 +5829,9 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && vocalAudioCtx && vocalAudioCtx.state === "suspended"){
     vocalAudioCtx.resume().catch(() => {});
   }
+  // Retour au premier plan (changement d'app, réveil de l'écran…) : vérifie que le micro n'a pas
+  // été réellement coupé pendant l'absence (voir vocalRevaliderMicroApresRetour ci-dessous).
+  if (document.visibilityState === "visible") vocalRevaliderMicroApresRetour();
 });
 
 /** Demande le micro au tout premier clic sur "activer mon micro" (geste utilisateur, indispensable
@@ -5812,6 +5853,38 @@ async function vocalDemanderMicro(){
     $("vocalMicMsg").className = "feedback bad";
   }
   return vocalLocalStream;
+}
+
+/** Changer d'application, verrouiller l'écran ou mettre le téléphone en veille peut, sur certains
+ *  systèmes, couper réellement la piste micro (pas juste la mettre en pause) — vocal:rejoindre
+ *  reprend déjà le micro là où il en était côté salon (voir server.js), mais si la piste elle-même
+ *  est morte, la remettre "enabled" ne suffit pas : il faut une nouvelle piste. On la redemande
+ *  donc silencieusement (déjà autorisée, pas de nouvelle demande de permission dans l'immense
+ *  majorité des cas) et on la substitue dans les connexions déjà ouvertes avec replaceTrack(),
+ *  qui évite d'avoir à tout renégocier comme le ferait fermer/rouvrir chaque connexion. */
+async function vocalRevaliderMicroApresRetour(){
+  if (!vocalSalonActuel || !vocalLocalStream) return;
+  const pisteActuelle = vocalLocalStream.getAudioTracks()[0];
+  if (pisteActuelle && pisteActuelle.readyState !== "ended") return; // toujours vivante, rien à faire
+  try {
+    const nouveauFlux = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const nouvellePiste = nouveauFlux.getAudioTracks()[0];
+    nouvellePiste.enabled = vocalMicOuvert;
+    for (const pc of vocalPeers.values()){
+      const emetteur = pc.getSenders().find(s => s.track && s.track.kind === "audio");
+      if (emetteur) emetteur.replaceTrack(nouvellePiste).catch(() => {});
+      else pc.addTrack(nouvellePiste, nouveauFlux);
+    }
+    vocalArreterVAD();
+    vocalLocalStream.getTracks().forEach(t => t.stop());
+    vocalLocalStream = nouveauFlux;
+    vocalDemarrerVAD(vocalLocalStream);
+  } catch {
+    // Micro toujours indisponible (permission révoquée entretemps, appareil débranché…) : on ne
+    // casse rien, l'indicateur visuel continue de fonctionner sans le son pour cette personne.
+    $("vocalMicMsg").textContent = "Micro coupé par votre appareil/navigateur — réactivez-le avec le bouton ci-dessus.";
+    $("vocalMicMsg").className = "feedback bad";
+  }
 }
 
 function afficherVocalListe(){
@@ -6046,6 +6119,7 @@ function renderVocalSalon(salon){
   // Radio : diffusion en cours (synchronisée sur demarreLe) ou sélecteur pour la lancer (modérateurs seulement).
   const modo = monRole === "hote" || monRole === "cohote";
   const audio = $("vocalAudio");
+  audio.volume = vocalRadioVolume; // au cas où l'élément <audio> aurait été recréé/réinitialisé entretemps
   if (salon.radio){
     $("vocalRadioTexte").textContent = `🎶 En cours : ${salon.radio.titre} — cliquez ▶️ si la lecture ne démarre pas toute seule.`;
     audio.style.display = "";
@@ -7757,6 +7831,10 @@ function resynchroniserSalonVocal(){
       return;
     }
     renderVocalSalon(res.salon);
+    // Le serveur vient de restituer le micro/rôle d'avant la coupure (voir vocal:rejoindre côté
+    // serveur) ; si la piste micro elle-même a été tuée par le système pendant l'absence, on la
+    // redemande ici (voir vocalRevaliderMicroApresRetour).
+    vocalRevaliderMicroApresRetour();
   });
 }
 
