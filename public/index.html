@@ -1402,8 +1402,17 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
             <p class="feedback bad" id="vocalRadioAjouterMsg"></p>
 
             <p class="note" style="margin:16px 0 4px;padding-top:12px;border-top:1px solid rgba(237,232,220,.12)"><b>🎬 Vidéo</b></p>
-            <p class="note" style="margin:0 0 8px">Un lien YouTube, un lien direct vers un fichier vidéo, ou un fichier envoyé depuis votre téléphone (mp4, webm, mov — 15 Mo max). L'écran apparaît ici même, pour tout le salon.</p>
+            <p class="note" style="margin:0 0 8px">Cherchez une vidéo YouTube par mots-clés, collez un lien (YouTube ou fichier vidéo), ou envoyez un fichier depuis votre téléphone (mp4, webm, mov — 15 Mo max). L'écran apparaît ici même, pour tout le salon.</p>
             <input id="vocalVideoTitre" placeholder="Titre (facultatif)" maxlength="80" style="margin-bottom:8px">
+
+            <div class="row" style="margin-bottom:8px">
+              <input id="vocalYoutubeRechercheInput" placeholder="🔍 Chercher une vidéo YouTube…" style="flex:1">
+              <button id="btnVocalYoutubeRechercheLancer" style="flex:0 0 auto">Chercher</button>
+            </div>
+            <p class="feedback" id="vocalYoutubeRechercheMsg" style="margin:0 0 8px"></p>
+            <div id="vocalYoutubeRechercheListe"></div>
+
+            <p class="note" style="margin:8px 0;text-align:center;opacity:0.7">— ou collez un lien —</p>
             <input id="vocalVideoYoutubeLien" placeholder="https://www.youtube.com/watch?v=..." style="margin-bottom:8px">
             <div class="row"><button id="btnVocalVideoYoutubeEnvoyer" class="ghost">▶️ Diffuser cette vidéo YouTube</button></div>
             <p class="note" style="margin:8px 0;text-align:center;opacity:0.7">— ou —</p>
@@ -6900,6 +6909,65 @@ function vocalApresEnvoiVideo(res, msg){
   $("vocalVideoLien").value = ""; $("vocalVideoFichier").value = "";
   $("vocalRadioAjouter").classList.add("hidden");
 }
+
+/** Petit moteur de recherche YouTube, léger, directement dans le panneau vidéo du salon (voir
+ *  #btnVocalRechercheVideo... — même esprit que la recherche de film TMDB, voir
+ *  rendreResultatsRechercheFilm, mais un clic sur un résultat diffuse directement la vidéo choisie,
+ *  sans étape de copier-coller de lien. Nécessite une clé YouTube configurée côté admin (voir
+ *  REGLAGES.youtubeApiKey) — sans clé, coller un lien juste en dessous reste toujours possible. */
+function rendreResultatsRechercheYoutube(resultats){
+  const liste = $("vocalYoutubeRechercheListe");
+  liste.innerHTML = resultats.map(v => `
+    <div class="histoItem">
+      ${v.vignette ? `<img src="${esc(v.vignette)}" alt="">` : ""}
+      <div class="info">
+        <b>${esc(v.titre)}</b>
+        <small>${esc(v.chaine || "")}</small>
+        <div class="row" style="margin-top:6px">
+          <button class="ghost" type="button" data-video-id="${esc(v.videoId)}" data-video-titre="${esc(v.titre)}">▶️ Diffuser au salon</button>
+        </div>
+      </div>
+    </div>`).join("");
+  liste.querySelectorAll("[data-video-id]").forEach(btn => {
+    btn.onclick = () => {
+      if (!vocalSalonActuel) return;
+      const msg = $("vocalYoutubeRechercheMsg");
+      const titre = $("vocalVideoTitre").value.trim() || btn.dataset.videoTitre;
+      msg.textContent = "Diffusion…";
+      emitAvecDelai("vocal:video-youtube", { code: vocalSalonActuel.code, titre, url: `https://www.youtube.com/watch?v=${btn.dataset.videoId}` }, (res) => {
+        if (!res?.ok) { msg.textContent = vocalMessageErreurVideo(res); return; }
+        msg.textContent = "";
+        liste.innerHTML = "";
+        $("vocalYoutubeRechercheInput").value = "";
+        $("vocalVideoTitre").value = "";
+        $("vocalRadioAjouter").classList.add("hidden");
+      });
+    };
+  });
+}
+async function lancerRechercheYoutubeVocal(){
+  const q = $("vocalYoutubeRechercheInput").value.trim();
+  const msg = $("vocalYoutubeRechercheMsg");
+  if (q.length < 2){ msg.textContent = "Tapez au moins 2 lettres."; return; }
+  msg.textContent = "Recherche en cours…";
+  $("vocalYoutubeRechercheListe").innerHTML = "";
+  try {
+    const data = await fetch(`/api/youtube/recherche?q=${encodeURIComponent(q)}`).then(r => r.json());
+    if (!data.ok){
+      msg.textContent = data.error === "NO_KEY"
+        ? "Recherche YouTube indisponible pour l'instant (non configurée côté administration) — collez un lien directement à la place."
+        : "Recherche impossible pour l'instant, réessayez plus tard.";
+      return;
+    }
+    msg.textContent = data.resultats.length ? "" : "Aucun résultat.";
+    rendreResultatsRechercheYoutube(data.resultats || []);
+  } catch {
+    msg.textContent = "Erreur réseau — vérifiez votre connexion.";
+  }
+}
+$("btnVocalYoutubeRechercheLancer").onclick = lancerRechercheYoutubeVocal;
+$("vocalYoutubeRechercheInput").addEventListener("keydown", (e) => { if (e.key === "Enter") lancerRechercheYoutubeVocal(); });
+
 $("btnVocalVideoYoutubeEnvoyer").onclick = () => {
   if (!vocalSalonActuel) return;
   const titre = $("vocalVideoTitre").value.trim();
