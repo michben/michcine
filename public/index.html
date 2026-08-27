@@ -733,10 +733,14 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
 }
 .vocalParticipant .vocalMute{position:absolute;bottom:-2px;right:-2px;width:20px;height:20px;border-radius:50%;
   background:var(--ticket);display:flex;align-items:center;justify-content:center;font-size:11px;border:2px solid var(--ink)}
+/* Petite main superposée en haut à gauche de la photo (voir mainLevee côté serveur) : juste assez
+   grande pour reconnaître qui a levé la main, sans jamais cacher le visage ni le rôle en dessous. */
+.vocalParticipant .vocalMainLevee{position:absolute;top:-4px;left:-4px;width:18px;height:18px;border-radius:50%;
+  background:var(--beam);display:flex;align-items:center;justify-content:center;font-size:10px;border:2px solid var(--ink)}
 .vocalParticipant .vocalNom{font-size:11.5px;color:var(--chalk);line-height:1.2;word-break:break-word}
 .vocalParticipant .vocalRoleTag{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
-#btnVocalMute,#btnVocalMicFlottant{transition:background .15s ease,color .15s ease}
-#btnVocalMute.micro-ouvert,#btnVocalMicFlottant.micro-ouvert{background:var(--teal);color:#0A2015;border-color:var(--teal)}
+#btnVocalMute,#btnVocalMicFlottant,#btnVocalLeverMain{transition:background .15s ease,color .15s ease}
+#btnVocalMute.micro-ouvert,#btnVocalMicFlottant.micro-ouvert,#btnVocalLeverMain.micro-ouvert{background:var(--teal);color:#0A2015;border-color:var(--teal)}
 #vocalDemandesListe .urowVocal,#vocalConsoleParticipants .urowVocal{display:flex;align-items:center;gap:10px;
   padding:10px 0;border-top:1px solid rgba(237,232,220,.1);flex-wrap:wrap}
 #vocalDemandesListe .urowVocal .qui,#vocalConsoleParticipants .urowVocal .qui{display:flex;align-items:center;gap:8px;flex:1 1 140px}
@@ -1350,6 +1354,7 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
       <div class="card vocalBarreBas" id="vocalBarreBas">
         <div class="vocalBarreRangee">
           <button id="btnVocalMute" class="hidden">🎙️ Activer mon micro</button>
+          <button id="btnVocalLeverMain" class="ghost hidden" type="button">✋ Lever la main</button>
           <button id="btnVocalDemander" class="ghost hidden">✋ Demander à intervenir</button>
           <button id="btnVocalBaisserMain" class="ghost hidden">✋ Baisser la main</button>
           <button id="btnVocalReactionsToggle" class="ghost" type="button" aria-pressed="false">👋 Réactions</button>
@@ -1386,6 +1391,11 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
 
       <div class="card hidden" id="vocalConsole">
         <p class="tag" style="margin:0 0 10px">🎛️ Console de modération</p>
+        <label for="vocalReglageTitre" style="display:block;margin:0 0 6px;text-transform:none;letter-spacing:0;font-size:14px">✏️ Titre du salon</label>
+        <div class="row" style="margin-bottom:14px">
+          <input id="vocalReglageTitre" maxlength="60" placeholder="Le titre du salon">
+          <button class="ghost" id="btnVocalRenommer" type="button">Renommer</button>
+        </div>
         <label style="display:flex;align-items:center;gap:8px;margin:0 0 8px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:14px">
           <input type="checkbox" id="vocalReglagePrive" style="width:auto;cursor:pointer">
           🔒 Salon privé (invisible dans « Salons en direct » pour qui n'est pas ami avec l'hôte)
@@ -5970,7 +5980,7 @@ function carteParticipantVocal(p){
     : `<div class="emoji">${esc(p.avatar || "🎬")}</div>`;
   const roleLabel = { hote: "Hôte", cohote: "Cohôte", intervenant: "Intervenant", auditeur: "Auditeur" }[p.role] || "";
   return `<div class="vocalParticipant${parle}" title="${esc(p.pseudo)}">
-    <div class="vocalAvatarWrap">${photo}${p.mute ? `<span class="vocalMute">🔇</span>` : ""}</div>
+    <div class="vocalAvatarWrap">${photo}${p.mute ? `<span class="vocalMute">🔇</span>` : ""}${p.mainLevee ? `<span class="vocalMainLevee">✋</span>` : ""}</div>
     <span class="vocalNom">${esc(p.pseudo)}</span>
     <span class="vocalRoleTag">${roleLabel}</span>
   </div>`;
@@ -6002,6 +6012,14 @@ function renderVocalSalon(salon){
   $("btnVocalMute").textContent = vocalMicOuvert ? "🔴 Couper mon micro" : "🎙️ Activer mon micro";
   $("btnVocalMute").classList.toggle("micro-ouvert", vocalMicOuvert);
   majMicFlottant(pageAffichee);
+
+  // Lever/baisser la main : signal d'attention réservé à l'hôte/aux cohôtes/intervenants (voir
+  // vocal:main-toggle) — distinct de « Demander à intervenir » ci-dessous, qui ne concerne que les
+  // auditeurs et sert à demander à devenir intervenant, pas à signaler qu'on veut la parole.
+  $("btnVocalLeverMain").classList.toggle("hidden", !peutParler);
+  const mainLevee = Boolean(moi?.mainLevee);
+  $("btnVocalLeverMain").textContent = mainLevee ? "🤚 Baisser la main" : "✋ Lever la main";
+  $("btnVocalLeverMain").classList.toggle("micro-ouvert", mainLevee);
 
   const demandeEnvoyee = monRole === "auditeur" && salon.demandesMontee.includes(me?.id);
   $("btnVocalDemander").classList.toggle("hidden", monRole !== "auditeur" || demandeEnvoyee);
@@ -6183,6 +6201,9 @@ $("closeVocalRechercheFilmBtn").onclick = () => $("vocalRechercheFilmModal").cla
 $("vocalRechercheFilmModal").onclick = (e) => { if (e.target.id === "vocalRechercheFilmModal") $("vocalRechercheFilmModal").classList.remove("active"); };
 
 function renderConsoleVocal(salon, monRole){
+  // Ne touche pas au champ pendant que l'hôte/le cohôte est en train d'y taper, sinon chaque
+  // vocal:update (déclenché par n'importe quel autre événement du salon) effacerait sa saisie.
+  if (document.activeElement !== $("vocalReglageTitre")) $("vocalReglageTitre").value = salon.titre || "";
   $("vocalReglagePrive").checked = Boolean(salon.prive);
   $("vocalReglageMonteeLibre").checked = Boolean(salon.monteeLibre);
   // Réservé à l'hôte (pas aux cohôtes) : fermer tout le salon est une action définitive pour
@@ -6232,6 +6253,17 @@ function renderConsoleVocal(salon, monRole){
   });
 }
 
+/** Lever/baisser la main : simple signal d'attention pour l'hôte/les cohôtes/intervenants (voir
+ *  vocal:main-toggle côté serveur) — distinct de la demande d'intervention des auditeurs juste en
+ *  dessous. Le serveur renvoie déjà le salon à jour dans l'accusé de réception : pas besoin
+ *  d'optimistic update ici, contrairement à « Baisser la main » plus bas qui n'a pas cet accusé. */
+$("btnVocalLeverMain").onclick = () => {
+  if (!vocalSalonActuel) return;
+  socket.emit("vocal:main-toggle", { code: vocalSalonActuel.code }, (res) => {
+    if (res?.ok && res.salon) renderVocalSalon(res.salon);
+  });
+};
+
 $("btnVocalDemander").onclick = () => {
   socket.emit("vocal:demander-intervenir", { code: vocalSalonActuel.code }, (res) => {
     if (res?.ok) renderVocalSalon(vocalSalonActuel); // masque aussitôt le bouton, sans attendre le prochain vocal:update
@@ -6254,6 +6286,21 @@ $("btnVocalFermer").onclick = () => {
   if (!vocalSalonActuel) return;
   if (!confirm("Fermer ce salon pour tout le monde ? Cette action est définitive.")) return;
   socket.emit("vocal:fermer", { code: vocalSalonActuel.code }, () => {});
+};
+
+/** Renommer le salon : possible à tout moment (pas seulement à la création), réservé à
+ *  l'hôte/aux cohôtes — voir vocal:reglages côté serveur. */
+$("btnVocalRenommer").onclick = () => {
+  if (!vocalSalonActuel) return;
+  const t = $("vocalReglageTitre").value.trim();
+  if (!t) return;
+  socket.emit("vocal:reglages", { code: vocalSalonActuel.code, titre: t }, (res) => {
+    if (res?.ok && res.titre) {
+      vocalSalonActuel.titre = res.titre;
+      $("vocalTitreSalon").textContent = res.titre;
+      $("vocalReglageTitre").value = res.titre;
+    }
+  });
 };
 
 $("vocalReglagePrive").onchange = (e) => {
