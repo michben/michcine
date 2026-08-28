@@ -711,6 +711,25 @@
 #popLienExterne .noteAttente{color:var(--muted);font-size:13px;margin:0}
 #popLienExterne a.lienActif{display:inline-block;margin-top:6px;background:var(--beam);color:#0A0C16;
   font-weight:bold;padding:11px 20px;border-radius:999px;text-decoration:none}
+/* Bouton "liens épinglés" (le trombone 📎, voir initLiensEpingles()) : même gabarit que les deux
+   boutons ci-dessus, encore un cran plus à gauche — masqué tant qu'aucun lien n'est configuré. */
+#btnLiensEpingles{right:114px}
+@media(max-width:480px){ #btnLiensEpingles{top:34px;right:106px} }
+#popLiensEpingles{position:fixed;inset:0;background:rgba(10,12,22,.72);display:grid;place-items:center;z-index:95;padding:18px}
+#popLiensEpingles .boite{background:var(--velvet);border:1px solid rgba(237,232,220,.14);border-radius:14px;
+  padding:24px;max-width:380px;width:100%;position:relative;max-height:80vh;overflow-y:auto}
+#popLiensEpingles .close-btn{position:absolute;top:6px;right:10px;font-size:26px;cursor:pointer;color:var(--muted)}
+#popLiensEpingles .close-btn:hover{color:var(--chalk)}
+#popLiensEpingles h3{font-family:'Anton',sans-serif;text-transform:uppercase;letter-spacing:.03em;
+  font-size:19px;margin:8px 0 14px;font-weight:400;color:var(--chalk);text-align:center}
+.lienEpingleItem{display:flex;align-items:center;gap:12px;padding:10px;border-radius:10px;
+  background:rgba(237,232,220,.05);margin-bottom:8px;text-decoration:none;color:var(--chalk);
+  transition:background .2s}
+.lienEpingleItem:hover{background:rgba(245,185,66,.12)}
+.lienEpingleItem img{width:44px;height:44px;border-radius:8px;object-fit:cover;flex:0 0 auto;background:rgba(0,0,0,.2)}
+.lienEpingleItem .ic{width:44px;height:44px;border-radius:8px;flex:0 0 auto;display:grid;place-items:center;
+  font-size:20px;background:rgba(245,185,66,.16)}
+.lienEpingleItem b{font-size:14px;font-weight:600}
 
 /* --- COIN "REGARDÉ PAR" : qui suit la partie en direct --- */
 #spectateursCorner{position:fixed;top:14px;right:14px;z-index:45;max-width:180px;
@@ -1939,6 +1958,17 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
       <div style="font-size:38px">🔗</div>
       <h3 id="lienExterneTitre">À venir</h3>
       <div id="lienExterneContenu"></div>
+    </div>
+  </div>
+
+  <!-- Trombone "liens épinglés" (voir initLiensEpingles()) : masqué tant que la console admin n'a
+       aucun lien enregistré — même principe et même emplacement que #btnLienExterne juste au-dessus. -->
+  <div class="help-btn hidden" id="btnLiensEpingles" title="Liens">📎</div>
+  <div id="popLiensEpingles" class="hidden">
+    <div class="boite">
+      <span class="close-btn" id="liensEpinglesFermer">&times;</span>
+      <h3>📎 Liens</h3>
+      <div id="liensEpinglesContenu"></div>
     </div>
   </div>
 
@@ -3301,6 +3331,7 @@ fetch("/api/config").then(r => r.json())
     // utile quand la connexion directe échoue sur un réseau très restrictif.
     if (c.turn && c.turn.urls) VOCAL_ICE_SERVERS.push(c.turn);
     initLienExterne(c.lienExterne);
+    initLiensEpingles(c.liensEpingles);
   })
   .catch(() => $("tipLink").classList.add("hidden"));
 
@@ -3364,6 +3395,29 @@ function fermerLienExterne(){
 $("btnLienExterne").onclick = ouvrirLienExterne;
 $("lienExterneFermer").onclick = fermerLienExterne;
 $("popLienExterne").onclick = (e) => { if (e.target.id === "popLienExterne") fermerLienExterne(); };
+
+/* ---------- Bouton "liens épinglés" (le trombone 📎, voir REGLAGES.liensEpingles côté serveur) ----------
+ * Une petite page de liens (site web, réseaux sociaux, Discord…) entièrement gérée depuis la
+ * console admin (onglet Réglages) : titre + url + jaquette facultative pour chacun. Le bouton
+ * reste masqué tant qu'aucun lien n'est configuré. */
+function initLiensEpingles(liste){
+  const liens = Array.isArray(liste) ? liste : [];
+  $("btnLiensEpingles").classList.toggle("hidden", liens.length === 0);
+  $("btnLiensEpingles").onclick = () => ouvrirLiensEpingles(liens);
+}
+function ouvrirLiensEpingles(liens){
+  $("liensEpinglesContenu").innerHTML = liens.map(l => `
+    <a class="lienEpingleItem" href="${esc(l.url)}" target="_blank" rel="noopener">
+      ${l.image ? `<img src="${esc(l.image)}" alt="">` : `<div class="ic">🔗</div>`}
+      <b>${esc(l.titre)}</b>
+    </a>`).join("") || `<p class="noteAttente">Aucun lien pour l'instant.</p>`;
+  $("popLiensEpingles").classList.remove("hidden");
+}
+function fermerLiensEpingles(){
+  $("popLiensEpingles").classList.add("hidden");
+}
+$("liensEpinglesFermer").onclick = fermerLiensEpingles;
+$("popLiensEpingles").onclick = (e) => { if (e.target.id === "popLiensEpingles") fermerLiensEpingles(); };
 
 /* ---------- Session ---------- */
 const AVATAR_LIST = AVATARS;

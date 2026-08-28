@@ -921,6 +921,23 @@
       </div>
 
       <div class="card">
+        <p class="tag">📎 Liens épinglés</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6">
+          Accessibles aux joueurs via le trombone 📎 sur la page d'accueil : une petite page de
+          liens (site web, réseaux sociaux, Discord…), chacun avec un titre, une adresse, et une
+          jaquette facultative (jpeg/png). Le bouton reste masqué tant qu'aucun lien n'est enregistré.
+        </p>
+        <div id="listeLiensEpingles" style="margin-bottom:10px"></div>
+        <div class="row">
+          <button class="ghost" id="btnAjouterLienEpingle" type="button">+ Ajouter un lien</button>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button id="btnSaveLiensEpingles">Enregistrer ces réglages</button>
+        </div>
+        <p class="msg" id="liensEpinglesMsg"></p>
+      </div>
+
+      <div class="card">
         <p class="tag">Bouton d'aide « ? » pour les joueurs</p>
         <p style="color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6">
           Ce bouton est masqué par défaut. Rédigez le message ici — règles du jeu, annonce, ce que
@@ -1882,6 +1899,83 @@ $("btnAjouterEmojiReaction").onclick = () => {
   rendreListeReactionsEmojis();
 };
 
+/** Liste des liens épinglés (voir REGLAGES.liensEpingles côté serveur, accessibles aux joueurs
+ *  via le trombone 📎 sur la page d'accueil) : titre + url + jaquette facultative pour chacun,
+ *  mêmes flèches ▲▼ et bouton « Retirer » que la liste des émojis de réaction ci-dessus. */
+let liensEpinglesActuels = [];
+function rendreListeLiensEpingles(){
+  $("listeLiensEpingles").innerHTML = liensEpinglesActuels.map((l, i) => `
+    <div class="item" style="align-items:flex-start">
+      <div style="position:relative;flex:0 0 auto">
+        <img data-apercu-lien="${i}" src="${l.image || ""}" alt="" style="width:48px;height:48px;border-radius:8px;object-fit:cover;background:rgba(255,255,255,.08);${l.image ? "" : "display:none"}">
+        <div data-icone-lien="${i}" style="width:48px;height:48px;border-radius:8px;background:rgba(245,185,66,.16);align-items:center;justify-content:center;font-size:18px;display:${l.image ? "none" : "flex"}">🔗</div>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:6px;min-width:160px">
+        <input type="text" data-titre-lien="${i}" value="${esc(l.titre || "")}" placeholder="Titre (ex : Notre Discord)">
+        <input type="text" data-url-lien="${i}" value="${esc(l.url || "")}" placeholder="https://...">
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <label style="cursor:pointer;padding:8px 12px;border-radius:8px;font-size:13px;border:1px solid rgba(237,232,220,.22);color:var(--chalk)">
+          Jaquette
+          <input type="file" accept="image/png,image/jpeg,image/webp" data-image-lien="${i}" style="display:none">
+        </label>
+        <button class="ghost" type="button" data-move-lien="${i}" data-dir="haut" ${i === 0 ? "disabled" : ""}>▲</button>
+        <button class="ghost" type="button" data-move-lien="${i}" data-dir="bas" ${i === liensEpinglesActuels.length - 1 ? "disabled" : ""}>▼</button>
+        <button class="danger" type="button" data-retirer-lien="${i}">Retirer</button>
+      </div>
+    </div>`).join("") || `<p class="note" style="margin:0">Aucun lien pour l'instant — cliquez sur « + Ajouter un lien ».</p>`;
+
+  $("listeLiensEpingles").querySelectorAll("[data-titre-lien]").forEach((inp) => {
+    inp.oninput = () => { liensEpinglesActuels[Number(inp.dataset.titreLien)].titre = inp.value; };
+  });
+  $("listeLiensEpingles").querySelectorAll("[data-url-lien]").forEach((inp) => {
+    inp.oninput = () => { liensEpinglesActuels[Number(inp.dataset.urlLien)].url = inp.value; };
+  });
+  $("listeLiensEpingles").querySelectorAll("[data-image-lien]").forEach((inp) => {
+    inp.onchange = () => {
+      const i = Number(inp.dataset.imageLien);
+      const fichier = inp.files?.[0];
+      if (!fichier) return;
+      if (fichier.size > 1_000_000) {
+        $("liensEpinglesMsg").textContent = "Image trop lourde (1 Mo maximum).";
+        $("liensEpinglesMsg").className = "msg err";
+        return;
+      }
+      const lecteur = new FileReader();
+      lecteur.onload = () => {
+        liensEpinglesActuels[i].image = lecteur.result;
+        rendreListeLiensEpingles();
+      };
+      lecteur.readAsDataURL(fichier);
+    };
+  });
+  $("listeLiensEpingles").querySelectorAll("[data-move-lien]").forEach((btn) => {
+    btn.onclick = () => {
+      const i = Number(btn.dataset.moveLien);
+      const j = btn.dataset.dir === "haut" ? i - 1 : i + 1;
+      if (j < 0 || j >= liensEpinglesActuels.length) return;
+      [liensEpinglesActuels[i], liensEpinglesActuels[j]] = [liensEpinglesActuels[j], liensEpinglesActuels[i]];
+      rendreListeLiensEpingles();
+    };
+  });
+  $("listeLiensEpingles").querySelectorAll("[data-retirer-lien]").forEach((btn) => {
+    btn.onclick = () => {
+      liensEpinglesActuels.splice(Number(btn.dataset.retirerLien), 1);
+      rendreListeLiensEpingles();
+    };
+  });
+}
+$("btnAjouterLienEpingle").onclick = () => {
+  if (liensEpinglesActuels.length >= 12) {
+    $("liensEpinglesMsg").textContent = "12 liens maximum.";
+    $("liensEpinglesMsg").className = "msg err";
+    return;
+  }
+  liensEpinglesActuels.push({ id: "", titre: "", url: "", image: "" });
+  rendreListeLiensEpingles();
+};
+$("btnSaveLiensEpingles").onclick = () => enregistrerReglages($("liensEpinglesMsg"));
+
 async function chargerReglages(){
   const res = await api("/api/admin/reglages");
   if (!res.ok) return;
@@ -1904,6 +1998,9 @@ async function chargerReglages(){
     ? [...reglages.reactions.emojis] : ["👋", "❤️", "💯", "🩸", "😂", "😭"];
   rendreListeReactionsEmojis();
   $("rReactionDuree").value = reglages.reactions?.dureeAffichageMs ?? 2300;
+
+  liensEpinglesActuels = Array.isArray(reglages.liensEpingles) ? reglages.liensEpingles.map((l) => ({ ...l })) : [];
+  rendreListeLiensEpingles();
 
   $("listeIndices").innerHTML = Object.entries(reglages.indices).map(([cle, v]) => `
     <div class="urow">
@@ -1961,6 +2058,7 @@ async function enregistrerReglages(msgEl){
   corps.afficherAmisEnLigne = $("rAfficherAmisEnLigne").checked;
   corps.afficherClassementAccueil = $("rAfficherClassementAccueil").checked;
   corps.reactions = { emojis: reactionsEmojisActuels, dureeAffichageMs: Number($("rReactionDuree").value) };
+  corps.liensEpingles = liensEpinglesActuels;
   Object.assign(corps.indices.poster, {
     zoom: Number($("rZoom").value), flou: Number($("rFlou").value), cadrage: $("rCadrage").value,
   });
