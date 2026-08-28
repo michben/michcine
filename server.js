@@ -219,6 +219,12 @@ const REGLAGES_DEFAUT = {
   // qu'elle n'est pas atteinte, les joueurs voient un compte à rebours plutôt que le lien lui-même.
   // Laisser `cible` vide rend le lien actif immédiatement, sans compte à rebours.
   lienExterne: { actif: false, url: "", titre: "", cible: "" },
+  // Liens épinglés accessibles aux joueurs via le trombone 📎 sur la page d'accueil (voir
+  // #btnLiensEpingles côté client et /api/config) : une petite page perso de liens (site web,
+  // réseaux sociaux, Discord, etc.), chacun avec un titre et une « jaquette » (jpeg/png)
+  // facultative — entièrement gérée depuis la console admin, onglet Réglages. Le bouton reste
+  // masqué côté joueur tant qu'aucun lien valide n'est enregistré.
+  liensEpingles: [],
   // Passerelle de connexion (« Sign in with MichBen ») : permet à un AUTRE projet de reconnaître
   // automatiquement un compte MichBen sans jamais partager mots de passe ni base de données — voir
   // GET /api/passerelle/autoriser et POST /api/passerelle/echanger plus bas. `domaines` liste les
@@ -769,6 +775,29 @@ app.put("/api/admin/reglages", requireAdmin, (req, res) => {
     if (emojisValides.length) REGLAGES.reactions.emojis = emojisValides;
   }
   REGLAGES.reactions.dureeAffichageMs = borne(r.reactions?.dureeAffichageMs, 800, 8000, REGLAGES.reactions.dureeAffichageMs);
+
+  // Liens épinglés (voir REGLAGES_DEFAUT.liensEpingles) : chaque lien doit avoir un titre et une
+  // url http(s) valide pour être conservé — un titre ou un lien vide est silencieusement écarté
+  // plutôt que de faire échouer tout l'enregistrement des réglages. La jaquette (si présente) suit
+  // les mêmes règles que les logos de cinéma (voir /api/admin/logos-cinema) : une image encodée en
+  // base64, bornée en poids pour ne pas alourdir le fichier de réglages à chaque sauvegarde.
+  if (Array.isArray(r.liensEpingles)) {
+    REGLAGES.liensEpingles = r.liensEpingles
+      .slice(0, 12)
+      .map((l) => {
+        const titre = String(l?.titre || "").trim().slice(0, 60);
+        const url = String(l?.url || "").trim().slice(0, 500);
+        if (!titre || !url || !/^https?:\/\//i.test(url)) return null;
+        let image = "";
+        if (typeof l?.image === "string" && l.image
+            && /^data:image\/(png|jpe?g|webp);base64,/.test(l.image) && l.image.length <= 1_400_000) {
+          image = l.image;
+        }
+        const id = String(l?.id || "").trim().slice(0, 60) || crypto.randomUUID();
+        return { id, titre, url, image };
+      })
+      .filter(Boolean);
+  }
 
   sauver("reglages", REGLAGES);
   res.json(REGLAGES);
@@ -4264,6 +4293,10 @@ app.get("/api/config", (_req, res) => res.json({
         passerelle: Boolean(REGLAGES.passerelle?.actif && REGLAGES.passerelle.cleSecrete),
       }
     : null,
+  // Liens épinglés (voir #btnLiensEpingles côté client) : envoyés tels quels aux joueurs, déjà
+  // filtrés de tout lien incomplet côté serveur (voir PUT /api/admin/reglages) — le bouton reste
+  // masqué côté client tant que ce tableau est vide.
+  liensEpingles: (REGLAGES.liensEpingles || []).map((l) => ({ id: l.id, titre: l.titre, url: l.url, image: l.image || "" })),
 }));
 
 /**
