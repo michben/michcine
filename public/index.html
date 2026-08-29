@@ -688,18 +688,22 @@
   }
   @media (prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important}}
 
-/* --- LE BOUTON POINT D'INTERROGATION --- */
-/* En bas à gauche, ce bouton se retrouvait sous le clavier / le champ de saisie des messages
-   (chat de partie en plein écran sur mobile, conversations privées) et gênait l'envoi. Placé
-   en haut à droite à la place : jamais affiché pendant une partie (voir aideActive / inGame),
-   exactement comme le coin « regardé par », qui occupe cette même place mais uniquement en jeu —
-   les deux ne se croisent donc jamais. */
-.help-btn { position: fixed; top: 38px; right: 14px; width: 40px; height: 40px; background: rgba(28, 34, 56, 0.6); color: var(--muted); border: 1px solid rgba(237, 232, 220, 0.15); border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 20px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2); transition: all 0.3s ease; z-index: 1000; backdrop-filter: blur(4px); }
+/* --- BARRE D'ICÔNES EN HAUT À DROITE (aide "?", lien externe "🔗", liens épinglés "📎") --- */
+/* En bas à gauche à l'origine, le bouton d'aide se retrouvait sous le clavier / le champ de
+   saisie des messages (chat de partie en plein écran sur mobile, conversations privées) et
+   gênait l'envoi. Placé en haut à droite à la place : jamais affiché pendant une partie (voir
+   aideActive / inGame), exactement comme le coin « regardé par », qui occupe cette même place
+   mais uniquement en jeu — les deux ne se croisent donc jamais.
+   Les trois boutons de ce coin (aide, lien externe, liens épinglés) sont chacun masqués ou
+   affichés indépendamment selon la configuration de l'administration — un espacement fixe en
+   pixels pour chacun (comme avant) laissait un vide visible dès que l'un d'eux était masqué,
+   ou les faisait se chevaucher selon les cas. Un conteneur flex commun (#barreBoutonsCoin) les
+   garde toujours collés les uns aux autres, sans trou ni chevauchement, quel que soit le
+   sous-ensemble réellement affiché. */
+#barreBoutonsCoin{position:fixed;top:38px;right:14px;display:flex;flex-direction:row-reverse;gap:10px;z-index:1000}
+@media(max-width:480px){ #barreBoutonsCoin{top:34px} }
+.help-btn { width: 40px; height: 40px; background: rgba(28, 34, 56, 0.6); color: var(--muted); border: 1px solid rgba(237, 232, 220, 0.15); border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 20px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2); transition: all 0.3s ease; backdrop-filter: blur(4px); }
 .help-btn:hover { transform: scale(1.1); color: var(--chalk); border-color: var(--beam); background: rgba(28, 34, 56, 0.9); }
-/* Bouton teaser "lien externe" (voir initLienExterne()) : même gabarit que le bouton d'aide,
-   placé juste à sa gauche — masqué tant que l'administration n'a rien configuré/activé. */
-#btnLienExterne{right:64px}
-@media(max-width:480px){ #btnLienExterne{top:34px;right:60px} }
 #popLienExterne{position:fixed;inset:0;background:rgba(10,12,22,.72);display:grid;place-items:center;z-index:95;padding:18px}
 #popLienExterne .boite{background:var(--velvet);border:1px solid rgba(237,232,220,.14);border-radius:14px;
   padding:24px;max-width:340px;width:100%;text-align:center;position:relative}
@@ -711,10 +715,6 @@
 #popLienExterne .noteAttente{color:var(--muted);font-size:13px;margin:0}
 #popLienExterne a.lienActif{display:inline-block;margin-top:6px;background:var(--beam);color:#0A0C16;
   font-weight:bold;padding:11px 20px;border-radius:999px;text-decoration:none}
-/* Bouton "liens épinglés" (le trombone 📎, voir initLiensEpingles()) : même gabarit que les deux
-   boutons ci-dessus, encore un cran plus à gauche — masqué tant qu'aucun lien n'est configuré. */
-#btnLiensEpingles{right:114px}
-@media(max-width:480px){ #btnLiensEpingles{top:34px;right:106px} }
 #popLiensEpingles{position:fixed;inset:0;background:rgba(10,12,22,.72);display:grid;place-items:center;z-index:95;padding:18px}
 #popLiensEpingles .boite{background:var(--velvet);border:1px solid rgba(237,232,220,.14);border-radius:14px;
   padding:24px;max-width:380px;width:100%;position:relative;max-height:80vh;overflow-y:auto}
@@ -773,7 +773,6 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
   #tickerBanniere .tickerContenu{font-size:11.5px}
   html.ticker-actif .wrap{padding-top:34px}
   html.ticker-actif.mode-enfant-actif .wrap{padding-top:70px}
-  .help-btn{top:34px}
 }
 /* --- Salon vocal (façon talkie-walkie) --- */
 .vocalGrille{display:flex;flex-wrap:wrap;gap:14px;justify-content:flex-start}
@@ -1947,11 +1946,19 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
 
   <p id="erreurJS" class="hidden"></p>
 
-  <!-- Bouton teaser configurable depuis la console admin (onglet Réglages) — masqué tant que
-       rien n'est configuré/activé. Voir initLienExterne() et ouvrirLienExterne(). Placé ici (plutôt
-       qu'à côté de #helpBtn plus bas dans le document) pour que le script qui lui attache ses
-       gestionnaires de clic, exécuté plus haut dans la page, le trouve déjà présent dans le DOM. -->
-  <div class="help-btn hidden" id="btnLienExterne" title="À venir">🔗</div>
+  <!-- Barre d'icônes en haut à droite (voir la note dans le CSS, #barreBoutonsCoin) : les trois
+       boutons ci-dessous sont chacun masqués/affichés indépendamment (aide en jeu, lien externe et
+       liens épinglés configurés depuis la console admin), regroupés dans un même conteneur flex
+       pour ne jamais laisser de trou ni se chevaucher selon ce qui est réellement affiché. Placée
+       ici, tôt dans le document (le bouton d'aide était auparavant bien plus bas dans la page,
+       ce qui pouvait laisser croire à un mauvais positionnement du trombone lorsque le lien externe
+       n'était pas configuré), pour que les scripts qui attachent leurs gestionnaires de clic,
+       exécutés plus haut dans la page, trouvent déjà les boutons présents dans le DOM. -->
+  <div id="barreBoutonsCoin">
+    <div class="help-btn hidden" id="helpBtn" title="Comment jouer ?">?</div>
+    <div class="help-btn hidden" id="btnLienExterne" title="À venir">🔗</div>
+    <div class="help-btn hidden" id="btnLiensEpingles" title="Liens">📎</div>
+  </div>
   <div id="popLienExterne" class="hidden">
     <div class="boite">
       <span class="close-btn" id="lienExterneFermer">&times;</span>
@@ -1961,9 +1968,6 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
     </div>
   </div>
 
-  <!-- Trombone "liens épinglés" (voir initLiensEpingles()) : masqué tant que la console admin n'a
-       aucun lien enregistré — même principe et même emplacement que #btnLienExterne juste au-dessus. -->
-  <div class="help-btn hidden" id="btnLiensEpingles" title="Liens">📎</div>
   <div id="popLiensEpingles" class="hidden">
     <div class="boite">
       <span class="close-btn" id="liensEpinglesFermer">&times;</span>
@@ -6843,8 +6847,8 @@ async function basculerMicroVocal(){
   socket.emit("vocal:mute", { code: vocalSalonActuel.code, mute: !ouvrir });
 }
 $("btnVocalMute").onclick = basculerMicroVocal;
-// #btnVocalMicFlottant est défini beaucoup plus bas dans la page (près de #helpBtn, hors des
-// <section>, pour rester visible sur tout l'écran) : à cet endroit du script, le HTML n'a pas
+// #btnVocalMicFlottant est défini beaucoup plus bas dans la page (hors des <section>, pour rester
+// visible sur tout l'écran) : à cet endroit du script, le HTML n'a pas
 // encore été lu par le navigateur, donc $() ne trouve rien et renvoie l'objet inerte de secours —
 // le clic ne faisait alors RIEN de visible sur le vrai bouton (bug remonté par un joueur : le
 // bouton restait figé quel que soit l'état du micro). On attend DOMContentLoaded pour être sûr que
@@ -8780,9 +8784,10 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
       box-shadow:0 6px 18px rgba(0,0,0,.35);font-size:14px"
       title="Couper ou activer votre micro du salon vocal">🎙️</button>
 
-    <!-- BOUTON FLOTTANT ET MODALE D'AIDE : masqué tant que l'administration ne l'a pas activé
-         depuis la console admin (onglet Réglages) — voir chargerAide() ci-dessous. -->
-    <div class="help-btn hidden" id="helpBtn" title="Comment jouer ?">?</div>
+    <!-- MODALE D'AIDE : le bouton flottant qui l'ouvre (#helpBtn) est désormais regroupé plus haut
+         dans le document avec les autres icônes du coin (voir #barreBoutonsCoin) — masqué tant que
+         l'administration ne l'a pas activé depuis la console admin (onglet Réglages), voir
+         chargerAide() ci-dessous. -->
     <div class="modal-overlay" id="rulesModal">
         <div class="modal-content">
             <div class="modal-header">
