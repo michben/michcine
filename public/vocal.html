@@ -1031,6 +1031,8 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
       <div class="card" style="text-align:center">
         <p class="tag" id="vocalTitreSalon" style="margin:0 0 4px">Salon</p>
         <div class="marquee" id="vocalMarquee" style="margin-bottom:10px"></div>
+        <div class="row" style="justify-content:center"><button class="ghost" id="btnVocalCopierLien">🔗 Copier le lien du salon</button></div>
+        <p class="feedback" id="vocalCopierLienMsg" style="margin:6px 0 0"></p>
       </div>
 
       <div class="card" id="vocalRadioCard">
@@ -1182,7 +1184,7 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
         <button class="close-btn" id="closeInviterVocalBtn">&times;</button>
       </div>
       <div class="modal-body">
-        <p class="note" style="margin-top:0">Invitez un ami en ligne à rejoindre ce salon vocal — code <b id="inviterVocalCode"></b>.</p>
+        <p class="note" style="margin-top:0">Invitez un ami en ligne à rejoindre ce salon vocal — code <b id="inviterVocalCode"></b>. Vous pouvez aussi copier un lien à envoyer par SMS, WhatsApp, Messenger… (le bouton « 🔗 Copier le lien du salon » en haut de la page).</p>
         <div id="inviterVocalListe"></div>
         <p class="feedback" id="inviterVocalMsg"></p>
       </div>
@@ -1972,8 +1974,12 @@ $("btnVocalCreer").onclick = () => {
 };
 
 /** `rester: true` : rejoint le salon en arrière-plan sans afficher l'écran "Salon vocal" — utile
- *  pour rejoindre depuis la bannière de retour sans quitter la partie en cours (voir plus bas). */
-function rejoindreSalonVocalParCode(code, { rester = false } = {}){
+ *  pour rejoindre depuis la bannière de retour sans quitter la partie en cours (voir plus bas).
+ *  `delaiMs` : délai d'attente avant d'abandonner (voir emitAvecDelai) — plus généreux que la
+ *  valeur par défaut lors d'un rejoint automatique juste après le chargement de la page (lien de
+ *  salon partagé), où la connexion temps réel vient tout juste de démarrer et peut avoir besoin
+ *  d'un peu plus de temps pour s'établir que lors d'un clic manuel en pleine session déjà connectée. */
+function rejoindreSalonVocalParCode(code, { rester = false, delaiMs } = {}){
   emitAvecDelai("vocal:rejoindre", { code }, (res) => {
     if (!res?.ok){
       $("vocalErreur").textContent = res?.error === "SALON_COMPLET" ? "Ce salon est complet."
@@ -1989,7 +1995,7 @@ function rejoindreSalonVocalParCode(code, { rester = false } = {}){
     // en arrière-plan, sans changer d'écran ni afficher de notification qui interromprait la
     // partie (voir bandeauNotif, volontairement silencieux pendant une partie en cours).
     if (!rester) afficherVocalSalonVue();
-  });
+  }, delaiMs);
 }
 $("btnVocalRejoindre").onclick = () => {
   const code = $("vocalCode").value.trim().toUpperCase();
@@ -2866,6 +2872,26 @@ $("btnVocalInviter").onclick = async () => {
     });
   });
 };
+
+/** Lien direct vers ce salon (ex. https://mon-site.fr/vocal?code=ZYLP) : ouvert par n'importe qui de
+ *  connecté, ça rejoint automatiquement ce salon précis sans avoir à retaper le code à la main —
+ *  pratique pour l'envoyer par SMS, WhatsApp, Messenger, etc. à des personnes hors de l'app. */
+$("btnVocalCopierLien").onclick = async () => {
+  if (!vocalSalonActuel?.code) return;
+  const lien = `${location.origin}/vocal?code=${vocalSalonActuel.code}`;
+  const msg = $("vocalCopierLienMsg");
+  try {
+    await navigator.clipboard.writeText(lien);
+    msg.textContent = "Lien copié — collez-le où vous voulez l'envoyer.";
+    msg.className = "feedback good";
+  } catch {
+    // Environnement sans accès au presse-papier (permission refusée, contexte non sécurisé…) :
+    // on affiche le lien en clair pour qu'il puisse être copié à la main.
+    msg.textContent = `Copie impossible automatiquement — voici le lien : ${lien}`;
+    msg.className = "feedback";
+  }
+};
+
 $("closeInviterVocalBtn").onclick = () => $("inviterVocalModal").classList.remove("active");
 $("inviterVocalModal").onclick = e => { if (e.target.id === "inviterVocalModal") $("inviterVocalModal").classList.remove("active"); };
 
@@ -3047,6 +3073,20 @@ fetch("/api/config").then(r => r.json()).then(c => {
   if (c.turn && c.turn.urls) VOCAL_ICE_SERVERS.push(c.turn);
 }).catch(() => {});
 
+/* Lien direct partagé (ex. /vocal?code=ZYLP, voir bouton "Copier le lien du salon") : le code est
+ * mémorisé tout de suite, avant même de savoir si on est connecté, car il doit survivre à
+ * l'aller-retour par /auth/x/login (qui change de page) si une connexion est nécessaire d'abord. */
+const CODE_LIEN_PARTAGE_CLE = "vocalCodeLienPartage";
+(() => {
+  const code = new URLSearchParams(location.search).get("code");
+  if (code && /^[A-Za-z0-9]{4}$/.test(code)) {
+    try { sessionStorage.setItem(CODE_LIEN_PARTAGE_CLE, code.toUpperCase()); } catch {}
+    // Retire "?code=..." de l'adresse affichée : évite de re-rejoindre par erreur à un simple
+    // rechargement de page une fois que le salon a déjà été rejoint ou quitté.
+    history.replaceState(null, "", "/vocal");
+  }
+})();
+
 /* ==========================================================================
    Vérification de connexion — spécifique à cette page indépendante.
    Aucun accès anonyme : mêmes comptes que le jeu (voir /auth/x/login côté
@@ -3068,6 +3108,40 @@ fetch("/api/config").then(r => r.json()).then(c => {
     vocalMajBoutonPhotoReaction();
     afficherVocalListe();
     chargerSalonsVocauxOuverts();
+    // Si la page a été ouverte via un lien de salon partagé, on rejoint directement ce salon
+    // plutôt que de laisser la personne sur la liste à retrouver/retaper le code elle-même.
+    let codeAttente = null;
+    try { codeAttente = sessionStorage.getItem(CODE_LIEN_PARTAGE_CLE); } catch {}
+    if (codeAttente) {
+      try { sessionStorage.removeItem(CODE_LIEN_PARTAGE_CLE); } catch {}
+      show("vocal");
+      // On attend que la connexion temps réel soit réellement établie avant de rejoindre : juste
+      // après le chargement de la page, la connexion peut prendre un instant à s'ouvrir (parfois
+      // plus long que d'habitude juste après le retour de /auth/x/login), et on veut que le délai
+      // d'attente de rejoindreSalonVocalParCode démarre à partir de ce moment-là, pas avant — sinon
+      // une lenteur ponctuelle pourrait faire échouer l'auto-rejoint alors que rejoindre à la main,
+      // un peu plus tard, aurait très bien fonctionné.
+      let dejaLance = false;
+      const lancerRejoint = () => { dejaLance = true; rejoindreSalonVocalParCode(codeAttente, { delaiMs: 15000 }); };
+      if (socket.connected) {
+        lancerRejoint();
+      } else {
+        socket.once("connect", lancerRejoint);
+        // Filet de sécurité : si la connexion temps réel tarde vraiment à s'établir (observé
+        // occasionnellement juste après le retour de /auth/x/login), on force une nouvelle
+        // tentative de connexion — ça suffit en pratique — puis, si même ça ne suffit toujours pas,
+        // on informe la personne plutôt que de la laisser indéfiniment sur un écran figé sans
+        // aucun message.
+        setTimeout(() => {
+          if (dejaLance || socket.connected) return;
+          socket.connect();
+          setTimeout(() => {
+            if (dejaLance || socket.connected) return;
+            $("vocalErreur").textContent = "Le serveur ne répond pas — vérifiez votre connexion et réessayez.";
+          }, 5000);
+        }, 3000);
+      }
+    }
     return;
   }
 
