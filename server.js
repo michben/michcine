@@ -79,6 +79,21 @@ app.get("/js/moteur.js", (_req, res) => {
   });
 });
 
+/**
+ * Page indépendante du salon vocal (voir public/vocal.html) : une URL à part, distincte du jeu,
+ * que la propriétaire du site peut partager avec des personnes qui ne veulent que discuter en
+ * vocal, sans jouer au quiz. Toujours protégée par connexion (vérifiée côté client via /api/me,
+ * voir vocal.html) — mêmes comptes que le jeu, jamais d'accès anonyme. Une route dédiée plutôt que
+ * de compter sur express.static (qui servirait déjà ce fichier sous /vocal.html) : ainsi l'URL
+ * reste "/vocal", sans extension, plus simple à partager. Même politique de cache que les autres
+ * pages HTML ci-dessus (jamais de cache), pour qu'une mise à jour de cette page soit toujours vue
+ * tout de suite.
+ */
+app.get("/vocal", (_req, res) => {
+  res.setHeader("Cache-Control", "no-cache, must-revalidate");
+  res.sendFile("vocal.html", { root: "public" });
+});
+
 mountAuth(app);                       // /auth/x/login, /auth/x/callback, /api/me, /api/leaderboard
 mountPasserelleEntrante(app, () => REGLAGES.passerelleEntrante);   // /auth/michben/retour
 const httpServer = createServer(app);

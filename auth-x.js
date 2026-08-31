@@ -1088,26 +1088,37 @@ export function mountAuth(app) {
     res.json({ ok: true });
   });
 
+  /* --- Page de retour après connexion : "/" par défaut, ou une page précise (ex. "/vocal")
+     quand le lien de connexion l'a demandé via ?retour=/vocal — utilisé par la page indépendante
+     du salon vocal pour ramener le joueur exactement là où il voulait aller, plutôt que de le
+     laisser sur l'accueil du jeu après s'être connecté. Validée strictement (chemin interne
+     commençant par un seul "/", jamais une adresse externe) pour ne jamais servir de redirection
+     ouverte. */
+  function retourValide(valeur) {
+    const v = String(valeur || "");
+    return /^\/[a-zA-Z0-9_-]*$/.test(v) ? v : "/";
+  }
+
   /* --- Mode développement : aucune clé X configurée --- */
   if (DEV_MODE) {
     console.warn("⚠️  X_CLIENT_ID absent : connexion de test activée. NE PAS DÉPLOYER AINSI.");
-    app.get("/auth/x/login", (_req, res) => {
+    app.get("/auth/x/login", (req, res) => {
       const id = `dev-${crypto.randomBytes(4).toString("hex")}`;
       users[id] = { id, pseudo: "", pseudoChosen: false, avatar: "🎬", totalScore: 0, gamesPlayed: 0, credits: STARTING_CREDITS, points: 0, role: "joueur",
         amis: [], demandesRecues: [], demandesEnvoyees: [], bloques: [], claimedBonuses: [], creeLe: new Date().toISOString() };
       saveUsers();
       createSession(res, users[id]);
-      res.redirect("/");
+      res.redirect(retourValide(req.query.retour));
     });
     return;
   }
 
   /* --- OAuth 2.0 avec PKCE --- */
-  app.get("/auth/x/login", (_req, res) => {
+  app.get("/auth/x/login", (req, res) => {
     const state = b64url(crypto.randomBytes(16));
     const verifier = b64url(crypto.randomBytes(32));
     const challenge = b64url(crypto.createHash("sha256").update(verifier).digest());
-    pending.set(state, { verifier, createdAt: Date.now() });
+    pending.set(state, { verifier, createdAt: Date.now(), retour: retourValide(req.query.retour) });
 
     const url = new URL("https://twitter.com/i/oauth2/authorize");
     url.searchParams.set("response_type", "code");
@@ -1152,7 +1163,7 @@ export function mountAuth(app) {
       users[id].xHandle = data.username;
       saveUsers();
       createSession(res, users[id]);
-      res.redirect("/");
+      res.redirect(entry.retour || "/");
     } catch (err) {
       console.error("Échec OAuth X :", err.message);
       res.redirect("/?erreur=auth");
