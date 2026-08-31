@@ -1053,6 +1053,9 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
         <div id="vocalYoutubeWrap" class="hidden" style="position:relative;width:100%;padding-top:56.25%;border-radius:10px;overflow:hidden;background:var(--ink)">
           <div id="vocalYoutubePlayer" style="position:absolute;inset:0;width:100%;height:100%"></div>
         </div>
+        <div id="vocalTweetWrap" class="hidden" style="width:100%;max-height:520px;overflow-y:auto;border-radius:10px;background:var(--ink);padding:4px 0">
+          <div id="vocalTweetPlayer" style="display:flex;justify-content:center"></div>
+        </div>
         <div id="vocalRadioChoix" class="hidden">
           <select id="vocalRadioSelect"></select>
           <div class="row">
@@ -1086,6 +1089,10 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
             <div class="row"><button id="btnVocalVideoYoutubeEnvoyer" class="ghost">▶️ Diffuser cette vidéo YouTube</button></div>
             <p class="note" style="margin:8px 0;text-align:center;opacity:0.7">— ou —</p>
             <input id="vocalVideoLien" placeholder="https://exemple.com/video.mp4" style="margin-bottom:8px">
+            <p class="note" style="margin:16px 0 4px;padding-top:12px;border-top:1px solid rgba(237,232,220,.12)"><b>🐦 Post X / Twitter</b></p>
+            <p class="note" style="margin:0 0 8px">Collez un lien vers un post X (twitter.com ou x.com) contenant une vidéo — il s'affiche ici même, pour tout le salon, exactement comme sur X. <b>Attention :</b> un « Space » (émission audio en direct de X) ne peut pas être diffusé ainsi — X ne permet à aucun site, y compris celui-ci, de faire écouter un Space autrement que depuis l'application ou le site X eux-mêmes. Seuls les posts (avec vidéo, image ou texte) fonctionnent ici.</p>
+            <input id="vocalTweetLien" placeholder="https://x.com/compte/status/…" style="margin-bottom:8px">
+            <div class="row"><button id="btnVocalTweetEnvoyer" class="ghost">▶️ Diffuser ce post X</button></div>
             <div class="row"><button id="btnVocalVideoLienEnvoyer" class="ghost">▶️ Diffuser ce lien vidéo</button></div>
             <p class="note" style="margin:8px 0;text-align:center;opacity:0.7">— ou —</p>
             <input type="file" id="vocalVideoFichier" accept="video/*" style="margin-bottom:8px">
@@ -2278,7 +2285,7 @@ function renderVocalSalon(salon){
  *  lecteur YouTube officiel pour une vidéo YouTube — un seul à la fois, synchronisé pour tout le
  *  monde sur le temps écoulé depuis le début de la diffusion (voir demarreLe côté serveur). */
 function vocalMajLectureRadioOuVideo(salon, modo){
-  const audio = $("vocalAudio"), video = $("vocalVideo"), ytWrap = $("vocalYoutubeWrap");
+  const audio = $("vocalAudio"), video = $("vocalVideo"), ytWrap = $("vocalYoutubeWrap"), twWrap = $("vocalTweetWrap");
   audio.volume = vocalRadioVolume; // au cas où l'élément aurait été recréé/réinitialisé entretemps
   video.volume = vocalRadioVolume;
   const media = salon.radio;
@@ -2289,34 +2296,73 @@ function vocalMajLectureRadioOuVideo(salon, modo){
     video.pause(); video.style.display = "none"; video.removeAttribute("src"); video.dataset.url = "";
     ytWrap.classList.add("hidden");
     vocalArreterYoutube();
+    twWrap.classList.add("hidden");
+    vocalArreterTweet();
     $("vocalRadioChoix").classList.toggle("hidden", !modo);
     return;
   }
 
-  // Un emoji différent selon le type de contenu (musique/vidéo/YouTube — voir salon.radio.type côté
-  // serveur), pour qu'un coup d'œil suffise à savoir ce qui est diffusé sans lire tout le titre.
-  const emojiDiffusion = { youtube: "📺", video: "🎬" }[media.type] || "🎵";
+  // Un emoji différent selon le type de contenu (musique/vidéo/YouTube/post X — voir salon.radio.type
+  // côté serveur), pour qu'un coup d'œil suffise à savoir ce qui est diffusé sans lire tout le titre.
+  const emojiDiffusion = { youtube: "📺", video: "🎬", twitter: "🐦" }[media.type] || "🎵";
   $("vocalRadioTexte").textContent = `${emojiDiffusion} En cours : ${media.titre} — cliquez ▶️ si la lecture ne démarre pas toute seule.`;
 
   if (media.type === "youtube"){
     audio.pause(); audio.style.display = "none";
     video.pause(); video.style.display = "none";
+    twWrap.classList.add("hidden");
+    vocalArreterTweet();
     ytWrap.classList.remove("hidden");
     vocalChargerYoutube(media.youtubeId, media.demarreLe);
+  } else if (media.type === "twitter"){
+    audio.pause(); audio.style.display = "none";
+    video.pause(); video.style.display = "none";
+    ytWrap.classList.add("hidden");
+    vocalArreterYoutube();
+    twWrap.classList.remove("hidden");
+    vocalChargerTweet(media.tweetId);
   } else if (media.type === "video"){
     ytWrap.classList.add("hidden");
     vocalArreterYoutube();
+    twWrap.classList.add("hidden");
+    vocalArreterTweet();
     audio.pause(); audio.style.display = "none";
     video.style.display = "";
     vocalSyncMedia(video, media, modo);
   } else {
     ytWrap.classList.add("hidden");
     vocalArreterYoutube();
+    twWrap.classList.add("hidden");
+    vocalArreterTweet();
     video.pause(); video.style.display = "none";
     audio.style.display = "";
     vocalSyncMedia(audio, media, modo);
   }
   $("vocalRadioChoix").classList.toggle("hidden", !modo);
+}
+
+/** Post X/Twitter diffusé au salon (voir vocal:tweet-diffuser côté serveur) : passe par le lecteur
+ *  officiel intégré de X (https://platform.twitter.com/embed/Tweet.html), la seule façon fiable et
+ *  autorisée d'afficher un post (avec sa vidéo, le cas échéant) sur un site tiers — jamais une
+ *  tentative d'extraire nous-mêmes un flux vidéo, ce que X ne permet de toute façon pas depuis
+ *  l'extérieur. Un simple changement d'attribut "src" suffit à charger un autre post ; recréer
+ *  l'iframe à chaque fois éviterait un rechargement visible sans apporter de bénéfice réel. */
+let vocalTweetIdActuel = null;
+function vocalChargerTweet(tweetId){
+  if (vocalTweetIdActuel === tweetId) return;
+  vocalTweetIdActuel = tweetId;
+  const conteneur = $("vocalTweetPlayer");
+  conteneur.innerHTML = "";
+  const iframe = document.createElement("iframe");
+  iframe.src = `https://platform.twitter.com/embed/Tweet.html?id=${encodeURIComponent(tweetId)}&theme=dark&dnt=true`;
+  iframe.style.cssText = "width:100%;max-width:550px;min-height:420px;border:0";
+  iframe.setAttribute("loading", "lazy");
+  conteneur.appendChild(iframe);
+}
+function vocalArreterTweet(){
+  vocalTweetIdActuel = null;
+  const conteneur = $("vocalTweetPlayer");
+  if (conteneur) conteneur.innerHTML = "";
 }
 
 /** Cale un <audio> ou <video> sur le temps écoulé depuis le début de la diffusion (voir demarreLe
@@ -2855,6 +2901,7 @@ $("btnVocalRadioEnvoyer").onclick = async () => {
  *  vocal:video-youtube/-lien/-fichier côté serveur) donc son propre message d'erreur. */
 function vocalMessageErreurVideo(res){
   return res?.error === "LIEN_YOUTUBE_INVALIDE" ? "Ce lien ne ressemble pas à une vidéo YouTube valide."
+    : res?.error === "LIEN_TWEET_INVALIDE" ? "Ce lien ne ressemble pas à un post X/Twitter valide (doit être de la forme https://x.com/compte/status/1234…)."
     : res?.error === "LIEN_INVALIDE" ? "Ce lien ne ressemble pas à une adresse valide (doit commencer par http:// ou https://)."
     : res?.error === "FICHIER_TROP_LOURD" ? "Ce fichier dépasse 15 Mo — essayez un lien direct à la place."
     : res?.error === "FORMAT_NON_SUPPORTE" ? "Ce format de vidéo n'est pas pris en charge. Formats acceptés : mp4, webm, mov, m4v, ogg, ogv — certaines vidéos filmées en HEVC (iPhone) ne se lisent pas non plus dans tous les navigateurs, même avec la bonne extension."
@@ -2866,7 +2913,7 @@ function vocalApresEnvoiVideo(res, msg){
   if (!res?.ok) { msg.textContent = vocalMessageErreurVideo(res); return; }
   msg.textContent = "";
   $("vocalVideoTitre").value = ""; $("vocalVideoYoutubeLien").value = "";
-  $("vocalVideoLien").value = ""; $("vocalVideoFichier").value = "";
+  $("vocalVideoLien").value = ""; $("vocalVideoFichier").value = ""; $("vocalTweetLien").value = "";
   $("vocalRadioAjouter").classList.add("hidden");
 }
 
@@ -2943,6 +2990,14 @@ $("btnVocalVideoLienEnvoyer").onclick = () => {
   const msg = $("vocalVideoAjouterMsg");
   if (!url) { msg.textContent = "Indiquez un lien vidéo."; return; }
   emitAvecDelai("vocal:video-lien", { code: vocalSalonActuel.code, titre, url }, (res) => vocalApresEnvoiVideo(res, msg));
+};
+$("btnVocalTweetEnvoyer").onclick = () => {
+  if (!vocalSalonActuel) return;
+  const titre = $("vocalVideoTitre").value.trim();
+  const url = $("vocalTweetLien").value.trim();
+  const msg = $("vocalVideoAjouterMsg");
+  if (!url) { msg.textContent = "Indiquez un lien vers un post X/Twitter."; return; }
+  emitAvecDelai("vocal:tweet-diffuser", { code: vocalSalonActuel.code, titre, url }, (res) => vocalApresEnvoiVideo(res, msg));
 };
 $("btnVocalVideoFichierEnvoyer").onclick = () => {
   if (!vocalSalonActuel) return;
