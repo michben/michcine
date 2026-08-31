@@ -17,6 +17,7 @@ import { createRequire } from "module";
 import { dirname, join } from "path";
 import crypto from "crypto";
 import fs from "fs";
+import { creerModuleVocalSalon } from "./vocal-salon.js";
 import { mountAuth, mountPasserelleEntrante, userFromCookie, addRankedPoints,
          spendCredits, grantCredits, getCredits, CREDITS_PER_GAME,
          listUsers, adminUpdateUser, adminDeleteUser, grantAll,
@@ -79,20 +80,9 @@ app.get("/js/moteur.js", (_req, res) => {
   });
 });
 
-/**
- * Page indépendante du salon vocal (voir public/vocal.html) : une URL à part, distincte du jeu,
- * que la propriétaire du site peut partager avec des personnes qui ne veulent que discuter en
- * vocal, sans jouer au quiz. Toujours protégée par connexion (vérifiée côté client via /api/me,
- * voir vocal.html) — mêmes comptes que le jeu, jamais d'accès anonyme. Une route dédiée plutôt que
- * de compter sur express.static (qui servirait déjà ce fichier sous /vocal.html) : ainsi l'URL
- * reste "/vocal", sans extension, plus simple à partager. Même politique de cache que les autres
- * pages HTML ci-dessus (jamais de cache), pour qu'une mise à jour de cette page soit toujours vue
- * tout de suite.
- */
-app.get("/vocal", (_req, res) => {
-  res.setHeader("Cache-Control", "no-cache, must-revalidate");
-  res.sendFile("vocal.html", { root: "public" });
-});
+// La route "/vocal" (page indépendante du salon vocal, voir public/vocal.html) est maintenant
+// définie par le module vocal-salon.js lui-même (voir plus bas, creerModuleVocalSalon) — le salon
+// vocal étant désormais totalement autonome, jusqu'à posséder sa propre route.
 
 mountAuth(app);                       // /auth/x/login, /auth/x/callback, /api/me, /api/leaderboard
 mountPasserelleEntrante(app, () => REGLAGES.passerelleEntrante);   // /auth/michben/retour
@@ -937,22 +927,8 @@ app.put("/api/admin/audio", requireAdmin, (req, res) => {
   res.json({ ok: true, audio: REGLAGES.audio });
 });
 
-/** Liste tous les salons vocaux actuellement ouverts, avec leurs participants — vue d'ensemble
- *  pour la modération, indépendante de la liste publique « Salons en direct » (qui masque les
- *  salons privés aux non-amis de l'hôte : l'administration, elle, doit tout voir). */
-app.get("/api/admin/vocal/salons", requireModerateur, (_req, res) => {
-  res.json([...salonsVocaux.values()].map((s) => ({
-    code: s.code,
-    titre: s.titre,
-    prive: s.prive,
-    monteeLibre: s.monteeLibre,
-    compteEnfant: Boolean(s.compteEnfant),
-    creeLe: s.creeLe,
-    participants: [...s.participants.values()].map((p) => ({
-      pseudo: p.pseudo, avatar: p.avatar, role: p.role, mute: p.mute,
-    })),
-  })));
-});
+// La route "/api/admin/vocal/salons" (vue de modération) est maintenant définie par le module
+// vocal-salon.js lui-même (voir plus bas, creerModuleVocalSalon).
 
 /**
  * Petit bouton teaser à côté du "?" (voir #btnLienExterne côté client) : un lien externe à
@@ -2670,15 +2646,23 @@ const VIDEO_DIR = join(process.cwd(), "public", "videos");
 const VIDEO_EXT_AUTORISEES = ["mp4", "webm", "mov", "m4v", "ogg", "ogv"];
 const VIDEO_MAX_OCTETS = 15 * 1024 * 1024;
 
-/** Reconnaît un lien YouTube sous ses formes les plus courantes (page normale, lien court youtu.be,
- *  lien d'intégration, Shorts) et en extrait le seul identifiant qui compte pour la lecture — on ne
- *  stocke et ne renvoie jamais l'URL telle quelle, seulement cet identifiant à 11 caractères, pour
- *  ne jamais avoir à faire confiance à un format d'URL particulier côté client. */
-function extraireIdYoutube(url) {
-    const s = String(url || "").trim();
-    const m = s.match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/);
-    return m ? m[1] : null;
-}
+// extraireIdYoutube (reconnaître un lien YouTube et en extraire l'identifiant) vit maintenant
+// exclusivement dans vocal-salon.js — seul le salon vocal en avait besoin.
+
+/**
+ * Le salon vocal est un module totalement à part (voir vocal-salon.js) : il ne connaît rien du
+ * jeu de quiz lui-même. `getReglages`/`getPlaylisteMusique` sont des fonctions plutôt que les
+ * valeurs directement, car REGLAGES et playlisteMusique sont parfois entièrement REMPLACÉS
+ * ailleurs dans ce fichier (import de réglages, ajout d'une piste) — une simple copie de la
+ * valeur, prise une fois ici, deviendrait alors périmée sans que le module vocal ne le sache.
+ */
+const vocalSalon = creerModuleVocalSalon({
+  app, io,
+  getReglages: () => REGLAGES,
+  getPlaylisteMusique: () => playlisteMusique,
+  borneValeur, exigeCompte, requireModerateur, fichierMusiqueExiste, ajouterPisteMusique,
+  VIDEO_EXT_AUTORISEES, VIDEO_MAX_OCTETS, VIDEO_DIR,
+});
 
 // Avis des joueurs sur chaque piste (pouce vers le haut / vers le bas), remonté dans l'admin.
 // Un vote par joueur et par piste : trackId -> { userId: "up" | "down" }. Revoter change ou retire l'avis.
@@ -4395,7 +4379,7 @@ app.post("/api/points/donner", (req, res) => {
                     photo: user.photo || null, montant });
   // Si donneur et receveur sont tous deux dans le même salon vocal en ce moment, le don devient un
   // petit moment visible par tout le salon (voir diffuserDonVocal) — comme les réactions emoji.
-  diffuserDonVocal(user.id, cible, { type: "points", de: user.pseudo, avatar: user.avatar,
+  vocalSalon.diffuserDonVocal(user.id, cible, { type: "points", de: user.pseudo, avatar: user.avatar,
                     photo: user.photo || null, cible: cibleFiche?.pseudo || "", montant });
 
   res.json({ ok: true, points: getPoints(user.id), montant, restant: statutDonsJour(user.id).restant });
@@ -4419,7 +4403,7 @@ app.post("/api/parties-classees/donner", (req, res) => {
 
   const cibleFiche = fichePublique(cible, user.id);
   notifier(cible, { type: "don_partie", de: user.pseudo, avatar: user.avatar, photo: user.photo || null });
-  diffuserDonVocal(user.id, cible, { type: "partie", de: user.pseudo, avatar: user.avatar,
+  vocalSalon.diffuserDonVocal(user.id, cible, { type: "partie", de: user.pseudo, avatar: user.avatar,
                     photo: user.photo || null, cible: cibleFiche?.pseudo || "" });
   res.json({ ok: true, partiesRestantes: partiesRestantes(user.id) });
 });
@@ -4495,7 +4479,7 @@ app.post("/api/tickets/donner", (req, res) => {
 
   notifier(cible, { type: "don_tickets", de: user.pseudo, avatar: user.avatar,
                     photo: user.photo || null, montant });
-  diffuserDonVocal(user.id, cible, { type: "tickets", de: user.pseudo, avatar: user.avatar,
+  vocalSalon.diffuserDonVocal(user.id, cible, { type: "tickets", de: user.pseudo, avatar: user.avatar,
                     photo: user.photo || null, cible: cibleFiche?.pseudo || "", montant });
 
   res.json({ ok: true, credits: getCredits(user.id), montant, xpGagnee, niveau,
@@ -4567,236 +4551,12 @@ function borneValeur(v, min, max, defaut) {
   return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : defaut;
 }
 
-// Réglables depuis la console admin (onglet Audio, voir REGLAGES.audio et /api/admin/audio) —
-// des valeurs par défaut raisonnables sont utilisées tant que rien n'a été personnalisé.
-const MAX_COHOTES_VOCAL = () => borneValeur(REGLAGES.audio?.maxCohotesVocal, 1, 10, 3);
-const MAX_PARTICIPANTS_VOCAL = () => borneValeur(REGLAGES.audio?.maxParticipantsVocal, 2, 200, 40);
-const salonsVocaux = new Map(); // code -> salon
-
-/** Retrouve le salon vocal (s'il y en a un) où se trouve actuellement ce joueur — utilisé pour
- *  rendre un don (points/tickets/partie classée, voir plus bas) visible par tout le salon quand
- *  donneur et receveur s'y trouvent tous les deux au moment du don (voir diffuserDonVocal). */
-function salonVocalDuJoueur(userId) {
-  for (const salon of salonsVocaux.values()) {
-    if (salon.participants.has(userId)) return salon;
-  }
-  return null;
-}
-
-/** Si le donneur et le receveur d'un don sont actuellement tous les deux dans le même salon vocal,
- *  diffuse un petit effet visuel (façon réaction volante, voir vocal:reaction) à tout le salon —
- *  un don fait "en direct" devient ainsi un moment visible par tous, comme les réactions emoji,
- *  plutôt qu'une simple notification privée pour le seul receveur. Ne fait rien si l'un des deux
- *  n'est pas dans ce salon (le don reste alors une notification privée, comme avant). */
-function diffuserDonVocal(donneurId, cibleId, payload) {
-  const salon = salonVocalDuJoueur(donneurId);
-  if (!salon || !salon.participants.has(cibleId)) return;
-  for (const p of salon.participants.values()) {
-    const s = [...io.of("/").sockets.values()].find((sk) => sk.data.user?.id === p.userId);
-    if (s) s.emit("vocal:don", payload);
-  }
-}
-
-/** Personnes coupées involontairement (réseau, onglet fermé…) d'un salon vocal toujours actif :
- *  on leur garde un accès rapide pour y revenir depuis la page d'accueil plutôt que de les laisser
- *  rechercher le salon ou retaper le code. Périmé après RETOUR_VOCAL_VALIDITE_MS. */
-const retourVocalDisponible = new Map(); // userId -> { code, titre, at }
-const RETOUR_VOCAL_VALIDITE_MS = 15 * 60 * 1000;
-
-/** Micro qui « reste en sourdine » quand un joueur change d'application ou de page : le vrai
- *  coupable n'était pas le micro lui-même, mais le fait qu'une coupure de connexion involontaire
- *  (mise en veille, changement d'app — très fréquent sur mobile, la connexion WebSocket est
- *  suspendue par le système) supprimait entièrement son entrée dans le salon (voir
- *  quitterSalonVocal), si bien qu'au retour, vocal:rejoindre le faisait recommencer à zéro :
- *  micro remis en sourdine, rôle perdu, main baissée — même si le joueur, lui, n'avait rien
- *  demandé de tout ça. On garde donc une courte mémoire de son état juste avant la coupure, pour
- *  le lui restituer telle quelle s'il revient à temps (même délai que la grâce du salon
- *  lui-même, voir VOCAL_SALON_VIDE_GRACE_MS) — sinon (trop longtemps parti) il repart bien sur
- *  des valeurs par défaut, comme avant. */
-const vocalEtatRecent = new Map(); // "code:userId" -> { role, mute, mainLevee, expire }
-setInterval(() => {
-  const maintenant = Date.now();
-  for (const [cle, etat] of vocalEtatRecent) if (etat.expire < maintenant) vocalEtatRecent.delete(cle);
-}, 60 * 1000);
-
-function genererCodeVocal() {
-  let code;
-  do {
-    code = Array.from({ length: 4 }, () =>
-      CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)]
-    ).join("");
-  } while (salonsVocaux.has(code));
-  return code;
-}
-
-/** État public d'un salon vocal, envoyé à ses participants à chaque changement. */
-function publicVocal(salon) {
-  return {
-    code: salon.code,
-    titre: salon.titre,
-    hostId: salon.hostId,
-    participants: [...salon.participants.values()].map((p) => ({
-      userId: p.userId, pseudo: p.pseudo, avatar: p.avatar, photo: p.photo,
-      role: p.role, mute: p.mute, parle: p.parle, mainLevee: Boolean(p.mainLevee),
-    })),
-    demandesMontee: [...salon.demandesMontee],
-    radio: salon.radio,
-    chat: salon.chat || [],
-    prive: Boolean(salon.prive),
-    monteeLibre: Boolean(salon.monteeLibre),
-  };
-}
-
-const VOCAL_CHAT_HISTORIQUE_MAX = 50; // borne la taille de l'historique renvoyé à chaque mise à jour
-
-function diffuserVocal(salon) {
-  io.to(`vocal:${salon.code}`).emit("vocal:update", publicVocal(salon));
-}
-
-/** Hôte ou cohôte : les deux ont les pouvoirs de modération, seul l'hôte peut nommer/retirer des cohôtes. */
-function estModoVocal(salon, userId) {
-  return salon.hostId === userId || salon.participants.get(userId)?.role === "cohote";
-}
-
-/** Délai laissé à un salon vocal devenu « sans personne pour le tenir » (l'hôte est parti, ou tout
- *  le monde est parti) avant sa fermeture réelle — le temps d'une coupure wifi ou d'une mise en
- *  veille de téléphone, pour que la ou les personnes concernées puissent retrouver leur salon (voir
- *  la bulle de retour rapide) plutôt que de le perdre instantanément. Même logique que
- *  ROOM_VIDE_GRACE_MS pour les parties de jeu. Pendant ce délai, un cohôte éventuel garde tous ses
- *  pouvoirs de modération (voir estModoVocal) : le salon n'est donc pas forcément à l'arrêt.
- *  Durée réglable depuis la console admin (onglet Audio) — 3 minutes par défaut. */
-const VOCAL_SALON_VIDE_GRACE_MS = () => borneValeur(REGLAGES.audio?.fermetureGraceMinutes, 1, 30, 3) * 60 * 1000;
-
-/** Un salon totalement vide (plus personne dedans, pas seulement l'hôte parti) n'a aucune raison
- *  de bénéficier du long délai de grâce ci-dessus, qui n'a de sens que pour laisser à l'hôte le
- *  temps de revenir pendant que d'autres participants patientent : personne ne profite d'un salon
- *  vide qui traîne pendant plusieurs minutes. Fermeture rapide pour libérer le code. */
-const VOCAL_SALON_TOTALEMENT_VIDE_GRACE_MS = 10_000;
-
-/** Ferme un salon vocal pour de bon : prévient tout le monde et libère le salon. */
-function fermerSalonVocalDefinitivement(salon, raison) {
-  io.to(`vocal:${salon.code}`).emit("vocal:ferme", { raison });
-  for (const p of salon.participants.values()) {
-    const s = [...io.of("/").sockets.values()].find((sk) => sk.data.user?.id === p.userId);
-    if (s) s.leave(`vocal:${salon.code}`);
-  }
-  salonsVocaux.delete(salon.code);
-}
-
-/** Retire un socket de tout salon vocal dont il fait partie (déconnexion, ou changement de salon).
- *  Si l'hôte part ou si plus personne n'est présent, le salon n'est pas détruit tout de suite : il
- *  reste ouvert VOCAL_SALON_VIDE_GRACE_MS, le temps que la personne revienne (voir vocal:rejoindre,
- *  qui lui redonne directement son rôle d'hôte si elle revient à temps) — sans quoi la moindre
- *  coupure réseau du côté de l'hôte faisait perdre le salon à tout le monde instantanément.
- *  `involontaire` distingue une vraie coupure (réseau, onglet fermé) d'un départ volontaire (bouton
- *  Quitter) : seule la coupure involontaire laisse une trace pour la bulle de retour rapide. */
-function quitterSalonVocal(socket, { involontaire = false } = {}) {
-  const userId = socket.data.user?.id;
-  if (!userId) return;
-  for (const salon of salonsVocaux.values()) {
-    if (!salon.participants.has(userId)) continue;
-    const etaitHote = salon.hostId === userId;
-    const participantSortant = salon.participants.get(userId);
-    // Coupure involontaire (pas un clic sur "Quitter") : on garde une courte mémoire de son état
-    // — micro ouvert ou non, rôle, main levée — pour le lui restituer s'il revient à temps (voir
-    // vocal:rejoindre) plutôt que de le faire recommencer à zéro (voir vocalEtatRecent ci-dessus).
-    if (involontaire) {
-      vocalEtatRecent.set(`${salon.code}:${userId}`, {
-        role: participantSortant.role, mute: participantSortant.mute,
-        mainLevee: Boolean(participantSortant.mainLevee), expire: Date.now() + VOCAL_SALON_VIDE_GRACE_MS(),
-      });
-    }
-    salon.participants.delete(userId);
-    salon.demandesMontee.delete(userId);
-    socket.leave(`vocal:${salon.code}`);
-    clearTimeout(salon.fermetureTimer);
-    if (etaitHote || salon.participants.size === 0) {
-      if (involontaire) {
-        retourVocalDisponible.set(userId, { code: salon.code, titre: salon.titre, at: Date.now() });
-      }
-      // Le salon continue de vivre pour ceux qui y sont encore (s'il en reste) — seule sa
-      // fermeture définitive est programmée, pas immédiate.
-      io.to(`vocal:${salon.code}`).emit("vocal:rtc-peer-left", { userId });
-      diffuserVocal(salon);
-      const delaiFermeture = salon.participants.size === 0
-        ? VOCAL_SALON_TOTALEMENT_VIDE_GRACE_MS
-        : VOCAL_SALON_VIDE_GRACE_MS();
-      salon.fermetureTimer = setTimeout(() => {
-        if (salonsVocaux.get(salon.code) === salon)
-          fermerSalonVocalDefinitivement(salon, etaitHote ? "HOTE_PARTI" : "SALON_VIDE");
-      }, delaiFermeture);
-    } else {
-      // Prévient les autres qu'ils peuvent fermer leur connexion audio (WebRTC) vers ce
-      // participant — le salon continue, seul son flux à lui doit s'arrêter.
-      io.to(`vocal:${salon.code}`).emit("vocal:rtc-peer-left", { userId });
-      diffuserVocal(salon);
-      if (involontaire) {
-        retourVocalDisponible.set(userId, { code: salon.code, titre: salon.titre, at: Date.now() });
-      }
-    }
-    return; // un compte ne peut être que dans un seul salon vocal à la fois
-  }
-}
-
-/** Liste des salons vocaux ouverts en ce moment (« Salons en direct »), pour en rejoindre un sans
- *  code. Un salon privé (voir vocal:reglages) n'apparaît que pour les amis de l'hôte et pour ceux
- *  qui y sont déjà — jamais pour un inconnu. `hoteEstAmi` permet au client de regrouper « Salons
- *  d'amis » et « Autres salons » sans avoir à connaître lui-même la liste d'amis du joueur. */
-app.get("/api/vocal/salons", (req, res) => {
-  const user = exigeCompte(req, res);
-  if (!user) return;
-  res.json([...salonsVocaux.values()]
-    // Un compte enfant ne doit même pas voir apparaître un salon adulte dans la liste (ni l'inverse) :
-    // même séparation stricte qu'à la création/à l'entrée d'un salon (voir vocal:creer, vocal:rejoindre).
-    .filter((s) => Boolean(s.compteEnfant) === (user.role === "enfant"))
-    .filter((s) => {
-      if (!s.prive) return true;
-      if (s.participants.has(user.id)) return true;
-      return statutRelation(user.id, s.hostId) === "ami";
-    })
-    .map((s) => ({
-      code: s.code, titre: s.titre,
-      hote: s.participants.get(s.hostId)?.pseudo || "?",
-      hoteEstAmi: statutRelation(user.id, s.hostId) === "ami",
-      participants: s.participants.size,
-      prive: Boolean(s.prive),
-    })));
-});
-
-/** Bulle affichée en haut de la page d'accueil : propose un accès direct à un salon vocal encore
- *  actif, soit parce que le compte en a été coupé involontairement, soit parce qu'il a reçu une
- *  invitation à laquelle il n'a pas encore répondu. */
-app.get("/api/vocal/retour", (req, res) => {
-  const user = exigeCompte(req, res);
-  if (!user) return;
-
-  const r = retourVocalDisponible.get(user.id);
-  if (r) {
-    if (Date.now() - r.at < RETOUR_VOCAL_VALIDITE_MS && salonsVocaux.has(r.code)) {
-      return res.json({ retour: { code: r.code, titre: r.titre, motif: "deconnecte" } });
-    }
-    retourVocalDisponible.delete(user.id); // périmé ou salon disparu entretemps
-  }
-
-  for (const salon of salonsVocaux.values()) {
-    const invite = salon.invites?.get(user.id);
-    if (invite && !salon.participants.has(user.id)) {
-      return res.json({ retour: { code: salon.code, titre: salon.titre, motif: "invite", de: invite.de } });
-    }
-  }
-
-  res.json({ retour: null });
-});
-
-/** Ferme la bulle de retour sans rejoindre le salon : nettoie la coupure et les invitations en
- *  attente pour ce compte, pour qu'elle ne réapparaisse pas tant que rien de nouveau ne survient. */
-app.post("/api/vocal/retour/ignorer", (req, res) => {
-  const user = exigeCompte(req, res);
-  if (!user) return;
-  retourVocalDisponible.delete(user.id);
-  for (const salon of salonsVocaux.values()) salon.invites?.delete(user.id);
-  res.json({ ok: true });
-});
+// Tout ce qui suivait ici (salons vocaux : état, aide, routes /api/vocal/*) vit maintenant dans
+// le module totalement indépendant vocal-salon.js (voir la constante `vocalSalon` plus haut) —
+// server.js n'a plus besoin de connaître le détail de son fonctionnement, seulement les quelques
+// fonctions que ce module expose en retour (vocalSalon.diffuserDonVocal, vocalSalon.salonsVocaux,
+// etc.) pour les deux passerelles qui restent, elles, du côté du jeu (vocal:equipe-ouvrir,
+// vocal:partie-ouvrir et fusionnerSalonsVocauxEquipe, plus bas dans ce fichier).
 
 /**
  * Quatre propositions : la bonne, plus trois leurres pris de préférence
@@ -5458,8 +5218,8 @@ function endRound(room) {
 function fusionnerSalonsVocauxEquipe(room) {
   const codes = room.salonsVocauxEquipe;
   if (!codes || !codes.A || !codes.B || codes.A === codes.B) return;
-  const salonA = salonsVocaux.get(codes.A);
-  const salonB = salonsVocaux.get(codes.B);
+  const salonA = vocalSalon.salonsVocaux.get(codes.A);
+  const salonB = vocalSalon.salonsVocaux.get(codes.B);
   if (!salonA || !salonB) return;
 
   salonA.titre = `🏆 Résultat final — partie ${room.code}`;
@@ -5467,7 +5227,7 @@ function fusionnerSalonsVocauxEquipe(room) {
   // message échangé pendant la partie dans l'un ou l'autre salon d'équipe.
   salonA.chat = [...(salonA.chat || []), ...(salonB.chat || [])]
     .sort((a, b) => a.at - b.at)
-    .slice(-VOCAL_CHAT_HISTORIQUE_MAX);
+    .slice(-vocalSalon.VOCAL_CHAT_HISTORIQUE_MAX);
   for (const [uid, p] of salonB.participants) {
     if (!salonA.participants.has(uid)) {
       salonA.participants.set(uid, { ...p, role: p.role === "hote" ? "cohote" : "intervenant", parle: false });
@@ -5479,11 +5239,11 @@ function fusionnerSalonsVocauxEquipe(room) {
       // Émis directement au socket (plutôt qu'à la salle vocal:${salonB.code}, qu'il vient de
       // quitter) : c'est ce qui déclenche côté client la bascule vers le salon commun et la
       // reconnexion audio (WebRTC) vers les participants qui n'y étaient pas encore.
-      s.emit("vocal:fusionne", { salon: publicVocal(salonA) });
+      s.emit("vocal:fusionne", { salon: vocalSalon.publicVocal(salonA) });
     }
   }
-  salonsVocaux.delete(salonB.code);
-  diffuserVocal(salonA);
+  vocalSalon.salonsVocaux.delete(salonB.code);
+  vocalSalon.diffuserVocal(salonA);
   diffuserAnnonce("🎉 Les deux salons vocaux d'équipe se réunissent pour un bilan convivial !", "equipe");
 }
 
@@ -5970,473 +5730,10 @@ io.on("connection", (socket) => {
     else pauserSalon(room, socket.data.user.pseudo);
   });
 
-  /* -------------------- Salons vocaux -------------------- */
-
-  socket.on("vocal:creer", ({ titre }, cb) => {
-    quitterSalonVocal(socket); // un compte ne peut animer/rejoindre qu'un seul salon vocal à la fois
-    retourVocalDisponible.delete(user.id); // on anime un nouveau salon : la bulle de retour n'a plus lieu d'être
-    const code = genererCodeVocal();
-    const salon = {
-      code, hostId: user.id,
-      titre: String(titre || "").trim().slice(0, 60) || `Le salon de ${user.pseudo}`,
-      participants: new Map(),
-      demandesMontee: new Set(),
-      invites: new Map(), // userId -> { de, at } — pour proposer un accès rapide même après coup
-      radio: null,
-      chat: [], // messages du salon (voir vocal:chat-envoyer) — bornés à VOCAL_CHAT_HISTORIQUE_MAX
-      creeLe: Date.now(),
-      // Réglables par l'hôte/les cohôtes à tout moment (voir vocal:reglages) : un salon privé
-      // n'apparaît pas dans la liste publique « Salons en direct » pour les joueurs qui ne sont
-      // pas amis avec l'hôte ; la montée libre laisse un auditeur devenir intervenant sans avoir
-      // à demander (et sans que l'hôte ait à valider) la parole.
-      prive: false,
-      // Valeur de départ réglable depuis la console admin (onglet Audio) — l'hôte reste toujours
-      // libre de la changer ensuite depuis sa propre console de modération, salon par salon.
-      monteeLibre: REGLAGES.audio?.monteeLibreParDefaut === true,
-      // Même séparation stricte que pour les salons de jeu (voir room:join) : un compte enfant ne
-      // doit jamais se retrouver en direct vocal avec un adulte, ni l'inverse. Fixé une fois pour
-      // toutes à la création — pas de mécanisme pour "convertir" un salon après coup.
-      compteEnfant: user.role === "enfant",
-    };
-    salon.participants.set(user.id, {
-      // Micro fermé par défaut : c'est le premier clic sur "activer mon micro" qui l'ouvre —
-      // jamais automatique, pour ne surprendre personne avec un micro déjà ouvert.
-      userId: user.id, pseudo: user.pseudo, avatar: user.avatar, photo: user.photo || null,
-      role: "hote", mute: true, parle: false,
-    });
-    salonsVocaux.set(code, salon);
-    socket.join(`vocal:${code}`);
-    cb?.({ ok: true, code, salon: publicVocal(salon) });
-  });
-
-  socket.on("vocal:rejoindre", ({ code }, cb) => {
-    const salon = salonsVocaux.get(code);
-    if (!salon) return cb?.({ ok: false, error: "SALON_INTROUVABLE" });
-    // Séparation stricte enfant / adulte, identique à room:join : jamais de contact vocal en
-    // direct entre un compte enfant et un adulte, quel que soit le sens.
-    if (user.role === "enfant" && !salon.compteEnfant) return cb?.({ ok: false, error: "ENFANT_MODE_ENFANT_UNIQUEMENT" });
-    if (user.role !== "enfant" && salon.compteEnfant) return cb?.({ ok: false, error: "ADULTE_SALON_ENFANT_INTERDIT" });
-    if (salon.participants.size >= MAX_PARTICIPANTS_VOCAL()) return cb?.({ ok: false, error: "SALON_COMPLET" });
-    quitterSalonVocal(socket);
-    retourVocalDisponible.delete(user.id); // on rejoint un salon : la bulle de retour n'a plus lieu d'être
-    salon.invites?.delete(user.id); // l'invitation, s'il y en avait une, est consommée
-    clearTimeout(salon.fermetureTimer); // quelqu'un revient : on annule la fermeture programmée
-    // L'hôte d'origine qui revient à temps (coupure réseau, mise en veille — voir
-    // VOCAL_SALON_VIDE_GRACE_MS) retrouve directement son rôle plutôt que d'atterrir en simple
-    // auditeur dans son propre salon.
-    const redevientHote = salon.hostId === user.id && !salon.participants.has(user.id);
-    // Retour rapide après une coupure involontaire (changement d'application, mise en veille…) :
-    // on restitue le micro/rôle/main levée d'avant plutôt que de tout réinitialiser (voir
-    // vocalEtatRecent) — sans ça, chaque petite coupure réseau (très fréquente sur mobile en
-    // arrière-plan) remettait le micro en sourdine sans que le joueur n'ait rien demandé.
-    const cleEtatRecent = `${salon.code}:${user.id}`;
-    const etatRecent = vocalEtatRecent.get(cleEtatRecent);
-    vocalEtatRecent.delete(cleEtatRecent);
-    const etatEncoreValide = etatRecent && etatRecent.expire > Date.now();
-    salon.participants.set(user.id, {
-      userId: user.id, pseudo: user.pseudo, avatar: user.avatar, photo: user.photo || null,
-      role: redevientHote ? "hote" : (etatEncoreValide ? etatRecent.role : "auditeur"),
-      mute: etatEncoreValide ? etatRecent.mute : true,
-      parle: false,
-      mainLevee: etatEncoreValide ? etatRecent.mainLevee : false,
-    });
-    socket.join(`vocal:${salon.code}`);
-    diffuserVocal(salon);
-    cb?.({ ok: true, salon: publicVocal(salon) });
-  });
-
-  socket.on("vocal:quitter", ({ code }, cb) => {
-    quitterSalonVocal(socket);
-    cb?.({ ok: true });
-  });
-
-  /** Met à jour l'anneau qui pulse autour de la photo — déclenché automatiquement côté client par
-   *  la détection de voix pendant que le micro est ouvert (pas besoin d'appuyer sur un bouton).
-   *  Réservé à ceux qui ont la parole, et seulement micro ouvert. */
-  socket.on("vocal:parler", ({ code, parle }) => {
-    const salon = salonsVocaux.get(code);
-    const moi = salon?.participants.get(user.id);
-    if (!moi || moi.mute || !["hote", "cohote", "intervenant"].includes(moi.role)) return;
-    moi.parle = Boolean(parle);
-    diffuserVocal(salon);
-  });
-
-  /** Ouvre ou ferme le micro — c'est le seul contrôle du salon (plus de bouton "maintenir pour
-   *  parler" : une fois ouvert, le micro reste ouvert jusqu'à ce qu'on le referme soi-même). */
-  socket.on("vocal:mute", ({ code, mute }) => {
-    const salon = salonsVocaux.get(code);
-    const moi = salon?.participants.get(user.id);
-    if (!moi) return;
-    moi.mute = Boolean(mute);
-    if (moi.mute) moi.parle = false;
-    diffuserVocal(salon);
-  });
-
-  /** Un auditeur signale qu'il aimerait intervenir : l'hôte ou un cohôte décide de le faire monter —
-   *  sauf si la « montée libre » est activée pour ce salon (voir vocal:reglages), auquel cas la
-   *  demande devient inutile : l'auditeur devient intervenant tout de suite, sans validation. */
-  socket.on("vocal:demander-intervenir", ({ code }, cb) => {
-    const salon = salonsVocaux.get(code);
-    const moi = salon?.participants.get(user.id);
-    if (!moi || moi.role !== "auditeur") return cb?.({ ok: false });
-    if (salon.monteeLibre) {
-      moi.role = "intervenant";
-      moi.mute = true; // micro fermé par défaut, même en montée libre — jamais une surprise
-      salon.demandesMontee.delete(user.id);
-    } else {
-      salon.demandesMontee.add(user.id);
-    }
-    diffuserVocal(salon);
-    cb?.({ ok: true, monteeLibre: Boolean(salon.monteeLibre) });
-  });
-
-  socket.on("vocal:annuler-demande", ({ code }) => {
-    const salon = salonsVocaux.get(code);
-    if (!salon) return;
-    salon.demandesMontee.delete(user.id);
-    diffuserVocal(salon);
-  });
-
-  /** Lever/baisser la main : simple signal d'attention (✋ superposée sur la photo, voir
-   *  publicVocal/carteParticipantVocal), réservé à l'hôte/aux cohôtes/intervenants — jamais aux
-   *  auditeurs, qui ont déjà leur propre demande d'intervention juste au-dessus (vocal:demander-
-   *  intervenir), un mécanisme différent (demander à devenir intervenant, pas juste signaler qu'on
-   *  veut la parole). */
-  socket.on("vocal:main-toggle", ({ code }, cb) => {
-    const salon = salonsVocaux.get(code);
-    const moi = salon?.participants.get(user.id);
-    if (!moi || !["hote", "cohote", "intervenant"].includes(moi.role)) return cb?.({ ok: false });
-    moi.mainLevee = !moi.mainLevee;
-    diffuserVocal(salon);
-    cb?.({ ok: true, salon: publicVocal(salon) });
-  });
-
-  socket.on("vocal:promouvoir", ({ code, userId }, cb) => {
-    const salon = salonsVocaux.get(code);
-    if (!salon || !estModoVocal(salon, user.id)) return cb?.({ ok: false });
-    const cible = salon.participants.get(userId);
-    if (!cible || cible.role !== "auditeur") return cb?.({ ok: false });
-    cible.role = "intervenant";
-    cible.mute = true; // micro fermé par défaut, même après une promotion — jamais une surprise
-    salon.demandesMontee.delete(userId);
-    diffuserVocal(salon);
-    cb?.({ ok: true });
-  });
-
-  /** Ferme le salon immédiatement pour tout le monde, sans attendre le délai de grâce — réservé à
-   *  l'hôte (pas aux cohôtes) : c'est une action définitive et irréversible pour tous les participants. */
-  socket.on("vocal:fermer", ({ code }, cb) => {
-    const salon = salonsVocaux.get(code);
-    if (!salon || salon.hostId !== user.id) return cb?.({ ok: false });
-    clearTimeout(salon.fermetureTimer);
-    fermerSalonVocalDefinitivement(salon, "FERME_PAR_HOTE");
-    cb?.({ ok: true });
-  });
-
-  /** L'hôte ou un cohôte choisit si le salon reste privé (absent de la liste publique « Salons en
-   *  direct » pour qui n'est pas ami avec l'hôte — voir /api/vocal/salons) et si la montée est
-   *  libre (un auditeur devient intervenant sans avoir à demander ni à être validé). */
-  socket.on("vocal:reglages", ({ code, prive, monteeLibre, titre }, cb) => {
-    const salon = salonsVocaux.get(code);
-    if (!salon || !estModoVocal(salon, user.id)) return cb?.({ ok: false });
-    if (typeof prive === "boolean") salon.prive = prive;
-    if (typeof monteeLibre === "boolean") salon.monteeLibre = monteeLibre;
-    // Renommer le salon : possible à tout moment, pas seulement à la création (voir vocal:creer) —
-    // réservé à l'hôte/aux cohôtes, comme les autres réglages ci-dessus.
-    if (typeof titre === "string") {
-      const t = titre.trim().slice(0, 60);
-      if (t) salon.titre = t;
-    }
-    diffuserVocal(salon);
-    cb?.({ ok: true, prive: salon.prive, monteeLibre: salon.monteeLibre, titre: salon.titre });
-  });
-
-  /** Fait redescendre un intervenant en simple auditeur — jamais un hôte ou un cohôte via cette
-   *  voie (voir vocal:retirer-cohote pour les cohôtes, l'hôte ne peut être rétrogradé). */
-  socket.on("vocal:retrograder", ({ code, userId }, cb) => {
-    const salon = salonsVocaux.get(code);
-    if (!salon || !estModoVocal(salon, user.id)) return cb?.({ ok: false });
-    const cible = salon.participants.get(userId);
-    if (!cible || cible.role !== "intervenant") return cb?.({ ok: false });
-    cible.role = "auditeur";
-    cible.parle = false;
-    cible.mute = true; // redescendu = plus le droit de parler, micro refermé au cas où
-    cible.mainLevee = false; // le signal « main levée » est réservé à hôte/cohôte/intervenant (voir vocal:main-toggle)
-    diffuserVocal(salon);
-    cb?.({ ok: true });
-  });
-
-  /** Nommer/retirer un cohôte est réservé à l'hôte — jusqu'à 3 à la fois, comme demandé. */
-  socket.on("vocal:nommer-cohote", ({ code, userId }, cb) => {
-    const salon = salonsVocaux.get(code);
-    if (!salon || salon.hostId !== user.id) return cb?.({ ok: false, error: "PAS_HOTE" });
-    const nbCohotes = [...salon.participants.values()].filter((p) => p.role === "cohote").length;
-    if (nbCohotes >= MAX_COHOTES_VOCAL()) return cb?.({ ok: false, error: "MAX_COHOTES_ATTEINT", max: MAX_COHOTES_VOCAL() });
-    const cible = salon.participants.get(userId);
-    if (!cible || cible.role === "hote" || cible.role === "cohote") return cb?.({ ok: false });
-    cible.role = "cohote";
-    salon.demandesMontee.delete(userId);
-    diffuserVocal(salon);
-    cb?.({ ok: true });
-  });
-
-  socket.on("vocal:retirer-cohote", ({ code, userId }, cb) => {
-    const salon = salonsVocaux.get(code);
-    if (!salon || salon.hostId !== user.id) return cb?.({ ok: false, error: "PAS_HOTE" });
-    const cible = salon.participants.get(userId);
-    if (!cible || cible.role !== "cohote") return cb?.({ ok: false });
-    cible.role = "intervenant"; // reste intervenant : seul le pouvoir de modération lui est retiré
-    diffuserVocal(salon);
-    cb?.({ ok: true });
-  });
-
-  /** Exclusion : l'hôte peut exclure n'importe qui (sauf lui-même), un cohôte ne peut exclure
-   *  que des auditeurs ou intervenants — jamais l'hôte ni un autre cohôte. */
-  socket.on("vocal:exclure", ({ code, userId }, cb) => {
-    const salon = salonsVocaux.get(code);
-    if (!salon || !estModoVocal(salon, user.id) || userId === user.id) return cb?.({ ok: false });
-    const cible = salon.participants.get(userId);
-    if (!cible || cible.role === "hote") return cb?.({ ok: false });
-    if (salon.hostId !== user.id && cible.role === "cohote") return cb?.({ ok: false });
-    salon.participants.delete(userId);
-    salon.demandesMontee.delete(userId);
-    const socketCible = [...io.of("/").sockets.values()].find((s) => s.data.user?.id === userId);
-    if (socketCible) {
-      socketCible.leave(`vocal:${salon.code}`);
-      socketCible.emit("vocal:exclu", { code: salon.code });
-    }
-    // Les autres participants doivent couper leur connexion audio directe vers la personne exclue.
-    io.to(`vocal:${salon.code}`).emit("vocal:rtc-peer-left", { userId });
-    diffuserVocal(salon);
-    cb?.({ ok: true });
-  });
-
-  /** Relais des messages de négociation WebRTC (offres, réponses, candidats ICE) entre deux
-   *  participants du même salon — le serveur ne fait que transmettre, il ne touche jamais au son
-   *  lui-même, qui circule directement entre les deux navigateurs une fois la connexion établie. */
-  socket.on("vocal:rtc-signal", ({ code, to, signal }) => {
-    const salon = salonsVocaux.get(code);
-    if (!salon || !salon.participants.has(user.id) || !salon.participants.has(to)) return;
-    const socketCible = [...io.of("/").sockets.values()].find((s) => s.data.user?.id === to);
-    if (socketCible) socketCible.emit("vocal:rtc-signal", { from: user.id, signal });
-  });
-
-  /** Diffuse une piste du catalogue radio existant à tout le salon : chacun charge le même
-   *  fichier et se cale sur le temps écoulé depuis `demarreLe`, pour une écoute à peu près
-   *  synchronisée sans avoir besoin de faire transiter le moindre son par le serveur. */
-  socket.on("vocal:radio", ({ code, pisteId }, cb) => {
-    const salon = salonsVocaux.get(code);
-    if (!salon || !estModoVocal(salon, user.id)) return cb?.({ ok: false });
-    if (!pisteId) {
-      salon.radio = null;
-      diffuserVocal(salon);
-      return cb?.({ ok: true });
-    }
-    const piste = playlisteMusique.find((p) => p.id === pisteId);
-    if (!piste) return cb?.({ ok: false, error: "PISTE_INTROUVABLE" });
-    if (!fichierMusiqueExiste(piste)) return cb?.({ ok: false, error: "FICHIER_INTROUVABLE" });
-    salon.radio = { titre: piste.titre, url: piste.url, type: "audio", demarreLe: Date.now() };
-    diffuserVocal(salon);
-    cb?.({ ok: true });
-  });
-
-  /** Ajout rapide d'une piste depuis le salon lui-même — un lien direct, ou un fichier envoyé
-   *  depuis le téléphone (voir ajouterPisteMusique) — sans passer par la console admin. Réservé
-   *  à l'hôte/aux cohôtes, comme la diffusion elle-même. Volontairement séparé de la diffusion
-   *  du micro (voir vocal:parler/vocal:mute) : c'est justement cette lecture locale synchronisée
-   *  sur chaque appareil, plutôt qu'un relais par le micro, qui évite la dégradation du son que
-   *  provoque le traitement vocal (suppression de bruit, annulation d'écho) du navigateur. */
-  socket.on("vocal:radio-ajouter", ({ code, titre, url, fichier, ext }, cb) => {
-    const salon = salonsVocaux.get(code);
-    if (!salon || !estModoVocal(salon, user.id)) return cb?.({ ok: false });
-    const resultat = ajouterPisteMusique({ titre, url, fichier, ext });
-    if (resultat.error) return cb?.({ ok: false, error: resultat.error });
-    salon.radio = { titre: resultat.piste.titre, url: resultat.piste.url, type: "audio", demarreLe: Date.now() };
-    diffuserVocal(salon);
-    cb?.({ ok: true, piste: resultat.piste });
-  });
-
-  /** Diffuse une vidéo YouTube à tout le salon — même mécanisme de synchronisation par temps
-   *  écoulé que la radio (voir vocal:radio) : le serveur ne retient que l'identifiant de la vidéo
-   *  et l'heure de démarrage, la lecture réelle est gérée côté client par l'API officielle
-   *  YouTube (voir vocalChargerYoutube), jamais par un lien direct vers le flux vidéo — YouTube ne
-   *  le permet pas, et nous n'essayons pas de le contourner. */
-  socket.on("vocal:video-youtube", ({ code, url, titre }, cb) => {
-    const salon = salonsVocaux.get(code);
-    if (!salon || !estModoVocal(salon, user.id)) return cb?.({ ok: false });
-    const youtubeId = extraireIdYoutube(url);
-    if (!youtubeId) return cb?.({ ok: false, error: "LIEN_YOUTUBE_INVALIDE" });
-    salon.radio = {
-      titre: String(titre || "").trim().slice(0, 80) || "Vidéo YouTube",
-      type: "youtube", youtubeId, demarreLe: Date.now(),
-    };
-    diffuserVocal(salon);
-    cb?.({ ok: true });
-  });
-
-  /** Diffuse une vidéo depuis un lien web direct (mp4, webm…) — même principe que vocal:radio :
-   *  chaque appareil charge le même fichier et se cale sur le temps écoulé, sans jamais faire
-   *  transiter la vidéo par le serveur. */
-  socket.on("vocal:video-lien", ({ code, url, titre }, cb) => {
-    const salon = salonsVocaux.get(code);
-    if (!salon || !estModoVocal(salon, user.id)) return cb?.({ ok: false });
-    const lien = String(url || "").trim();
-    if (!/^https?:\/\/\S+$/i.test(lien)) return cb?.({ ok: false, error: "LIEN_INVALIDE" });
-    salon.radio = { titre: String(titre || "").trim().slice(0, 80) || "Vidéo", type: "video", url: lien, demarreLe: Date.now() };
-    diffuserVocal(salon);
-    cb?.({ ok: true });
-  });
-
-  /** Diffuse une vidéo envoyée depuis le téléphone (fichier encodé en base64, comme pour la
-   *  musique — voir ajouterPisteMusique), écrite sur disque puis diffusée aussitôt. Contrairement
-   *  à la musique, une vidéo envoyée ainsi n'entre pas dans une playlist partagée : c'est un envoi
-   *  ponctuel, propre à ce moment du salon. Comme pour la musique (voir fichierMusiqueExiste), le
-   *  fichier ne survivra pas forcément à un redéploiement sur un hébergement à disque non
-   *  persistant — sans conséquence ici puisque le salon lui-même ne survit pas non plus. */
-  socket.on("vocal:video-fichier", ({ code, titre, fichier, ext }, cb) => {
-    const salon = salonsVocaux.get(code);
-    if (!salon || !estModoVocal(salon, user.id)) return cb?.({ ok: false });
-    // Comme pour la musique (voir ajouterPisteMusique) : un format non reconnu n'est plus renommé
-    // de force en ".mp4" — ce mensonge sur le format faisait échouer la lecture silencieusement
-    // (Content-Type ne correspondant pas au contenu réel), pour certains fichiers seulement, ce qui
-    // ressemblait à un bug aléatoire. On refuse maintenant clairement, avec un message explicite.
-    const cleanExt = String(ext || "").toLowerCase();
-    if (!VIDEO_EXT_AUTORISEES.includes(cleanExt)) return cb?.({ ok: false, error: "FORMAT_NON_SUPPORTE" });
-    const base64Data = String(fichier || "").split(";base64,").pop();
-    const octets = Buffer.from(base64Data, "base64");
-    if (!octets.length) return cb?.({ ok: false, error: "FICHIER_INVALIDE" });
-    if (octets.length > VIDEO_MAX_OCTETS) return cb?.({ ok: false, error: "FICHIER_TROP_LOURD" });
-    if (!fs.existsSync(VIDEO_DIR)) fs.mkdirSync(VIDEO_DIR, { recursive: true });
-    const nomFichier = `${crypto.randomUUID()}.${cleanExt}`;
-    try { fs.writeFileSync(join(VIDEO_DIR, nomFichier), octets); }
-    catch { return cb?.({ ok: false, error: "ECRITURE_IMPOSSIBLE" }); }
-    salon.radio = {
-      titre: String(titre || "").trim().slice(0, 80) || "Vidéo",
-      type: "video", url: `/videos/${nomFichier}`, demarreLe: Date.now(),
-    };
-    diffuserVocal(salon);
-    cb?.({ ok: true });
-  });
-
-  /** Message de groupe propre au salon vocal — permet d'échanger par écrit sans couper le micro de
-   *  personne, ou pour ceux qui préfèrent taper. Réservé aux participants actuels du salon. Un
-   *  historique court est conservé (voir VOCAL_CHAT_HISTORIQUE_MAX) pour qu'un participant qui
-   *  rejoint en cours de route retrouve un peu de contexte, pas juste les messages à venir. */
-  socket.on("vocal:chat-envoyer", ({ code, texte, filmTmdbId, filmTitre, filmPoster }, cb) => {
-    const salon = salonsVocaux.get(code);
-    const moi = salon?.participants.get(user.id);
-    if (!salon || !moi) return cb?.({ ok: false });
-
-    const message = String(texte || "").trim().slice(0, 300);
-    if (!message) return cb?.({ ok: false, error: "VIDE" });
-
-    // Film proposé (voir #btnVocalRechercheFilm / "📢 Partager dans le salon") : en plus du texte,
-    // on retient l'identifiant TMDB du film pour que les autres joueurs puissent ouvrir directement
-    // sa fiche (bande-annonce, affiche…) depuis le message, sans avoir à le rechercher eux-mêmes.
-    // Uniquement un identifiant numérique TMDB — jamais une chaîne arbitraire du client.
-    const idTmdb = /^\d+$/.test(String(filmTmdbId || "")) ? String(filmTmdbId) : null;
-
-    salon.chat = salon.chat || [];
-    salon.chat.push({
-      id: crypto.randomUUID(), userId: user.id, pseudo: user.pseudo,
-      avatar: user.avatar, photo: user.photo || null, texte: message, at: Date.now(),
-      ...(idTmdb ? { filmTmdbId: idTmdb, filmTitre: String(filmTitre || "").trim().slice(0, 120),
-                     filmPoster: String(filmPoster || "").trim().slice(0, 300) || null } : {}),
-    });
-    if (salon.chat.length > VOCAL_CHAT_HISTORIQUE_MAX) salon.chat = salon.chat.slice(-VOCAL_CHAT_HISTORIQUE_MAX);
-
-    // Un message n'atteint pas les participants qui ont bloqué son auteur (même principe que le
-    // chat de partie), mais reste dans l'historique commun pour ne pas compliquer sa reconstruction.
-    for (const p of salon.participants.values()) {
-      if (p.userId !== user.id && estBloque(p.userId, user.id)) continue;
-      const s = [...io.of("/").sockets.values()].find((sk) => sk.data.user?.id === p.userId);
-      if (s) s.emit("vocal:update", publicVocal(salon));
-    }
-    cb?.({ ok: true });
-  });
-
-  /** Réactions emoji publiques dans un salon vocal — même principe que les réactions volantes en
-   *  partie (voir socket.on("reaction", ...)), mais sous un nom d'événement distinct : les deux
-   *  espaces (partie et salon vocal) ne doivent jamais se marcher dessus. Respecte le blocage,
-   *  comme le chat du salon. Liste validée contre REGLAGES.reactions.emojis (personnalisable
-   *  depuis la console admin) et non plus une liste figée à part : sinon, un émoji ajouté ou
-   *  réordonné depuis l'admin apparaissait bien dans la barre côté client mais était silencieusement
-   *  rejeté ici — la réaction ne partait jamais, sans le moindre message d'erreur.
-   *  `photo: true` : réaction spéciale qui envoie la photo de profil de l'expéditeur au lieu d'un
-   *  emoji — jamais son URL fournie par le client (on lit toujours `user.photo`, la valeur du
-   *  compte authentifié), pour qu'on ne puisse jamais faire apparaître la photo de quelqu'un
-   *  d'autre. Refusée en silence si le compte n'a pas de photo (rien à envoyer).
-   *  N'est PAS renvoyée à l'expéditeur lui-même : le client affiche désormais sa propre réaction
-   *  immédiatement en local, dès le clic (voir construireBarreReactions dans public/index.html /
-   *  public/vocal.html) plutôt que d'attendre cet aller-retour serveur pour l'afficher — c'était la
-   *  cause du "il faut cliquer plusieurs fois pour avoir un retour" remonté par plusieurs joueurs.
-   *  La renvoyer quand même à l'expéditeur l'aurait affichée une seconde fois en double. */
-  let derniereReactionVocale = 0;
-  socket.on("vocal:reaction", ({ code, emoji, photo }) => {
-    const salon = salonsVocaux.get(code);
-    const moi = salon?.participants.get(user.id);
-    if (!salon || !moi) return;
-    const estPhoto = photo === true && Boolean(user.photo);
-    if (!estPhoto && !REGLAGES.reactions.emojis.includes(emoji)) return;
-    if (Date.now() - derniereReactionVocale < 700) return; // évite le matraquage
-    derniereReactionVocale = Date.now();
-    const payload = estPhoto
-      ? { photo: user.photo, pseudo: user.pseudo, avatar: user.avatar }
-      : { emoji, pseudo: user.pseudo, avatar: user.avatar };
-    for (const p of salon.participants.values()) {
-      if (p.userId === user.id) continue; // déjà affichée en local par l'expéditeur, voir plus haut
-      if (estBloque(p.userId, user.id)) continue;
-      const s = [...io.of("/").sockets.values()].find((sk) => sk.data.user?.id === p.userId);
-      if (s) s.emit("vocal:reaction", payload);
-    }
-  });
-
-  /** Réaction emoji PRIVÉE dans un salon vocal : contrairement à vocal:reaction (diffusée à tout
-   *  le monde), celle-ci n'est envoyée qu'à un seul destinataire choisi (cibleUserId) — pensée pour
-   *  un petit clin d'œil discret à quelqu'un sans que le reste du salon le voie. Déclenchée côté
-   *  client en cliquant sur la photo de profil d'un participant (voir ouvrirMenuReactionPrivee dans
-   *  public/index.html / public/vocal.html). Mêmes règles de sécurité que la réaction publique :
-   *  liste d'émojis validée contre REGLAGES.reactions.emojis, blocage respecté, et un anti-matraquage
-   *  séparé (propre à ce socket, comme derniereReactionVocale ci-dessus) pour qu'on ne puisse pas
-   *  harceler quelqu'un d'émojis privés en boucle. */
-  let derniereReactionVocalePrivee = 0;
-  socket.on("vocal:reaction-privee", ({ code, cibleUserId, emoji }) => {
-    const salon = salonsVocaux.get(code);
-    const moi = salon?.participants.get(user.id);
-    if (!salon || !moi || !cibleUserId || cibleUserId === user.id) return;
-    const cible = salon.participants.get(cibleUserId);
-    if (!cible) return; // le destinataire a peut-être déjà quitté le salon entretemps
-    if (!REGLAGES.reactions.emojis.includes(emoji)) return;
-    if (estBloque(cibleUserId, user.id)) return;
-    if (Date.now() - derniereReactionVocalePrivee < 700) return; // évite le matraquage
-    derniereReactionVocalePrivee = Date.now();
-    const s = [...io.of("/").sockets.values()].find((sk) => sk.data.user?.id === cibleUserId);
-    if (s) s.emit("vocal:reaction-privee", { emoji, pseudo: user.pseudo, avatar: user.avatar });
-  });
-
-  /** Invite un ami dans le salon vocal en cours — même principe que invite:send pour les parties,
-   *  mais vers un salon vocal. Il reçoit une notification avec le code pour le rejoindre. */
-  socket.on("vocal:inviter", ({ code, amiId }, cb) => {
-    const salon = salonsVocaux.get(code);
-    if (!salon || !salon.participants.has(user.id)) return cb?.({ ok: false });
-    if (statutRelation(user.id, amiId) !== "ami") return cb?.({ ok: false, error: "PAS_AMI" });
-    if (estBloque(user.id, amiId)) return cb?.({ ok: false, error: "BLOQUE" });
-
-    // Gardé même si la personne est hors ligne ou manque le message : elle retrouvera l'invitation
-    // sous forme de bulle sur la page d'accueil dès qu'elle reviendra, tant que le salon est ouvert.
-    salon.invites?.set(amiId, { de: user.pseudo, at: Date.now() });
-
-    let livree = false;
-    for (const [, s] of io.of("/").sockets) {
-      if (s.data.user?.id !== amiId) continue;
-      s.emit("vocal:invite-recue", {
-        code: salon.code, titre: salon.titre,
-        de: user.pseudo, avatar: user.avatar, photo: user.photo || null,
-      });
-      livree = true;
-    }
-    cb?.({ ok: true, livree });
-  });
+  // Tous les événements vocal:* (créer, rejoindre, quitter, réactions, radio, chat, etc.) sont
+  // maintenant gérés par le module totalement indépendant vocal-salon.js — un seul point de
+  // contact avec ce socket, voir attacherSocket() dans ce fichier.
+  vocalSalon.attacherSocket(socket);
 
   /**
    * Ouvre (ou rejoint, si un coéquipier l'a déjà ouvert) un salon vocal réservé à toute son équipe
@@ -6452,12 +5749,12 @@ io.on("connection", (socket) => {
 
     room.salonsVocauxEquipe = room.salonsVocauxEquipe || {};
     let salonCode = room.salonsVocauxEquipe[joueur.team];
-    let salon = salonCode ? salonsVocaux.get(salonCode) : null;
+    let salon = salonCode ? vocalSalon.salonsVocaux.get(salonCode) : null;
 
     if (!salon) {
-      quitterSalonVocal(socket);
-      retourVocalDisponible.delete(user.id);
-      salonCode = genererCodeVocal();
+      vocalSalon.quitterSalonVocal(socket);
+      vocalSalon.retourVocalDisponible.delete(user.id);
+      salonCode = vocalSalon.genererCodeVocal();
       salon = {
         code: salonCode, hostId: user.id,
         titre: `Équipe ${joueur.team === "A" ? "🟡" : "🔷"} — partie ${room.code}`,
@@ -6473,13 +5770,13 @@ io.on("connection", (socket) => {
         userId: user.id, pseudo: user.pseudo, avatar: user.avatar, photo: user.photo || null,
         role: "hote", mute: true, parle: false,
       });
-      salonsVocaux.set(salonCode, salon);
+      vocalSalon.salonsVocaux.set(salonCode, salon);
       socket.join(`vocal:${salonCode}`);
       room.salonsVocauxEquipe[joueur.team] = salonCode;
     } else if (!salon.participants.has(user.id)) {
-      if (salon.participants.size >= MAX_PARTICIPANTS_VOCAL()) return cb?.({ ok: false, error: "SALON_COMPLET" });
-      quitterSalonVocal(socket);
-      retourVocalDisponible.delete(user.id);
+      if (salon.participants.size >= vocalSalon.MAX_PARTICIPANTS_VOCAL()) return cb?.({ ok: false, error: "SALON_COMPLET" });
+      vocalSalon.quitterSalonVocal(socket);
+      vocalSalon.retourVocalDisponible.delete(user.id);
       salon.participants.set(user.id, {
         userId: user.id, pseudo: user.pseudo, avatar: user.avatar, photo: user.photo || null,
         role: "auditeur", mute: true, parle: false,
@@ -6502,8 +5799,8 @@ io.on("connection", (socket) => {
       }
     }
 
-    diffuserVocal(salon);
-    cb?.({ ok: true, code: salonCode, salon: publicVocal(salon), invites });
+    vocalSalon.diffuserVocal(salon);
+    cb?.({ ok: true, code: salonCode, salon: vocalSalon.publicVocal(salon), invites });
   });
 
   /** Équivalent de vocal:equipe-ouvrir pour les modes sans équipes (duel, chacun pour soi,
@@ -6516,12 +5813,12 @@ io.on("connection", (socket) => {
     if (!room || room.mode === "teams" || !joueur) return cb?.({ ok: false, error: "INDISPONIBLE" });
 
     let salonCode = room.salonVocalPartie;
-    let salon = salonCode ? salonsVocaux.get(salonCode) : null;
+    let salon = salonCode ? vocalSalon.salonsVocaux.get(salonCode) : null;
 
     if (!salon) {
-      quitterSalonVocal(socket);
-      retourVocalDisponible.delete(user.id);
-      salonCode = genererCodeVocal();
+      vocalSalon.quitterSalonVocal(socket);
+      vocalSalon.retourVocalDisponible.delete(user.id);
+      salonCode = vocalSalon.genererCodeVocal();
       salon = {
         code: salonCode, hostId: user.id,
         titre: `Salon de la partie ${room.code}`,
@@ -6537,13 +5834,13 @@ io.on("connection", (socket) => {
         userId: user.id, pseudo: user.pseudo, avatar: user.avatar, photo: user.photo || null,
         role: "hote", mute: true, parle: false,
       });
-      salonsVocaux.set(salonCode, salon);
+      vocalSalon.salonsVocaux.set(salonCode, salon);
       socket.join(`vocal:${salonCode}`);
       room.salonVocalPartie = salonCode;
     } else if (!salon.participants.has(user.id)) {
-      if (salon.participants.size >= MAX_PARTICIPANTS_VOCAL()) return cb?.({ ok: false, error: "SALON_COMPLET" });
-      quitterSalonVocal(socket);
-      retourVocalDisponible.delete(user.id);
+      if (salon.participants.size >= vocalSalon.MAX_PARTICIPANTS_VOCAL()) return cb?.({ ok: false, error: "SALON_COMPLET" });
+      vocalSalon.quitterSalonVocal(socket);
+      vocalSalon.retourVocalDisponible.delete(user.id);
       salon.participants.set(user.id, {
         userId: user.id, pseudo: user.pseudo, avatar: user.avatar, photo: user.photo || null,
         role: "auditeur", mute: true, parle: false,
@@ -6566,11 +5863,12 @@ io.on("connection", (socket) => {
       }
     }
 
-    diffuserVocal(salon);
-    cb?.({ ok: true, code: salonCode, salon: publicVocal(salon), invites });
+    vocalSalon.diffuserVocal(salon);
+    cb?.({ ok: true, code: salonCode, salon: vocalSalon.publicVocal(salon), invites });
   });
 
-  socket.on("disconnect", () => quitterSalonVocal(socket, { involontaire: true }));
+  // Le "disconnect" propre au salon vocal est déjà enregistré par vocalSalon.attacherSocket(socket)
+  // plus haut (voir vocal-salon.js) — inutile d'en ajouter un second ici.
 
   /** Réactions émoji pendant la partie, relayées à tout le salon (liste REGLAGES.reactions.emojis,
    *  personnalisable depuis la console admin, aussi utilisée par les bots — voir botDire()).
