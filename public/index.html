@@ -10,6 +10,12 @@
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Bebas+Neue&family=Bangers&family=Archivo+Black&family=Oswald:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=Poppins:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&family=Barlow+Condensed:wght@400;500;600;700&family=Teko:wght@400;500;600;700&family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
 <style>
   :root{--ink:#0A0C16;--velvet:#151A2E;--card:#1C2238;--beam:#F5B942;--ticket:#E4586E;--teal:#4ECDC4;--chalk:#EDE8DC;--muted:#7C819B;
+    /* --online : vert "en ligne" / statut actif, utilisé pour les points de présence, les boutons
+       à bascule activés (musique, radio, mode enfant) et le bandeau mode enfant — regroupé ici en
+       variable plutôt que répété en dur à une dizaine d'endroits (nettoyage de cohérence visuelle).
+       --onbright : couleur de texte sombre utilisée par-dessus un fond vif (--online ou --teal),
+       pour rester lisible — même logique, même variable, réutilisée aux mêmes endroits. */
+    --online:#3DDC84; --onbright:#0A2015;
     --font-affiche:'Anton',sans-serif; --font-corps:'Inter',system-ui,sans-serif; --font-etiquette:'Oswald','Inter',system-ui,sans-serif; --font-code:'JetBrains Mono',monospace}
   *{box-sizing:border-box}
   body{margin:0;min-height:100vh;background:var(--ink);color:var(--chalk);
@@ -24,6 +30,10 @@
     color:var(--teal);border:1px solid var(--teal);border-radius:999px;padding:6px 14px}
   .card{background:var(--velvet);border:1px solid rgba(237,232,220,.09);border-radius:14px;padding:20px;margin-top:16px}
   .tag{font-family:var(--font-etiquette);font-weight:500;font-size:11px;letter-spacing:.26em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+  /* Lecture du volume (musique d'ambiance, radio du salon vocal) : utilisait la classe .tag par
+     facilité, mais son grand espacement de lettres (pensé pour des titres de section) rendait
+     "50%" illisible ("5 0 %"). Classe dédiée, sans cet espacement. */
+  .volLabel{font-family:var(--font-code);font-weight:600;font-size:13px;color:var(--muted);text-align:center}
   label{display:block;font-family:var(--font-etiquette);font-weight:500;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
   input{width:100%;background:var(--card);border:1px solid rgba(237,232,220,.14);color:var(--chalk);border-radius:10px;padding:13px 14px;font:inherit;font-size:16px}
   input:focus-visible,button:focus-visible{outline:2px solid var(--beam);outline-offset:2px}
@@ -41,12 +51,23 @@
   button.danger{color:var(--ticket);border-color:rgba(228,88,110,.45)}
   button:disabled{opacity:.45;cursor:not-allowed;transform:none !important;box-shadow:none}
   .row{display:flex;gap:10px;margin-top:14px}.row>*{flex:1}
+  /* Rangée de contrôle de la radio du salon vocal (reculer / volume / avancer, 5 éléments) :
+     débordait sur petit écran et repassait à la ligne de façon inégale (le dernier bouton se
+     retrouvant seul sur sa propre ligne) — flex:0 0 auto sans gap ni padding resserrés au lieu
+     d'hériter des règles génériques de .row. */
+  .row.rangeeControlesRadio{flex-wrap:nowrap;gap:6px}
+  .rangeeControlesRadio>*{flex:0 0 auto;padding:10px 12px}
+  @media (max-width:420px){
+    .rangeeControlesRadio{gap:4px}
+    .rangeeControlesRadio>button{padding:10px 8px;font-size:13px}
+    .rangeeControlesRadio .volLabel{min-width:28px;font-size:12px}
+  }
   /* Radio d'ambiance : visible dès la page d'accueil, en haut de chaque écran, et jamais superposée à rien
      puisqu'elle suit le flux normal de la page (pas de position fixe). */
   .radioBar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:10px 0}
   .radioBar #musiqueVolLabel{font-size:12px}
-  #btnMusique[aria-pressed="true"]{background:#3DDC84;color:#0A2015;border-color:#3DDC84}
-  #btnRadioLike[aria-pressed="true"]{background:#3DDC84;color:#0A2015;border-color:#3DDC84}
+  #btnMusique[aria-pressed="true"]{background:var(--online);color:var(--onbright);border-color:var(--online)}
+  #btnRadioLike[aria-pressed="true"]{background:var(--online);color:var(--onbright);border-color:var(--online)}
   #btnRadioDislike[aria-pressed="true"]{background:var(--ticket);color:#fff;border-color:var(--ticket)}
   .hidden{display:none !important}
   .avatars{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:4px}
@@ -86,7 +107,7 @@
     padding:22px 20px;box-shadow:0 10px 28px rgba(245,185,66,.35);transition:transform .15s ease,box-shadow .15s ease}
   #btnCommencerPartie::before{display:none}
   #btnCommencerPartie .ic{font-size:32px}
-  #btnCommencerPartie b{font-size:20px;color:#0A0C16}
+  #btnCommencerPartie b{font-size:20px;color:var(--ink)}
   #btnCommencerPartie small{color:rgba(10,12,22,.72)}
   body.animations-actives #btnCommencerPartie:hover,
   body.animations-actives #btnCommencerPartie:active{transform:translateY(-2px);box-shadow:0 14px 34px rgba(245,185,66,.5)}
@@ -109,7 +130,7 @@
   #carteProfil{text-align:center;margin:4px 0 22px}
   .barreNiveau{position:relative;overflow:hidden;cursor:pointer;
     background:linear-gradient(155deg,rgba(245,185,66,.16),rgba(228,88,110,.10) 55%,var(--card) 100%);
-    border:1px solid rgba(245,185,66,.35);border-radius:16px;padding:15px 17px;margin-top:14px;
+    border:1px solid rgba(245,185,66,.35);border-radius:14px;padding:15px 17px;margin-top:14px;
     box-shadow:0 8px 20px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.05);
     transition:border-color .2s,transform .2s}
   .barreNiveau:hover{border-color:var(--beam);transform:translateY(-1px)}
@@ -145,7 +166,7 @@
   @keyframes presquePulse{0%,100%{box-shadow:0 8px 20px rgba(78,205,196,.22)}50%{box-shadow:0 8px 26px rgba(78,205,196,.45)}}
   /* Version compacte de la carte de niveau, réutilisée dans le profil (le sien et celui
      d'un autre joueur) — même langage visuel que .barreNiveau du menu, en plus sobre. */
-  .niveauMini{background:var(--card);border:1px solid rgba(245,185,66,.25);border-radius:12px;
+  .niveauMini{background:var(--card);border:1px solid rgba(245,185,66,.25);border-radius:14px;
     padding:12px 14px;margin:14px 0}
   .niveauMiniTete{display:flex;align-items:center;gap:8px;margin-bottom:8px}
   .niveauMiniEmoji{font-size:20px}
@@ -273,9 +294,9 @@
   .amiLigne .pfp{width:28px;height:28px}
   #popNom .pfp{width:52px;height:52px;vertical-align:-16px;margin-right:6px}
   .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:0 0 auto}
-  .dot.on{background:#3DDC84;box-shadow:0 0 8px rgba(61,220,132,.7)}
+  .dot.on{background:var(--online);box-shadow:0 0 8px rgba(61,220,132,.7)}
   .online{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--muted);margin-top:10px}
-  .online b{color:#3DDC84;font-family:'JetBrains Mono',monospace;font-size:16px}
+  .online b{color:var(--online);font-family:'JetBrains Mono',monospace;font-size:16px}
   /* Bulle en haut de l'accueil : accès rapide à un salon vocal dont on a été coupé, ou auquel
      on a été invité et pas encore rejoint. */
   /* position:fixed : cette bannière n'est plus dans #menu (voir HTML) pour rester visible même
@@ -291,7 +312,7 @@
   .retourVocalBulle .txt small{display:block;color:var(--muted);font-size:12px;margin-top:2px;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .retourVocalBulle button{flex:0 0 auto;padding:8px 14px;font-size:13px;background:var(--teal);
-    color:#0A2015;border:0;border-radius:999px;font-weight:600;cursor:pointer}
+    color:var(--onbright);border:0;border-radius:999px;font-weight:600;cursor:pointer}
   .retourVocalBulle .retourVocalFermer{background:transparent;color:var(--muted);font-size:20px;
     font-weight:400;padding:0 2px;line-height:1}
   /* Tête d'affiche : bandeau des joueurs en ligne, mis en avant en haut du menu. */
@@ -304,9 +325,9 @@
   .listeTeteAffiche{display:flex;gap:12px;overflow-x:auto;padding:2px 2px 8px;scrollbar-width:thin}
   .teteAvatar{display:flex;flex-direction:column;align-items:center;gap:5px;flex:0 0 auto;width:60px;cursor:pointer}
   .teteAvatar .cadre{position:relative;width:48px;height:48px;border-radius:50%;overflow:hidden;
-    border:2px solid #3DDC84;display:grid;place-items:center;font-size:22px;background:var(--card)}
+    border:2px solid var(--online);display:grid;place-items:center;font-size:22px;background:var(--card)}
   .teteAvatar .cadre img{width:100%;height:100%;object-fit:cover}
-  .teteAvatar .dot{position:absolute;bottom:0;right:0;border:2px solid var(--bg,#0A0C16)}
+  .teteAvatar .dot{position:absolute;bottom:0;right:0;border:2px solid var(--ink)}
   .teteAvatar span{font-size:11px;color:var(--chalk);text-align:center;white-space:nowrap;
     overflow:hidden;text-overflow:ellipsis;max-width:60px}
   .players li{background:var(--card);border-radius:999px;padding:7px 14px;font-size:14px;display:flex;gap:7px;align-items:center}
@@ -657,14 +678,18 @@
   #banner{display:block;width:100%;background:transparent;border:0;padding:0;text-align:left;cursor:pointer;color:inherit}
   #banner:hover h1 em{color:var(--ticket)}
   .xbtn{display:block;text-align:center;text-decoration:none;font-weight:700;font-size:16px;
-    background:var(--chalk);color:#0A0C16;border-radius:10px;padding:14px 18px;margin-bottom:10px}
+    background:var(--chalk);color:var(--ink);border-radius:10px;padding:14px 18px;margin-bottom:10px}
   .xbtn.ghostlink{background:transparent;color:var(--chalk);border:1px solid rgba(237,232,220,.25);font-weight:500}
   ul.how{list-style:none;padding:0;margin:0;color:var(--muted);font-size:15px;line-height:1.6}
   ul.how b{color:var(--beam);margin-right:6px}
   /* Téléphones : cibles tactiles plus larges, chat plein écran, moins de marges. */
   @media (max-width:600px){
     .wrap{padding:18px 14px 96px}
-    .card{padding:16px;border-radius:12px}
+    /* Le titre pouvait s'étendre jusque sous les icônes fixes du coin (#barreBoutonsCoin, jusqu'à
+       3 boutons ronds) et sembler s'y superposer sur petit écran — on réserve leur largeur max
+       pour que le titre passe à la ligne avant de les atteindre plutôt que de passer dessous. */
+    #banner{padding-right:150px}
+    .card{padding:16px}
     .row{flex-wrap:wrap}
     button,input{min-height:48px}
     .flap{width:46px;height:60px;font-size:26px}
@@ -713,7 +738,7 @@
   font-size:19px;margin:8px 0 12px;font-weight:400;color:var(--chalk)}
 #popLienExterne .lienExterneCompte{font-family:'JetBrains Mono',monospace;font-size:26px;color:var(--beam);margin:0 0 6px}
 #popLienExterne .noteAttente{color:var(--muted);font-size:13px;margin:0}
-#popLienExterne a.lienActif{display:inline-block;margin-top:6px;background:var(--beam);color:#0A0C16;
+#popLienExterne a.lienActif{display:inline-block;margin-top:6px;background:var(--beam);color:var(--ink);
   font-weight:bold;padding:11px 20px;border-radius:999px;text-decoration:none}
 #popLiensEpingles{position:fixed;inset:0;background:rgba(10,12,22,.72);display:grid;place-items:center;z-index:95;padding:18px}
 #popLiensEpingles .boite{background:var(--velvet);border:1px solid rgba(237,232,220,.14);border-radius:14px;
@@ -741,12 +766,12 @@
 
 /* --- MODE ENFANT --- */
 #btnKidMode{font-size:18px;line-height:1;padding:13px 16px}
-#btnKidMode[aria-pressed="true"]{background:#3DDC84;color:#0A2015;border-color:#3DDC84}
+#btnKidMode[aria-pressed="true"]{background:var(--online);color:var(--onbright);border-color:var(--online)}
 #btnKidMode:disabled{cursor:not-allowed;opacity:.85}
 /* Halo vert tout autour de l'écran tant que le mode enfant est actif. */
-html.mode-enfant-actif{box-shadow:inset 0 0 0 5px #3DDC84, inset 0 0 34px 6px rgba(61,220,132,.55)}
+html.mode-enfant-actif{box-shadow:inset 0 0 0 5px var(--online), inset 0 0 34px 6px rgba(61,220,132,.55)}
 html.mode-enfant-actif body{min-height:100vh}
-.bandeauEnfant{position:fixed;top:0;left:0;right:0;z-index:1200;background:#3DDC84;color:#0A2015;
+.bandeauEnfant{position:fixed;top:0;left:0;right:0;z-index:1200;background:var(--online);color:var(--onbright);
   text-align:center;font-family:var(--font-etiquette);font-weight:600;font-size:12px;letter-spacing:.14em;
   text-transform:uppercase;padding:6px 10px}
 html.mode-enfant-actif .wrap{padding-top:48px}
@@ -807,34 +832,37 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
 .vocalParticipant[data-userid]:not(.vocalParticipantMoi):hover .vocalAvatarWrap,
 .vocalParticipant[data-userid]:not(.vocalParticipantMoi):active .vocalAvatarWrap{filter:brightness(1.18)}
 #btnVocalMute,#btnVocalMicFlottant,#btnVocalLeverMain{transition:background .15s ease,color .15s ease}
-#btnVocalMute.micro-ouvert,#btnVocalMicFlottant.micro-ouvert,#btnVocalLeverMain.micro-ouvert{background:var(--teal);color:#0A2015;border-color:var(--teal)}
+#btnVocalMute.micro-ouvert,#btnVocalMicFlottant.micro-ouvert,#btnVocalLeverMain.micro-ouvert{background:var(--teal);color:var(--onbright);border-color:var(--teal)}
 #vocalDemandesListe .urowVocal,#vocalConsoleParticipants .urowVocal{display:flex;align-items:center;gap:10px;
   padding:10px 0;border-top:1px solid rgba(237,232,220,.1);flex-wrap:wrap}
 #vocalDemandesListe .urowVocal .qui,#vocalConsoleParticipants .urowVocal .qui{display:flex;align-items:center;gap:8px;flex:1 1 140px}
 /* --- LA FENÊTRE MODALE --- */
+/* Reprise avec les variables du thème (--ink/--velvet/--card/--chalk/--muted/--ticket/--teal) au
+   lieu des gris/rouge/vert génériques d'origine (#1a1a1a, #e50914, #1db954…) qui donnaient
+   l'impression d'un composant collé là depuis un autre site, visuellement décroché du reste. */
 .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.85); display: none; justify-content: center; align-items: center; z-index: 1001; opacity: 0; transition: opacity 0.3s ease; }
 .modal-overlay.active { display: flex; opacity: 1; }
 /* La bande-annonce peut s'ouvrir par-dessus une autre fenêtre déjà affichée (Sorties Ciné,
    Actuellement au cinéma) : elle doit toujours passer au-dessus, quel que soit son ordre dans
    le document, sans quoi elle peut se retrouver masquée derrière la fenêtre qui l'a ouverte. */
 #trailerModal.active { z-index: 1002; }
-.modal-content { background-color: #1a1a1a; border: 1px solid #333; border-radius: 12px; width: 90%; max-width: 600px; max-height: 80vh; overflow-y: auto; position: relative; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7); transform: translateY(-20px); transition: transform 0.3s ease; color: #fff;}
+.modal-content { background-color: var(--velvet); border: 1px solid rgba(237,232,220,.14); border-radius: 14px; width: 90%; max-width: 600px; max-height: 80vh; overflow-y: auto; position: relative; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7); transform: translateY(-20px); transition: transform 0.3s ease; color: var(--chalk);}
 .modal-overlay.active .modal-content { transform: translateY(0); }
-.modal-header { background: #111; padding: 20px; border-bottom: 2px solid #222; border-radius: 12px 12px 0 0; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; }
-.modal-header h2 { margin: 0; font-size: 24px; color: #f5f5f5; font-family: 'Anton', sans-serif;}
-.close-btn { background: none; border: none; color: #888; font-size: 32px; line-height: 1; cursor: pointer; transition: color 0.2s; }
-.close-btn:hover { color: #e50914; }
+.modal-header { background: var(--ink); padding: 20px; border-bottom: 2px solid rgba(237,232,220,.14); border-radius: 14px 14px 0 0; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; }
+.modal-header h2 { margin: 0; font-size: 24px; color: var(--chalk); font-family: 'Anton', sans-serif;}
+.close-btn { background: none; border: none; color: var(--muted); font-size: 32px; line-height: 1; cursor: pointer; transition: color 0.2s; }
+.close-btn:hover { color: var(--ticket); }
 .modal-body { padding: 25px; line-height: 1.6; font-family: 'Inter', sans-serif; text-align: left; }
-.mode-section { background-color: #222; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; border-left: 5px solid #1db954; text-align: left; }
-.mode-section.cine { border-left-color: #e50914; }
-.mode-section h3 { margin-top: 0; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; color: white;}
+.mode-section { background-color: var(--card); padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; border-left: 5px solid var(--teal); text-align: left; }
+.mode-section.cine { border-left-color: var(--ticket); }
+.mode-section h3 { margin-top: 0; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; color: var(--chalk);}
 .mode-section ul { margin-bottom: 0; padding-left: 20px; }
-.teaser-section { background: linear-gradient(135deg, #1c1c3c, #3a2056); padding: 25px; border-radius: 8px; text-align: center; margin-top: 30px; box-shadow: 0 4px 15px rgba(58, 32, 86, 0.4); border: 1px solid #4a3066; }
-.teaser-section h3 { margin-top: 0; color: #fff; text-transform: uppercase; letter-spacing: 1px; font-size: 20px; }
-.teaser-section p { font-size: 1.05em; color: #ddd; }
+.teaser-section { background: linear-gradient(135deg, var(--velvet), var(--card)); padding: 25px; border-radius: 8px; text-align: center; margin-top: 30px; box-shadow: 0 4px 15px rgba(245,185,66,.15); border: 1px solid rgba(245,185,66,.25); }
+.teaser-section h3 { margin-top: 0; color: var(--chalk); text-transform: uppercase; letter-spacing: 1px; font-size: 20px; }
+.teaser-section p { font-size: 1.05em; color: var(--chalk); opacity: .85; }
 .modal-content::-webkit-scrollbar { width: 8px; }
-.modal-content::-webkit-scrollbar-track { background: #1a1a1a; }
-.modal-content::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
+.modal-content::-webkit-scrollbar-track { background: var(--velvet); }
+.modal-content::-webkit-scrollbar-thumb { background: rgba(237,232,220,.25); border-radius: 4px; }
 
   .bday-item { display: flex; gap: 12px; margin-bottom: 12px; padding: 10px; background: var(--card); border-radius: 8px; align-items: center; border-left: 4px solid var(--teal); }
   .bday-item img { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; }
@@ -844,7 +872,7 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
   /* Historique des questions déjà posées dans la partie en cours. */
   .histoItem{display:flex;gap:12px;margin-bottom:12px;padding:10px;background:var(--card);
     border-radius:8px;align-items:flex-start;border-left:4px solid var(--beam)}
-  .histoItem img{width:52px;height:76px;object-fit:cover;border-radius:4px;flex:0 0 auto;background:#000}
+  .histoItem img{width:52px;height:76px;object-fit:cover;border-radius:4px;flex:0 0 auto;background:var(--ink)}
   .histoItem .info{flex:1;min-width:0}
   .histoItem .info b{display:block;color:var(--chalk);font-size:15px;margin-bottom:2px}
   .histoItem .info small{color:var(--muted);font-size:12.5px;line-height:1.35;display:block}
@@ -859,16 +887,16 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
   .progression-map { display: flex; flex-direction: column-reverse; align-items: center; padding: 20px 0; overflow-y: auto; overflow-x: hidden; height: 100%; padding-bottom: 50vh; }
   .progression-line { width: 6px; height: 26px; background: var(--card); transition: background 0.3s; }
   .progression-line.done { background: var(--teal); }
-  .progression-step { width: 56px; height: 56px; border-radius: 50%; background: var(--card); color: var(--chalk); display: flex; justify-content: center; align-items: center; font-family: 'Anton', sans-serif; font-size: 22px; border: 4px solid #222; z-index: 2; transition: all 0.3s; position: relative; }
-  .progression-step.done { background: var(--teal); border-color: #3DDC84; color: #000; }
-  .progression-step.current { background: var(--beam); border-color: #FFF; color: #000; transform: scale(1.35); box-shadow: 0 0 20px var(--beam); z-index: 5; }
-  .progression-step.bonus { border-color: var(--ticket); background: #4a1c24; }
+  .progression-step { width: 56px; height: 56px; border-radius: 50%; background: var(--card); color: var(--chalk); display: flex; justify-content: center; align-items: center; font-family: 'Anton', sans-serif; font-size: 22px; border: 4px solid var(--ink); z-index: 2; transition: all 0.3s; position: relative; }
+  .progression-step.done { background: var(--teal); border-color: var(--online); color: var(--ink); }
+  .progression-step.current { background: var(--beam); border-color: var(--chalk); color: var(--ink); transform: scale(1.35); box-shadow: 0 0 20px var(--beam); z-index: 5; }
+  .progression-step.bonus { border-color: var(--ticket); background: rgba(228,88,110,.22); }
   .progression-step.bonus.done { background: var(--teal); border-color: var(--ticket); }
-  .progression-step.claimable { animation: pulseBonus 1s infinite; cursor: pointer; background: var(--ticket); color: #fff; box-shadow: 0 0 15px var(--ticket); z-index: 6; }
-  .progression-step.fog { background: #111; border-color: #1a1a1a; color: transparent; text-shadow: 0 0 0 #444; transform: scale(0.9); }
-  .progression-step.chest { border-color: var(--teal); background: #0f2e2b; }
-  .progression-step.chest.done { background: var(--teal); border-color: #fff; color: #000; }
-  .progression-step.chest.claimable { background: var(--teal); color: #04201c; box-shadow: 0 0 15px var(--teal); animation: pulseBonus 1s infinite; }
+  .progression-step.claimable { animation: pulseBonus 1s infinite; cursor: pointer; background: var(--ticket); color: var(--chalk); box-shadow: 0 0 15px var(--ticket); z-index: 6; }
+  .progression-step.fog { background: var(--ink); border-color: var(--velvet); color: transparent; text-shadow: 0 0 0 rgba(237,232,220,.25); transform: scale(0.9); }
+  .progression-step.chest { border-color: var(--teal); background: rgba(78,205,196,.16); }
+  .progression-step.chest.done { background: var(--teal); border-color: var(--chalk); color: var(--ink); }
+  .progression-step.chest.claimable { background: var(--teal); color: var(--onbright); box-shadow: 0 0 15px var(--teal); animation: pulseBonus 1s infinite; }
   .coffre-anim { font-size: 64px; margin: 6px 0 14px; animation: coffreBounce 1.2s ease-in-out infinite; }
   @keyframes coffreBounce { 0%,100%{transform:translateY(0) rotate(0deg)} 25%{transform:translateY(-6px) rotate(-4deg)} 75%{transform:translateY(-6px) rotate(4deg)} }
   .coffre-anim.ouvert { animation: coffreOuvre .6s ease forwards; }
@@ -957,7 +985,7 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
     <button id="btnMusique" class="ghost" style="flex:0 0 auto" title="Lancer la radio">📻 Lancer la radio</button>
     <button id="btnMusiqueSuivant" class="ghost hidden" style="flex:0 0 auto;padding:10px 12px" title="Passer à la piste suivante">⏭️</button>
     <button id="btnMusiqueVolMoins" class="ghost" style="flex:0 0 auto;padding:10px 12px" title="Diminuer le volume">🔉➖</button>
-    <span id="musiqueVolLabel" class="tag" style="margin:0;min-width:34px;text-align:center">50%</span>
+    <span id="musiqueVolLabel" class="volLabel" style="min-width:34px">50%</span>
     <button id="btnMusiqueVolPlus" class="ghost" style="flex:0 0 auto;padding:10px 12px" title="Augmenter le volume">🔊➕</button>
     <span id="radioAvisTexte" class="tag hidden" style="margin:0">Tu aimes ce que tu entends ?</span>
     <button id="btnRadioLike" class="ghost hidden" style="flex:0 0 auto;padding:10px 12px" title="J'aime cette musique">👍</button>
@@ -1306,7 +1334,7 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
     <div class="row hidden" id="favorisAccueil" style="margin-bottom:14px;flex-wrap:wrap"></div>
 
     <div class="row" style="margin-bottom: 14px;" data-module="sorties">
-      <button id="btnFilmsCinema" style="flex:1; padding: 10px 16px; background: var(--beam); color: #0A0C16; font-weight: bold; border: 0; border-radius: 999px; cursor: pointer;">🎬 Films au cinéma</button>
+      <button id="btnFilmsCinema" style="flex:1; padding: 10px 16px; background: var(--beam); color: var(--ink); font-weight: bold; border: 0; border-radius: 999px; cursor: pointer;">🎬 Films au cinéma</button>
     </div>
     <div class="row" style="margin-bottom: 14px;" data-module="cinemas">
       <button id="btnCinemasProches" class="ghost" style="border-color: var(--ticket); color: var(--ticket);">📍 Cinéma le plus proche</button>
@@ -1390,16 +1418,16 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
       <div class="card" id="vocalRadioCard">
         <p class="tag" style="margin:0 0 8px">📻 Radio & vidéo du salon</p>
         <p class="note" id="vocalRadioTexte" style="margin:0 0 10px">Aucune piste diffusée pour l'instant.</p>
-        <div class="row" style="margin:0 0 10px">
-          <button id="btnVocalRadioReculer" class="ghost" style="flex:0 0 auto;padding:10px 12px" title="Reculer de 15 secondes">⏪ 15s</button>
-          <button id="btnVocalRadioVolMoins" class="ghost" style="flex:0 0 auto;padding:10px 12px" title="Diminuer le volume">🔉➖</button>
-          <span id="vocalRadioVolLabel" class="tag" style="margin:0;min-width:34px;text-align:center">50%</span>
-          <button id="btnVocalRadioVolPlus" class="ghost" style="flex:0 0 auto;padding:10px 12px" title="Augmenter le volume">🔊➕</button>
-          <button id="btnVocalRadioAvancer" class="ghost" style="flex:0 0 auto;padding:10px 12px" title="Avancer de 15 secondes">15s ⏩</button>
+        <div class="row rangeeControlesRadio" style="margin:0 0 10px">
+          <button id="btnVocalRadioReculer" class="ghost" title="Reculer de 15 secondes">⏪ 15s</button>
+          <button id="btnVocalRadioVolMoins" class="ghost" title="Diminuer le volume">🔉➖</button>
+          <span id="vocalRadioVolLabel" class="volLabel" style="min-width:34px">50%</span>
+          <button id="btnVocalRadioVolPlus" class="ghost" title="Augmenter le volume">🔊➕</button>
+          <button id="btnVocalRadioAvancer" class="ghost" title="Avancer de 15 secondes">15s ⏩</button>
         </div>
         <audio id="vocalAudio" style="width:100%;display:none" controls></audio>
-        <video id="vocalVideo" style="width:100%;display:none;border-radius:10px;background:#000" controls playsinline></video>
-        <div id="vocalYoutubeWrap" class="hidden" style="position:relative;width:100%;padding-top:56.25%;border-radius:10px;overflow:hidden;background:#000">
+        <video id="vocalVideo" style="width:100%;display:none;border-radius:10px;background:var(--ink)" controls playsinline></video>
+        <div id="vocalYoutubeWrap" class="hidden" style="position:relative;width:100%;padding-top:56.25%;border-radius:10px;overflow:hidden;background:var(--ink)">
           <div id="vocalYoutubePlayer" style="position:absolute;inset:0;width:100%;height:100%"></div>
         </div>
         <div id="vocalRadioChoix" class="hidden">
@@ -1519,7 +1547,7 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
         <div id="vocalDemandesListe"></div>
         <div id="vocalConsoleParticipants"></div>
         <div class="row hidden" id="vocalFermerZone" style="margin-top:14px">
-          <button class="danger" id="btnVocalFermer">🔒 Fermer le salon pour tout le monde</button>
+          <button class="ghost danger" id="btnVocalFermer">🔒 Fermer le salon pour tout le monde</button>
         </div>
       </div>
 
@@ -1586,7 +1614,7 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
           <input type="checkbox" id="lectureAuto"> Lecture automatique
         </label>
         <button id="btnLectureVolMoins" class="ghost" style="flex:0 0 auto;padding:8px 10px" title="Diminuer le volume de la voix">🔉➖</button>
-        <span id="lectureVolLabel" class="tag" style="margin:0;min-width:34px;text-align:center;font-size:12px">100%</span>
+        <span id="lectureVolLabel" class="volLabel" style="min-width:34px;font-size:12px">100%</span>
         <button id="btnLectureVolPlus" class="ghost" style="flex:0 0 auto;padding:8px 10px" title="Augmenter le volume de la voix">🔊➕</button>
       </div>
       <p class="indiceLecture hidden" id="indiceLecture">Touchez le texte pour tout afficher</p>
@@ -1697,18 +1725,18 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
       <div class="modal-body">
         <p class="note" style="margin:0 0 10px">★ Épinglez jusqu'à 4 raccourcis sur votre page d'accueil en cliquant sur l'étoile à côté d'une option.</p>
         <div class="row" style="flex-wrap:wrap">
-          <span class="favoriGroup"><button class="ghost" id="btnExchange">Espace échange</button><button class="favToggle" data-fav="btnExchange" title="Épingler sur l'accueil">☆</button></span>
-          <span class="favoriGroup"><button class="ghost" id="btnBoard">Classement</button><button class="favToggle" data-fav="btnBoard" title="Épingler sur l'accueil">☆</button></span>
-          <span class="favoriGroup"><button class="ghost" id="btnQuetes">Quêtes <span id="badgeQuetes" class="pastille hidden">0</span></button><button class="favToggle" data-fav="btnQuetes" title="Épingler sur l'accueil">☆</button></span>
+          <span class="favoriGroup"><button class="ghost" id="btnExchange">🔄 Espace échange</button><button class="favToggle" data-fav="btnExchange" title="Épingler sur l'accueil">☆</button></span>
+          <span class="favoriGroup"><button class="ghost" id="btnBoard">🏅 Classement</button><button class="favToggle" data-fav="btnBoard" title="Épingler sur l'accueil">☆</button></span>
+          <span class="favoriGroup"><button class="ghost" id="btnQuetes">🎯 Quêtes <span id="badgeQuetes" class="pastille hidden">0</span></button><button class="favToggle" data-fav="btnQuetes" title="Épingler sur l'accueil">☆</button></span>
           <span class="favoriGroup"><button class="ghost" id="btnSondages">🍿 Sondages <span id="badgeSondages" class="pastille hidden">0</span></button><button class="favToggle" data-fav="btnSondages" title="Épingler sur l'accueil">☆</button></span>
-          <span class="favoriGroup"><button class="ghost" id="btnFriends">Amis <span id="badgeAmis" class="pastille hidden">0</span></button><button class="favToggle" data-fav="btnFriends" title="Épingler sur l'accueil">☆</button></span>
+          <span class="favoriGroup"><button class="ghost" id="btnFriends">👥 Amis <span id="badgeAmis" class="pastille hidden">0</span></button><button class="favToggle" data-fav="btnFriends" title="Épingler sur l'accueil">☆</button></span>
           <span class="favoriGroup"><button class="ghost" id="btnParcourirFilms">🎞️ Parcourir les films</button><button class="favToggle" data-fav="btnParcourirFilms" title="Épingler sur l'accueil">☆</button></span>
           <span class="favoriGroup"><button class="ghost" id="btnSignets">🔖 Mes signets</button><button class="favToggle" data-fav="btnSignets" title="Épingler sur l'accueil">☆</button></span>
           <span class="favoriGroup"><button class="ghost" id="btnPepites">💎 Mes pépites <span id="badgePepites" class="pastille hidden">0</span></button><button class="favToggle" data-fav="btnPepites" title="Épingler sur l'accueil">☆</button></span>
           <span class="favoriGroup"><button class="ghost" id="btnVocal" style="border-color:var(--teal);color:var(--teal)">🔴 Salons en direct</button><button class="favToggle" data-fav="btnVocal" title="Épingler sur l'accueil">☆</button></span>
           <span class="favoriGroup"><button class="ghost" id="btnContactDev" title="Envoyer un message au développeur">✉️ Contacter le développeur</button><button class="favToggle" data-fav="btnContactDev" title="Épingler sur l'accueil">☆</button></span>
           <span class="favoriGroup"><button class="ghost" id="btnKidMode" aria-pressed="false" title="Mode enfant : uniquement des films pour enfants">🐻 Mode enfant</button><button class="favToggle" data-fav="btnKidMode" title="Épingler sur l'accueil">☆</button></span>
-          <span class="favoriGroup"><button class="ghost" id="btnProfile">Profil</button><button class="favToggle" data-fav="btnProfile" title="Épingler sur l'accueil">☆</button></span>
+          <span class="favoriGroup"><button class="ghost" id="btnProfile">👤 Profil</button><button class="favToggle" data-fav="btnProfile" title="Épingler sur l'accueil">☆</button></span>
           <button class="ghost hidden" id="btnModeration">Modération</button>
           <button class="ghost hidden" id="btnAdminAccess" style="border-color:var(--beam); color:var(--beam)">⚙️ Administration</button>
           <span class="favoriGroup"><button class="ghost" id="btnSuggestion" style="border-color:var(--teal); color:var(--teal)">💡 Suggérer un film</button><button class="favToggle" data-fav="btnSuggestion" title="Épingler sur l'accueil">☆</button></span>
@@ -4723,7 +4751,7 @@ async function ouvrirPub(){
   } else {
     // Vidéo hébergée directement (mp4/webm...) plutôt qu'un lien YouTube.
     $("pubZoneVideo").classList.remove("hidden");
-    $("pubFrame").outerHTML = `<video id="pubFrame" autoplay muted playsinline style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:contain;background:#000" src="${pub.url}"></video>`;
+    $("pubFrame").outerHTML = `<video id="pubFrame" autoplay muted playsinline style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:contain;background:var(--ink)" src="${pub.url}"></video>`;
   }
 
   const duree = Math.max(3, Number(pub.duree) || 15);
@@ -5009,7 +5037,7 @@ async function ouvrirJoueur(id, pseudo, avatar, photoJoueur){
     ? `${ETATS[relation] || ""} En train de jouer${MODE_NAMES[f.modeSalon] ? ` (${MODE_NAMES[f.modeSalon]})` : ""}.`.trim()
     : (ETATS[relation] || "");
   const regarderBtn = (f.enPartie && autoriserSpectateurGlobal && f.partageActif)
-    ? `<button data-act="regarder" style="background:#3DDC84;color:#0A2015">👁️ Regarder en direct</button>` : "";
+    ? `<button data-act="regarder" style="background:var(--online);color:var(--onbright)">👁️ Regarder en direct</button>` : "";
   $("popActions").innerHTML = regarderBtn + (ACTIONS_AMI[relation] || []).map(([a, libelle]) =>
     `<button class="${a === "bloquer" ? "ghost danger" : ""}" data-act="${a}">${libelle}</button>`).join("");
 
@@ -5068,7 +5096,7 @@ function ligneJoueur(j, boutons){
       }</span>
     ${(j.enPartie && autoriserSpectateurGlobal && j.partageActif) ? `<button class="ghost" data-act="regarder" data-id="${esc(j.id)}"
        title="Regarder sa partie en direct" style="padding:6px 10px; font-size:15px;
-       background:#3DDC84; color:#0A2015; border-color:#3DDC84">👁️ en direct</button>` : ""}
+       background:var(--online); color:var(--onbright); border-color:var(--online)">👁️ en direct</button>` : ""}
     <div style="display:flex; gap:6px; flex-wrap:wrap;">
     ${boutons.map(([a, l]) => {
       const alerte = a === "message" && nonLus > 0;
@@ -8588,7 +8616,7 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
                 <button class="close-btn" id="closeTrailerBtn">&times;</button>
             </div>
             <div class="modal-body" style="padding:0">
-                <div style="position:relative;width:100%;padding-top:56.25%;background:#000">
+                <div style="position:relative;width:100%;padding-top:56.25%;background:var(--ink)">
                     <iframe id="trailerFrame" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0" allow="autoplay; encrypted-media" allowfullscreen title="Bande-annonce"></iframe>
                 </div>
                 <p class="note" id="trailerMsg" style="text-align:center;padding:14px"></p>
@@ -8603,10 +8631,10 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
                 <h2 id="pubTitre">🎬 Publicité</h2>
             </div>
             <div class="modal-body" style="padding:0">
-                <div id="pubZoneImage" class="hidden" style="width:100%;background:#000;display:flex;align-items:center;justify-content:center">
+                <div id="pubZoneImage" class="hidden" style="width:100%;background:var(--ink);display:flex;align-items:center;justify-content:center">
                     <img id="pubImage" alt="Publicité" style="max-width:100%;max-height:340px;display:block;margin:0 auto">
                 </div>
-                <div id="pubZoneVideo" class="hidden" style="position:relative;width:100%;padding-top:56.25%;background:#000">
+                <div id="pubZoneVideo" class="hidden" style="position:relative;width:100%;padding-top:56.25%;background:var(--ink)">
                     <iframe id="pubFrame" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0" allow="autoplay; encrypted-media" allowfullscreen title="Publicité vidéo"></iframe>
                 </div>
                 <div style="padding:14px">

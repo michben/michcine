@@ -1,0 +1,3090 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<link rel="icon" href="/api/favicon">
+<link rel="apple-touch-icon" href="/api/favicon">
+<meta name="theme-color" content="#0A0C16">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Salon vocal — MichBen Ciné Quizz</title>
+<!--
+  ==========================================================================
+  PAGE INDÉPENDANTE DU SALON VOCAL (/vocal)
+  ==========================================================================
+  Généré par duplication volontaire depuis public/index.html (voir le
+  commentaire équivalent en bas de fichier, avant les balises de script, pour le
+  détail de ce qui a été repris/adapté/omis). Aucune ligne de index.html
+  n'a été modifiée pour créer cette page : tout ce dont le salon vocal a
+  besoin (CSS, balisage, JS) a été copié ici tel quel ou légèrement adapté,
+  au prix d'une duplication de code assumée, plutôt que de faire dépendre
+  cette page de index.html (ou l'inverse) — objectif : zéro risque de casser
+  le jeu principal en construisant cette page, et zéro risque qu'une future
+  modification de cette page casse le jeu principal.
+-->
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Bebas+Neue&family=Bangers&family=Archivo+Black&family=Oswald:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=Poppins:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&family=Barlow+Condensed:wght@400;500;600;700&family=Teko:wght@400;500;600;700&family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
+<style>
+  :root{--ink:#0A0C16;--velvet:#151A2E;--card:#1C2238;--beam:#F5B942;--ticket:#E4586E;--teal:#4ECDC4;--chalk:#EDE8DC;--muted:#7C819B;
+    /* --online : vert "en ligne" / statut actif, utilisé pour les points de présence, les boutons
+       à bascule activés (musique, radio, mode enfant) et le bandeau mode enfant — regroupé ici en
+       variable plutôt que répété en dur à une dizaine d'endroits (nettoyage de cohérence visuelle).
+       --onbright : couleur de texte sombre utilisée par-dessus un fond vif (--online ou --teal),
+       pour rester lisible — même logique, même variable, réutilisée aux mêmes endroits. */
+    --online:#3DDC84; --onbright:#0A2015;
+    --font-affiche:'Anton',sans-serif; --font-corps:'Inter',system-ui,sans-serif; --font-etiquette:'Oswald','Inter',system-ui,sans-serif; --font-code:'JetBrains Mono',monospace}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;background:var(--ink);color:var(--chalk);
+    font-family:var(--font-corps);overflow-x:hidden;
+    background-image:radial-gradient(ellipse 80% 55% at 50% -10%, rgba(245,185,66,.16), transparent 70%)}
+  .wrap{max-width:720px;margin:0 auto;padding:26px 18px 40px}
+  h1{font-family:var(--font-affiche);font-size:clamp(30px,8vw,52px);letter-spacing:.04em;text-transform:uppercase;margin:0;line-height:.92}
+  h1 em{font-style:normal;color:var(--beam)}
+  h2{font-family:var(--font-affiche);text-transform:uppercase;letter-spacing:.03em;font-size:22px;margin:0 0 4px}
+  .baseline{color:var(--muted);font-size:16px;margin:10px 0 0;line-height:1.5;max-width:44ch}
+  .free{display:inline-block;margin-top:14px;font-family:var(--font-etiquette);font-weight:500;font-size:11px;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--teal);border:1px solid var(--teal);border-radius:999px;padding:6px 14px}
+  .card{background:var(--velvet);border:1px solid rgba(237,232,220,.09);border-radius:14px;padding:20px;margin-top:16px}
+  .tag{font-family:var(--font-etiquette);font-weight:500;font-size:11px;letter-spacing:.26em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+  /* Lecture du volume (musique d'ambiance, radio du salon vocal) : utilisait la classe .tag par
+     facilité, mais son grand espacement de lettres (pensé pour des titres de section) rendait
+     "50%" illisible ("5 0 %"). Classe dédiée, sans cet espacement. */
+  .volLabel{font-family:var(--font-code);font-weight:600;font-size:13px;color:var(--muted);text-align:center}
+  label{display:block;font-family:var(--font-etiquette);font-weight:500;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+  input{width:100%;background:var(--card);border:1px solid rgba(237,232,220,.14);color:var(--chalk);border-radius:10px;padding:13px 14px;font:inherit;font-size:16px}
+  input:focus-visible,button:focus-visible{outline:2px solid var(--beam);outline-offset:2px}
+  #joinCode{font-family:'JetBrains Mono',monospace;letter-spacing:.5em;text-transform:uppercase;font-size:20px}
+  button{font:inherit;font-weight:700;border:0;border-radius:12px;padding:13px 18px;cursor:pointer;
+    background:var(--beam);
+    background:linear-gradient(180deg, color-mix(in srgb, var(--beam) 100%, white 12%), var(--beam));
+    color:#161207;box-shadow:0 2px 0 rgba(0,0,0,.15), 0 3px 8px rgba(0,0,0,.18);
+    transition:transform .12s ease, box-shadow .12s ease, filter .12s ease}
+  button:hover:not(:disabled){filter:brightness(1.04)}
+  button:active:not(:disabled){transform:translateY(1px);box-shadow:0 1px 0 rgba(0,0,0,.15), 0 1px 4px rgba(0,0,0,.16)}
+  button.ghost{background:rgba(237,232,220,.03);color:var(--chalk);border:1px solid rgba(237,232,220,.22);box-shadow:none}
+  button.ghost:hover:not(:disabled){background:rgba(237,232,220,.07);border-color:rgba(237,232,220,.32)}
+  button.ghost:active:not(:disabled){transform:translateY(1px)}
+  button.danger{color:var(--ticket);border-color:rgba(228,88,110,.45)}
+  button:disabled{opacity:.45;cursor:not-allowed;transform:none !important;box-shadow:none}
+  .row{display:flex;gap:10px;margin-top:14px}.row>*{flex:1}
+  /* Rangée de contrôle de la radio du salon vocal (reculer / volume / avancer, 5 éléments) :
+     débordait sur petit écran et repassait à la ligne de façon inégale (le dernier bouton se
+     retrouvant seul sur sa propre ligne) — flex:0 0 auto sans gap ni padding resserrés au lieu
+     d'hériter des règles génériques de .row. */
+  .row.rangeeControlesRadio{flex-wrap:nowrap;gap:6px}
+  .rangeeControlesRadio>*{flex:0 0 auto;padding:10px 12px}
+  @media (max-width:420px){
+    .rangeeControlesRadio{gap:4px}
+    .rangeeControlesRadio>button{padding:10px 8px;font-size:13px}
+    .rangeeControlesRadio .volLabel{min-width:28px;font-size:12px}
+  }
+  /* Radio d'ambiance : visible dès la page d'accueil, en haut de chaque écran, et jamais superposée à rien
+     puisqu'elle suit le flux normal de la page (pas de position fixe). */
+  .radioBar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:10px 0}
+  .radioBar #musiqueVolLabel{font-size:12px}
+  #btnMusique[aria-pressed="true"]{background:var(--online);color:var(--onbright);border-color:var(--online)}
+  #btnRadioLike[aria-pressed="true"]{background:var(--online);color:var(--onbright);border-color:var(--online)}
+  #btnRadioDislike[aria-pressed="true"]{background:var(--ticket);color:#fff;border-color:var(--ticket)}
+  .hidden{display:none !important}
+  .avatars{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:4px}
+  .avatars button{background:var(--card);border:1px solid transparent;font-size:22px;padding:8px 10px;line-height:1}
+  .avatars button[aria-pressed="true"]{border-color:var(--beam);background:rgba(245,185,66,.12)}
+  .levels{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px}
+  .levels button{flex:1 1 auto;background:var(--card);color:var(--muted);border:1px solid transparent;
+    font-weight:500;font-size:14px;padding:11px 12px}
+  .levels button[aria-pressed="true"]{color:#161207;background:var(--beam);font-weight:700}
+  /* Espace échange : les montants de tickets ressortent en jaune, y compris la dernière case (maximum). */
+  #xAmounts button{color:#FFD84D}
+  #xAmounts button small{color:inherit;opacity:.85}
+  #xAmounts button[aria-pressed="true"]{color:#161207}
+  .modes{display:grid;gap:10px}
+  /* overflow:hidden fait que la barre de couleur (::before) épouse le coin arrondi de la carte
+     au lieu de dépasser en angle droit ; padding-left compense la place prise par cette barre. */
+  .mode{position:relative;overflow:hidden;display:flex;gap:14px;align-items:center;text-align:left;background:var(--card);
+    border:1px solid rgba(237,232,220,.1);color:var(--chalk);padding:16px 16px 16px 20px;border-radius:12px;font-weight:500}
+  .mode::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--muted)}
+  .mode[data-mode="solo"]::before{background:var(--beam)}
+  .mode[data-mode="duel"]::before{background:var(--ticket)}
+  .mode[data-mode="ffa"]::before{background:var(--teal)}
+  .mode[data-mode="teams"]::before{background:linear-gradient(180deg,var(--beam),var(--teal))}
+  .mode[data-mode="ranked"]::before{background:linear-gradient(180deg,var(--beam),var(--ticket))}
+  .mode:disabled{pointer-events:none}
+  .mode span.ic{font-size:26px}
+  .mode .details{flex:1;min-width:0}
+  .mode b{display:block;font-family:'Anton',sans-serif;text-transform:uppercase;letter-spacing:.03em;font-size:17px;font-weight:400}
+  .mode small{color:var(--muted)}
+  /* Chip de capacité : même langage visuel que .niveauXp, pour indiquer d'un coup d'œil
+     combien de joueurs chaque mode demande. */
+  .mode .capacite{flex:0 0 auto;font-family:var(--font-code);font-size:12px;color:var(--muted);
+    background:rgba(0,0,0,.28);padding:5px 10px;border-radius:999px;white-space:nowrap}
+  /* Le bouton "Commencer la partie" est la toute première action attendue d'un joueur sur ce menu :
+     il doit sauter aux yeux avant tout le reste, pas se fondre dans les autres cartes .mode. */
+  #btnCommencerPartie{background:linear-gradient(135deg,var(--beam),var(--ticket));border:none;
+    padding:22px 20px;box-shadow:0 10px 28px rgba(245,185,66,.35);transition:transform .15s ease,box-shadow .15s ease}
+  #btnCommencerPartie::before{display:none}
+  #btnCommencerPartie .ic{font-size:32px}
+  #btnCommencerPartie b{font-size:20px;color:var(--ink)}
+  #btnCommencerPartie small{color:rgba(10,12,22,.72)}
+  body.animations-actives #btnCommencerPartie:hover,
+  body.animations-actives #btnCommencerPartie:active{transform:translateY(-2px);box-shadow:0 14px 34px rgba(245,185,66,.5)}
+  /* Bulle d'aide affichée après une pression longue (souris ou tactile) sur un élément
+     marqué data-bulle — voir activerBullesAide() dans le script. */
+  .bulleAide{position:fixed;z-index:400;max-width:250px;background:var(--velvet);color:var(--chalk);
+    font-size:12.5px;line-height:1.45;padding:10px 13px;border-radius:10px;
+    border:1px solid rgba(245,185,66,.35);box-shadow:0 10px 28px rgba(0,0,0,.5);
+    opacity:0;transform:translateY(4px);transition:opacity .15s ease,transform .15s ease;
+    pointer-events:none}
+  .bulleAide.visible{opacity:1;transform:translateY(0)}
+  .marquee{display:flex;gap:10px;justify-content:center;margin:6px 0 16px}
+  .flap{width:54px;height:70px;display:grid;place-items:center;border-radius:8px;
+    background:linear-gradient(180deg,#232A44 0 49%,#1A2034 51% 100%);box-shadow:inset 0 0 0 1px rgba(245,185,66,.25);
+    font-family:'JetBrains Mono',monospace;font-size:32px;color:var(--beam);animation:flip .35s ease both}
+  .flap:nth-child(2){animation-delay:.07s}.flap:nth-child(3){animation-delay:.14s}.flap:nth-child(4){animation-delay:.21s}
+  @keyframes flip{from{transform:rotateX(-85deg);opacity:0}to{transform:none;opacity:1}}
+  .players{list-style:none;padding:0;margin:12px 0 0;display:flex;flex-wrap:wrap;gap:8px}
+  /* Carte de profil : la photo est le premier élément vu, encadrée en grand. */
+  #carteProfil{text-align:center;margin:4px 0 22px}
+  .barreNiveau{position:relative;overflow:hidden;cursor:pointer;
+    background:linear-gradient(155deg,rgba(245,185,66,.16),rgba(228,88,110,.10) 55%,var(--card) 100%);
+    border:1px solid rgba(245,185,66,.35);border-radius:14px;padding:15px 17px;margin-top:14px;
+    box-shadow:0 8px 20px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.05);
+    transition:border-color .2s,transform .2s}
+  .barreNiveau:hover{border-color:var(--beam);transform:translateY(-1px)}
+  .barreNiveau::after{content:"";position:absolute;top:-60%;right:-20%;width:60%;height:220%;
+    background:radial-gradient(circle,rgba(245,185,66,.16),transparent 70%);pointer-events:none}
+  .niveauTete{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+  .pastilleNiveau{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;
+    background:linear-gradient(140deg,var(--beam),var(--ticket));color:#161207;
+    font-family:var(--font-code);font-weight:700;font-size:17px;flex:0 0 auto;
+    box-shadow:0 0 0 3px rgba(245,185,66,.2),0 4px 14px rgba(245,185,66,.4)}
+  body.animations-actives .pastilleNiveau{animation:pastillePulse 2.6s ease-in-out infinite}
+  @keyframes pastillePulse{
+    0%,100%{box-shadow:0 0 0 3px rgba(245,185,66,.2),0 4px 14px rgba(245,185,66,.4)}
+    50%{box-shadow:0 0 0 6px rgba(245,185,66,.1),0 4px 20px rgba(245,185,66,.6)}}
+  .niveauTexte{flex:1;font-size:14px;color:var(--muted)}
+  .niveauTexte b{color:var(--beam);font-family:var(--font-affiche);font-size:19px;
+    letter-spacing:.02em;text-transform:uppercase;font-weight:400}
+  .niveauXp{font-family:var(--font-code);font-size:12px;color:var(--chalk);
+    background:rgba(0,0,0,.28);padding:4px 10px;border-radius:999px;white-space:nowrap}
+  .barreNiveau .jauge{height:9px;border-radius:99px;background:rgba(0,0,0,.32);
+    box-shadow:inset 0 1px 3px rgba(0,0,0,.5);margin:12px 0 2px}
+  .barreNiveau .jauge i{background:linear-gradient(90deg,var(--ticket),var(--beam),var(--teal));
+    background-size:200% 100%;box-shadow:0 0 10px rgba(245,185,66,.55);border-radius:99px}
+  body.animations-actives .barreNiveau .jauge i{animation:jaugeShimmer 2.2s linear infinite}
+  @keyframes jaugeShimmer{0%{background-position:0% 0}100%{background-position:200% 0}}
+  #niveauEmoji{display:inline-block}
+  body.animations-actives #niveauEmoji{animation:niveauEmojiFlotte 2.6s ease-in-out infinite}
+  @keyframes niveauEmojiFlotte{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-2px) rotate(-6deg)}}
+  /* Petit signal quand le joueur est tout proche du niveau suivant — encourage à finir une manche de plus. */
+  .tagPresque{margin:8px 0 0;font-size:12px;color:var(--teal);font-weight:600}
+  .barreNiveau.presque{border-color:var(--teal);box-shadow:0 8px 20px rgba(78,205,196,.28),inset 0 1px 0 rgba(255,255,255,.05)}
+  body.animations-actives .barreNiveau.presque{animation:presquePulse 1.8s ease-in-out infinite}
+  @keyframes presquePulse{0%,100%{box-shadow:0 8px 20px rgba(78,205,196,.22)}50%{box-shadow:0 8px 26px rgba(78,205,196,.45)}}
+  /* Version compacte de la carte de niveau, réutilisée dans le profil (le sien et celui
+     d'un autre joueur) — même langage visuel que .barreNiveau du menu, en plus sobre. */
+  .niveauMini{background:var(--card);border:1px solid rgba(245,185,66,.25);border-radius:14px;
+    padding:12px 14px;margin:14px 0}
+  .niveauMiniTete{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .niveauMiniEmoji{font-size:20px}
+  .niveauMiniTexte{font-size:14px;color:var(--muted)}
+  .niveauMiniTexte b{color:var(--beam);font-family:var(--font-affiche);font-size:16px;
+    letter-spacing:.02em;text-transform:uppercase;font-weight:400}
+  .statutNiveau{color:var(--teal);font-weight:600}
+  .niveauMini .jauge{height:7px;border-radius:99px;background:rgba(0,0,0,.32);margin:0 0 5px}
+  .niveauMini .jauge i{background:linear-gradient(90deg,var(--ticket),var(--beam),var(--teal));border-radius:99px}
+  .niveauMiniXp{margin:0;font-size:11px;color:var(--muted);font-family:var(--font-code)}
+  /* Rangée de petites affiches pour le top 5 pépites d'une fiche de profil. */
+  .pepitesMini{margin:14px 0}
+  .pepitesMiniRow{display:flex;gap:8px;flex-wrap:wrap}
+  .pepitesMiniItem{width:52px;height:78px;border-radius:8px;overflow:hidden;background:var(--card);
+    border:1px solid rgba(245,185,66,.3);flex:0 0 auto;display:grid;place-items:center}
+  .pepitesMiniItem img{width:100%;height:100%;object-fit:cover;display:block}
+  .pepitesMiniEmoji{font-size:20px}
+  .quete{display:flex;gap:12px;align-items:center;padding:14px 0;border-top:1px solid rgba(237,232,220,.1);flex-wrap:wrap}
+  .quete .infos{flex:1;min-width:150px}
+  .quete .infos b{display:block;font-size:15px}
+  .quete .infos small{color:var(--muted);font-size:13px}
+  .quete .jauge{margin:7px 0 0}
+  .quete .gain{font-size:13px;color:var(--beam);white-space:nowrap}
+  .quete.finie .infos b{color:var(--teal)}
+  .quete button{padding:9px 14px;font-size:14px}
+  .quete .surprise{font-size:12px;color:var(--ticket);white-space:normal;display:block;margin-top:2px}
+  .badgeFondateur{display:inline-block;font-size:.85em;filter:drop-shadow(0 0 2px rgba(255,196,0,.6))}
+  .montee{position:fixed;left:50%;top:11%;transform:translateX(-50%);z-index:86;text-align:center;
+    max-width:min(420px,88vw);pointer-events:none;animation:monteeNiveau 6s ease-out forwards}
+  .montee b{display:block;font-family:'Anton',sans-serif;text-transform:uppercase;
+    font-size:clamp(26px,7vw,40px);color:var(--beam);letter-spacing:.03em}
+  @keyframes monteeNiveau{0%{opacity:0;transform:translateX(-50%) scale(.7)}
+    8%{opacity:1;transform:translateX(-50%) scale(1.1)}14%{transform:translateX(-50%) scale(1)}
+    88%{opacity:1;transform:translateX(-50%) translateY(0)}
+    100%{opacity:0;transform:translateX(-50%) translateY(-24px)}}
+  /* Citation façon diapositive de cinéma : cadre sombre, perforations de
+     pellicule sur les côtés, fenêtre surélevée pour la réplique, bandeau
+     d'étiquette en dessous pour le film et l'anecdote. */
+  .citationCine{pointer-events:none;margin:10px auto 0;max-width:380px;
+    background:linear-gradient(180deg,#1c150c,#0d0906);
+    border:1px solid rgba(255,196,0,.4);border-radius:8px;
+    box-shadow:0 10px 32px rgba(0,0,0,.55);position:relative;overflow:hidden}
+  .citationCine .perfo{position:absolute;top:0;bottom:0;width:15px;opacity:.65;
+    background-image:repeating-linear-gradient(180deg,var(--beam,#e9b64c) 0 5px,transparent 5px 13px);
+    background-position:center;background-repeat:repeat-y}
+  .citationCine .perfo.g{left:0}
+  .citationCine .perfo.d{right:0}
+  .citationCine .fenetre{margin:12px 26px 0;padding:14px 12px;text-align:center;
+    background:radial-gradient(ellipse at 50% 0%,rgba(255,255,255,.07),transparent 72%);
+    border:1px solid rgba(255,196,0,.28);border-radius:6px}
+  .citationCine .texte{font-family:'Anton',sans-serif;letter-spacing:.01em;font-size:15px;
+    color:var(--chalk,#ede8dc);line-height:1.3;margin:0;text-transform:none}
+  .citationCine .etiquette{margin:0 26px;padding:8px 10px 12px;text-align:center;
+    border-top:1px dashed rgba(255,196,0,.3)}
+  .citationCine .source{font-size:12px;color:var(--beam,#e9b64c);margin:8px 0 4px;font-weight:600}
+  .citationCine .source .annee{color:var(--muted,#9a9284);font-weight:400}
+  .citationCine .anecdote{font-size:11px;color:var(--muted,#9a9284);margin:0;font-style:italic;line-height:1.4}
+  #citationNiveauPanel{padding:0 20px 14px}
+  #citationNiveauPanel .citationCine{margin:6px auto 0;max-width:none}
+  .codeCadre{text-align:center;background:var(--card);border-radius:12px;padding:16px;margin-top:8px}
+  .codeCadre .valeur{font-family:'JetBrains Mono',monospace;font-size:30px;letter-spacing:.32em;
+    color:var(--beam);margin:6px 0 12px;user-select:all}
+  .chip{display:inline-flex;align-items:center;gap:6px;background:var(--card);border:1px solid rgba(255,255,255,.08);
+    border-radius:999px;padding:6px 12px;font-size:13px;color:var(--chalk)}
+  .chip b{color:var(--beam)}
+  /* Roue quotidienne : disque tournant avec pointeur fixe au sommet. */
+  .roueZone{position:relative;width:min(280px,80vw);height:min(280px,80vw);margin:18px auto 0}
+  .roueFleche{position:absolute;top:-6px;left:50%;transform:translateX(-50%);z-index:2;
+    font-size:28px;color:var(--beam);text-shadow:0 2px 4px rgba(0,0,0,.6)}
+  .roueDisque{width:100%;height:100%;border-radius:50%;position:relative;
+    border:6px solid var(--beam);box-shadow:0 10px 30px rgba(0,0,0,.5), inset 0 0 0 2px rgba(0,0,0,.4);
+    transition:transform 4.2s cubic-bezier(.13,.85,.13,1)}
+  .roueDisque::after{content:"";position:absolute;inset:0;margin:auto;width:20%;height:20%;
+    border-radius:50%;background:var(--velvet,#161207);border:3px solid var(--beam);
+    top:0;bottom:0;left:0;right:0}
+  .roueEtiquette{position:absolute;width:0;height:0}
+  .roueEtiquette span{position:absolute;left:0;top:0;transform:translate(-50%,-50%);
+    white-space:nowrap;font-size:11px;font-weight:700;color:#fff;
+    text-shadow:0 1px 3px rgba(0,0,0,.7);font-family:'Oswald',sans-serif;letter-spacing:.02em}
+  #btnTournerRoue:disabled{opacity:.5;cursor:not-allowed}
+  /* Seau de pop-corn : se vide à chaque partie classée, se remplit en 24 h. */
+  .seau{position:relative;width:96px;height:104px;margin:0 auto;
+    background:linear-gradient(180deg,#E4586E 0 100%);
+    clip-path:polygon(12% 0,88% 0,78% 100%,22% 100%);
+    box-shadow:inset -14px 0 0 rgba(0,0,0,.16),inset 14px 0 0 rgba(255,255,255,.12)}
+  .seau::before{content:"";position:absolute;inset:0;
+    background:repeating-linear-gradient(90deg,transparent 0 12px,rgba(255,255,255,.28) 12px 24px)}
+  .grains{position:absolute;left:0;right:0;bottom:0;overflow:visible;
+    transition:height .7s cubic-bezier(.34,1.3,.64,1);
+    background-color: #F8E5A0;
+    background-image:
+      radial-gradient(circle at 30% 25%, #FFFFFF 4px, transparent 7px),
+      radial-gradient(circle at 70% 20%, #FFFFFF 5px, transparent 8px),
+      radial-gradient(circle at 45% 45%, #FFFFFF 6px, transparent 9px),
+      radial-gradient(circle at 20% 65%, #FFFFFF 5px, transparent 8px),
+      radial-gradient(circle at 80% 60%, #FFFFFF 4px, transparent 7px),
+      radial-gradient(circle at 55% 85%, #FFFFFF 5px, transparent 8px),
+      radial-gradient(circle at 35% 35%, #F0D060 2px, transparent 5px),
+      radial-gradient(circle at 65% 55%, #F0D060 3px, transparent 6px),
+      radial-gradient(circle at 40% 75%, #F0D060 2px, transparent 5px);
+    background-size: 28px 28px;
+    box-shadow: inset 0 12px 20px rgba(0,0,0,0.3);}
+  .grains::before{content:"";position:absolute;top:-6px;left:-10px;right:-10px;height:12px;
+    background: radial-gradient(circle at 12px 6px, #FFFFFF 6px, transparent 7px) repeat-x;
+    background-size: 18px 12px; z-index: 1;}
+  .seauChiffre{position:absolute;inset:0;display:grid;place-items:center;z-index:2;
+    font-family:'JetBrains Mono',monospace;font-size:30px;color:#2A1206;
+    text-shadow:0 1px 0 rgba(255,255,255,.5)}
+  .seau.vide .seauChiffre{color:rgba(255,255,255,.85);text-shadow:none}
+  .jauge{height:6px;background:var(--velvet);border-radius:99px;overflow:hidden;margin:10px 0 6px}
+  .jauge i{display:block;height:100%;background:linear-gradient(90deg,var(--ticket),var(--beam))}
+  .cadrePhoto{width:150px;height:150px;margin:0 auto 16px;border-radius:50%;padding:4px;
+    background:linear-gradient(140deg,var(--beam),var(--ticket),var(--teal));
+    box-shadow:0 10px 34px rgba(0,0,0,.5)}
+  .cadrePhoto img{width:100%;height:100%;border-radius:50%;object-fit:cover;
+    display:block;background:var(--card);border:3px solid var(--velvet)}
+  .bienvenue{font-family:'Anton',sans-serif;text-transform:uppercase;letter-spacing:.03em;
+    font-size:clamp(19px,5vw,25px);color:var(--beam);margin:0 0 6px;font-weight:400;line-height:1.2}
+  .stat{color:var(--muted);font-size:14px;line-height:1.6;margin:0 0 16px}
+  .stat b{color:var(--chalk)}
+  @media(max-width:600px){.cadrePhoto{width:124px;height:124px}}
+  .pfp{width:26px;height:26px;border-radius:50%;object-fit:cover;vertical-align:-8px;
+    background:var(--card);border:1px solid rgba(237,232,220,.14)}
+  ol.rank .pfp{width:30px;height:30px}
+  .amiLigne .pfp{width:28px;height:28px}
+  #popNom .pfp{width:52px;height:52px;vertical-align:-16px;margin-right:6px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:0 0 auto}
+  .dot.on{background:var(--online);box-shadow:0 0 8px rgba(61,220,132,.7)}
+  .online{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--muted);margin-top:10px}
+  .online b{color:var(--online);font-family:'JetBrains Mono',monospace;font-size:16px}
+  /* Bulle en haut de l'accueil : accès rapide à un salon vocal dont on a été coupé, ou auquel
+     on a été invité et pas encore rejoint. */
+  /* position:fixed : cette bannière n'est plus dans #menu (voir HTML) pour rester visible même
+     pendant une partie en cours, par-dessus l'écran affiché sans jamais recouvrir la barre du bas. */
+  .retourVocalBulle{display:flex;align-items:center;gap:10px;background:var(--card);
+    border:1px solid var(--teal);border-radius:14px;padding:12px 14px;
+    position:fixed;top:10px;left:10px;right:10px;z-index:300;max-width:480px;margin:0 auto;
+    box-shadow:0 10px 28px rgba(0,0,0,.4);animation:apparitionBulle .3s ease both}
+  @keyframes apparitionBulle{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
+  .retourVocalBulle .ic{font-size:24px;flex:0 0 auto}
+  .retourVocalBulle .txt{flex:1;min-width:0}
+  .retourVocalBulle .txt b{display:block;font-size:14px;font-weight:600}
+  .retourVocalBulle .txt small{display:block;color:var(--muted);font-size:12px;margin-top:2px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .retourVocalBulle button{flex:0 0 auto;padding:8px 14px;font-size:13px;background:var(--teal);
+    color:var(--onbright);border:0;border-radius:999px;font-weight:600;cursor:pointer}
+  .retourVocalBulle .retourVocalFermer{background:transparent;color:var(--muted);font-size:20px;
+    font-weight:400;padding:0 2px;line-height:1}
+  /* Tête d'affiche : bandeau des joueurs en ligne, mis en avant en haut du menu. */
+  .teteAffiche{margin:0 0 16px}
+  /* Étoile pour épingler une option de « Plus d'options » en raccourci sur l'accueil. */
+  .favoriGroup{display:inline-flex;align-items:stretch;gap:2px}
+  .favToggle{background:transparent;border:1px solid rgba(237,232,220,.14);border-radius:8px;
+    color:var(--muted);font-size:15px;padding:0 8px;cursor:pointer;line-height:1}
+  .favToggle.actif{color:var(--beam);border-color:var(--beam)}
+  .listeTeteAffiche{display:flex;gap:12px;overflow-x:auto;padding:2px 2px 8px;scrollbar-width:thin}
+  .teteAvatar{display:flex;flex-direction:column;align-items:center;gap:5px;flex:0 0 auto;width:60px;cursor:pointer}
+  .teteAvatar .cadre{position:relative;width:48px;height:48px;border-radius:50%;overflow:hidden;
+    border:2px solid var(--online);display:grid;place-items:center;font-size:22px;background:var(--card)}
+  .teteAvatar .cadre img{width:100%;height:100%;object-fit:cover}
+  .teteAvatar .dot{position:absolute;bottom:0;right:0;border:2px solid var(--ink)}
+  .teteAvatar span{font-size:11px;color:var(--chalk);text-align:center;white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis;max-width:60px}
+  .players li{background:var(--card);border-radius:999px;padding:7px 14px;font-size:14px;display:flex;gap:7px;align-items:center}
+  .players li.A{box-shadow:inset 0 0 0 1px var(--beam)}
+  .players li.B{box-shadow:inset 0 0 0 1px var(--teal)}
+  .beam{height:4px;background:var(--card);border-radius:99px;overflow:hidden;margin-bottom:18px}
+  .beam i{display:block;height:100%;width:100%;transform-origin:left;background:linear-gradient(90deg,var(--ticket),var(--beam));transition:transform .25s linear}
+  .synopsis{font-size:clamp(17px,4.4vw,22px);line-height:1.5;margin:0;cursor:default}
+  /* Chaque mot apparaît en fondu, comme si le texte se lisait tout seul.
+     Volontairement rapide : le chronomètre tourne pendant ce temps. */
+  .synopsis .mot{display:inline-block;opacity:0;filter:blur(3px);transform:translateY(6px);
+    animation:apparait .34s ease forwards}
+  .synopsis .mot.masque{color:var(--ticket);letter-spacing:.06em}
+  @keyframes apparait{to{opacity:1;filter:none;transform:none}}
+  .synopsis.termine .mot{animation:none;opacity:1;filter:none;transform:none}
+  .barreLecture{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px}
+  .barreLecture button{padding:9px 14px;font-size:14px}
+  .barreLecture button.parle{border-color:var(--beam);color:var(--beam)}
+  .autoLecture{display:flex;align-items:center;gap:7px;margin:0;color:var(--muted);
+    font-size:13px;text-transform:none;letter-spacing:0;cursor:pointer}
+  .autoLecture input{width:18px;height:18px;accent-color:var(--beam)}
+  .indiceLecture{color:var(--muted);font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    margin:10px 0 0;opacity:.75}
+  @media (prefers-reduced-motion:reduce){.synopsis .mot{animation:none;opacity:1;filter:none;transform:none}}
+  .choices{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px}
+  /* min-width:0 est indispensable ici : par défaut, une cellule de grille CSS ne peut pas
+     rétrécir sous la largeur de son contenu (un titre de film sans espace, par ex.), ce qui
+     forçait la colonne à déborder du cadre au lieu de faire retourner le texte à la ligne.
+     overflow-wrap/word-break forcent la coupure même au milieu d'un mot très long si besoin. */
+  .choices button{background:var(--card);color:var(--chalk);border:1px solid rgba(237,232,220,.14);
+    font-weight:500;font-size:15px;padding:16px 12px;text-align:center;line-height:1.3;min-height:64px;
+    min-width:0;width:100%;box-sizing:border-box;overflow-wrap:break-word;word-break:break-word;hyphens:auto}
+  .choices button:hover:not(:disabled){border-color:var(--beam)}
+  .choices button.good{background:rgba(78,205,196,.16);border-color:var(--teal);color:var(--teal);font-weight:700}
+  .choices button.bad{background:rgba(228,88,110,.14);border-color:var(--ticket);color:var(--ticket)}
+  .typed{margin-top:16px}
+  .typed summary{cursor:pointer;color:var(--muted);font-size:13px;letter-spacing:.1em;text-transform:uppercase;list-style:none}
+  .typed summary::-webkit-details-marker{display:none}
+  .typed summary::before{content:"＋ ";color:var(--beam)}
+  .hints{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+  .hints button{background:transparent;color:var(--chalk);border:1px dashed rgba(245,185,66,.45);font-weight:500;padding:10px 13px;font-size:14px}
+  .hints button.bought{border-style:solid;border-color:var(--beam);color:var(--beam)}
+  .hints .cost{color:var(--muted);font-size:12px;margin-left:6px}
+  .feedback{margin-top:12px;font-size:15px;min-height:22px}
+  .feedback.bad{color:var(--ticket)}.feedback.good{color:var(--beam)}
+  /* overflow-wrap/word-break : un titre long (ex. "Spider-Man : Across the Spider-Verse") en
+     majuscules à 30-40px pouvait déborder de l'écran sur mobile et chevaucher le bouton
+     « Question suivante » juste en dessous. max-width+margin:auto le recentre et le contraint
+     à la largeur de l'écran quel que soit l'endroit où il est affiché. */
+  .reveal{font-family:'Anton',sans-serif;font-size:clamp(24px,6vw,34px);text-transform:uppercase;color:var(--beam);margin:4px 0 0;letter-spacing:.03em;
+    max-width:100%;overflow-wrap:break-word;word-break:break-word;hyphens:auto}
+  /* Révélation : l'affiche et le titre occupent le centre de l'écran. */
+  .revelation{text-align:center;margin:6px 0 4px;animation:revele .5s ease both;max-width:100%}
+  @keyframes revele{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:none}}
+  .afficheRevelee{width:min(58%,190px);border-radius:12px;display:block;margin:0 auto 14px;
+    box-shadow:0 16px 40px rgba(0,0,0,.6)}
+  .revelation .reveal{font-size:clamp(22px,6.5vw,36px);margin:0 auto;line-height:1.15}
+  #verdictTag.juste{color:var(--teal)}
+  #verdictTag.rate{color:var(--ticket)}
+  .poster{width:140px;border-radius:10px;display:block;margin-top:14px;box-shadow:0 12px 30px rgba(0,0,0,.5)}
+  #hintPoster{width:min(100%,340px);aspect-ratio:16/9;object-fit:cover;overflow:hidden}
+  ol.rank{list-style:none;counter-reset:r;padding:0;margin:14px 0 0}
+  ol.rank li{counter-increment:r;display:flex;align-items:center;gap:10px;padding:11px 0;border-top:1px solid rgba(237,232,220,.1)}
+  ol.rank li::before{content:counter(r);font-family:'JetBrains Mono',monospace;color:var(--muted);width:22px}
+  ol.rank li b{margin-left:auto;color:var(--beam)}
+  ol.rank li.A{border-left:3px solid var(--beam);padding-left:10px}
+  ol.rank li.B{border-left:3px solid var(--teal);padding-left:10px}
+  ol.rank li.B b{color:var(--teal)}
+  #roundPlayers li.A{box-shadow:inset 0 0 0 1px var(--beam)}
+  #roundPlayers li.B{box-shadow:inset 0 0 0 1px var(--teal)}
+  #bilan{background:var(--card);border-radius:12px;padding:15px;margin:16px 0;text-align:left}
+  #bilan .ligne{display:flex;justify-content:space-between;padding:5px 0;font-size:14px}
+  #bilan .ligne b{color:var(--beam);font-family:'JetBrains Mono',monospace}
+  #bilan .titre{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+  .teamboard{display:flex;gap:12px;margin-top:14px}
+  .teamboard div{flex:1;background:var(--card);border-radius:12px;padding:14px;text-align:center}
+  .teamboard div b{display:block;font-family:'JetBrains Mono',monospace;font-size:26px;margin-top:4px}
+  .teamboard .a b{color:var(--beam)}.teamboard .b b{color:var(--teal)}
+  .sondageCard{background:var(--card);border-radius:14px;padding:16px;margin-bottom:14px}
+  .sondageQuestion{font-weight:700;margin:0 0 12px;font-size:15px}
+  .sondageChoix{display:flex;gap:10px}
+  .sondageChoix button{flex:1;padding:14px 10px;font-size:15px;border-radius:12px;
+    border:1px solid rgba(237,232,220,.15);background:var(--velvet);color:var(--chalk);cursor:pointer}
+  .sondageChoix button.voteA{border-color:var(--beam)}
+  .sondageChoix button.voteB{border-color:var(--teal)}
+  .sondageBarre{display:flex;height:26px;border-radius:999px;overflow:hidden;margin:12px 0 6px;background:var(--velvet)}
+  .sondageBarre .a{background:var(--beam);transition:width .4s ease}
+  .sondageBarre .b{background:var(--teal);transition:width .4s ease}
+  .sondageResultat{display:flex;justify-content:space-between;font-size:13px;color:var(--muted)}
+  .sondageMonVote{display:inline-flex;align-items:center;gap:8px;font-size:13px;margin-top:10px;color:var(--muted)}
+  .sondageAnneau{width:30px;height:30px;border-radius:50%;display:inline-flex;align-items:center;
+    justify-content:center;font-size:16px;background:var(--velvet)}
+  .sondageAnneau.anneauA{box-shadow:0 0 0 3px var(--beam)}
+  .sondageAnneau.anneauB{box-shadow:0 0 0 3px var(--teal)}
+  /* Battle de films : la petite affiche remplace l'emoji dans le bouton de vote. */
+  .sondagePoster{display:block;width:100%;aspect-ratio:2/3;object-fit:cover;border-radius:8px;margin:0 0 8px}
+  .sondageRecompense{display:inline-block;margin-top:12px;font-size:12px;color:var(--beam);
+    background:rgba(0,0,0,.28);padding:4px 10px;border-radius:999px}
+  .note{color:var(--muted);font-size:13px;margin-top:14px;line-height:1.5}
+  footer{margin-top:34px;padding-top:20px;border-top:1px solid rgba(237,232,220,.1);text-align:center}
+  footer p{color:var(--muted);font-size:13px;margin:0 0 12px}
+  .tip{display:inline-flex;align-items:center;gap:8px;text-decoration:none;font-weight:700;font-size:15px;
+    background:transparent;color:var(--beam);border:1px solid var(--beam);border-radius:999px;padding:11px 20px}
+  .headline{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+  .dots{display:flex;gap:5px;flex:1;min-width:120px}
+  .dots i{flex:1;height:5px;border-radius:99px;background:var(--card)}
+  .dots i.done{background:var(--muted)}
+  .dots i.now{background:var(--beam)}
+  .pattern{font-family:'JetBrains Mono',monospace;font-size:clamp(19px,5vw,26px);color:var(--beam);
+    letter-spacing:.14em;margin:16px 0 0;word-break:break-word}
+  .coeurs{display:flex;gap:3px;font-size:19px;line-height:1}
+  .coeurs span{transition:transform .3s ease,opacity .3s ease}
+  .coeurs span.perdu{opacity:.22;transform:scale(.8)}
+  .coeurs span.casse{animation:brise .6s ease}
+  .coeurs.mini{font-size:12px;gap:1px;margin-left:2px}
+  #adversairesCoeurs{margin:10px 0 0}
+  #adversairesCoeurs li.off{opacity:.5}
+  @keyframes brise{0%{transform:scale(1)}30%{transform:scale(1.4) rotate(-12deg)}100%{transform:scale(.8);opacity:.22}}
+  .clock{font-family:'JetBrains Mono',monospace;font-size:26px;color:var(--beam);min-width:44px;
+    text-align:center;font-variant-numeric:tabular-nums}
+  .clock.urgent{color:var(--ticket);animation:pulse .9s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
+  select{width:100%;background:var(--card);border:1px solid rgba(237,232,220,.14);color:var(--chalk);
+    border-radius:10px;padding:12px 13px;font:inherit;font-size:16px}
+  /* top:96px (et non 18px) : laisse la place à la bannière « retourVocalBulle » qui occupe déjà
+     le haut de l'écran (voir plus bas) — les deux se recouvraient sinon, et un clic sur
+     « Rejoindre » atterrissait sur le mauvais bouton (celui du dessus). */
+  .invitation{position:fixed;left:50%;top:96px;transform:translateX(-50%);z-index:80;
+    background:var(--velvet);border:1px solid var(--beam);border-radius:14px;padding:16px 18px;
+    max-width:min(360px,calc(100vw - 24px));box-shadow:0 14px 40px rgba(0,0,0,.6);
+    animation:descend .3s ease both}
+  .invitation b{display:block;font-size:15px}
+  .invitation small{display:block;color:var(--muted);font-size:13px;margin:2px 0 12px}
+  .invitation span{display:flex;gap:8px}
+  .invitation button{flex:1;padding:10px;font-size:14px}
+  @keyframes descend{from{opacity:0;transform:translateX(-50%) translateY(-18px)}to{opacity:1;transform:translateX(-50%)}}
+  .emojis{display:flex;gap:6px;flex-wrap:wrap;margin-top:16px;justify-content:center}
+  .emojis button{background:var(--card);border:1px solid rgba(237,232,220,.12);font-size:22px;
+    padding:8px 11px;line-height:1;min-height:0}
+  .emojis button:hover{border-color:var(--beam)}
+  /* Options du bas du salon vocal : une seule barre compacte (micro, intervenir, réactions,
+     quitter) plutôt que plusieurs cartes empilées — voir #vocalBarreBas. */
+  .vocalBarreBas .vocalBarreRangee{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+  .vocalBarreBas .vocalBarreRangee button{flex:1 1 calc(50% - 8px);min-width:130px;font-size:14px;padding:12px 10px}
+  #btnVocalReactionsToggle[aria-pressed="true"]{background:var(--card);border-color:var(--beam);color:var(--beam)}
+  /* Blocs réductibles du salon vocal (radio, console de modération) : un petit bouton cliquable
+     dans le titre du bloc, à la demande d'un joueur — voir rendreBlocReductible() plus bas.
+     Placé DANS le fil normal du titre (flex), jamais en position absolue par-dessus le reste du
+     bloc : une première version positionnée en absolu par-dessus la carte finissait par recouvrir
+     les boutons de volume de la radio sur mobile (la carte perd du padding en dessous de 600px,
+     voir @media plus bas) et les rendait inutilisables — leçon à retenir pour tout futur bouton de
+     ce genre : ne jamais superposer un élément cliquable en position absolue sur une zone qui
+     contient déjà d'autres contrôles. Aussi rendu bien visible (fond teinté + chevron ▾/▸), après
+     un retour indiquant que le trait d'origine, trop discret, restait invisible. */
+  .cardReductible .tag{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .cardReductible .traitReduction{flex:0 0 auto;width:34px;height:26px;border:none;border-radius:8px;
+    background:rgba(245,185,66,.16);color:var(--beam);font-size:14px;line-height:1;cursor:pointer;
+    display:grid;place-items:center}
+  .cardReductible .traitReduction:hover,.cardReductible .traitReduction:focus-visible{background:rgba(245,185,66,.32)}
+  .cardReductible.blocReduit{opacity:.72}
+  .cardReductible.blocReduit>*:not(.tag){display:none}
+  /* Réactions volantes (emoji ou photo de profil, voir afficherReactionVolante) : une trajectoire
+     "baladeuse" plutôt qu'une simple ligne droite vers le haut — deux points de passage aléatoires
+     (--dx1/--dx2/--dx3, --rot1/--rot2, fournis en JS à chaque réaction) donnent un mouvement
+     différent à chaque fois. En cas de "combo" (plusieurs taps rapprochés sur la même réaction,
+     voir vocalComboReactions), la classe .combo agrandit l'effet et affiche un compteur ×N. */
+  .flyEmoji{position:fixed;z-index:55;pointer-events:none;font-size:34px;text-align:center;
+    animation:balade var(--duree,2.3s) cubic-bezier(.22,.68,.35,1) forwards;
+    --dx1:0px;--dx2:0px;--dx3:0px;--rot1:0deg;--rot2:0deg;--taille:1}
+  .flyEmoji small{display:block;font-size:11px;color:var(--muted);text-align:center;
+    font-family:'Inter',sans-serif}
+  .flyEmoji.combo{font-size:calc(34px * var(--taille));filter:drop-shadow(0 0 10px var(--beam))}
+  .flyEmoji.combo small{color:var(--beam);font-weight:700}
+  .flyEmoji .comboCompteur{position:absolute;top:-8px;right:-16px;font-size:14px;color:var(--beam);
+    font-family:'Inter',sans-serif;-webkit-text-stroke:3px var(--ink);paint-order:stroke fill}
+  /* Don visible dans le salon vocal (voir afficherDonVolant) : quand donneur et receveur sont tous
+     deux dans le même salon au moment du don, il devient un petit moment public — même mécanique de
+     trajectoire "baladeuse" que les réactions, mais en plus gros et avec le nom du receveur. */
+  .flyEmoji.flyDon{font-size:42px;filter:drop-shadow(0 0 12px var(--beam))}
+  .flyEmoji.flyDon .donLibelle{display:block;font-size:15px;color:var(--beam);font-weight:700;
+    font-family:'Inter',sans-serif;margin-top:2px}
+  .flyEmoji.flyDon small{color:var(--chalk)}
+  @keyframes balade{
+    0%{opacity:0;transform:translate(0,0) scale(.6) rotate(0deg)}
+    12%{opacity:1;transform:translate(calc(var(--dx1) * .3),-40px) scale(calc(1.1 * var(--taille))) rotate(var(--rot1))}
+    55%{opacity:1;transform:translate(var(--dx1),-46vh) scale(var(--taille)) rotate(var(--rot2))}
+    85%{opacity:.9;transform:translate(var(--dx2),-78vh) scale(var(--taille)) rotate(calc(var(--rot1) * -1))}
+    100%{opacity:0;transform:translate(var(--dx3),-100vh) scale(calc(.85 * var(--taille))) rotate(0deg)}}
+  /* La pause doit rendre le synopsis réellement illisible : un simple voile
+     opaque se contourne en jouant sur le contraste ou en sélectionnant le
+     texte. On floute donc la page elle-même, en plus du voile. */
+  /* Le flou s'applique au contenu du jeu, jamais au voile lui-même :
+     sinon les boutons de reprise deviennent illisibles. */
+  body.enPause .wrap{filter:blur(14px) saturate(.4);pointer-events:none;user-select:none}
+  body.enPause #voilePause{filter:none}
+  #voilePause{position:fixed;inset:0;z-index:75;display:grid;place-items:center;padding:20px;
+    background:rgba(10,12,22,.97);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+  .boitePause{text-align:center;max-width:340px;background:var(--velvet);
+    border:1px solid rgba(237,232,220,.16);border-radius:16px;padding:26px 22px;
+    box-shadow:0 20px 60px rgba(0,0,0,.7)}
+  .boitePause .row{margin-top:12px}
+  .grosChiffre{font-family:'JetBrains Mono',monospace;font-size:52px;color:var(--beam);margin:0 0 4px}
+  #erreurJS{position:fixed;left:0;right:0;bottom:0;z-index:90;margin:0;padding:12px 16px;
+    background:var(--ticket);color:#fff;font-size:13px;font-family:'JetBrains Mono',monospace;
+    word-break:break-word}
+  .tabsAmis{display:flex;gap:8px}
+  .tabsAmis button{flex:1;background:transparent;color:var(--muted);border:1px solid rgba(237,232,220,.16);font-weight:500;font-size:14px;padding:10px 8px}
+  .tabsAmis button[aria-pressed="true"]{background:var(--beam);color:#161207;font-weight:700;border-color:var(--beam)}
+  .amiLigne{display:flex;gap:10px;align-items:center;padding:13px 0;border-top:1px solid rgba(237,232,220,.1);flex-wrap:wrap}
+  .amiLigne .nom{flex:1;min-width:130px}
+  .amiLigne button{padding:9px 12px;font-size:13px}
+  .pastille{background:var(--ticket);color:#fff;font-size:11px;font-weight:700;border-radius:10px;
+    min-width:20px;display:inline-grid;place-items:center;padding:2px 6px;margin-left:6px;
+    box-shadow:0 0 0 2px var(--velvet),0 2px 10px rgba(228,88,110,.6);animation:pulsePastille 2s ease-in-out infinite}
+  @keyframes pulsePastille{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
+  /* pastille sur les onglets internes de l'écran Amis */
+  .tabsAmis button .pastille{margin-left:5px;animation:none}
+  /* bandeau de notification, discret et éphémère */
+  .notif{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:85;
+    background:var(--velvet);border:1px solid var(--beam);border-radius:12px;padding:12px 18px;
+    display:flex;align-items:center;gap:11px;max-width:min(340px,calc(100vw - 28px));
+    box-shadow:0 12px 34px rgba(0,0,0,.6);cursor:pointer;animation:monteNotif .3s ease both}
+  .notif b{color:var(--beam)}
+  .notif small{display:block;color:var(--muted);font-size:12px}
+  @keyframes monteNotif{from{opacity:0;transform:translateX(-50%) translateY(16px)}to{opacity:1;transform:translateX(-50%)}}
+  /* fenêtre d'action sur un joueur */
+  #popMessages{position:fixed;inset:0;background:rgba(10,12,22,.72);display:grid;place-items:end center;z-index:78;padding:0}
+  .boiteMsg{background:var(--velvet);border:1px solid rgba(237,232,220,.14);border-radius:16px 16px 0 0;
+    width:min(460px,100%);max-height:80vh;display:flex;flex-direction:column;gap:12px;padding:16px}
+  .enteteMsg{display:flex;align-items:center;gap:8px}
+  .enteteMsg span{flex:1;font-weight:700;display:flex;align-items:center;gap:8px}
+  .enteteMsg button{padding:6px 11px;font-size:14px}
+  #msgLog{flex:1;overflow-y:auto;min-height:180px;display:flex;flex-direction:column;gap:8px}
+  .bulle{max-width:78%;padding:9px 13px;border-radius:14px;font-size:15px;line-height:1.4;word-break:break-word}
+  .bulle.moi{align-self:flex-end;background:var(--beam);color:#161207;border-bottom-right-radius:4px}
+  .bulle.lui{align-self:flex-start;background:var(--card);border-bottom-left-radius:4px}
+  .bulle small{display:block;font-size:11px;opacity:.6;margin-top:3px}
+  /* Tutoriel d'accueil (3 écrans, joueurs qui n'ont encore jamais joué de partie — voir
+     ouvrirTutorielAccueil()) : même gabarit de fenêtre centrée que #popJoueur, en plus haut niveau
+     (z-index) puisqu'il peut s'ouvrir par-dessus le menu dès le premier chargement. */
+  /* Bandeau de consentement cookies/vie privée (voir #popCookies) : plus haut niveau que le
+     tutoriel puisqu'il doit passer avant lui pour un tout nouveau compte. */
+  #popCookies{position:fixed;inset:0;background:rgba(10,12,22,.82);display:grid;place-items:center;z-index:98;padding:18px}
+  #popCookies .boite{background:var(--velvet);border:1px solid rgba(237,232,220,.14);border-radius:14px;
+    padding:22px;max-width:380px;width:100%;text-align:center}
+  #popCookies h3{font-family:'Anton',sans-serif;text-transform:uppercase;letter-spacing:.03em;
+    font-size:18px;margin:6px 0 10px;font-weight:400;color:var(--chalk)}
+  #popCookies p{color:var(--muted);font-size:13.5px;line-height:1.55;margin:0 0 6px}
+  #popCookies a{color:var(--beam)}
+  #popCookies .row{margin-top:16px}
+  #tutorielAccueil{position:fixed;inset:0;background:rgba(10,12,22,.8);display:grid;place-items:center;z-index:90;padding:18px}
+  #tutorielAccueil .boite{background:var(--velvet);border:1px solid rgba(237,232,220,.14);border-radius:14px;
+    padding:26px 24px;max-width:360px;width:100%;text-align:center;max-height:calc(100vh - 36px);
+    overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .tutorielIcone{font-size:44px;line-height:1;margin-bottom:14px}
+  .tutorielEcran h3{font-family:'Anton',sans-serif;text-transform:uppercase;letter-spacing:.03em;
+    font-size:19px;margin:0 0 10px;font-weight:400;color:var(--chalk)}
+  .tutorielEcran p{color:var(--muted);font-size:14px;line-height:1.55;margin:0}
+  .tutorielPoints{display:flex;justify-content:center;gap:7px;margin-top:20px}
+  .tutorielPoints span{width:7px;height:7px;border-radius:50%;background:rgba(237,232,220,.25)}
+  .tutorielPoints span.actif{background:var(--beam)}
+  #popJoueur{position:fixed;inset:0;background:rgba(10,12,22,.72);display:grid;place-items:center;z-index:70;padding:18px}
+  #popJoueur .boite{background:var(--velvet);border:1px solid rgba(237,232,220,.14);border-radius:14px;
+    padding:22px;max-width:340px;width:100%;text-align:center;position:relative;
+    /* La fiche peut être haute (stats, niveau, pépites, plusieurs boutons d'action) : sans cette
+       limite elle dépassait l'écran et le bas (bouton Fermer, dernières actions) restait coupé,
+       surtout sur mobile. On la limite à la hauteur de l'écran et on fait défiler le contenu à
+       l'intérieur plutôt que de le laisser déborder. */
+    max-height:calc(100vh - 36px);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+  #popJoueur .close-btn{position:absolute;top:6px;right:10px;font-size:28px}
+  .ficheEntete{margin-bottom:16px}
+  .cadreFiche{width:88px;height:88px;margin:0 auto 12px;border-radius:50%;padding:3px;
+    background:linear-gradient(140deg,var(--beam),var(--ticket),var(--teal))}
+  .cadreFiche img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;
+    background:var(--card);border:2px solid var(--velvet)}
+  .cadreFiche.emoji{display:grid;place-items:center;font-size:40px;background:var(--card);
+    box-shadow:inset 0 0 0 1px rgba(245,185,66,.35)}
+  .ficheStats{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:0 0 16px}
+  .ficheStats div{background:var(--card);border-radius:10px;padding:11px 8px}
+  .ficheStats small{display:block;color:var(--muted);font-size:11px;letter-spacing:.1em;
+    text-transform:uppercase;margin-bottom:3px}
+  .ficheStats b{font-family:'JetBrains Mono',monospace;font-size:19px;color:var(--beam)}
+  .ficheStats .large{grid-column:1 / -1}
+  #popJoueur .boite h3{font-family:'Anton',sans-serif;text-transform:uppercase;letter-spacing:.03em;
+    font-size:20px;margin:0 0 4px;font-weight:400}
+  #popJoueur .boite p{color:var(--muted);font-size:13px;margin:0 0 16px}
+  .modrow{display:flex;gap:10px;align-items:flex-start;padding:14px 0;border-top:1px solid rgba(237,232,220,.1);flex-wrap:wrap}
+  .modrow .txt{flex:1;min-width:180px}
+  .modrow .txt strong{display:block}
+  .modrow .txt small{color:var(--muted)}
+  .modrow button{padding:9px 12px;font-size:14px}
+  .modrow.traite{opacity:.45}
+  .badge-role{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);
+    border:1px solid var(--teal);border-radius:999px;padding:3px 9px;margin-left:8px}
+  .roomcode{font-family:'JetBrains Mono',monospace;font-size:14px;letter-spacing:.24em;color:var(--beam);
+    background:var(--card);border-radius:8px;padding:6px 12px}
+  .grace{color:var(--ticket);font-size:14px;margin:12px 0 0}
+  .waiting{text-align:center;padding:26px 0}
+  .waiting b{display:block;font-family:'Anton',sans-serif;text-transform:uppercase;font-size:20px;color:var(--beam);margin-bottom:8px}
+  .wallet{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--muted);
+    background:var(--card);border-radius:999px;padding:7px 14px;margin-top:10px}
+  .wallet b{color:var(--beam);font-family:'JetBrains Mono',monospace;font-size:15px}
+  .hints button.broke{opacity:.4;border-style:dotted}
+  /* Chat */
+  #confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:60;display:none}
+  .bravo{position:fixed;top:22%;left:50%;transform:translateX(-50%);z-index:61;pointer-events:none;
+    font-family:'Anton',sans-serif;text-transform:uppercase;letter-spacing:.05em;
+    font-size:clamp(30px,9vw,54px);color:var(--beam);text-shadow:0 6px 30px rgba(0,0,0,.7);
+    animation:bravo 1.6s ease-out forwards}
+  @keyframes bravo{
+    0%{opacity:0;transform:translateX(-50%) scale(.6)}
+    18%{opacity:1;transform:translateX(-50%) scale(1.08)}
+    30%{transform:translateX(-50%) scale(1)}
+    100%{opacity:0;transform:translateX(-50%) translateY(-26px) scale(1)}}
+  #chatToggle{position:fixed;right:18px;bottom:18px;width:56px;height:56px;border-radius:50%;
+    font-size:24px;padding:0;box-shadow:0 8px 24px rgba(0,0,0,.5);z-index:20}
+  #chatToggle .badge{position:absolute;top:-4px;right:-4px;background:var(--ticket);color:#fff;
+    font-size:11px;min-width:20px;height:20px;border-radius:10px;display:grid;place-items:center;padding:0 5px}
+  #chatPanel.reduit{max-height:none}
+  #chatPanel.reduit #chatLog,#chatPanel.reduit #chatForm{display:none}
+  #chatPanel{position:fixed;right:18px;bottom:84px;width:min(340px,calc(100vw - 36px));max-height:60vh;
+    background:var(--velvet);border:1px solid rgba(237,232,220,.14);border-radius:14px;padding:14px;
+    display:flex;flex-direction:column;gap:10px;z-index:20;box-shadow:0 16px 40px rgba(0,0,0,.6)}
+  #chatLog{flex:1;overflow-y:auto;min-height:120px;display:flex;flex-direction:column;gap:9px;font-size:14px}
+  #chatLog p{margin:0;line-height:1.4}
+  #chatLog b{color:var(--beam);font-weight:700}
+  #chatLog .sys{color:var(--ticket);font-size:13px}
+  #chatForm{display:flex;gap:8px}
+  #chatForm input{padding:10px 12px;font-size:15px}
+  #chatForm button{padding:10px 14px}
+  /* Discussion écrite propre à chaque salon vocal — pas flottante comme le chat de partie,
+     intégrée directement dans la carte de l'écran du salon. */
+  .vocalChatMessages{max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;
+    font-size:14px;padding-right:2px}
+  .vocalChatMessages p{margin:0;line-height:1.4;display:flex;align-items:flex-start;gap:7px}
+  .vocalChatMessages .pfp{width:22px;height:22px;border-radius:50%;object-fit:cover;flex:0 0 auto}
+  .vocalChatMessages .emoji{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;
+    background:var(--card);font-size:13px;flex:0 0 auto}
+  .vocalChatMessages b{color:var(--beam);font-weight:700}
+  /* Film proposé dans le tchat du salon (voir #btnVocalRechercheFilm / renderVocalChat) : affiche
+     et le lien direct vers sa fiche/bande-annonce, plutôt que devoir le rechercher soi-même pour
+     savoir de quel film il s'agit. */
+  .vocalChatFilm{display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap}
+  .vocalChatFilm img{width:32px;height:46px;object-fit:cover;border-radius:5px;flex:0 0 auto}
+  .vocalChatFilm button{flex:0 0 auto;padding:6px 10px;font-size:12.5px;min-height:0;
+    background:rgba(245,185,66,.14);color:var(--beam);border:1px solid rgba(245,185,66,.3)}
+  .vocalChatFilm button:hover{background:rgba(245,185,66,.26)}
+  #banner{display:block;width:100%;background:transparent;border:0;padding:0;text-align:left;cursor:pointer;color:inherit}
+  #banner:hover h1 em{color:var(--ticket)}
+  .xbtn{display:block;text-align:center;text-decoration:none;font-weight:700;font-size:16px;
+    background:var(--chalk);color:var(--ink);border-radius:10px;padding:14px 18px;margin-bottom:10px}
+  .xbtn.ghostlink{background:transparent;color:var(--chalk);border:1px solid rgba(237,232,220,.25);font-weight:500}
+  ul.how{list-style:none;padding:0;margin:0;color:var(--muted);font-size:15px;line-height:1.6}
+  ul.how b{color:var(--beam);margin-right:6px}
+  /* Téléphones : cibles tactiles plus larges, chat plein écran, moins de marges. */
+  @media (max-width:600px){
+    .wrap{padding:18px 14px 96px}
+    /* Le titre pouvait s'étendre jusque sous les icônes fixes du coin (#barreBoutonsCoin, jusqu'à
+       3 boutons ronds) et sembler s'y superposer sur petit écran — on réserve leur largeur max
+       pour que le titre passe à la ligne avant de les atteindre plutôt que de passer dessous. */
+    #banner{padding-right:150px}
+    .card{padding:16px}
+    .row{flex-wrap:wrap}
+    button,input{min-height:48px}
+    .flap{width:46px;height:60px;font-size:26px}
+    .mode{padding:14px 14px 14px 18px;gap:10px}
+    .mode span.ic{font-size:22px}
+    .mode .capacite{font-size:11px;padding:4px 8px}
+    .hints{gap:6px}
+      .hints button{flex:1 1 calc(50% - 6px);padding:12px 8px;font-size:13px;justify-content:center}
+    .choices{grid-template-columns:1fr;gap:8px}
+    .choices button{min-height:56px;font-size:15px}
+    .hints .cost{display:block;margin:2px 0 0}
+    #chatPanel{right:0;left:0;bottom:0;width:100%;max-height:72vh;border-radius:14px 14px 0 0}
+    #chatToggle{right:14px;bottom:14px}
+    .urow input{width:70px}
+    ol.rank li{font-size:15px}
+    .teamboard{flex-direction:column;gap:8px}
+    footer{margin-bottom:60px}
+  }
+  @media (max-width:380px){
+    .flap{width:40px;height:52px;font-size:22px}
+  }
+  @media (prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important}}
+
+/* --- BARRE D'ICÔNES EN HAUT À DROITE (aide "?", lien externe "🔗", liens épinglés "📎") --- */
+/* En bas à gauche à l'origine, le bouton d'aide se retrouvait sous le clavier / le champ de
+   saisie des messages (chat de partie en plein écran sur mobile, conversations privées) et
+   gênait l'envoi. Placé en haut à droite à la place : jamais affiché pendant une partie (voir
+   aideActive / inGame), exactement comme le coin « regardé par », qui occupe cette même place
+   mais uniquement en jeu — les deux ne se croisent donc jamais.
+   Les trois boutons de ce coin (aide, lien externe, liens épinglés) sont chacun masqués ou
+   affichés indépendamment selon la configuration de l'administration — un espacement fixe en
+   pixels pour chacun (comme avant) laissait un vide visible dès que l'un d'eux était masqué,
+   ou les faisait se chevaucher selon les cas. Un conteneur flex commun (#barreBoutonsCoin) les
+   garde toujours collés les uns aux autres, sans trou ni chevauchement, quel que soit le
+   sous-ensemble réellement affiché. */
+#barreBoutonsCoin{position:fixed;top:38px;right:14px;display:flex;flex-direction:row-reverse;gap:10px;z-index:1000}
+@media(max-width:480px){ #barreBoutonsCoin{top:34px} }
+.help-btn { width: 40px; height: 40px; background: rgba(28, 34, 56, 0.6); color: var(--muted); border: 1px solid rgba(237, 232, 220, 0.15); border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 20px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2); transition: all 0.3s ease; backdrop-filter: blur(4px); }
+.help-btn:hover { transform: scale(1.1); color: var(--chalk); border-color: var(--beam); background: rgba(28, 34, 56, 0.9); }
+#popLienExterne{position:fixed;inset:0;background:rgba(10,12,22,.72);display:grid;place-items:center;z-index:95;padding:18px}
+#popLienExterne .boite{background:var(--velvet);border:1px solid rgba(237,232,220,.14);border-radius:14px;
+  padding:24px;max-width:340px;width:100%;text-align:center;position:relative}
+#popLienExterne .close-btn{position:absolute;top:6px;right:10px;font-size:26px;cursor:pointer;color:var(--muted)}
+#popLienExterne .close-btn:hover{color:var(--chalk)}
+#popLienExterne h3{font-family:'Anton',sans-serif;text-transform:uppercase;letter-spacing:.03em;
+  font-size:19px;margin:8px 0 12px;font-weight:400;color:var(--chalk)}
+#popLienExterne .lienExterneCompte{font-family:'JetBrains Mono',monospace;font-size:26px;color:var(--beam);margin:0 0 6px}
+#popLienExterne .noteAttente{color:var(--muted);font-size:13px;margin:0}
+#popLienExterne a.lienActif{display:inline-block;margin-top:6px;background:var(--beam);color:var(--ink);
+  font-weight:bold;padding:11px 20px;border-radius:999px;text-decoration:none}
+#popLiensEpingles{position:fixed;inset:0;background:rgba(10,12,22,.72);display:grid;place-items:center;z-index:95;padding:18px}
+#popLiensEpingles .boite{background:var(--velvet);border:1px solid rgba(237,232,220,.14);border-radius:14px;
+  padding:24px;max-width:380px;width:100%;position:relative;max-height:80vh;overflow-y:auto}
+#popLiensEpingles .close-btn{position:absolute;top:6px;right:10px;font-size:26px;cursor:pointer;color:var(--muted)}
+#popLiensEpingles .close-btn:hover{color:var(--chalk)}
+#popLiensEpingles h3{font-family:'Anton',sans-serif;text-transform:uppercase;letter-spacing:.03em;
+  font-size:19px;margin:8px 0 14px;font-weight:400;color:var(--chalk);text-align:center}
+.lienEpingleItem{display:flex;align-items:center;gap:12px;padding:10px;border-radius:10px;
+  background:rgba(237,232,220,.05);margin-bottom:8px;text-decoration:none;color:var(--chalk);
+  transition:background .2s}
+.lienEpingleItem:hover{background:rgba(245,185,66,.12)}
+.lienEpingleItem img{width:44px;height:44px;border-radius:8px;object-fit:cover;flex:0 0 auto;background:rgba(0,0,0,.2)}
+.lienEpingleItem .ic{width:44px;height:44px;border-radius:8px;flex:0 0 auto;display:grid;place-items:center;
+  font-size:20px;background:rgba(245,185,66,.16)}
+.lienEpingleItem b{font-size:14px;font-weight:600}
+
+/* --- COIN "REGARDÉ PAR" : qui suit la partie en direct --- */
+#spectateursCorner{position:fixed;top:14px;right:14px;z-index:45;max-width:180px;
+  background:rgba(10,12,22,.78);border:1px solid rgba(237,232,220,.14);border-radius:10px;
+  padding:8px 12px;font-size:12.5px;color:var(--muted);text-align:right;backdrop-filter:blur(4px)}
+#spectateursCorner b{display:block;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--chalk);margin-bottom:3px}
+#spectateursCorner span{display:block;line-height:1.4}
+
+/* --- MODE ENFANT --- */
+#btnKidMode{font-size:18px;line-height:1;padding:13px 16px}
+#btnKidMode[aria-pressed="true"]{background:var(--online);color:var(--onbright);border-color:var(--online)}
+#btnKidMode:disabled{cursor:not-allowed;opacity:.85}
+/* Halo vert tout autour de l'écran tant que le mode enfant est actif. */
+html.mode-enfant-actif{box-shadow:inset 0 0 0 5px var(--online), inset 0 0 34px 6px rgba(61,220,132,.55)}
+html.mode-enfant-actif body{min-height:100vh}
+.bandeauEnfant{position:fixed;top:0;left:0;right:0;z-index:1200;background:var(--online);color:var(--onbright);
+  text-align:center;font-family:var(--font-etiquette);font-weight:600;font-size:12px;letter-spacing:.14em;
+  text-transform:uppercase;padding:6px 10px}
+html.mode-enfant-actif .wrap{padding-top:48px}
+/* --- Bandeau défilant (annonces développeur, félicitations, messages de bienvenue) --- */
+#tickerBanniere{position:fixed;left:0;right:0;top:0;z-index:1150;height:30px;overflow:hidden;
+  background:var(--velvet);border-bottom:1px solid rgba(237,232,220,.14);
+  display:flex;align-items:center;transition:top .2s ease}
+#tickerBanniere.hidden{display:none}
+#tickerBanniere .tickerContenu{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;
+  padding-left:100%;will-change:transform;animation:tickerDefile linear 1;
+  font-family:var(--font-etiquette);font-size:12.5px;font-weight:600;letter-spacing:.02em}
+#tickerBanniere .tickerContenu.dev{color:var(--ticket)}
+#tickerBanniere .tickerContenu.roue,#tickerBanniere .tickerContenu.equipe,
+#tickerBanniere .tickerContenu.partage,#tickerBanniere .tickerContenu.sondage,
+#tickerBanniere .tickerContenu.classement{color:var(--beam)}
+#tickerBanniere .tickerContenu.bienvenue{color:var(--teal)}
+#tickerBanniere .tickerContenu.cliquable{cursor:pointer}
+#tickerBanniere .tickerPfp{width:18px;height:18px;border-radius:50%;object-fit:cover;flex:0 0 auto}
+@keyframes tickerDefile{ from{ transform:translateX(0); } to{ transform:translateX(-100%); } }
+html.ticker-actif .wrap{padding-top:38px}
+html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
+@media(max-width:480px){
+  #tickerBanniere{height:26px}
+  #tickerBanniere .tickerContenu{font-size:11.5px}
+  html.ticker-actif .wrap{padding-top:34px}
+  html.ticker-actif.mode-enfant-actif .wrap{padding-top:70px}
+}
+/* --- Salon vocal (façon talkie-walkie) --- */
+.vocalGrille{display:flex;flex-wrap:wrap;gap:14px;justify-content:flex-start}
+.vocalGrille:empty::after{content:"Personne ici pour l'instant.";color:var(--muted);font-size:13px}
+.vocalParticipant{display:flex;flex-direction:column;align-items:center;gap:6px;width:74px;text-align:center}
+.vocalParticipant .vocalAvatarWrap{position:relative;width:56px;height:56px;display:flex;align-items:center;justify-content:center}
+.vocalParticipant .vocalAvatarWrap img.pfp{width:52px;height:52px;vertical-align:0}
+.vocalParticipant .vocalAvatarWrap .emoji{font-size:30px;width:52px;height:52px;border-radius:50%;
+  background:var(--card);display:flex;align-items:center;justify-content:center}
+/* L'anneau qui pulse autour de la photo quand la personne "parle" (aucun son réel transmis,
+   juste l'indicateur visuel demandé — façon talkie-walkie). */
+.vocalParticipant.parle .vocalAvatarWrap::before{content:"";position:absolute;inset:-6px;border-radius:50%;
+  border:3px solid var(--teal);animation:vocalPulse 1.1s ease-out infinite}
+.vocalParticipant.parle .vocalAvatarWrap::after{content:"";position:absolute;inset:-6px;border-radius:50%;
+  border:3px solid var(--teal);opacity:.6}
+@keyframes vocalPulse{
+  0%{transform:scale(1);opacity:.9}
+  100%{transform:scale(1.55);opacity:0}
+}
+.vocalParticipant .vocalMute{position:absolute;bottom:-2px;right:-2px;width:20px;height:20px;border-radius:50%;
+  background:var(--ticket);display:flex;align-items:center;justify-content:center;font-size:11px;border:2px solid var(--ink)}
+/* Petite main superposée en haut à gauche de la photo (voir mainLevee côté serveur) : juste assez
+   grande pour reconnaître qui a levé la main, sans jamais cacher le visage ni le rôle en dessous.
+   Rien qu'un emoji, sans pastille colorée derrière (demande explicite : pas de rond jaune). */
+.vocalParticipant .vocalMainLevee{position:absolute;top:-6px;left:-6px;font-size:18px;line-height:1;
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
+.vocalParticipant .vocalNom{font-size:11.5px;color:var(--chalk);line-height:1.2;word-break:break-word}
+.vocalParticipant .vocalRoleTag{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+/* Voir le profil depuis le salon vocal (voir ouvrirJoueur, câblé dans renderVocalSalon) : curseur
+   et léger effet au survol/appui sur la carte d'un AUTRE participant, jamais sur la sienne. */
+.vocalParticipant[data-userid]:not(.vocalParticipantMoi){cursor:pointer}
+.vocalParticipant[data-userid]:not(.vocalParticipantMoi):hover .vocalAvatarWrap,
+.vocalParticipant[data-userid]:not(.vocalParticipantMoi):active .vocalAvatarWrap{filter:brightness(1.18)}
+#btnVocalMute,#btnVocalMicFlottant,#btnVocalLeverMain{transition:background .15s ease,color .15s ease}
+#btnVocalMute.micro-ouvert,#btnVocalMicFlottant.micro-ouvert,#btnVocalLeverMain.micro-ouvert{background:var(--teal);color:var(--onbright);border-color:var(--teal)}
+#vocalDemandesListe .urowVocal,#vocalConsoleParticipants .urowVocal{display:flex;align-items:center;gap:10px;
+  padding:10px 0;border-top:1px solid rgba(237,232,220,.1);flex-wrap:wrap}
+#vocalDemandesListe .urowVocal .qui,#vocalConsoleParticipants .urowVocal .qui{display:flex;align-items:center;gap:8px;flex:1 1 140px}
+/* --- LA FENÊTRE MODALE --- */
+/* Reprise avec les variables du thème (--ink/--velvet/--card/--chalk/--muted/--ticket/--teal) au
+   lieu des gris/rouge/vert génériques d'origine (#1a1a1a, #e50914, #1db954…) qui donnaient
+   l'impression d'un composant collé là depuis un autre site, visuellement décroché du reste. */
+.modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.85); display: none; justify-content: center; align-items: center; z-index: 1001; opacity: 0; transition: opacity 0.3s ease; }
+.modal-overlay.active { display: flex; opacity: 1; }
+/* La bande-annonce peut s'ouvrir par-dessus une autre fenêtre déjà affichée (Sorties Ciné,
+   Actuellement au cinéma) : elle doit toujours passer au-dessus, quel que soit son ordre dans
+   le document, sans quoi elle peut se retrouver masquée derrière la fenêtre qui l'a ouverte. */
+#trailerModal.active { z-index: 1002; }
+.modal-content { background-color: var(--velvet); border: 1px solid rgba(237,232,220,.14); border-radius: 14px; width: 90%; max-width: 600px; max-height: 80vh; overflow-y: auto; position: relative; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7); transform: translateY(-20px); transition: transform 0.3s ease; color: var(--chalk);}
+.modal-overlay.active .modal-content { transform: translateY(0); }
+.modal-header { background: var(--ink); padding: 20px; border-bottom: 2px solid rgba(237,232,220,.14); border-radius: 14px 14px 0 0; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; }
+.modal-header h2 { margin: 0; font-size: 24px; color: var(--chalk); font-family: 'Anton', sans-serif;}
+.close-btn { background: none; border: none; color: var(--muted); font-size: 32px; line-height: 1; cursor: pointer; transition: color 0.2s; }
+.close-btn:hover { color: var(--ticket); }
+.modal-body { padding: 25px; line-height: 1.6; font-family: 'Inter', sans-serif; text-align: left; }
+.mode-section { background-color: var(--card); padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; border-left: 5px solid var(--teal); text-align: left; }
+.mode-section.cine { border-left-color: var(--ticket); }
+.mode-section h3 { margin-top: 0; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; color: var(--chalk);}
+.mode-section ul { margin-bottom: 0; padding-left: 20px; }
+.teaser-section { background: linear-gradient(135deg, var(--velvet), var(--card)); padding: 25px; border-radius: 8px; text-align: center; margin-top: 30px; box-shadow: 0 4px 15px rgba(245,185,66,.15); border: 1px solid rgba(245,185,66,.25); }
+.teaser-section h3 { margin-top: 0; color: var(--chalk); text-transform: uppercase; letter-spacing: 1px; font-size: 20px; }
+.teaser-section p { font-size: 1.05em; color: var(--chalk); opacity: .85; }
+.modal-content::-webkit-scrollbar { width: 8px; }
+.modal-content::-webkit-scrollbar-track { background: var(--velvet); }
+.modal-content::-webkit-scrollbar-thumb { background: rgba(237,232,220,.25); border-radius: 4px; }
+
+  .bday-item { display: flex; gap: 12px; margin-bottom: 12px; padding: 10px; background: var(--card); border-radius: 8px; align-items: center; border-left: 4px solid var(--teal); }
+  .bday-item img { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; }
+  .bday-item .info { flex: 1; }
+  .bday-item .info b { display: block; color: var(--chalk); font-size: 16px; margin-bottom: 2px;}
+  .bday-item .info small { color: var(--muted); font-size: 13px; line-height: 1.3; display: block;}
+  /* Historique des questions déjà posées dans la partie en cours. */
+  .histoItem{display:flex;gap:12px;margin-bottom:12px;padding:10px;background:var(--card);
+    border-radius:8px;align-items:flex-start;border-left:4px solid var(--beam)}
+  .histoItem img{width:52px;height:76px;object-fit:cover;border-radius:4px;flex:0 0 auto;background:var(--ink)}
+  .histoItem .info{flex:1;min-width:0}
+  .histoItem .info b{display:block;color:var(--chalk);font-size:15px;margin-bottom:2px}
+  .histoItem .info small{color:var(--muted);font-size:12.5px;line-height:1.35;display:block}
+  /* Décompte 3-2-1 avant le lancement d'une partie. */
+  .compteARebours{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;
+    background:rgba(10,8,5,.88);pointer-events:none}
+  .compteARebours span{font-family:'Anton',sans-serif;color:var(--beam);text-transform:uppercase;
+    letter-spacing:.03em;font-size:clamp(48px,16vw,110px);text-shadow:0 6px 24px rgba(0,0,0,.6);
+    animation:compteAPop .7s ease-out}
+  @keyframes compteAPop{0%{opacity:0;transform:scale(.5)}30%{opacity:1;transform:scale(1.15)}100%{opacity:1;transform:scale(1)}}
+
+  .progression-map { display: flex; flex-direction: column-reverse; align-items: center; padding: 20px 0; overflow-y: auto; overflow-x: hidden; height: 100%; padding-bottom: 50vh; }
+  .progression-line { width: 6px; height: 26px; background: var(--card); transition: background 0.3s; }
+  .progression-line.done { background: var(--teal); }
+  .progression-step { width: 56px; height: 56px; border-radius: 50%; background: var(--card); color: var(--chalk); display: flex; justify-content: center; align-items: center; font-family: 'Anton', sans-serif; font-size: 22px; border: 4px solid var(--ink); z-index: 2; transition: all 0.3s; position: relative; }
+  .progression-step.done { background: var(--teal); border-color: var(--online); color: var(--ink); }
+  .progression-step.current { background: var(--beam); border-color: var(--chalk); color: var(--ink); transform: scale(1.35); box-shadow: 0 0 20px var(--beam); z-index: 5; }
+  .progression-step.bonus { border-color: var(--ticket); background: rgba(228,88,110,.22); }
+  .progression-step.bonus.done { background: var(--teal); border-color: var(--ticket); }
+  .progression-step.claimable { animation: pulseBonus 1s infinite; cursor: pointer; background: var(--ticket); color: var(--chalk); box-shadow: 0 0 15px var(--ticket); z-index: 6; }
+  .progression-step.fog { background: var(--ink); border-color: var(--velvet); color: transparent; text-shadow: 0 0 0 rgba(237,232,220,.25); transform: scale(0.9); }
+  .progression-step.chest { border-color: var(--teal); background: rgba(78,205,196,.16); }
+  .progression-step.chest.done { background: var(--teal); border-color: var(--chalk); color: var(--ink); }
+  .progression-step.chest.claimable { background: var(--teal); color: var(--onbright); box-shadow: 0 0 15px var(--teal); animation: pulseBonus 1s infinite; }
+  .coffre-anim { font-size: 64px; margin: 6px 0 14px; animation: coffreBounce 1.2s ease-in-out infinite; }
+  @keyframes coffreBounce { 0%,100%{transform:translateY(0) rotate(0deg)} 25%{transform:translateY(-6px) rotate(-4deg)} 75%{transform:translateY(-6px) rotate(4deg)} }
+  .coffre-anim.ouvert { animation: coffreOuvre .6s ease forwards; }
+  @keyframes coffreOuvre { 0%{transform:scale(1) rotate(0)} 40%{transform:scale(1.3) rotate(-10deg)} 70%{transform:scale(1.45) rotate(10deg)} 100%{transform:scale(1.6) rotate(0)} }
+  .coffre-reveal { font-size: 56px; animation: coffreRevealPop .5s ease; }
+  @keyframes coffreRevealPop { 0%{transform:scale(0);opacity:0} 60%{transform:scale(1.25);opacity:1} 100%{transform:scale(1)} }
+  
+  @keyframes pulseBonus { 0%, 100% { transform: scale(1.2); } 50% { transform: scale(1.4); box-shadow: 0 0 30px var(--ticket); } }
+
+
+  .cadrePhoto.emoji { display: grid; place-items: center; font-size: 64px; }
+  .cadrePhoto.emoji .inner-emoji { width: 100%; height: 100%; border-radius: 50%; background: var(--card); border: 3px solid var(--velvet); display: grid; place-items: center; }
+
+
+  /* --- Effets visuels avancés (Boutons et Logos) --- */
+  body.animations-actives button:not(.ghost):not(#chatToggle):not(.close-btn):not(#banner) {
+    position: relative; overflow: hidden; transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s;
+  }
+  body.animations-actives button:not(.ghost):not(#chatToggle):not(.close-btn):not(#banner)::after {
+    content: ""; position: absolute; top: 0; left: -100%; width: 50%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+    transform: skewX(-20deg); transition: none;
+  }
+  body.animations-actives button:not(.ghost):not(#chatToggle):not(.close-btn):not(#banner):hover,
+  body.animations-actives button:not(.ghost):not(#chatToggle):not(.close-btn):not(#banner):active {
+    transform: scale(1.03); box-shadow: 0 4px 15px rgba(245,185,66,0.3);
+  }
+  body.animations-actives button:not(.ghost):not(#chatToggle):not(.close-btn):not(#banner):hover::after,
+  body.animations-actives button:not(.ghost):not(#chatToggle):not(.close-btn):not(#banner):active::after {
+    animation: shine 0.6s ease;
+  }
+  @keyframes shine { 100% { left: 200%; } }
+  
+  body.animations-actives button.ghost:not(#btnQuitGame):not(#chatReduire) {
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s, border-color 0.2s;
+  }
+  body.animations-actives button.ghost:not(#btnQuitGame):not(#chatReduire):hover,
+  body.animations-actives button.ghost:not(#btnQuitGame):not(#chatReduire):active {
+    transform: scale(1.05); background: rgba(255,255,255,0.06); border-color: var(--beam); color: var(--chalk);
+  }
+  
+  body.animations-actives .mode { transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s, border-color 0.2s; }
+  body.animations-actives .mode:hover, body.animations-actives .mode:active {
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.5);
+    border-color: var(--beam);
+  }
+  /* Au survol, le liseré de la carte reprend la couleur propre à chaque mode plutôt que
+     toujours le jaune par défaut — cohérent avec la barre de couleur affichée en permanence. */
+  body.animations-actives .mode[data-mode="solo"]:hover, body.animations-actives .mode[data-mode="solo"]:active { border-color: var(--beam); box-shadow: 0 8px 25px rgba(245,185,66,.3); }
+  body.animations-actives .mode[data-mode="duel"]:hover, body.animations-actives .mode[data-mode="duel"]:active { border-color: var(--ticket); box-shadow: 0 8px 25px rgba(228,88,110,.3); }
+  body.animations-actives .mode[data-mode="ffa"]:hover, body.animations-actives .mode[data-mode="ffa"]:active { border-color: var(--teal); box-shadow: 0 8px 25px rgba(78,205,196,.3); }
+  body.animations-actives .mode[data-mode="teams"]:hover, body.animations-actives .mode[data-mode="teams"]:active { border-color: var(--teal); box-shadow: 0 8px 25px rgba(78,205,196,.22), 0 -8px 25px rgba(245,185,66,.18); }
+  body.animations-actives .mode:hover .ic, body.animations-actives .mode:active .ic { animation: bounceIcon 0.5s; }
+  @keyframes bounceIcon { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px) scale(1.1); } }
+
+  body.animations-actives #banner h1 em { display: inline-block; transition: transform 0.3s; }
+  body.animations-actives #banner:hover h1 em, body.animations-actives #banner:active h1 em { animation: wobble 0.6s ease-in-out; color: var(--ticket); }
+  @keyframes wobble { 0%, 100% { transform: rotate(0deg) scale(1); } 25% { transform: rotate(-8deg) scale(1.1); } 75% { transform: rotate(8deg) scale(1.1); } }
+  
+  body.animations-actives .amiLigne { transition: background 0.2s, transform 0.2s; }
+  body.animations-actives .amiLigne:hover { background: rgba(255,255,255,0.03); border-radius: 8px; transform: translateX(4px); }
+  
+  body.animations-actives .choices button { transition: transform 0.15s, border-color 0.15s, background 0.15s; }
+  body.animations-actives .choices button:hover:not(:disabled),
+  body.animations-actives .choices button:active:not(:disabled) {
+    transform: scale(1.02); border-color: var(--beam); box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+  }
+
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <a id="banner" href="/" title="Aller au jeu MichBen Ciné Quizz"><h1>MichBen <em>Salon vocal</em></h1></a>
+
+  <!-- ===== Écran de connexion : affiché par défaut, masqué dès que /api/me confirme une session
+       valide (voir le script de bas de page). Jamais d'accès anonyme : même système de comptes
+       que le jeu (mêmes identifiants), voir /auth/x/login?retour=/vocal plus bas. ===== -->
+  <div id="loginGate">
+    <div class="card" style="max-width:460px;margin:40px auto 0;text-align:center">
+      <p class="tag">🎙️ Salon vocal — MichBen Ciné Quizz</p>
+      <h2 id="loginGateTitre">Connexion en cours…</h2>
+      <p class="note" id="loginGateTexte">Vérification de votre session.</p>
+      <div class="row" id="loginGateAction" hidden>
+        <button type="button" id="btnLoginVocal">Se connecter</button>
+      </div>
+      <p class="feedback bad" id="loginGateErreur" style="margin-top:10px"></p>
+    </div>
+  </div>
+
+  <section id="vocal" class="hidden">
+    <button class="ghost" id="btnVocalRetourMenu" style="margin-bottom:14px">← Retour au menu</button>
+
+    <div id="vocalListe">
+      <h2>🎙️ Salons vocaux</h2>
+      <p class="note" style="margin:0 0 14px">Un micro pour de vrai, en plus d'un petit chat écrit propre à chaque
+        salon — pratique pour ceux qui préfèrent taper, ou compléter la voix par un mot ou un lien.</p>
+      <div class="card">
+        <label for="vocalTitreCreation">Créer un salon</label>
+        <input id="vocalTitreCreation" placeholder="Le titre de votre salon (facultatif)" maxlength="60">
+        <div class="row"><button id="btnVocalCreer">🎙️ Ouvrir mon salon</button></div>
+        <p class="feedback bad" id="vocalErreurCreation"></p>
+      </div>
+      <div class="card">
+        <label for="vocalCode">Rejoindre avec un code</label>
+        <input id="vocalCode" maxlength="4" placeholder="ABCD" autocomplete="off">
+        <div class="row"><button id="btnVocalRejoindre" class="ghost">Rejoindre</button></div>
+        <p class="feedback bad" id="vocalErreur"></p>
+      </div>
+      <p class="tag" style="margin-top:18px">🔴 Salons en direct — vos amis</p>
+      <div id="vocalSalonsAmis"><p class="note">Aucun de vos amis n'anime de salon pour l'instant.</p></div>
+      <p class="tag" style="margin-top:18px">Autres salons ouverts</p>
+      <div id="vocalSalonsAutres"><p class="note">Aucun autre salon ouvert pour l'instant.</p></div>
+    </div>
+
+    <div id="vocalSalon" class="hidden">
+      <div class="card" style="text-align:center">
+        <p class="tag" id="vocalTitreSalon" style="margin:0 0 4px">Salon</p>
+        <div class="marquee" id="vocalMarquee" style="margin-bottom:10px"></div>
+      </div>
+
+      <div class="card" id="vocalRadioCard">
+        <p class="tag" style="margin:0 0 8px">📻 Radio & vidéo du salon</p>
+        <p class="note" id="vocalRadioTexte" style="margin:0 0 10px">Aucune piste diffusée pour l'instant.</p>
+        <div class="row rangeeControlesRadio" style="margin:0 0 10px">
+          <button id="btnVocalRadioReculer" class="ghost" title="Reculer de 15 secondes">⏪ 15s</button>
+          <button id="btnVocalRadioVolMoins" class="ghost" title="Diminuer le volume">🔉➖</button>
+          <span id="vocalRadioVolLabel" class="volLabel" style="min-width:34px">50%</span>
+          <button id="btnVocalRadioVolPlus" class="ghost" title="Augmenter le volume">🔊➕</button>
+          <button id="btnVocalRadioAvancer" class="ghost" title="Avancer de 15 secondes">15s ⏩</button>
+        </div>
+        <audio id="vocalAudio" style="width:100%;display:none" controls></audio>
+        <video id="vocalVideo" style="width:100%;display:none;border-radius:10px;background:var(--ink)" controls playsinline></video>
+        <div id="vocalYoutubeWrap" class="hidden" style="position:relative;width:100%;padding-top:56.25%;border-radius:10px;overflow:hidden;background:var(--ink)">
+          <div id="vocalYoutubePlayer" style="position:absolute;inset:0;width:100%;height:100%"></div>
+        </div>
+        <div id="vocalRadioChoix" class="hidden">
+          <select id="vocalRadioSelect"></select>
+          <div class="row">
+            <button id="btnVocalRadioDiffuser" class="ghost">▶️ Diffuser</button>
+            <button id="btnVocalRadioArreter" class="ghost">⏹️ Arrêter</button>
+          </div>
+          <button class="ghost" id="btnVocalRadioAjouterToggle" style="margin-top:10px;font-size:13px">➕ Diffuser mon propre contenu (musique ou vidéo)</button>
+          <div id="vocalRadioAjouter" class="hidden" style="margin-top:10px">
+            <p class="note" style="margin:0 0 4px"><b>🎵 Musique</b></p>
+            <p class="note" style="margin:0 0 8px">Un lien direct vers un fichier audio, ou un fichier envoyé depuis votre téléphone (mp3, wav, ogg, m4a — 8 Mo max). Rejoint la playlist commune et démarre aussitôt pour tout le salon.</p>
+            <input id="vocalRadioTitre" placeholder="Titre (facultatif)" maxlength="80" style="margin-bottom:8px">
+            <input id="vocalRadioLien" placeholder="https://exemple.com/musique.mp3" style="margin-bottom:8px">
+            <p class="note" style="margin:4px 0;text-align:center;opacity:0.7">— ou —</p>
+            <input type="file" id="vocalRadioFichier" accept="audio/*" style="margin-bottom:8px">
+            <div class="row"><button id="btnVocalRadioEnvoyer">Diffuser ceci au salon</button></div>
+            <p class="feedback bad" id="vocalRadioAjouterMsg"></p>
+
+            <p class="note" style="margin:16px 0 4px;padding-top:12px;border-top:1px solid rgba(237,232,220,.12)"><b>🎬 Vidéo</b></p>
+            <p class="note" style="margin:0 0 8px">Cherchez une vidéo YouTube par mots-clés, collez un lien (YouTube ou fichier vidéo), ou envoyez un fichier depuis votre téléphone (mp4, webm, mov — 15 Mo max). L'écran apparaît ici même, pour tout le salon.</p>
+            <input id="vocalVideoTitre" placeholder="Titre (facultatif)" maxlength="80" style="margin-bottom:8px">
+
+            <div class="row" style="margin-bottom:8px">
+              <input id="vocalYoutubeRechercheInput" placeholder="🔍 Chercher une vidéo YouTube…" style="flex:1">
+              <button id="btnVocalYoutubeRechercheLancer" style="flex:0 0 auto">Chercher</button>
+            </div>
+            <p class="feedback" id="vocalYoutubeRechercheMsg" style="margin:0 0 8px"></p>
+            <div id="vocalYoutubeRechercheListe"></div>
+
+            <p class="note" style="margin:8px 0;text-align:center;opacity:0.7">— ou collez un lien —</p>
+            <input id="vocalVideoYoutubeLien" placeholder="https://www.youtube.com/watch?v=..." style="margin-bottom:8px">
+            <div class="row"><button id="btnVocalVideoYoutubeEnvoyer" class="ghost">▶️ Diffuser cette vidéo YouTube</button></div>
+            <p class="note" style="margin:8px 0;text-align:center;opacity:0.7">— ou —</p>
+            <input id="vocalVideoLien" placeholder="https://exemple.com/video.mp4" style="margin-bottom:8px">
+            <div class="row"><button id="btnVocalVideoLienEnvoyer" class="ghost">▶️ Diffuser ce lien vidéo</button></div>
+            <p class="note" style="margin:8px 0;text-align:center;opacity:0.7">— ou —</p>
+            <input type="file" id="vocalVideoFichier" accept="video/*" style="margin-bottom:8px">
+            <div class="row"><button id="btnVocalVideoFichierEnvoyer" class="ghost">▶️ Diffuser ce fichier vidéo</button></div>
+            <p class="feedback bad" id="vocalVideoAjouterMsg"></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Options du bas, regroupées dans une seule barre compacte plutôt que plusieurs cartes
+           empilées : micro / demande d'intervention / réactions (repliées, voir #vocalEmojiBar) /
+           recherche d'un film / quitter, toujours dans le flux normal de la page (jamais en position
+           fixe, voir la note sur .radioBar plus haut) pour ne jamais chevaucher le clavier mobile ou
+           le chat. Remontée juste sous la radio du salon et juste au-dessus des cases participants
+           (hôte/intervenants/auditeurs), à la demande d'un joueur : plus rapide à atteindre qu'après
+           avoir fait défiler toute la liste des participants. -->
+      <div class="card vocalBarreBas" id="vocalBarreBas">
+        <div class="vocalBarreRangee">
+          <button id="btnVocalMute" class="hidden">🎙️ Activer mon micro</button>
+          <button id="btnVocalLeverMain" class="ghost hidden" type="button">✋ Lever la main</button>
+          <button id="btnVocalDemander" class="ghost hidden">✋ Demander à intervenir</button>
+          <button id="btnVocalBaisserMain" class="ghost hidden">✋ Baisser la main</button>
+          <button id="btnVocalReactionsToggle" class="ghost" type="button" aria-pressed="false">👋 Réactions</button>
+          <button id="btnVocalRechercheFilm" class="ghost" type="button">🔍 Chercher un film</button>
+          <button id="btnVocalQuitter" class="ghost danger">🚪 Quitter</button>
+        </div>
+        <p class="note" id="vocalDemandeEnvoyee" style="margin:10px 0 0;text-align:center" hidden>Votre demande a été envoyée à l'hôte.</p>
+        <p class="feedback" id="vocalMicMsg" style="margin:8px 0 0;text-align:center"></p>
+        <div id="vocalEmojiBar" class="emojis hidden" style="margin-top:14px"></div>
+      </div>
+
+      <!-- Sons reçus des autres participants (WebRTC) — invisible, un <audio> par personne connectée.
+           position:absolute + taille 0 plutôt que display:none : certains navigateurs mobiles sont
+           moins fiables pour lire un <audio> totalement retiré du rendu. -->
+      <div id="vocalAudioDistant" style="position:absolute;width:0;height:0;overflow:hidden"></div>
+
+      <!-- Enveloppe dédiée aux trois cases réordonnables (voir theme.ordre.vocal et appliquerTheme) :
+           en limitant la réorganisation à cette enveloppe plutôt qu'à tout #vocalSalon, les cases ne
+           risquent jamais de se retrouver déplacées après la console de modération ou le tchat. -->
+      <div id="vocalCasesWrapper">
+        <div class="card" data-module="vocal-hote">
+          <p class="tag" style="margin:0 0 10px">🎤 Hôte & cohôtes</p>
+          <div id="vocalListeHote" class="vocalGrille"></div>
+        </div>
+        <div class="card" data-module="vocal-intervenants">
+          <p class="tag" style="margin:0 0 10px">🗣️ Intervenants</p>
+          <div id="vocalListeIntervenants" class="vocalGrille"></div>
+        </div>
+        <div class="card" data-module="vocal-auditeurs">
+          <p class="tag" style="margin:0 0 10px">👂 Auditeurs</p>
+          <div id="vocalListeAuditeurs" class="vocalGrille"></div>
+        </div>
+      </div>
+
+      <!-- Remontée juste sous les auditeurs (à la demande d'un joueur) : plus rapide à atteindre
+           qu'après avoir fait défiler toute la console de modération, qui n'est de toute façon
+           visible que pour l'hôte/les cohôtes. -->
+      <div class="card">
+        <p class="tag" style="margin:0 0 10px">💬 Discussion du salon</p>
+        <div id="vocalChatMessages" class="vocalChatMessages"></div>
+        <div class="row" style="margin-top:10px">
+          <input id="vocalChatInput" placeholder="Écrire un message…" maxlength="300" autocomplete="off" style="flex:1">
+          <button id="btnVocalChatEnvoyer" style="flex:0 0 auto">➤</button>
+        </div>
+      </div>
+
+      <div class="card hidden" id="vocalConsole">
+        <p class="tag" style="margin:0 0 10px">🎛️ Console de modération</p>
+        <label for="vocalReglageTitre" style="display:block;margin:0 0 6px;text-transform:none;letter-spacing:0;font-size:14px">✏️ Titre du salon</label>
+        <div class="row" style="margin-bottom:14px">
+          <input id="vocalReglageTitre" maxlength="60" placeholder="Le titre du salon">
+          <button class="ghost" id="btnVocalRenommer" type="button">Renommer</button>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;margin:0 0 8px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:14px">
+          <input type="checkbox" id="vocalReglagePrive" style="width:auto;cursor:pointer">
+          🔒 Salon privé (invisible dans « Salons en direct » pour qui n'est pas ami avec l'hôte)
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;margin:0 0 10px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:14px">
+          <input type="checkbox" id="vocalReglageMonteeLibre" style="width:auto;cursor:pointer">
+          🙌 Montée libre (les auditeurs deviennent intervenants sans avoir à demander)
+        </label>
+        <div id="vocalDemandesListe"></div>
+        <div id="vocalConsoleParticipants"></div>
+        <div class="row hidden" id="vocalFermerZone" style="margin-top:14px">
+          <button class="ghost danger" id="btnVocalFermer">🔒 Fermer le salon pour tout le monde</button>
+        </div>
+      </div>
+
+      <!-- Tout en bas de la page du salon, à la demande d'un joueur. -->
+      <div class="card" style="text-align:center">
+        <div class="row" style="justify-content:center"><button class="ghost" id="btnVocalInviter">🎙️ Inviter des amis</button></div>
+      </div>
+    </div>
+  </section>
+  <div class="modal-overlay" id="inviterVocalModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>🎙️ Inviter des amis</h2>
+        <button class="close-btn" id="closeInviterVocalBtn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="note" style="margin-top:0">Invitez un ami en ligne à rejoindre ce salon vocal — code <b id="inviterVocalCode"></b>.</p>
+        <div id="inviterVocalListe"></div>
+        <p class="feedback" id="inviterVocalMsg"></p>
+      </div>
+    </div>
+  </div>
+  <div class="modal-overlay" id="vocalRechercheFilmModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>🔍 Chercher un film</h2>
+        <button class="close-btn" id="closeVocalRechercheFilmBtn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="note" style="margin:0 0 10px">Trouvez un film à proposer au salon — recherche rapide ou recherche libre dans la base TMDB.</p>
+        <div class="row" id="vocalRechercheFilmPredefinies" style="flex-wrap:wrap;gap:8px;margin-bottom:12px"></div>
+        <div class="row" style="gap:8px">
+          <input id="vocalRechercheFilmInput" placeholder="Chercher un titre sur TMDB…" style="flex:1">
+          <button id="btnVocalRechercheFilmLancer" style="flex:0 0 auto">Chercher</button>
+        </div>
+        <p class="feedback" id="vocalRechercheFilmMsg" style="margin:8px 0 0"></p>
+        <div id="vocalRechercheFilmListe" style="margin-top:12px"></div>
+        <p class="note hidden" id="vocalRechercheFilmVide">Aucun résultat.</p>
+      </div>
+    </div>
+  </div>
+    <!-- MODALE BANDE-ANNONCE : ouverte au clic sur un film des « Sorties de la semaine ». -->
+    <div class="modal-overlay" id="trailerModal">
+        <div class="modal-content">
+            <div class="modal-header" style="border-bottom-color: var(--ticket);">
+                <h2 id="trailerTitre">🎬 Bande-annonce</h2>
+                <button class="close-btn" id="closeTrailerBtn">&times;</button>
+            </div>
+            <div class="modal-body" style="padding:0">
+                <div style="position:relative;width:100%;padding-top:56.25%;background:var(--ink)">
+                    <iframe id="trailerFrame" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0" allow="autoplay; encrypted-media" allowfullscreen title="Bande-annonce"></iframe>
+                </div>
+                <p class="note" id="trailerMsg" style="text-align:center;padding:14px"></p>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script src="/js/moteur.js"></script>
+<script>
+/* Dernier recours si le fichier local est lui aussi filtré. */
+if (typeof io === "undefined") {
+  document.write('<scr' + 'ipt src="https://cdn.jsdelivr.net/npm/socket.io-client@4.8.1/dist/socket.io.min.js"><\/scr' + 'ipt>');
+}
+</script>
+<script>
+/**
+ * Si Socket.IO reste indisponible (bloqueur, pare-feu, réseau filtrant), on
+ * remplace l'objet par une coquille inerte. Sans le temps réel, le salon
+ * vocal (qui en dépend entièrement, signalisation WebRTC comprise) ne peut
+ * pas fonctionner — le message d'erreur plus bas prévient clairement.
+ */
+window.tempsReelDispo = typeof io !== "undefined";
+window.cheminTempsReel = "/rt";
+
+/**
+ * Si le moteur temps réel n'a pas pu être chargé, on installe une coquille
+ * inerte sous le même nom. Sans elle, la première ligne qui appelle io()
+ * interrompt tout le script — et plus aucun bouton ne répond.
+ */
+if (!window.tempsReelDispo) {
+  const coquille = {
+    id: null, connected: false,
+    on(){ return this; }, once(){ return this; }, off(){ return this; },
+    emit(){ return this; }, connect(){ return this; },
+    disconnect(){ return this; }, close(){ return this; },
+  };
+  window.io = () => coquille;
+  var io = window.io;   // « var » pour que le nom soit aussi visible sans préfixe
+}
+</script>
+<script>
+// withCredentials garantit l'envoi du cookie de session, y compris après
+// une redirection entre le domaine avec et sans www.
+/* Le chemin par défaut « /socket.io » est lui aussi filtré par certains
+   bloqueurs : on expose donc le même service sous « /rt ». */
+/* Une panne du moteur ne doit jamais empêcher le reste de la page de fonctionner. */
+const socket = (() => {
+  try {
+    return io({ withCredentials: true, path: window.cheminTempsReel });
+  } catch (e) {
+    console.warn("Temps réel indisponible :", e.message);
+    window.tempsReelDispo = false;
+    const rien = { id: null, connected: false };
+    for (const m of ["on","once","off","emit","connect","disconnect","close"]) rien[m] = () => rien;
+    return rien;
+  }
+})();
+</script>
+<script>
+/**
+ * ==========================================================================
+ * Ce qui suit est repris (verbatim pour l'essentiel) de public/index.html,
+ * uniquement la partie « salon vocal » — voir le grand commentaire tout en
+ * bas de ce fichier pour le détail complet de ce qui a été copié, adapté ou
+ * volontairement omis par rapport au jeu principal.
+ * ==========================================================================
+ */
+
+if (!window.tempsReelDispo) {
+  document.addEventListener("DOMContentLoaded", () => {
+    $("loginGateTitre").textContent = "Temps réel indisponible";
+    $("loginGateTexte").textContent = "Le salon vocal exige une connexion temps réel, bloquée ici par votre navigateur ou votre réseau. Désactivez votre bloqueur sur ce site pour pouvoir l'utiliser.";
+  });
+}
+
+/* ---------- Petits utilitaires génériques (repris de index.html tels quels) ---------- */
+/** Échappement HTML basique — utilisé absolument partout ci-dessous pour ne jamais injecter tel
+ *  quel un pseudo, un titre ou un message dans le balisage. */
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+/**
+ * Un élément absent ne doit jamais interrompre tout le script : on renvoie un objet inerte plutôt
+ * que null. Repris tel quel de index.html — précieux ici aussi, puisque cette page ne reprend
+ * volontairement qu'une partie du balisage du jeu (des boutons/éléments du jeu principal auxquels
+ * du code copié fait encore référence, ex. #btnVocalMicFlottant, n'existent simplement pas ici).
+ */
+const INERTE = {
+  textContent: "", innerHTML: "", value: "", src: "", disabled: false,
+  style: {}, dataset: {},
+  classList: { add(){}, remove(){}, toggle(){}, contains(){ return false; } },
+  querySelectorAll: () => [], querySelector: () => null,
+  append(){}, prepend(){}, setAttribute(){}, addEventListener(){},
+  focus(){}, select(){}, scrollIntoView(){}, click(){},
+};
+const $ = (id) => {
+  const el = document.getElementById(id);
+  if (!el) console.warn(`Élément « ${id} » absent du balisage.`);
+  return el || INERTE;
+};
+
+/** Photo du joueur si l'administration lui en a attribué une, émoji sinon. */
+const vignette = (j) => j?.photo
+  ? `<img class="pfp" src="${esc(j.photo)}" alt="" onerror="this.remove()">`
+  : (j?.avatar || "🎬");
+
+/** Profil du compte connecté — rempli par la vérification de connexion tout en bas de ce fichier
+ *  (GET /api/me). Déclaré ici, avant tout le reste, car du code plus bas (construireBarreReactions
+ *  notamment) le lit dès sa construction. */
+let me = null;
+
+/** Cette page n'affiche jamais de partie de quiz en cours : toujours "false" ici. Certaines
+ *  fonctions copiées telles quelles depuis index.html (bandeauNotif, majMicFlottant...) le lisent
+ *  pour adapter leur comportement pendant une partie — état qui n'existe simplement pas ici. */
+let enPartieActuellement = false;
+
+/** Version très simplifiée de show() : le jeu principal l'utilise pour naviguer entre des dizaines
+ *  d'écrans (menu, lobby, manche...), mais cette page n'en a qu'un seul (#vocal), déjà visible en
+ *  permanence une fois la connexion confirmée (voir la vérification /api/me plus bas). On la garde
+ *  seulement pour que le code du salon vocal copié plus bas — qui appelle show("vocal") ou
+ *  show("menu") à quelques endroits, par ex. en acceptant une invitation reçue pendant qu'on
+ *  consultait la liste des salons — continue de s'exécuter sans erreur. "menu" n'a pas d'équivalent
+ *  ici : on revient simplement à la liste des salons plutôt qu'au salon en cours. */
+let pageAffichee = "vocal";
+function show(id){
+  pageAffichee = (id === "menu") ? "vocal" : id;
+  if (id === "menu") afficherVocalListe();
+}
+
+/** Bandeau éphémère, cliquable pour aller directement à l'écran concerné — repris tel quel de
+ *  index.html (voir vocal:ferme/vocal:exclu/vocal:fusionne plus bas, qui s'en servent). */
+function bandeauNotif(html, action){
+  if (enPartieActuellement) return;
+  const el = document.createElement("div");
+  el.className = "notif";
+  el.innerHTML = html;
+  el.onclick = () => { el.remove(); action?.(); };
+  document.body.append(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+/** Traduit un MediaError en catégorie lisible — utilisé par vocalSyncMedia (radio/vidéo du salon). */
+function raisonDepuisMediaError(err){
+  switch (err?.code){
+    case 2: return "reseau";
+    case 3: return "decodage";
+    case 4: return "format";
+    default: return "inconnue";
+  }
+}
+
+/** Réactions emoji publiques du salon vocal — liste et durée d'affichage par défaut, personnalisées
+ *  au chargement de /api/config si l'administration en a changé (voir plus bas). */
+let EMOJIS_REACTION = ["👋", "❤️", "💯", "🩸", "😂", "😭"];
+let REACTION_DUREE_AFFICHAGE_MS = 2300;
+
+/** (Re)construit la barre d'emojis de réaction du salon vocal et rebranche ses clics — repris de
+ *  index.html à l'identique, hormis l'appel pour la barre #emojiBar de la partie de quiz (qui
+ *  n'existe pas sur cette page, donc retiré) : ici, une seule barre existe, #vocalEmojiBar. */
+function construireBarreReactions(idBarre, evenement, obtenirCode){
+  const barre = $(idBarre);
+  barre.innerHTML = EMOJIS_REACTION
+    .map(e => `<button type="button" data-emoji="${e}">${e}</button>`).join("")
+    + `<button type="button" data-photo-reaction class="hidden" title="Envoyer ma photo en réaction">📸</button>`;
+  let derniereEnvoyee = 0;
+  barre.querySelectorAll("[data-emoji]").forEach(btn => {
+    btn.onclick = () => {
+      const code = obtenirCode();
+      if (!code) return;
+      const maintenant = Date.now();
+      if (maintenant - derniereEnvoyee < 700) return;   // évite le matraquage côté client aussi
+      derniereEnvoyee = maintenant;
+      socket.emit(evenement, { code, emoji: btn.dataset.emoji });
+    };
+  });
+  const btnPhoto = barre.querySelector("[data-photo-reaction]");
+  if (btnPhoto) btnPhoto.onclick = () => {
+    const code = obtenirCode();
+    if (!code || !me?.photo) return;
+    const maintenant = Date.now();
+    if (maintenant - derniereEnvoyee < 700) return;
+    derniereEnvoyee = maintenant;
+    socket.emit(evenement, { code, photo: true });
+  };
+  vocalMajBoutonPhotoReaction();
+}
+
+/** Affiche/cache le bouton "envoyer ma photo en réaction" selon que le compte a une photo ou non. */
+function vocalMajBoutonPhotoReaction(){
+  document.querySelectorAll("[data-photo-reaction]").forEach(btn => {
+    btn.classList.toggle("hidden", !me?.photo);
+    if (me?.photo) btn.innerHTML = `<img src="${esc(me.photo)}" alt="" style="width:20px;height:20px;border-radius:50%;object-fit:cover;vertical-align:middle">`;
+  });
+}
+
+/** Historique des réactions reçues récemment, pour détecter un "combo" (repris tel quel). */
+const vocalComboReactions = new Map();
+const VOCAL_COMBO_FENETRE_MS = 2600;
+function afficherReactionVolante(emoji, pseudo, photo){
+  const maintenant = Date.now();
+  for (const [cle, v] of vocalComboReactions) { if (v.expire <= maintenant) vocalComboReactions.delete(cle); }
+
+  const signature = photo ? `photo:${photo}` : `emoji:${emoji}`;
+  const cleCombo = `${pseudo || "?"}|${signature}`;
+  const precedent = vocalComboReactions.get(cleCombo);
+  const combo = (precedent && precedent.expire > maintenant) ? precedent.compte + 1 : 1;
+  vocalComboReactions.set(cleCombo, { compte: combo, expire: maintenant + VOCAL_COMBO_FENETRE_MS });
+  const enCombo = combo >= 2;
+  const ampleur = enCombo ? 1.7 : 1;
+
+  const el = document.createElement("div");
+  el.className = "flyEmoji" + (enCombo ? " combo" : "");
+  el.style.left = (12 + Math.random() * 66) + "%";
+  el.style.bottom = (110 + Math.random() * 60) + "px";
+  el.style.setProperty("--dx1", Math.round((Math.random() - 0.5) * 130 * ampleur) + "px");
+  el.style.setProperty("--dx2", Math.round((Math.random() - 0.5) * 160 * ampleur) + "px");
+  el.style.setProperty("--dx3", Math.round((Math.random() - 0.5) * 100 * ampleur) + "px");
+  el.style.setProperty("--rot1", Math.round((Math.random() - 0.5) * 24 * ampleur) + "deg");
+  el.style.setProperty("--rot2", Math.round((Math.random() - 0.5) * 24 * ampleur) + "deg");
+  el.style.setProperty("--duree", (REACTION_DUREE_AFFICHAGE_MS / 1000) + "s");
+  if (enCombo) el.style.setProperty("--taille", String(Math.min(2, 1 + combo * 0.18)));
+  el.innerHTML = (photo
+    ? `<img src="${esc(photo)}" alt="" style="width:1em;height:1em;border-radius:50%;object-fit:cover;vertical-align:middle;display:inline-block">`
+    : (emoji || "")) + (enCombo ? `<b class="comboCompteur">×${combo}</b>` : "") + `<small>${esc(pseudo || "")}</small>`;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), REACTION_DUREE_AFFICHAGE_MS);
+}
+
+/** Volume de la radio du salon vocal (#vocalAudio/#vocalVideo/YouTube) — repris tel quel. */
+let vocalRadioVolume = (() => {
+  const v = parseFloat(localStorage.getItem("michben_vocal_radio_volume"));
+  return Number.isFinite(v) && v >= 0 && v <= 1 ? v : 0.5;
+})();
+let vocalYoutubePlayer = null;
+function majVolumeRadioVocal(){
+  const audio = $("vocalAudio");
+  if (audio) audio.volume = vocalRadioVolume;
+  const video = $("vocalVideo");
+  if (video) video.volume = vocalRadioVolume;
+  if (vocalYoutubePlayer) { try { vocalYoutubePlayer.setVolume(Math.round(vocalRadioVolume * 100)); } catch {} }
+  const lbl = $("vocalRadioVolLabel");
+  if (lbl) lbl.textContent = Math.round(vocalRadioVolume * 100) + "%";
+}
+majVolumeRadioVocal();
+$("btnVocalRadioVolMoins").onclick = () => {
+  vocalRadioVolume = Math.max(0, Math.round((vocalRadioVolume - 0.1) * 10) / 10);
+  localStorage.setItem("michben_vocal_radio_volume", String(vocalRadioVolume));
+  majVolumeRadioVocal();
+};
+$("btnVocalRadioVolPlus").onclick = () => {
+  vocalRadioVolume = Math.min(1, Math.round((vocalRadioVolume + 0.1) * 10) / 10);
+  localStorage.setItem("michben_vocal_radio_volume", String(vocalRadioVolume));
+  majVolumeRadioVocal();
+};
+
+/** Blocs réductibles (radio du salon, console de modération) — repris tel quel. */
+function rendreBlocReductible(idCarte, cleStockage){
+  const carte = $(idCarte);
+  const titre = carte?.querySelector(".tag");
+  if (!carte || !titre) return;
+  carte.classList.add("cardReductible");
+  const trait = document.createElement("button");
+  trait.type = "button";
+  trait.className = "traitReduction";
+  trait.setAttribute("aria-label", "Réduire ou afficher ce bloc");
+  titre.appendChild(trait);
+  const appliquer = (reduit) => {
+    carte.classList.toggle("blocReduit", reduit);
+    trait.textContent = reduit ? "▸" : "▾";
+    trait.setAttribute("aria-pressed", reduit ? "true" : "false");
+    trait.title = reduit ? "Afficher ce bloc" : "Réduire ce bloc (mise en veille visuelle)";
+  };
+  let reduit = false;
+  try { reduit = localStorage.getItem(cleStockage) === "1"; } catch {}
+  appliquer(reduit);
+  trait.onclick = () => {
+    reduit = !reduit;
+    appliquer(reduit);
+    try { localStorage.setItem(cleStockage, reduit ? "1" : "0"); } catch {}
+  };
+}
+rendreBlocReductible("vocalRadioCard", "michben_vocal_radio_reduit");
+rendreBlocReductible("vocalConsole", "michben_vocal_console_reduit");
+
+/** Voir le profil d'un participant (photo, stats, actions de don...) : dans le jeu principal, ceci
+ *  ouvre une fiche joueur complète (#popJoueur) avec tout un système de gestion d'amis (demander,
+ *  bloquer, offrir des points/tickets, regarder en direct...) qui dépend d'un très grand nombre de
+ *  fonctions et d'écrans propres au jeu (amis, échange, classement...). Reproduire tout ça ici
+ *  aurait ajouté un volume de code sans rapport avec le salon vocal lui-même pour un gain mineur —
+ *  on se contente donc ici d'un clic sans effet sur la carte d'un participant. Tout ce qui est
+ *  central au salon vocal (parler, couper son micro, lever la main, inviter, modérer, fermer le
+ *  salon...) reste, lui, entièrement fonctionnel plus bas. */
+function ouvrirJoueur(_id, _pseudo, _avatar, _photoJoueur){
+  /* volontairement un no-op — voir commentaire ci-dessus */
+}
+
+/** Bande-annonce d'un film proposé dans le tchat du salon (repris tel quel de index.html, avec sa
+ *  modale dédiée #trailerModal ci-dessus dans le balisage). */
+const trailerModal = document.getElementById("trailerModal");
+const trailerFrame = document.getElementById("trailerFrame");
+const trailerMsg = document.getElementById("trailerMsg");
+const trailerTitreEl = document.getElementById("trailerTitre");
+const closeTrailerBtn = document.getElementById("closeTrailerBtn");
+function fermerTrailer(){
+  trailerModal.classList.remove("active");
+  trailerFrame.src = "";
+}
+async function ouvrirTrailer(tmdbId, titre){
+  trailerTitreEl.textContent = `🎬 ${titre || "Bande-annonce"}`;
+  trailerMsg.textContent = "Recherche de la bande-annonce…";
+  trailerFrame.src = "";
+  trailerModal.classList.add("active");
+  try {
+    const res = await fetch(`/api/movies/${encodeURIComponent(tmdbId)}/trailer`);
+    const data = await res.json();
+    if (data.key){
+      trailerFrame.src = `https://www.youtube.com/embed/${encodeURIComponent(data.key)}?autoplay=1&rel=0`;
+      trailerMsg.textContent = "";
+    } else if (data.error === "NO_KEY"){
+      trailerMsg.textContent = "Fonctionnalité en attente de configuration (clé API TMDB manquante).";
+    } else {
+      trailerMsg.textContent = "Aucune bande-annonce trouvée pour ce film.";
+    }
+  } catch(e){
+    trailerMsg.textContent = "Erreur lors du chargement de la bande-annonce.";
+  }
+}
+closeTrailerBtn.addEventListener("click", fermerTrailer);
+trailerModal.addEventListener("click", (e) => { if (e.target === trailerModal) fermerTrailer(); });
+
+/** Voir VOCAL_SALON_COURANT_CLE plus bas (reprise après rechargement complet de la page). */
+const VOCAL_SALON_COURANT_CLE = "michben_vocal_salon_courant";
+
+/* ---------- Fin des petits utilitaires — début du bloc salon vocal proprement dit ---------- */
+let vocalSalonActuel = null;   // dernier état reçu du serveur (payload publicVocal), ou null si pas dans un salon
+let vocalMusiquePourRadio = []; // catalogue /api/musique, chargé une seule fois pour le sélecteur radio
+
+/** Signal sonore discret pour hôte/cohôte/intervenant : prévient sans avoir à garder l'œil rivé sur
+ *  l'écran qu'un nouvel auditeur vient d'arriver, ou qu'une demande d'intervention vient d'être
+ *  envoyée. Deux notes différentes pour les distinguer à l'oreille. Généré directement (petit
+ *  bip synthétisé), sans fichier audio à charger — reste très bref et volontairement discret. */
+let vocalBipCtx = null;
+function vocalJouerBip(frequence, duree){
+  try {
+    if (!vocalBipCtx) vocalBipCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = vocalBipCtx;
+    // Sur mobile, le contexte peut rester "suspendu" (politique anti-lecture-automatique des
+    // navigateurs) même après un premier geste ailleurs sur la page — le bip restait alors
+    // totalement silencieux, sans aucune erreur visible. On le relance systématiquement ici.
+    if (ctx.state === "suspended") ctx.resume().catch(() => {});
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = frequence;
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    // Volume remonté (0.12 → 0.38) : signalé inaudible, notamment sur haut-parleur de téléphone.
+    gain.gain.exponentialRampToValueAtTime(0.38, ctx.currentTime + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duree);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + duree + 0.05);
+  } catch {} // pas grave si ça échoue (contexte audio indisponible) : purement un confort, jamais bloquant
+}
+// Débloque/relance le contexte audio du bip dès la première interaction dans le salon (certains
+// navigateurs mobiles n'autorisent vraiment le son qu'après un geste de l'utilisateur) : ainsi, au
+// moment où quelqu'un rejoint le salon (un événement serveur, jamais un geste de CET utilisateur-ci),
+// le contexte a toutes les chances d'être déjà prêt plutôt que de jouer un bip silencieux.
+document.getElementById("vocalSalon")?.addEventListener("pointerdown", () => {
+  try {
+    if (!vocalBipCtx) vocalBipCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (vocalBipCtx.state === "suspended") vocalBipCtx.resume().catch(() => {});
+  } catch {}
+}, { passive: true });
+let vocalDerniersAuditeursIds = new Set();
+let vocalDerniereDemandesCount = 0;
+let vocalDerniereSalleCode = null;
+
+/* ----- Son réel entre les joueurs (WebRTC, connexion directe pair-à-pair) -----
+ * Le serveur ne fait que relayer les messages de négociation ("vocal:rtc-signal") — le son ne
+ * transite jamais par lui. Sans service de relais payant (TURN), la connexion directe échoue
+ * parfois sur les réseaux les plus restrictifs : dans ce cas, seul l'indicateur visuel (anneau qui
+ * pulse) continue de fonctionner pour la personne concernée, le reste du salon n'est pas affecté.
+ * Pas de bouton "maintenir pour parler" : un seul bouton ouvre ou ferme le micro, et l'anneau qui
+ * pulse se déclenche tout seul quand du son est réellement détecté (voir vocalDemarrerVAD). */
+const VOCAL_ICE_SERVERS = [
+  { urls: "stun:stun.l.google.com:19302" },
+  { urls: "stun:stun1.l.google.com:19302" },
+];
+let vocalPeers = new Map();       // userId -> RTCPeerConnection
+let vocalLocalStream = null;      // notre micro, demandé au tout premier clic sur "activer mon micro"
+let vocalMicIndisponible = false; // évite de redemander le micro en boucle après un refus
+let vocalMicOuvert = false;       // état local du bouton (miroir de moi.mute côté serveur, inversé)
+let vocalVadFrame = null;
+let vocalAudioCtx = null;
+let vocalEtatPeers = new Map();   // userId -> état ICE de la connexion vers ce participant
+
+/** Recalcule si TOUTES les connexions vers les autres participants sont en échec (le symptôme
+ *  précis d'un réseau trop restrictif pour établir la moindre connexion directe : "je n'entends
+ *  personne mais les autres s'entendent très bien") et affiche/efface un message clair en
+ *  conséquence — sans ça, cet échec est totalement silencieux pour la personne concernée. */
+function vocalMajBanniereConnexion(){
+  const msg = $("vocalMicMsg");
+  if (!msg) return;
+  const etats = [...vocalEtatPeers.values()];
+  const enEchecTotal = etats.length > 0 && etats.every(e => e === "failed" || e === "disconnected" || e === "closed");
+  if (enEchecTotal){
+    msg.textContent = "⚠️ Connexion audio impossible avec les autres participants — probablement un réseau trop restrictif (wifi d'entreprise, certaines box). Essayez avec un autre réseau (4G/5G par exemple) si le problème persiste.";
+    msg.className = "feedback bad";
+  } else if (msg.textContent.startsWith("⚠️ Connexion audio impossible")){
+    msg.textContent = "";
+    msg.className = "feedback";
+  }
+}
+
+/** Crée (si besoin) la connexion audio directe vers un participant du salon. Ne fait rien si elle
+ *  existe déjà. Reste "vide" (sans son) tant que personne n'y a ajouté de piste micro — c'est
+ *  l'ajout d'une piste (voir vocalDemanderMicro) qui déclenche automatiquement la négociation.
+ *  Utilise des offres/réponses explicites (createOffer/createAnswer) plutôt que le raccourci
+ *  setLocalDescription() sans argument : ce raccourci n'est pas fiable partout (notamment sur
+ *  certaines versions de Safari/iOS), ce qui pouvait laisser le son coupé sans aucune erreur visible. */
+function vocalCreerPeer(peerId){
+  if (vocalPeers.has(peerId)) return vocalPeers.get(peerId);
+  const pc = new RTCPeerConnection({ iceServers: VOCAL_ICE_SERVERS });
+  pc._makingOffer = false;
+  // Politesse déterministe (même règle des deux côtés) : évite que les deux navigateurs
+  // s'envoient une offre en même temps sans savoir qui doit céder.
+  pc._poli = Boolean(me?.id && me.id > peerId);
+  pc.onnegotiationneeded = async () => {
+    try {
+      pc._makingOffer = true;
+      const offre = await pc.createOffer();
+      await pc.setLocalDescription(offre);
+      vocalEmettreSignal(peerId, { type: "offer", sdp: pc.localDescription });
+    } catch {} finally { pc._makingOffer = false; }
+  };
+  pc.onicecandidate = (e) => { if (e.candidate) vocalEmettreSignal(peerId, { type: "ice", candidate: e.candidate }); };
+  pc.ontrack = (e) => vocalAttacherAudioDistant(peerId, e.streams[0]);
+  pc._tentativesReprise = 0;
+  // Suit l'état de la connexion directe vers ce participant : si elle échoue, on tente plusieurs
+  // reprises (restartIce, avec un court délai croissant entre chaque essai — une coupure réseau
+  // brève a le temps de se résorber), puis en dernier recours on referme et recrée entièrement la
+  // connexion (utile quand restartIce lui-même ne suffit plus, par ex. après une longue mise en
+  // veille de l'appareil). Un message clair s'affiche seulement si tout ça a échoué — plutôt que de
+  // laisser un silence total sans aucune explication (voir vocalMajBanniereConnexion).
+  pc.oniceconnectionstatechange = () => {
+    vocalEtatPeers.set(peerId, pc.iceConnectionState);
+    if (pc.iceConnectionState === "failed"){
+      pc._tentativesReprise++;
+      if (pc._tentativesReprise <= 3){
+        setTimeout(() => { try { pc.restartIce?.(); } catch {} }, pc._tentativesReprise * 1000);
+      } else if (pc._tentativesReprise === 4 && vocalSalonActuel){
+        // restartIce a épuisé ses chances : on repart de zéro pour ce participant.
+        vocalFermerPeer(peerId);
+        if (vocalSalonActuel.participants?.some(p => p.userId === peerId)) vocalCreerPeer(peerId);
+      }
+    }
+    if (pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed") pc._tentativesReprise = 0;
+    vocalMajBanniereConnexion();
+  };
+  if (vocalLocalStream) vocalLocalStream.getTracks().forEach(t => pc.addTrack(t, vocalLocalStream));
+  vocalPeers.set(peerId, pc);
+  vocalEtatPeers.set(peerId, pc.iceConnectionState);
+  return pc;
+}
+
+function vocalFermerPeer(peerId){
+  const pc = vocalPeers.get(peerId);
+  if (pc){ pc.close(); vocalPeers.delete(peerId); }
+  vocalEtatPeers.delete(peerId);
+  vocalMajBanniereConnexion();
+  const audio = document.getElementById(`vocalAudioDistant-${CSS.escape(peerId)}`);
+  if (audio) audio.remove();
+}
+
+function vocalFermerToutesLesConnexions(){
+  for (const peerId of [...vocalPeers.keys()]) vocalFermerPeer(peerId);
+  vocalEtatPeers.clear();
+  if (vocalLocalStream){ vocalLocalStream.getTracks().forEach(t => t.stop()); vocalLocalStream = null; }
+  vocalArreterVAD();
+  vocalDesactiverMediaSession();
+  // On quitte vraiment le salon (par opposition à une coupure temporaire en cours de résync) :
+  // plus la peine de se souvenir d'y revenir tout seul après une prochaine actualisation (voir
+  // VOCAL_SALON_COURANT_CLE / la reprise automatique sur "connect" plus bas).
+  try { sessionStorage.removeItem(VOCAL_SALON_COURANT_CLE); } catch {}
+  vocalMicOuvert = false;
+  $("vocalAudioDistant").innerHTML = "";
+  $("vocalVideo")?.pause();
+  vocalArreterYoutube();
+}
+
+function vocalEmettreSignal(to, signal){
+  if (!vocalSalonActuel) return;
+  socket.emit("vocal:rtc-signal", { code: vocalSalonActuel.code, to, signal });
+}
+
+function vocalAttacherAudioDistant(peerId, stream){
+  const id = `vocalAudioDistant-${CSS.escape(peerId)}`;
+  let audio = document.getElementById(id);
+  if (!audio){
+    audio = document.createElement("audio");
+    audio.id = id;
+    audio.autoplay = true;
+    audio.setAttribute("playsinline", ""); // évite un comportement plein écran inattendu sur iOS
+    $("vocalAudioDistant").appendChild(audio);
+  }
+  if (audio.srcObject !== stream) audio.srcObject = stream;
+  vocalTenterLectureAudio(audio);
+}
+
+/** De nombreux navigateurs mobiles (Safari/iOS en tête) bloquent silencieusement la lecture
+ *  automatique du son tant qu'aucun geste récent n'a eu lieu sur la page. Sans ce filet, le son
+ *  restait bloqué indéfiniment : trompeur, car l'anneau qui pulse chez l'interlocuteur continue de
+ *  fonctionner (il vient du réseau, pas du son lui-même) — on "voit" que la personne parle, mais on
+ *  ne l'entend jamais. On retente donc au moindre geste sur la page tant que le son reste bloqué. */
+let vocalAudioBloque = false;
+function vocalTenterLectureAudio(audio){
+  audio.play().catch(() => {
+    vocalAudioBloque = true;
+    if ($("vocal") && !$("vocal").classList.contains("hidden") && $("vocalMicMsg")){
+      $("vocalMicMsg").textContent = "🔈 Touchez l'écran pour activer le son du salon.";
+      $("vocalMicMsg").className = "feedback bad";
+    }
+  });
+}
+function vocalDebloquerAudioSiBesoin(){
+  if (!vocalAudioBloque) return;
+  let succes = true;
+  document.querySelectorAll("#vocalAudioDistant audio").forEach(a => {
+    a.play().catch(() => { succes = false; });
+  });
+  if (!succes) return;
+  vocalAudioBloque = false;
+  if ($("vocalMicMsg")?.textContent.includes("Touchez l'écran")){
+    $("vocalMicMsg").textContent = "";
+    $("vocalMicMsg").className = "feedback";
+  }
+}
+document.addEventListener("click", vocalDebloquerAudioSiBesoin);
+document.addEventListener("touchstart", vocalDebloquerAudioSiBesoin, { passive: true });
+
+/** S'assure qu'une connexion existe vers chaque autre participant actuellement dans le salon, et
+ *  referme celles qui ne correspondent plus à personne (filet de sécurité, en plus des événements
+ *  vocal:rtc-peer-left qui font normalement déjà le ménage au fil de l'eau). */
+function assurerPeersVocal(salon){
+  if (!salon || !me) return;
+  const presents = new Set(salon.participants.map(p => p.userId).filter(id => id !== me.id));
+  for (const id of presents) vocalCreerPeer(id);
+  for (const id of [...vocalPeers.keys()]) if (!presents.has(id)) vocalFermerPeer(id);
+}
+
+/** Détection de voix très simple (niveau sonore du micro) : fait pulser l'anneau autour de notre
+ *  propre photo chez les autres, sans jamais avoir besoin d'appuyer sur un bouton pour "parler" —
+ *  le micro, lui, reste ouvert en continu une fois activé. */
+function vocalDemarrerVAD(stream){
+  try {
+    vocalAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const source = vocalAudioCtx.createMediaStreamSource(stream);
+    const analyseur = vocalAudioCtx.createAnalyser();
+    analyseur.fftSize = 512;
+    source.connect(analyseur);
+    const donnees = new Uint8Array(analyseur.frequencyBinCount);
+    let parleActuellement = false;
+    const SEUIL = 0.02;
+    const boucle = () => {
+      analyseur.getByteTimeDomainData(donnees);
+      let somme = 0;
+      for (let i = 0; i < donnees.length; i++){ const v = (donnees[i] - 128) / 128; somme += v * v; }
+      const niveau = Math.sqrt(somme / donnees.length);
+      const parleMaintenant = vocalMicOuvert && niveau > SEUIL;
+      if (parleMaintenant !== parleActuellement){
+        parleActuellement = parleMaintenant;
+        if (vocalSalonActuel) socket.emit("vocal:parler", { code: vocalSalonActuel.code, parle: parleMaintenant });
+      }
+      vocalVadFrame = requestAnimationFrame(boucle);
+    };
+    boucle();
+  } catch {} // pas grave si l'analyse échoue : le micro continue de fonctionner, juste sans anneau animé
+}
+function vocalArreterVAD(){
+  if (vocalVadFrame) cancelAnimationFrame(vocalVadFrame);
+  vocalVadFrame = null;
+  if (vocalAudioCtx){ vocalAudioCtx.close().catch(() => {}); vocalAudioCtx = null; }
+}
+
+/** Signale au système d'exploitation qu'un appel vocal est en cours (Media Session API) : sur les
+ *  navigateurs qui la prennent en charge, cela réduit — sans l'éliminer complètement — le risque que
+ *  l'appareil mette le son en pause quand l'onglet passe en arrière-plan, et affiche des informations
+ *  utiles sur l'écran verrouillé / les contrôles multimédia du téléphone. Important : cette API ne
+ *  peut pas garantir qu'aucune autre application ne vienne couper ou interrompre le son — c'est une
+ *  politique du système d'exploitation (économie de batterie, gestion audio) que JavaScript ne peut
+ *  pas entièrement contourner depuis un site web. */
+function vocalActiverMediaSession(){
+  if (!("mediaSession" in navigator)) return;
+  try {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: "Salon vocal en cours",
+      artist: vocalSalonActuel?.titre || "MichBen Ciné Quizz",
+    });
+    navigator.mediaSession.playbackState = "playing";
+    for (const action of ["play", "pause", "stop"]) {
+      try { navigator.mediaSession.setActionHandler(action, () => {}); } catch {}
+    }
+  } catch {}
+}
+function vocalDesactiverMediaSession(){
+  if (!("mediaSession" in navigator)) return;
+  try {
+    navigator.mediaSession.playbackState = "none";
+    navigator.mediaSession.metadata = null;
+    for (const action of ["play", "pause", "stop"]) {
+      try { navigator.mediaSession.setActionHandler(action, null); } catch {}
+    }
+  } catch {}
+}
+// Sur mobile, l'AudioContext utilisé pour la détection de voix (VAD) peut être suspendu par le
+// système quand l'onglet repasse en arrière-plan puis au premier plan : on le relance dès que
+// possible pour que l'anneau qui pulse continue de fonctionner (le son du salon lui-même, porté par
+// les connexions WebRTC directes, n'a pas besoin de ça pour continuer à circuler).
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && vocalAudioCtx && vocalAudioCtx.state === "suspended"){
+    vocalAudioCtx.resume().catch(() => {});
+  }
+  // Retour au premier plan (changement d'app, réveil de l'écran…) : vérifie que le micro n'a pas
+  // été réellement coupé pendant l'absence (voir vocalRevaliderMicroApresRetour ci-dessous).
+  if (document.visibilityState === "visible") vocalRevaliderMicroApresRetour();
+});
+
+/** Demande le micro au tout premier clic sur "activer mon micro" (geste utilisateur, indispensable
+ *  pour que le navigateur affiche la demande d'autorisation), puis ajoute la piste à toutes les
+ *  connexions déjà ouvertes. En cas de refus ou d'appareil sans micro, le salon reste utilisable :
+ *  seul le son ne passera pas pour cette personne, l'indicateur visuel continue de fonctionner. */
+async function vocalDemanderMicro(){
+  if (vocalLocalStream || vocalMicIndisponible) return vocalLocalStream;
+  try {
+    vocalLocalStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    for (const pc of vocalPeers.values())
+      vocalLocalStream.getTracks().forEach(t => pc.addTrack(t, vocalLocalStream));
+    vocalDemarrerVAD(vocalLocalStream);
+    vocalActiverMediaSession();
+    $("vocalMicMsg").textContent = "";
+  } catch {
+    vocalMicIndisponible = true;
+    $("vocalMicMsg").textContent = "Micro indisponible ou refusé — seul l'indicateur visuel fonctionnera pour vous.";
+    $("vocalMicMsg").className = "feedback bad";
+  }
+  return vocalLocalStream;
+}
+
+/** Changer d'application, verrouiller l'écran ou mettre le téléphone en veille peut, sur certains
+ *  systèmes, couper réellement la piste micro (pas juste la mettre en pause) — vocal:rejoindre
+ *  reprend déjà le micro là où il en était côté salon (voir server.js), mais si la piste elle-même
+ *  est morte, la remettre "enabled" ne suffit pas : il faut une nouvelle piste. On la redemande
+ *  donc silencieusement (déjà autorisée, pas de nouvelle demande de permission dans l'immense
+ *  majorité des cas) et on la substitue dans les connexions déjà ouvertes avec replaceTrack(),
+ *  qui évite d'avoir à tout renégocier comme le ferait fermer/rouvrir chaque connexion. */
+async function vocalRevaliderMicroApresRetour(){
+  if (!vocalSalonActuel || !vocalLocalStream) return;
+  const pisteActuelle = vocalLocalStream.getAudioTracks()[0];
+  if (pisteActuelle && pisteActuelle.readyState !== "ended") return; // toujours vivante, rien à faire
+  try {
+    const nouveauFlux = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const nouvellePiste = nouveauFlux.getAudioTracks()[0];
+    nouvellePiste.enabled = vocalMicOuvert;
+    for (const pc of vocalPeers.values()){
+      const emetteur = pc.getSenders().find(s => s.track && s.track.kind === "audio");
+      if (emetteur) emetteur.replaceTrack(nouvellePiste).catch(() => {});
+      else pc.addTrack(nouvellePiste, nouveauFlux);
+    }
+    vocalArreterVAD();
+    vocalLocalStream.getTracks().forEach(t => t.stop());
+    vocalLocalStream = nouveauFlux;
+    vocalDemarrerVAD(vocalLocalStream);
+  } catch {
+    // Micro toujours indisponible (permission révoquée entretemps, appareil débranché…) : on ne
+    // casse rien, l'indicateur visuel continue de fonctionner sans le son pour cette personne.
+    $("vocalMicMsg").textContent = "Micro coupé par votre appareil/navigateur — réactivez-le avec le bouton ci-dessus.";
+    $("vocalMicMsg").className = "feedback bad";
+  }
+}
+
+function afficherVocalListe(){
+  $("vocalListe").classList.remove("hidden");
+  $("vocalSalon").classList.add("hidden");
+}
+function afficherVocalSalonVue(){
+  $("vocalListe").classList.add("hidden");
+  $("vocalSalon").classList.remove("hidden");
+}
+
+function carteSalonVocalOuvert(s){
+  return `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid rgba(237,232,220,.1)">
+      <div><b>${s.prive ? "🔒 " : ""}${esc(s.titre)}</b><br><small style="color:var(--muted)">Animé par ${esc(s.hote)} · ${s.participants} participant${s.participants>1?"s":""}</small></div>
+      <button class="ghost" data-rejoindre-vocal="${esc(s.code)}">Rejoindre</button>
+    </div>`;
+}
+
+async function chargerSalonsVocauxOuverts(){
+  const liste = await fetch("/api/vocal/salons").then(r => r.ok ? r.json() : []).catch(() => []);
+  const amis = liste.filter(s => s.hoteEstAmi);
+  const autres = liste.filter(s => !s.hoteEstAmi);
+  $("vocalSalonsAmis").innerHTML = amis.length
+    ? amis.map(carteSalonVocalOuvert).join("")
+    : `<p class="note">Aucun de vos amis n'anime de salon pour l'instant.</p>`;
+  $("vocalSalonsAutres").innerHTML = autres.length
+    ? autres.map(carteSalonVocalOuvert).join("")
+    : `<p class="note">Aucun autre salon ouvert pour l'instant.</p>`;
+  $("vocalListe").querySelectorAll("[data-rejoindre-vocal]").forEach(b =>
+    b.onclick = () => rejoindreSalonVocalParCode(b.dataset.rejoindreVocal));
+}
+
+$("btnVocal").onclick = () => {
+  show("vocal");
+  if (vocalSalonActuel) afficherVocalSalonVue();
+  else { afficherVocalListe(); chargerSalonsVocauxOuverts(); }
+};
+$("btnVocalRetourMenu").onclick = () => show("menu");
+
+/** Enveloppe socket.emit avec un délai maximum : sans ça, une connexion temps réel absente ou
+ *  coupée fait attendre indéfiniment le callback, ce qui donne l'impression qu'un clic sur
+ *  « Ouvrir mon salon » ou « Rejoindre » ne fait absolument rien — le symptôme le plus difficile
+ *  à diagnostiquer pour un joueur, puisque rien ne s'affiche pour expliquer ce qui bloque. */
+function emitAvecDelai(evenement, donnees, cb, delaiMs = 6000){
+  let repondu = false;
+  const minuteur = setTimeout(() => {
+    if (repondu) return;
+    repondu = true;
+    cb?.({ ok: false, error: "TIMEOUT" });
+  }, delaiMs);
+  socket.emit(evenement, donnees, (res) => {
+    if (repondu) return;
+    repondu = true;
+    clearTimeout(minuteur);
+    cb?.(res);
+  });
+}
+
+$("btnVocalCreer").onclick = () => {
+  $("vocalErreurCreation").textContent = "";
+  const titre = $("vocalTitreCreation").value.trim();
+  emitAvecDelai("vocal:creer", { titre }, (res) => {
+    if (!res?.ok){
+      $("vocalErreurCreation").textContent = res?.error === "TIMEOUT"
+        ? "Le serveur ne répond pas — vérifiez votre connexion et réessayez."
+        : "Impossible d'ouvrir un salon pour l'instant.";
+      return;
+    }
+    chargerMusiqueVocal();
+    renderVocalSalon(res.salon);
+    afficherVocalSalonVue();
+  });
+};
+
+/** `rester: true` : rejoint le salon en arrière-plan sans afficher l'écran "Salon vocal" — utile
+ *  pour rejoindre depuis la bannière de retour sans quitter la partie en cours (voir plus bas). */
+function rejoindreSalonVocalParCode(code, { rester = false } = {}){
+  emitAvecDelai("vocal:rejoindre", { code }, (res) => {
+    if (!res?.ok){
+      $("vocalErreur").textContent = res?.error === "SALON_COMPLET" ? "Ce salon est complet."
+        : res?.error === "SALON_INTROUVABLE" ? "Aucun salon avec ce code."
+        : res?.error === "TIMEOUT" ? "Le serveur ne répond pas — vérifiez votre connexion et réessayez."
+        : "Impossible de rejoindre ce salon.";
+      return;
+    }
+    $("vocalErreur").textContent = "";
+    chargerMusiqueVocal();
+    renderVocalSalon(res.salon);
+    // rester: true (bannière de retour cliquée en pleine partie) : la connexion audio se fait
+    // en arrière-plan, sans changer d'écran ni afficher de notification qui interromprait la
+    // partie (voir bandeauNotif, volontairement silencieux pendant une partie en cours).
+    if (!rester) afficherVocalSalonVue();
+  });
+}
+$("btnVocalRejoindre").onclick = () => {
+  const code = $("vocalCode").value.trim().toUpperCase();
+  if (code.length !== 4){ $("vocalErreur").textContent = "Le code fait 4 caractères."; return; }
+  rejoindreSalonVocalParCode(code);
+};
+
+/** Bulle en haut de l'accueil : propose un accès direct à un salon vocal encore actif, soit parce
+ *  qu'on en a été coupé involontairement (réseau, onglet fermé…), soit parce qu'on y a été invité
+ *  et qu'on ne l'a pas encore rejoint — sans avoir à retrouver le salon ou retaper le code. */
+let retourVocalCourant = null;
+async function verifierRetourVocal(){
+  const r = await fetch("/api/vocal/retour").then(x => x.ok ? x.json() : null).catch(() => null);
+  retourVocalCourant = r?.retour || null;
+  const bulle = $("retourVocalBulle");
+  // Une invitation déjà annoncée par un « toast » (voir vocal:invite-recue) ne doit pas en plus
+  // afficher cette bannière pour le même code : les deux se recouvraient, avec un clic sur
+  // « Rejoindre » qui atterrissait sur le mauvais bouton.
+  if (retourVocalCourant?.motif === "invite" && invitationsToastEnCours?.has(retourVocalCourant.code)) {
+    bulle.classList.add("hidden");
+    return;
+  }
+  if (!retourVocalCourant){ bulle.classList.add("hidden"); return; }
+  $("retourVocalTitre").textContent = retourVocalCourant.motif === "invite"
+    ? `${retourVocalCourant.de} vous invite dans son salon vocal`
+    : "Vous avez été déconnecté d'un salon vocal encore actif";
+  $("retourVocalSousTitre").textContent = `${retourVocalCourant.titre} · rejoignez-le en un clic`;
+  bulle.classList.remove("hidden");
+}
+$("btnRetourVocalRejoindre").onclick = () => {
+  if (!retourVocalCourant) return;
+  const code = retourVocalCourant.code;
+  $("retourVocalBulle").classList.add("hidden");
+  retourVocalCourant = null;
+  if (enPartieActuellement) {
+    // On reste sur l'écran de la partie en cours : la connexion vocale se fait en arrière-plan.
+    rejoindreSalonVocalParCode(code, { rester: true });
+  } else {
+    show("vocal");
+    rejoindreSalonVocalParCode(code);
+  }
+};
+$("btnRetourVocalIgnorer").onclick = async () => {
+  $("retourVocalBulle").classList.add("hidden");
+  retourVocalCourant = null;
+  await fetch("/api/vocal/retour/ignorer", { method: "POST" }).catch(() => {});
+};
+
+$("btnVocalQuitter").onclick = () => {
+  if (vocalSalonActuel && !confirm("Voulez-vous vraiment quitter le salon vocal ?")) return;
+  if (vocalSalonActuel) socket.emit("vocal:quitter", { code: vocalSalonActuel.code }, () => {});
+  vocalSalonActuel = null;
+  vocalMicOuvert = false;
+  vocalDerniereSalleCode = null;
+  $("vocalAudio").pause();
+  vocalFermerToutesLesConnexions();
+  afficherVocalListe();
+  chargerSalonsVocauxOuverts();
+  majMicFlottant(pageAffichee);
+};
+
+async function chargerMusiqueVocal(){
+  if (vocalMusiquePourRadio.length) return; // déjà chargé, inutile de le refaire à chaque ouverture
+  vocalMusiquePourRadio = await fetch("/api/musique").then(r => r.ok ? r.json() : []).catch(() => []);
+  $("vocalRadioSelect").innerHTML = vocalMusiquePourRadio.map(p => `<option value="${esc(p.id)}">${esc(p.titre)}</option>`).join("");
+}
+
+function carteParticipantVocal(p){
+  const parle = p.parle ? " parle" : "";
+  const photo = p.photo
+    ? `<img class="pfp" src="${esc(p.photo)}" alt="" onerror="this.remove()">`
+    : `<div class="emoji">${esc(p.avatar || "🎬")}</div>`;
+  const roleLabel = { hote: "Hôte", cohote: "Cohôte", intervenant: "Intervenant", auditeur: "Auditeur" }[p.role] || "";
+  // Cliquable pour voir le profil du joueur (voir ouvrirJoueur, câblé juste après dans
+  // renderVocalSalon) — sauf sur sa propre carte. data-userid plutôt qu'un onclick en ligne : le
+  // pseudo pourrait contenir des apostrophes qui casseraient un attribut onclick="...".
+  const cMoi = p.userId === me?.id ? " vocalParticipantMoi" : "";
+  const titreInfo = p.userId === me?.id ? esc(p.pseudo) : `${esc(p.pseudo)} — voir le profil`;
+  return `<div class="vocalParticipant${parle}${cMoi}" data-userid="${esc(p.userId)}" title="${titreInfo}">
+    <div class="vocalAvatarWrap">${photo}${p.mute ? `<span class="vocalMute">🔇</span>` : ""}${p.mainLevee ? `<span class="vocalMainLevee">✋</span>` : ""}</div>
+    <span class="vocalNom">${esc(p.pseudo)}</span>
+    <span class="vocalRoleTag">${roleLabel}</span>
+  </div>`;
+}
+
+function renderVocalSalon(salon){
+  if (!salon) return;
+  vocalSalonActuel = salon;
+  assurerPeersVocal(salon);
+  $("vocalTitreSalon").textContent = salon.titre;
+  $("vocalMarquee").textContent = salon.code;
+
+  const hoteCohotes = salon.participants.filter(p => p.role === "hote" || p.role === "cohote");
+  const intervenants = salon.participants.filter(p => p.role === "intervenant");
+  const auditeurs = salon.participants.filter(p => p.role === "auditeur");
+  $("vocalListeHote").innerHTML = hoteCohotes.map(carteParticipantVocal).join("");
+  $("vocalListeIntervenants").innerHTML = intervenants.map(carteParticipantVocal).join("");
+  $("vocalListeAuditeurs").innerHTML = auditeurs.map(carteParticipantVocal).join("");
+  // Voir le profil d'un participant depuis le salon vocal (photo, stats, et — si on est amis — les
+  // actions de don) : un clic sur sa carte ouvre la même fiche joueur que partout ailleurs dans le
+  // jeu (voir ouvrirJoueur). Jamais sur sa propre carte (voir vocalParticipantMoi ci-dessus).
+  $("vocalCasesWrapper").querySelectorAll(".vocalParticipant[data-userid]:not(.vocalParticipantMoi)").forEach(carte => {
+    const p = salon.participants.find(x => x.userId === carte.dataset.userid);
+    if (p) carte.onclick = () => ouvrirJoueur(p.userId, p.pseudo, p.avatar, p.photo);
+  });
+  renderVocalChat(salon);
+
+  const moi = salon.participants.find(p => p.userId === me?.id);
+  const monRole = moi?.role || null;
+  const peutParler = ["hote","cohote","intervenant"].includes(monRole);
+
+  $("btnVocalMute").classList.toggle("hidden", !peutParler);
+  vocalMicOuvert = peutParler && !moi?.mute;
+  if (!vocalMicOuvert && vocalLocalStream) vocalLocalStream.getAudioTracks().forEach(t => t.enabled = false);
+  else if (vocalMicOuvert && vocalLocalStream) vocalLocalStream.getAudioTracks().forEach(t => t.enabled = true);
+  $("btnVocalMute").textContent = vocalMicOuvert ? "🔴 Couper mon micro" : "🎙️ Activer mon micro";
+  $("btnVocalMute").classList.toggle("micro-ouvert", vocalMicOuvert);
+  majMicFlottant(pageAffichee);
+  // Voir VOCAL_SALON_COURANT_CLE : mémorise qu'on est dans ce salon (et si le micro y est ouvert)
+  // pour qu'un rechargement complet de la page (mise en veille, changement d'appli) puisse nous y
+  // ramener tout seul, micro rouvert, sans repasser par la liste des salons.
+  try { sessionStorage.setItem(VOCAL_SALON_COURANT_CLE, JSON.stringify({ code: salon.code, micOuvert: vocalMicOuvert })); } catch {}
+
+  // Lever/baisser la main : signal d'attention réservé à l'hôte/aux cohôtes/intervenants (voir
+  // vocal:main-toggle) — distinct de « Demander à intervenir » ci-dessous, qui ne concerne que les
+  // auditeurs et sert à demander à devenir intervenant, pas à signaler qu'on veut la parole.
+  $("btnVocalLeverMain").classList.toggle("hidden", !peutParler);
+  const mainLevee = Boolean(moi?.mainLevee);
+  $("btnVocalLeverMain").textContent = mainLevee ? "🤚 Baisser la main" : "✋ Lever la main";
+  $("btnVocalLeverMain").classList.toggle("micro-ouvert", mainLevee);
+
+  const demandeEnvoyee = monRole === "auditeur" && salon.demandesMontee.includes(me?.id);
+  $("btnVocalDemander").classList.toggle("hidden", monRole !== "auditeur" || demandeEnvoyee);
+  $("btnVocalBaisserMain").classList.toggle("hidden", !demandeEnvoyee);
+  $("vocalDemandeEnvoyee").hidden = !demandeEnvoyee;
+
+  // Signal sonore discret pour hôte/cohôte/intervenant (voir vocalJouerBip) : un nouvel auditeur
+  // vient d'arriver (note aiguë), ou une nouvelle demande d'intervention vient d'être envoyée (note
+  // plus grave, réservée à hôte/cohôte qui peuvent y répondre) — jamais sur le tout premier rendu
+  // après avoir rejoint le salon (rejointDepuis), pour ne pas sonner pour tout le monde déjà présent.
+  const auditeursIdsActuels = new Set(auditeurs.map(p => p.userId));
+  const demandesActuelles = salon.demandesMontee.length;
+  const rejointDepuis = vocalDerniereSalleCode === salon.code;
+  if (rejointDepuis && peutParler){
+    const nouvelAuditeur = [...auditeursIdsActuels].some(id => !vocalDerniersAuditeursIds.has(id));
+    // Deux notes (façon "ding-dong") plutôt qu'un seul bref bip : plus reconnaissable à l'oreille
+    // et donc plus audible en pratique, même sur un haut-parleur de téléphone.
+    if (nouvelAuditeur) { vocalJouerBip(880, 0.16); setTimeout(() => vocalJouerBip(1174, 0.18), 130); }
+    if ((monRole === "hote" || monRole === "cohote") && demandesActuelles > vocalDerniereDemandesCount)
+      vocalJouerBip(660, 0.22);
+  }
+  vocalDerniersAuditeursIds = auditeursIdsActuels;
+  vocalDerniereDemandesCount = demandesActuelles;
+  vocalDerniereSalleCode = salon.code;
+
+  // Radio/vidéo : diffusion en cours (synchronisée sur demarreLe) ou sélecteur pour la lancer
+  // (modérateurs seulement) — voir vocalMajLectureRadioOuVideo, qui branche sur salon.radio.type
+  // (audio/vidéo/YouTube) pour afficher le bon lecteur au même endroit.
+  const modo = monRole === "hote" || monRole === "cohote";
+  vocalMajLectureRadioOuVideo(salon, modo);
+
+  // Console de modération : hôte et cohôtes seulement.
+  $("vocalConsole").classList.toggle("hidden", !modo);
+  if (modo) renderConsoleVocal(salon, monRole);
+}
+
+/** Affiche, au même endroit (la carte "Radio & vidéo du salon"), le bon lecteur selon le type de
+ *  contenu diffusé : <audio> pour une piste musicale, <video> pour un lien/fichier vidéo, ou le
+ *  lecteur YouTube officiel pour une vidéo YouTube — un seul à la fois, synchronisé pour tout le
+ *  monde sur le temps écoulé depuis le début de la diffusion (voir demarreLe côté serveur). */
+function vocalMajLectureRadioOuVideo(salon, modo){
+  const audio = $("vocalAudio"), video = $("vocalVideo"), ytWrap = $("vocalYoutubeWrap");
+  audio.volume = vocalRadioVolume; // au cas où l'élément aurait été recréé/réinitialisé entretemps
+  video.volume = vocalRadioVolume;
+  const media = salon.radio;
+
+  if (!media){
+    $("vocalRadioTexte").textContent = "Aucune piste diffusée pour l'instant.";
+    audio.pause(); audio.style.display = "none"; audio.removeAttribute("src"); audio.dataset.url = "";
+    video.pause(); video.style.display = "none"; video.removeAttribute("src"); video.dataset.url = "";
+    ytWrap.classList.add("hidden");
+    vocalArreterYoutube();
+    $("vocalRadioChoix").classList.toggle("hidden", !modo);
+    return;
+  }
+
+  $("vocalRadioTexte").textContent = `🎶 En cours : ${media.titre} — cliquez ▶️ si la lecture ne démarre pas toute seule.`;
+
+  if (media.type === "youtube"){
+    audio.pause(); audio.style.display = "none";
+    video.pause(); video.style.display = "none";
+    ytWrap.classList.remove("hidden");
+    vocalChargerYoutube(media.youtubeId, media.demarreLe);
+  } else if (media.type === "video"){
+    ytWrap.classList.add("hidden");
+    vocalArreterYoutube();
+    audio.pause(); audio.style.display = "none";
+    video.style.display = "";
+    vocalSyncMedia(video, media, modo);
+  } else {
+    ytWrap.classList.add("hidden");
+    vocalArreterYoutube();
+    video.pause(); video.style.display = "none";
+    audio.style.display = "";
+    vocalSyncMedia(audio, media, modo);
+  }
+  $("vocalRadioChoix").classList.toggle("hidden", !modo);
+}
+
+/** Cale un <audio> ou <video> sur le temps écoulé depuis le début de la diffusion (voir demarreLe
+ *  côté serveur) — factorisé ici car radio et vidéo (lien/fichier) suivent exactement le même
+ *  principe : chaque appareil charge le même contenu et se resynchronise tout seul. */
+function vocalSyncMedia(el, media, modo){
+  if (el.dataset.url !== media.url){
+    el.src = media.url;
+    el.dataset.url = media.url;
+    // Poser currentTime avant que le navigateur ait pu lire les métadonnées (durée, format) échoue
+    // souvent en silence : on attend ce signal plutôt que de le tenter tout de suite, pour rester
+    // synchronisé avec les autres sans empêcher la lecture de démarrer.
+    el.addEventListener("loadedmetadata", () => {
+      if (el.dataset.url !== media.url) return; // un autre contenu a démarré entretemps
+      const ecoule = Math.max(0, (Date.now() - media.demarreLe) / 1000);
+      try { el.currentTime = ecoule; } catch {}
+    }, { once: true });
+    // Signale clairement pourquoi rien ne s'affiche/s'entend (lien mort, fichier corrompu, format
+    // non supporté…) plutôt que de laisser un silence total sans explication.
+    el.onerror = () => {
+      const raison = raisonDepuisMediaError(el.error);
+      const libelles = { reseau: "fichier inaccessible", decodage: "fichier corrompu",
+        format: "format non lisible par ce navigateur", inconnue: "erreur de lecture inconnue" };
+      $("vocalRadioTexte").textContent = `⚠️ Lecture impossible (${libelles[raison]}).` +
+        (modo ? " Essayez un autre lien ou fichier." : " Prévenez l'hôte du salon.");
+    };
+  } else {
+    const elapsed = Math.max(0, (Date.now() - media.demarreLe) / 1000);
+    if (el.readyState >= 1 && Math.abs((el.currentTime || 0) - elapsed) > 3) el.currentTime = elapsed;
+  }
+  el.play().catch(() => {}); // lecture auto parfois bloquée sans geste : les contrôles restent visibles pour lancer à la main
+}
+
+/** Vidéo YouTube : passe par l'API officielle (chargée à la demande, voir plus bas) puisqu'un lien
+ *  direct vers le flux vidéo n'existe pas pour YouTube — même principe de synchronisation par temps
+ *  écoulé que pour la radio/vidéo (voir demarreLe), transposé aux méthodes de cette API. */
+let vocalYoutubeApiChargee = false, vocalYoutubeApiPrete = false;
+let vocalYoutubeIdActuel = null, vocalYoutubeIdEnAttente = null;
+function vocalChargerApiYoutubeSiBesoin(){
+  if (vocalYoutubeApiChargee) return;
+  vocalYoutubeApiChargee = true;
+  const script = document.createElement("script");
+  script.src = "https://www.youtube.com/iframe_api";
+  document.head.appendChild(script);
+}
+window.onYouTubeIframeAPIReady = function(){
+  vocalYoutubeApiPrete = true;
+  // On ne reprend la vidéo en attente que si elle correspond toujours à ce qui est diffusé
+  // maintenant : le salon a pu passer à autre chose pendant que l'API chargeait (chargement
+  // réseau, potentiellement lent sur mobile).
+  if (vocalYoutubeIdEnAttente && vocalSalonActuel?.radio?.type === "youtube"
+      && vocalSalonActuel.radio.youtubeId === vocalYoutubeIdEnAttente.id){
+    vocalChargerYoutube(vocalYoutubeIdEnAttente.id, vocalYoutubeIdEnAttente.demarreLe);
+  }
+  vocalYoutubeIdEnAttente = null;
+};
+function vocalChargerYoutube(youtubeId, demarreLe){
+  vocalChargerApiYoutubeSiBesoin();
+  if (!vocalYoutubeApiPrete || typeof YT === "undefined" || !YT.Player){
+    vocalYoutubeIdEnAttente = { id: youtubeId, demarreLe };
+    return;
+  }
+  const debut = Math.max(0, Math.floor((Date.now() - demarreLe) / 1000));
+  if (vocalYoutubePlayer && vocalYoutubeIdActuel === youtubeId){
+    // Déjà la bonne vidéo en cours : on ne fait que se recaler si l'écart devient trop visible.
+    try {
+      const t = vocalYoutubePlayer.getCurrentTime();
+      if (Math.abs(t - debut) > 4) vocalYoutubePlayer.seekTo(debut, true);
+      vocalYoutubePlayer.playVideo();
+    } catch {}
+    return;
+  }
+  vocalYoutubeIdActuel = youtubeId;
+  // Important : l'API remplace l'élément cible par un iframe qui NE garde PAS le même id — on ne
+  // peut donc créer le lecteur qu'une seule fois pour toute la session, jamais une deuxième fois
+  // avec `new YT.Player(...)` (voir vocalArreterYoutube, qui ne détruit jamais l'instance).
+  if (vocalYoutubePlayer){
+    try { vocalYoutubePlayer.loadVideoById({ videoId: youtubeId, startSeconds: debut }); return; } catch {}
+  }
+  vocalYoutubePlayer = new YT.Player("vocalYoutubePlayer", {
+    videoId: youtubeId,
+    playerVars: { start: debut, autoplay: 1, playsinline: 1 },
+    events: { onReady: (e) => { try { e.target.setVolume(Math.round(vocalRadioVolume * 100)); e.target.playVideo(); } catch {} } },
+  });
+}
+function vocalArreterYoutube(){
+  vocalYoutubeIdActuel = null;
+  if (vocalYoutubePlayer){ try { vocalYoutubePlayer.pauseVideo(); } catch {} }
+}
+
+/** Reculer/avancer de 15 secondes dans le contenu actuellement diffusé (radio ou vidéo) — une
+ *  action purement locale à chaque appareil, comme le ferait n'importe quel lecteur, puisque la
+ *  lecture n'est de toute façon pas relayée par le serveur (chacun charge le même contenu et se
+ *  cale sur le temps écoulé, voir vocalSyncMedia). */
+function vocalSauterMedia(deltaSecondes){
+  if (!vocalSalonActuel?.radio) return;
+  if (vocalSalonActuel.radio.type === "youtube"){
+    if (!vocalYoutubePlayer) return;
+    try { vocalYoutubePlayer.seekTo(Math.max(0, vocalYoutubePlayer.getCurrentTime() + deltaSecondes), true); } catch {}
+    return;
+  }
+  const el = vocalSalonActuel.radio.type === "video" ? $("vocalVideo") : $("vocalAudio");
+  if (!el || el.style.display === "none") return;
+  try { el.currentTime = Math.max(0, (el.currentTime || 0) + deltaSecondes); } catch {}
+}
+$("btnVocalRadioReculer").onclick = () => vocalSauterMedia(-15);
+$("btnVocalRadioAvancer").onclick = () => vocalSauterMedia(15);
+
+/** Discussion écrite propre au salon vocal : un historique court (voir VOCAL_CHAT_HISTORIQUE_MAX
+ *  côté serveur) est renvoyé à chaque mise à jour du salon, pour qu'un participant qui rejoint en
+ *  cours de route retrouve un peu de contexte plutôt que de partir d'une page blanche. */
+function renderVocalChat(salon){
+  const box = $("vocalChatMessages");
+  if (!box) return;
+  const messages = salon.chat || [];
+  const dejaEnBas = box.scrollTop + box.clientHeight >= box.scrollHeight - 20; // ne force pas le défilement si on relit plus haut
+  box.innerHTML = messages.length
+    ? messages.map(m => `<p>${m.photo ? `<img class="pfp" src="${esc(m.photo)}" alt="">` : `<span class="emoji">${esc(m.avatar || "🎬")}</span>`}
+        <span><b>${esc(m.pseudo)}</b> ${esc(m.texte)}
+        ${m.filmTmdbId ? `<span class="vocalChatFilm" data-tmdb-id="${esc(m.filmTmdbId)}" data-tmdb-titre="${esc(m.filmTitre || "")}">
+          ${m.filmPoster ? `<img src="${esc(m.filmPoster)}" alt="">` : ""}
+          <button type="button">🎬 Voir la fiche</button>
+        </span>` : ""}</span></p>`).join("")
+    : `<p class="note" style="margin:0">Aucun message pour l'instant — dites bonjour !</p>`;
+  // Film proposé (voir plus haut) : ouvre directement sa fiche/bande-annonce (même fenêtre que
+  // partout ailleurs dans le jeu, voir ouvrirTrailer) plutôt que d'obliger à le rechercher soi-même.
+  box.querySelectorAll(".vocalChatFilm").forEach(bloc => {
+    bloc.querySelector("button").onclick = () => ouvrirTrailer(bloc.dataset.tmdbId, bloc.dataset.tmdbTitre);
+  });
+  if (dejaEnBas) box.scrollTop = box.scrollHeight;
+}
+function envoyerMessageVocal(){
+  const champ = $("vocalChatInput");
+  const texte = champ.value.trim();
+  if (!texte || !vocalSalonActuel) return;
+  champ.value = "";
+  socket.emit("vocal:chat-envoyer", { code: vocalSalonActuel.code, texte }, () => {});
+}
+$("btnVocalChatEnvoyer").onclick = envoyerMessageVocal;
+$("vocalChatInput").addEventListener("keydown", (e) => { if (e.key === "Enter") envoyerMessageVocal(); });
+
+/** Réactions emoji publiques dans le salon vocal — même rendu volant que les réactions de partie
+ *  (afficherReactionVolante), mais sous un événement dédié (vocal:reaction) pour ne jamais se
+ *  confondre avec les réactions envoyées pendant une partie de jeu. Même liste/durée personnalisable
+ *  que la barre de partie ci-dessus (voir construireBarreReactions). */
+construireBarreReactions("vocalEmojiBar", "vocal:reaction", () => vocalSalonActuel?.code);
+socket.on("vocal:reaction", ({ emoji, pseudo, photo }) => afficherReactionVolante(emoji, pseudo, photo));
+
+/** Don visible dans le salon vocal : quand un don (points, tickets, ou partie classée offerte —
+ *  voir /api/points/donner et consorts, et ouvrirJoueur pour l'accès depuis ce salon) se fait entre
+ *  deux personnes toutes deux présentes dans le même salon vocal, le serveur (voir diffuserDonVocal)
+ *  le diffuse ici pour qu'il devienne un moment visible par tout le monde, comme une réaction emoji,
+ *  plutôt qu'une notification privée pour le seul receveur. Réutilise la même trajectoire
+ *  "baladeuse" (voir @keyframes balade) que les réactions. */
+function afficherDonVolant({ type, de, avatar, photo, cible, montant }){
+  const libelle = type === "tickets" ? `🎟️ ${montant}` : type === "partie" ? "🍿 partie offerte" : `🎁 ${montant}`;
+  const el = document.createElement("div");
+  el.className = "flyEmoji flyDon";
+  el.style.left = (16 + Math.random() * 64) + "%";
+  el.style.bottom = (110 + Math.random() * 60) + "px";
+  el.style.setProperty("--dx1", Math.round((Math.random() - 0.5) * 170) + "px");
+  el.style.setProperty("--dx2", Math.round((Math.random() - 0.5) * 200) + "px");
+  el.style.setProperty("--dx3", Math.round((Math.random() - 0.5) * 130) + "px");
+  el.style.setProperty("--rot1", Math.round((Math.random() - 0.5) * 16) + "deg");
+  el.style.setProperty("--rot2", Math.round((Math.random() - 0.5) * 16) + "deg");
+  el.style.setProperty("--duree", "3s");
+  el.innerHTML = (photo
+    ? `<img src="${esc(photo)}" alt="" style="width:1em;height:1em;border-radius:50%;object-fit:cover;vertical-align:middle;display:inline-block">`
+    : (avatar || "🎁"))
+    + `<span class="donLibelle">${libelle}</span><small>${esc(de || "")} → ${esc(cible || "")}</small>`;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+socket.on("vocal:don", afficherDonVolant);
+
+/** Réactions repliées par défaut dans la barre du bas : un coup d'œil sur les icônes suffit,
+ *  pas besoin de les garder affichées en permanence — voir la refonte de #vocalBarreBas. */
+$("btnVocalReactionsToggle").onclick = () => {
+  const masque = $("vocalEmojiBar").classList.toggle("hidden");
+  $("btnVocalReactionsToggle").setAttribute("aria-pressed", String(!masque));
+};
+
+/** Recherche d'un film à proposer au salon (voir #btnVocalRechercheFilm) : soit une poignée de
+ *  recherches prédéfinies (populaires, mieux notés…), soit une recherche libre par titre — les deux
+ *  interrogent TMDB côté serveur (voir /api/tmdb/predefini et /api/tmdb/recherche) plutôt que le
+ *  catalogue local du quiz, puisqu'il s'agit ici de proposer un film à regarder ensemble, pas
+ *  forcément un film qui existe déjà dans le jeu. Le résultat choisi est simplement partagé dans le
+ *  tchat du salon (aucun lien direct avec le quiz ou le catalogue). */
+const VOCAL_RECHERCHE_CATEGORIES = [
+  { id: "populaires", label: "🔥 Populaires" },
+  { id: "mieux-notes", label: "⭐ Les mieux notés" },
+  { id: "au-cinema", label: "🎬 Au cinéma" },
+  { id: "prochainement", label: "📅 Prochainement" },
+];
+$("vocalRechercheFilmPredefinies").innerHTML = VOCAL_RECHERCHE_CATEGORIES
+  .map(c => `<button class="ghost" type="button" data-cat="${c.id}">${c.label}</button>`).join("");
+
+function rendreResultatsRechercheFilm(resultats){
+  const liste = $("vocalRechercheFilmListe");
+  $("vocalRechercheFilmVide").classList.toggle("hidden", resultats.length > 0);
+  liste.innerHTML = resultats.map(f => `
+    <div class="histoItem">
+      ${f.poster ? `<img src="${esc(f.poster)}" alt="">` : ""}
+      <div class="info">
+        <b>${esc(f.title)}</b>
+        <small>${esc(f.annee || "Année inconnue")}</small>
+        <div class="row" style="margin-top:6px">
+          <button class="ghost" type="button" data-partager-id="${esc(String(f.id))}" data-partager-titre="${esc(f.title)}"
+            data-partager-annee="${esc(f.annee || "")}" data-partager-poster="${esc(f.poster || "")}">📢 Partager dans le salon</button>
+        </div>
+      </div>
+    </div>`).join("");
+  liste.querySelectorAll("[data-partager-titre]").forEach(btn => {
+    btn.onclick = () => {
+      if (!vocalSalonActuel) return;
+      const annee = btn.dataset.partagerAnnee;
+      // Le film proposé inclut son identifiant TMDB (voir vocal:chat-envoyer côté serveur) : les
+      // autres joueurs pourront ainsi ouvrir directement sa fiche depuis le message du tchat, sans
+      // avoir à le rechercher eux-mêmes (voir renderVocalChat).
+      socket.emit("vocal:chat-envoyer", {
+        code: vocalSalonActuel.code,
+        texte: `🎬 Je propose : ${btn.dataset.partagerTitre}${annee ? ` (${annee})` : ""}`,
+        filmTmdbId: btn.dataset.partagerId, filmTitre: btn.dataset.partagerTitre, filmPoster: btn.dataset.partagerPoster,
+      }, () => {});
+      $("vocalRechercheFilmModal").classList.remove("active");
+    };
+  });
+}
+
+async function lancerRechercheFilmVocal(url){
+  $("vocalRechercheFilmMsg").textContent = "Recherche en cours…";
+  $("vocalRechercheFilmListe").innerHTML = "";
+  $("vocalRechercheFilmVide").classList.add("hidden");
+  try {
+    const data = await fetch(url).then(r => r.json());
+    if (!data.ok){
+      $("vocalRechercheFilmMsg").textContent = data.error === "NO_KEY"
+        ? "Recherche de films indisponible pour l'instant (non configurée côté administration)."
+        : "Recherche impossible pour l'instant, réessayez plus tard.";
+      return;
+    }
+    $("vocalRechercheFilmMsg").textContent = "";
+    rendreResultatsRechercheFilm(data.resultats || []);
+  } catch {
+    $("vocalRechercheFilmMsg").textContent = "Erreur réseau — vérifiez votre connexion.";
+  }
+}
+$("vocalRechercheFilmPredefinies").querySelectorAll("[data-cat]").forEach(btn => {
+  btn.onclick = () => lancerRechercheFilmVocal(`/api/tmdb/predefini/${btn.dataset.cat}`);
+});
+$("btnVocalRechercheFilmLancer").onclick = () => {
+  const q = $("vocalRechercheFilmInput").value.trim();
+  if (q.length < 2){ $("vocalRechercheFilmMsg").textContent = "Tapez au moins 2 lettres."; return; }
+  lancerRechercheFilmVocal(`/api/tmdb/recherche?q=${encodeURIComponent(q)}`);
+};
+$("vocalRechercheFilmInput").addEventListener("keydown", (e) => { if (e.key === "Enter") $("btnVocalRechercheFilmLancer").click(); });
+$("btnVocalRechercheFilm").onclick = () => $("vocalRechercheFilmModal").classList.add("active");
+$("closeVocalRechercheFilmBtn").onclick = () => $("vocalRechercheFilmModal").classList.remove("active");
+$("vocalRechercheFilmModal").onclick = (e) => { if (e.target.id === "vocalRechercheFilmModal") $("vocalRechercheFilmModal").classList.remove("active"); };
+
+function renderConsoleVocal(salon, monRole){
+  // Ne touche pas au champ pendant que l'hôte/le cohôte est en train d'y taper, sinon chaque
+  // vocal:update (déclenché par n'importe quel autre événement du salon) effacerait sa saisie.
+  if (document.activeElement !== $("vocalReglageTitre")) $("vocalReglageTitre").value = salon.titre || "";
+  $("vocalReglagePrive").checked = Boolean(salon.prive);
+  $("vocalReglageMonteeLibre").checked = Boolean(salon.monteeLibre);
+  // Réservé à l'hôte (pas aux cohôtes) : fermer tout le salon est une action définitive pour
+  // tout le monde, contrairement aux réglages ci-dessus qu'un cohôte peut aussi ajuster.
+  $("vocalFermerZone").classList.toggle("hidden", monRole !== "hote");
+
+  const demandeurs = salon.demandesMontee
+    .map(id => salon.participants.find(p => p.userId === id)).filter(Boolean);
+  $("vocalDemandesListe").innerHTML = demandeurs.length
+    ? `<p class="note" style="margin:0 0 6px">Demandes pour intervenir</p>` + demandeurs.map(p => `
+      <div class="urowVocal">
+        <span class="qui">${p.photo ? `<img class="pfp" src="${esc(p.photo)}" alt="">` : esc(p.avatar||"🎬")} ${esc(p.pseudo)}</span>
+        <button class="ghost" data-promouvoir="${esc(p.userId)}">⬆️ Faire monter</button>
+      </div>`).join("")
+    : "";
+
+  const nbCohotes = salon.participants.filter(p => p.role === "cohote").length;
+  $("vocalConsoleParticipants").innerHTML = `<p class="note" style="margin:10px 0 6px">Participants</p>` +
+    salon.participants.filter(p => p.userId !== me?.id).map(p => {
+      const boutons = [];
+      if (p.role === "auditeur") boutons.push(`<button class="ghost" data-promouvoir="${esc(p.userId)}">⬆️ Intervenant</button>`);
+      if (p.role === "intervenant") boutons.push(`<button class="ghost" data-retrograder="${esc(p.userId)}">⬇️ Auditeur</button>`);
+      if (monRole === "hote" && p.role !== "hote" && p.role !== "cohote" && nbCohotes < 3)
+        boutons.push(`<button class="ghost" data-nommer-cohote="${esc(p.userId)}">🎖️ Nommer cohôte</button>`);
+      if (monRole === "hote" && p.role === "cohote")
+        boutons.push(`<button class="ghost" data-retirer-cohote="${esc(p.userId)}">🎖️ Retirer cohôte</button>`);
+      if (p.role !== "hote" && (monRole === "hote" || p.role !== "cohote"))
+        boutons.push(`<button class="ghost danger" data-exclure="${esc(p.userId)}">🚪 Exclure</button>`);
+      return `<div class="urowVocal">
+        <span class="qui">${p.photo ? `<img class="pfp" src="${esc(p.photo)}" alt="">` : esc(p.avatar||"🎬")} ${esc(p.pseudo)}
+          <small style="color:var(--muted)">(${p.role})</small></span>
+        ${boutons.join("")}
+      </div>`;
+    }).join("");
+
+  $("vocalConsole").querySelectorAll("[data-promouvoir]").forEach(b => b.onclick = () =>
+    socket.emit("vocal:promouvoir", { code: vocalSalonActuel.code, userId: b.dataset.promouvoir }, () => {}));
+  $("vocalConsole").querySelectorAll("[data-retrograder]").forEach(b => b.onclick = () =>
+    socket.emit("vocal:retrograder", { code: vocalSalonActuel.code, userId: b.dataset.retrograder }, () => {}));
+  $("vocalConsole").querySelectorAll("[data-nommer-cohote]").forEach(b => b.onclick = () =>
+    socket.emit("vocal:nommer-cohote", { code: vocalSalonActuel.code, userId: b.dataset.nommerCohote }, () => {}));
+  $("vocalConsole").querySelectorAll("[data-retirer-cohote]").forEach(b => b.onclick = () =>
+    socket.emit("vocal:retirer-cohote", { code: vocalSalonActuel.code, userId: b.dataset.retirerCohote }, () => {}));
+  $("vocalConsole").querySelectorAll("[data-exclure]").forEach(b => b.onclick = () => {
+    if (confirm("Exclure ce participant du salon ?"))
+      socket.emit("vocal:exclure", { code: vocalSalonActuel.code, userId: b.dataset.exclure }, () => {});
+  });
+}
+
+/** Lever/baisser la main : simple signal d'attention pour l'hôte/les cohôtes/intervenants (voir
+ *  vocal:main-toggle côté serveur) — distinct de la demande d'intervention des auditeurs juste en
+ *  dessous. Le serveur renvoie déjà le salon à jour dans l'accusé de réception : pas besoin
+ *  d'optimistic update ici, contrairement à « Baisser la main » plus bas qui n'a pas cet accusé. */
+$("btnVocalLeverMain").onclick = () => {
+  if (!vocalSalonActuel) return;
+  socket.emit("vocal:main-toggle", { code: vocalSalonActuel.code }, (res) => {
+    if (res?.ok && res.salon) renderVocalSalon(res.salon);
+  });
+};
+
+$("btnVocalDemander").onclick = () => {
+  socket.emit("vocal:demander-intervenir", { code: vocalSalonActuel.code }, (res) => {
+    if (res?.ok) renderVocalSalon(vocalSalonActuel); // masque aussitôt le bouton, sans attendre le prochain vocal:update
+  });
+};
+
+/** Baisser la main : annule une demande d'intervention envoyée par erreur ou qui n'a plus lieu
+ *  d'être, sans attendre que l'hôte y réponde (voir vocal:annuler-demande, déjà géré côté serveur). */
+$("btnVocalBaisserMain").onclick = () => {
+  if (!vocalSalonActuel) return;
+  socket.emit("vocal:annuler-demande", { code: vocalSalonActuel.code });
+  // Masque tout de suite les deux indicateurs, comme pour la demande elle-même : pas besoin
+  // d'attendre le prochain vocal:update pour voir l'effet du clic.
+  const salon = vocalSalonActuel;
+  salon.demandesMontee = salon.demandesMontee.filter(id => id !== me?.id);
+  renderVocalSalon(salon);
+};
+
+$("btnVocalFermer").onclick = () => {
+  if (!vocalSalonActuel) return;
+  if (!confirm("Fermer ce salon pour tout le monde ? Cette action est définitive.")) return;
+  socket.emit("vocal:fermer", { code: vocalSalonActuel.code }, () => {});
+};
+
+/** Renommer le salon : possible à tout moment (pas seulement à la création), réservé à
+ *  l'hôte/aux cohôtes — voir vocal:reglages côté serveur. */
+$("btnVocalRenommer").onclick = () => {
+  if (!vocalSalonActuel) return;
+  const t = $("vocalReglageTitre").value.trim();
+  if (!t) return;
+  socket.emit("vocal:reglages", { code: vocalSalonActuel.code, titre: t }, (res) => {
+    if (res?.ok && res.titre) {
+      vocalSalonActuel.titre = res.titre;
+      $("vocalTitreSalon").textContent = res.titre;
+      $("vocalReglageTitre").value = res.titre;
+    }
+  });
+};
+
+$("vocalReglagePrive").onchange = (e) => {
+  if (!vocalSalonActuel) return;
+  socket.emit("vocal:reglages", { code: vocalSalonActuel.code, prive: e.target.checked }, () => {});
+};
+$("vocalReglageMonteeLibre").onchange = (e) => {
+  if (!vocalSalonActuel) return;
+  socket.emit("vocal:reglages", { code: vocalSalonActuel.code, monteeLibre: e.target.checked }, () => {});
+};
+
+// Un seul bouton, pas de "maintenir pour parler" : un clic ouvre le micro (il reste ouvert en
+// continu), un second clic le referme. L'anneau qui pulse chez les autres se déclenche tout seul
+// selon le son détecté (voir vocalDemarrerVAD), sans rien avoir à maintenir enfoncé.
+// Extrait en fonction partagée pour que le bouton du salon (#btnVocalMute) et le micro flottant
+// (#btnVocalMicFlottant, visible sur n'importe quelle page) fassent exactement la même chose.
+async function basculerMicroVocal(){
+  if (!vocalSalonActuel) return;
+  const ouvrir = !vocalMicOuvert;
+  if (ouvrir){
+    const stream = await vocalDemanderMicro();
+    if (!stream) return; // micro refusé/indisponible : le message d'erreur est déjà affiché, on ne change rien côté serveur
+    stream.getAudioTracks().forEach(t => t.enabled = true);
+  } else if (vocalLocalStream) {
+    vocalLocalStream.getAudioTracks().forEach(t => t.enabled = false);
+  }
+  socket.emit("vocal:mute", { code: vocalSalonActuel.code, mute: !ouvrir });
+}
+$("btnVocalMute").onclick = basculerMicroVocal;
+// #btnVocalMicFlottant est défini beaucoup plus bas dans la page (hors des <section>, pour rester
+// visible sur tout l'écran) : à cet endroit du script, le HTML n'a pas
+// encore été lu par le navigateur, donc $() ne trouve rien et renvoie l'objet inerte de secours —
+// le clic ne faisait alors RIEN de visible sur le vrai bouton (bug remonté par un joueur : le
+// bouton restait figé quel que soit l'état du micro). On attend DOMContentLoaded pour être sûr que
+// le bouton existe réellement avant d'y attacher le clic.
+document.addEventListener("DOMContentLoaded", () => {
+  $("btnVocalMicFlottant").onclick = basculerMicroVocal;
+});
+
+/** Affiche/masque et met à jour le micro flottant : visible dès qu'un rôle capable de parler
+ *  (hôte/cohôte/intervenant) est actif dans un salon vocal, sur n'importe quelle page SAUF l'écran
+ *  du salon lui-même (où #btnVocalMute fait déjà exactement le même travail — jamais les deux à la
+ *  fois). Appelée à chaque changement de page (show()) et à chaque mise à jour du salon
+ *  (renderVocalSalon()), pour ne jamais afficher un état de micro périmé. */
+function majMicFlottant(pageActuelle){
+  const btn = $("btnVocalMicFlottant");
+  if (!btn) return;
+  const moi = vocalSalonActuel?.participants?.find?.(p => p.userId === me?.id);
+  const peutParler = Boolean(moi && ["hote","cohote","intervenant"].includes(moi.role));
+  const visible = peutParler && pageActuelle !== "vocal";
+  btn.classList.toggle("hidden", !visible);
+  if (!visible) return;
+  btn.textContent = vocalMicOuvert ? "🔴 Micro ouvert" : "🎙️ Micro coupé";
+  btn.classList.toggle("micro-ouvert", vocalMicOuvert);
+}
+
+$("btnVocalRadioDiffuser").onclick = () => {
+  const pisteId = $("vocalRadioSelect").value;
+  if (!pisteId || !vocalSalonActuel) return;
+  socket.emit("vocal:radio", { code: vocalSalonActuel.code, pisteId }, () => {});
+};
+$("btnVocalRadioArreter").onclick = () => {
+  if (!vocalSalonActuel) return;
+  socket.emit("vocal:radio", { code: vocalSalonActuel.code, pisteId: null }, () => {});
+};
+
+/** Devine l'extension d'un fichier envoyé depuis le téléphone : d'abord depuis son nom, et
+ *  seulement si celui-ci n'en contient aucune (arrive avec certains partages) depuis son vrai type
+ *  MIME plutôt qu'un défaut choisi à l'aveugle — le serveur refuse désormais franchement un format
+ *  non reconnu (voir FORMAT_NON_SUPPORTE) plutôt que de le faire silencieusement passer pour un
+ *  autre format, ce qui rendait certains fichiers illisibles une fois envoyés (voir server.js,
+ *  ajouterPisteMusique / vocal:video-fichier). Une extension mal déduite serait donc maintenant
+ *  rejetée avec un message clair au lieu d'échouer en silence à la lecture. */
+const CORRESPONDANCE_MIME_EXTENSION = {
+  quicktime: "mov", "x-matroska": "mkv", "3gpp": "3gp", "3gpp2": "3g2",
+  mpeg: "mp3", "x-m4a": "m4a", "mp4a-latm": "m4a", "x-wav": "wav", wave: "wav",
+};
+function extraireExtensionFichier(fichier, parDefaut){
+  const nom = fichier.name || "";
+  const point = nom.lastIndexOf(".");
+  if (point > -1 && point < nom.length - 1) return nom.slice(point + 1).toLowerCase();
+  const sousType = String(fichier.type || "").split("/")[1] || "";
+  return (CORRESPONDANCE_MIME_EXTENSION[sousType] || sousType || parDefaut).toLowerCase();
+}
+
+/** Ajout rapide d'une piste depuis le salon lui-même (lien direct ou fichier envoyé depuis le
+ *  téléphone) — pas besoin de passer par la console admin. Réservé à l'hôte/aux cohôtes, comme
+ *  la diffusion elle-même (voir estModoVocal côté serveur). Rejoint la playlist commune (voir
+ *  /api/musique) et démarre aussitôt pour tout le salon, sans jamais passer par le micro — c'est
+ *  cette lecture synchronisée en local sur chaque appareil (et non un relais audio par le micro,
+ *  bien plus mauvais en qualité à cause du traitement vocal du navigateur) qui garde un son propre. */
+$("btnVocalRadioAjouterToggle").onclick = () => $("vocalRadioAjouter").classList.toggle("hidden");
+$("btnVocalRadioEnvoyer").onclick = async () => {
+  if (!vocalSalonActuel) return;
+  const titre = $("vocalRadioTitre").value.trim();
+  const lien = $("vocalRadioLien").value.trim();
+  const fichierInput = $("vocalRadioFichier");
+  const msg = $("vocalRadioAjouterMsg");
+  msg.textContent = "";
+
+  const envoyer = (payload) => emitAvecDelai("vocal:radio-ajouter", { code: vocalSalonActuel.code, titre, ...payload }, (res) => {
+    if (!res?.ok) {
+      msg.textContent = res?.error === "FICHIER_TROP_LOURD" ? "Ce fichier dépasse 8 Mo — essayez un lien direct à la place."
+        : res?.error === "LIEN_INVALIDE" ? "Ce lien ne ressemble pas à une adresse valide (doit commencer par http:// ou https://)."
+        : res?.error === "FORMAT_NON_SUPPORTE" ? "Ce format de fichier audio n'est pas pris en charge. Formats acceptés : mp3, wav, ogg, opus, m4a, aac, flac, webm."
+        : res?.error === "TIMEOUT" ? "Le serveur ne répond pas — vérifiez votre connexion et réessayez."
+        : "Impossible de diffuser ce contenu.";
+      return;
+    }
+    msg.textContent = "";
+    $("vocalRadioTitre").value = ""; $("vocalRadioLien").value = ""; fichierInput.value = "";
+    $("vocalRadioAjouter").classList.add("hidden");
+    chargerMusiqueVocal();
+  });
+
+  if (fichierInput.files?.[0]) {
+    const fichier = fichierInput.files[0];
+    if (fichier.size > 8 * 1024 * 1024) { msg.textContent = "Ce fichier dépasse 8 Mo — essayez un lien direct à la place."; return; }
+    const ext = extraireExtensionFichier(fichier, "mp3");
+    const lecteur = new FileReader();
+    lecteur.onload = () => envoyer({ fichier: lecteur.result, ext });
+    lecteur.onerror = () => { msg.textContent = "Impossible de lire ce fichier."; };
+    lecteur.readAsDataURL(fichier);
+  } else if (lien) {
+    envoyer({ url: lien });
+  } else {
+    msg.textContent = "Indiquez un lien ou choisissez un fichier.";
+  }
+};
+
+/** Diffuse une vidéo YouTube, un lien vidéo direct, ou un fichier vidéo envoyé depuis le téléphone
+ *  — même esprit que la musique juste au-dessus, mais chacun a sa propre validation (voir
+ *  vocal:video-youtube/-lien/-fichier côté serveur) donc son propre message d'erreur. */
+function vocalMessageErreurVideo(res){
+  return res?.error === "LIEN_YOUTUBE_INVALIDE" ? "Ce lien ne ressemble pas à une vidéo YouTube valide."
+    : res?.error === "LIEN_INVALIDE" ? "Ce lien ne ressemble pas à une adresse valide (doit commencer par http:// ou https://)."
+    : res?.error === "FICHIER_TROP_LOURD" ? "Ce fichier dépasse 15 Mo — essayez un lien direct à la place."
+    : res?.error === "FORMAT_NON_SUPPORTE" ? "Ce format de vidéo n'est pas pris en charge. Formats acceptés : mp4, webm, mov, m4v, ogg, ogv — certaines vidéos filmées en HEVC (iPhone) ne se lisent pas non plus dans tous les navigateurs, même avec la bonne extension."
+    : res?.error === "FICHIER_INVALIDE" ? "Impossible de lire ce fichier."
+    : res?.error === "TIMEOUT" ? "Le serveur ne répond pas — vérifiez votre connexion et réessayez."
+    : "Impossible de diffuser cette vidéo.";
+}
+function vocalApresEnvoiVideo(res, msg){
+  if (!res?.ok) { msg.textContent = vocalMessageErreurVideo(res); return; }
+  msg.textContent = "";
+  $("vocalVideoTitre").value = ""; $("vocalVideoYoutubeLien").value = "";
+  $("vocalVideoLien").value = ""; $("vocalVideoFichier").value = "";
+  $("vocalRadioAjouter").classList.add("hidden");
+}
+
+/** Petit moteur de recherche YouTube, léger, directement dans le panneau vidéo du salon (voir
+ *  #btnVocalRechercheVideo... — même esprit que la recherche de film TMDB, voir
+ *  rendreResultatsRechercheFilm, mais un clic sur un résultat diffuse directement la vidéo choisie,
+ *  sans étape de copier-coller de lien. Nécessite une clé YouTube configurée côté admin (voir
+ *  REGLAGES.youtubeApiKey) — sans clé, coller un lien juste en dessous reste toujours possible. */
+function rendreResultatsRechercheYoutube(resultats){
+  const liste = $("vocalYoutubeRechercheListe");
+  liste.innerHTML = resultats.map(v => `
+    <div class="histoItem">
+      ${v.vignette ? `<img src="${esc(v.vignette)}" alt="">` : ""}
+      <div class="info">
+        <b>${esc(v.titre)}</b>
+        <small>${esc(v.chaine || "")}</small>
+        <div class="row" style="margin-top:6px">
+          <button class="ghost" type="button" data-video-id="${esc(v.videoId)}" data-video-titre="${esc(v.titre)}">▶️ Diffuser au salon</button>
+        </div>
+      </div>
+    </div>`).join("");
+  liste.querySelectorAll("[data-video-id]").forEach(btn => {
+    btn.onclick = () => {
+      if (!vocalSalonActuel) return;
+      const msg = $("vocalYoutubeRechercheMsg");
+      const titre = $("vocalVideoTitre").value.trim() || btn.dataset.videoTitre;
+      msg.textContent = "Diffusion…";
+      emitAvecDelai("vocal:video-youtube", { code: vocalSalonActuel.code, titre, url: `https://www.youtube.com/watch?v=${btn.dataset.videoId}` }, (res) => {
+        if (!res?.ok) { msg.textContent = vocalMessageErreurVideo(res); return; }
+        msg.textContent = "";
+        liste.innerHTML = "";
+        $("vocalYoutubeRechercheInput").value = "";
+        $("vocalVideoTitre").value = "";
+        $("vocalRadioAjouter").classList.add("hidden");
+      });
+    };
+  });
+}
+async function lancerRechercheYoutubeVocal(){
+  const q = $("vocalYoutubeRechercheInput").value.trim();
+  const msg = $("vocalYoutubeRechercheMsg");
+  if (q.length < 2){ msg.textContent = "Tapez au moins 2 lettres."; return; }
+  msg.textContent = "Recherche en cours…";
+  $("vocalYoutubeRechercheListe").innerHTML = "";
+  try {
+    const data = await fetch(`/api/youtube/recherche?q=${encodeURIComponent(q)}`).then(r => r.json());
+    if (!data.ok){
+      msg.textContent = data.error === "NO_KEY"
+        ? "Recherche YouTube indisponible pour l'instant (non configurée côté administration) — collez un lien directement à la place."
+        : "Recherche impossible pour l'instant, réessayez plus tard.";
+      return;
+    }
+    msg.textContent = data.resultats.length ? "" : "Aucun résultat.";
+    rendreResultatsRechercheYoutube(data.resultats || []);
+  } catch {
+    msg.textContent = "Erreur réseau — vérifiez votre connexion.";
+  }
+}
+$("btnVocalYoutubeRechercheLancer").onclick = lancerRechercheYoutubeVocal;
+$("vocalYoutubeRechercheInput").addEventListener("keydown", (e) => { if (e.key === "Enter") lancerRechercheYoutubeVocal(); });
+
+$("btnVocalVideoYoutubeEnvoyer").onclick = () => {
+  if (!vocalSalonActuel) return;
+  const titre = $("vocalVideoTitre").value.trim();
+  const url = $("vocalVideoYoutubeLien").value.trim();
+  const msg = $("vocalVideoAjouterMsg");
+  if (!url) { msg.textContent = "Indiquez un lien YouTube."; return; }
+  emitAvecDelai("vocal:video-youtube", { code: vocalSalonActuel.code, titre, url }, (res) => vocalApresEnvoiVideo(res, msg));
+};
+$("btnVocalVideoLienEnvoyer").onclick = () => {
+  if (!vocalSalonActuel) return;
+  const titre = $("vocalVideoTitre").value.trim();
+  const url = $("vocalVideoLien").value.trim();
+  const msg = $("vocalVideoAjouterMsg");
+  if (!url) { msg.textContent = "Indiquez un lien vidéo."; return; }
+  emitAvecDelai("vocal:video-lien", { code: vocalSalonActuel.code, titre, url }, (res) => vocalApresEnvoiVideo(res, msg));
+};
+$("btnVocalVideoFichierEnvoyer").onclick = () => {
+  if (!vocalSalonActuel) return;
+  const titre = $("vocalVideoTitre").value.trim();
+  const fichierInput = $("vocalVideoFichier");
+  const msg = $("vocalVideoAjouterMsg");
+  const fichier = fichierInput.files?.[0];
+  if (!fichier) { msg.textContent = "Choisissez un fichier vidéo."; return; }
+  if (fichier.size > 15 * 1024 * 1024) { msg.textContent = "Ce fichier dépasse 15 Mo — essayez un lien direct à la place."; return; }
+  const ext = extraireExtensionFichier(fichier, "mp4");
+  const lecteur = new FileReader();
+  lecteur.onload = () => emitAvecDelai("vocal:video-fichier", { code: vocalSalonActuel.code, titre, fichier: lecteur.result, ext },
+    (res) => vocalApresEnvoiVideo(res, msg));
+  lecteur.onerror = () => { msg.textContent = "Impossible de lire ce fichier."; };
+  lecteur.readAsDataURL(fichier);
+};
+
+socket.on("vocal:update", (salon) => {
+  if (!vocalSalonActuel || salon.code !== vocalSalonActuel.code) return;
+  renderVocalSalon(salon);
+});
+socket.on("vocal:ferme", (info) => {
+  if (!vocalSalonActuel) return;
+  vocalSalonActuel = null;
+  vocalMicOuvert = false;
+  vocalDerniereSalleCode = null;
+  $("vocalAudio").pause();
+  vocalFermerToutesLesConnexions();
+  if (!$("vocal").classList.contains("hidden")){
+    afficherVocalListe();
+    chargerSalonsVocauxOuverts();
+  }
+  majMicFlottant(pageAffichee);
+  bandeauNotif(`<span style="font-size:24px">🎙️</span><span><b>Salon vocal fermé</b>
+    <small>${info?.raison === "FERME_PAR_HOTE" ? "L'hôte a fermé le salon."
+      : info?.raison === "HOTE_PARTI" ? "L'hôte a quitté le salon." : "Le salon est vide."}</small></span>`);
+});
+socket.on("vocal:exclu", () => {
+  vocalSalonActuel = null;
+  vocalMicOuvert = false;
+  vocalDerniereSalleCode = null;
+  $("vocalAudio").pause();
+  vocalFermerToutesLesConnexions();
+  if (!$("vocal").classList.contains("hidden")){
+    afficherVocalListe();
+    chargerSalonsVocauxOuverts();
+  }
+  majMicFlottant(pageAffichee);
+  bandeauNotif(`<span style="font-size:24px">🚪</span><span><b>Vous avez été exclu du salon vocal</b></span>`);
+});
+
+/** Inviter des amis directement depuis le salon vocal, sans passer par l'écran Amis. */
+$("btnVocalInviter").onclick = async () => {
+  if (!vocalSalonActuel) return;
+  $("inviterVocalCode").textContent = vocalSalonActuel.code || "";
+  $("inviterVocalMsg").textContent = "";
+  $("inviterVocalMsg").className = "feedback";
+  $("inviterVocalListe").innerHTML = `<p class="note" style="margin:0">Chargement…</p>`;
+  $("inviterVocalModal").classList.add("active");
+
+  const r = await fetch("/api/friends").then(x => x.json()).catch(() => null);
+  const amisEnLigne = (r?.amis || []).filter(a => a.online);
+  if (!amisEnLigne.length){
+    $("inviterVocalListe").innerHTML = "";
+    $("inviterVocalMsg").textContent = "Aucun ami en ligne pour l'instant.";
+    return;
+  }
+  $("inviterVocalListe").innerHTML = amisEnLigne.map(a => `
+    <div class="amiLigne">
+      <span class="dot on"></span>
+      <span class="nom">${vignette(a)} ${esc(a.pseudo)}</span>
+      <button class="ghost" data-inviter-vocal="${esc(a.id)}" style="padding:6px 10px;font-size:15px">🎙️ Inviter</button>
+    </div>`).join("");
+  $("inviterVocalListe").querySelectorAll("[data-inviter-vocal]").forEach(b => b.onclick = () => {
+    socket.emit("vocal:inviter", { code: vocalSalonActuel.code, amiId: b.dataset.inviterVocal }, res => {
+      if (!res?.ok){
+        $("inviterVocalMsg").textContent = "Invitation impossible.";
+        $("inviterVocalMsg").className = "feedback bad";
+        return;
+      }
+      b.textContent = res.livree ? "Invité ✓" : "Hors ligne";
+      b.disabled = true;
+    });
+  });
+};
+$("closeInviterVocalBtn").onclick = () => $("inviterVocalModal").classList.remove("active");
+$("inviterVocalModal").onclick = e => { if (e.target.id === "inviterVocalModal") $("inviterVocalModal").classList.remove("active"); };
+
+/** Invitation reçue à rejoindre le salon vocal d'un ami. */
+// Codes pour lesquels une invitation « toast » est déjà affichée à l'écran — sert à ne pas
+// aussi afficher la bannière de retour (voir verifierRetourVocal) pour la même invitation :
+// les deux se recouvraient sinon (même zone en haut de l'écran), et un clic sur « Rejoindre »
+// atterrissait sur le mauvais bouton, donnant l'impression que rejoindre ne fonctionnait pas.
+const invitationsToastEnCours = new Set();
+socket.on("vocal:invite-recue", ({ code, titre, de, avatar, photo }) => {
+  invitationsToastEnCours.add(code);
+  const el = document.createElement("div");
+  el.className = "invitation";
+  el.innerHTML = `<b>${photo ? `<img class="pfp" src="${esc(photo)}" alt="">` : (avatar||"🎬")} ${esc(de)}</b> vous invite dans son salon vocal
+    <small>${esc(titre || "Salon vocal")} · code ${esc(code)}</small>
+    <span><button data-oui>Rejoindre</button><button data-non class="ghost">Plus tard</button></span>`;
+  document.body.append(el);
+  const fermer = () => { invitationsToastEnCours.delete(code); el.remove(); };
+  el.querySelector("[data-non]").onclick = fermer;
+  el.querySelector("[data-oui]").onclick = () => {
+    fermer();
+    // Pendant une partie en cours, on reste sur l'écran de jeu : la connexion vocale se fait en
+    // arrière-plan (même logique que la bannière de retour — voir btnRetourVocalRejoindre) plutôt
+    // que d'interrompre la partie affichée en pleine manche.
+    if (enPartieActuellement) {
+      rejoindreSalonVocalParCode(code, { rester: true });
+    } else {
+      show("vocal");
+      rejoindreSalonVocalParCode(code);
+    }
+  };
+});
+
+// ----- Signalisation WebRTC (le serveur ne fait que relayer, jamais toucher au son) -----
+socket.on("vocal:rtc-peer-left", ({ userId }) => vocalFermerPeer(userId));
+socket.on("vocal:rtc-signal", async ({ from, signal }) => {
+  const pc = vocalCreerPeer(from);
+  try {
+    if (signal.type === "offer" || signal.type === "answer"){
+      // "Négociation polie" : si on reçoit une offre alors qu'on est nous-même en train d'en
+      // envoyer une (collision rare mais possible), le pair "poli" l'ignore et laisse l'autre
+      // mener la négociation — évite que les deux navigateurs restent bloqués l'un contre l'autre.
+      const collision = signal.type === "offer" && (pc._makingOffer || pc.signalingState !== "stable");
+      if (collision && !pc._poli) return;
+      await pc.setRemoteDescription(signal.sdp);
+      if (signal.type === "offer"){
+        // Création explicite de la réponse (createAnswer) plutôt que la forme raccourcie
+        // setLocalDescription() sans argument : cette forme n'est pas fiable sur tous les
+        // navigateurs (notamment certaines versions de Safari/iOS), ce qui pouvait faire
+        // échouer la connexion en silence — c'était très probablement la cause du son absent.
+        const reponse = await pc.createAnswer();
+        await pc.setLocalDescription(reponse);
+        vocalEmettreSignal(from, { type: "answer", sdp: pc.localDescription });
+      }
+    } else if (signal.type === "ice"){
+      await pc.addIceCandidate(signal.candidate);
+    }
+  } catch {} // connexion WebRTC déjà refermée ou message arrivé trop tard : sans conséquence
+});
+/* ---------- Reprise après coupure réseau ou rechargement complet de la page (repris de index.html,
+   à l'identique — seule différence : resynchroniserSalon() n'est pas repris, elle ne concerne que
+   la reprise d'une partie de quiz en cours, qui n'existe pas sur cette page). ---------- */
+
+/** Reprise après un rechargement COMPLET de la page (pas juste une coupure réseau) pendant qu'on
+ *  était dans un salon vocal : sur mobile, changer d'application ou verrouiller l'écran peut aller
+ *  jusqu'à faire recharger la page par le système pour libérer de la mémoire — tout l'état JS
+ *  (vocalSalonActuel, la connexion micro…) disparaît alors avec elle, ce qu'aucune reconnexion
+ *  Socket.IO ne peut réparer puisqu'il n'y a plus rien en mémoire à réparer. On se fie donc à
+ *  VOCAL_SALON_COURANT_CLE (sessionStorage, qui survit au rechargement) pour rejoindre le même
+ *  salon tout seul, et rouvrir le micro tout seul s'il l'était, plutôt que de laisser le joueur
+ *  atterrir sur la liste des salons sans explication. Sans objet si resynchroniserSalonVocal()
+ *  vient déjà de reprendre un salon encore en mémoire (vocalSalonActuel non vide). */
+function vocalAutoRejoindreApresRechargement(){
+  if (vocalSalonActuel) return;
+  let sauvegarde = null;
+  try { sauvegarde = JSON.parse(sessionStorage.getItem(VOCAL_SALON_COURANT_CLE) || "null"); } catch {}
+  if (!sauvegarde?.code) return;
+  if (!enPartieActuellement) show("vocal");
+  rejoindreSalonVocalParCode(sauvegarde.code, { rester: enPartieActuellement });
+  if (!sauvegarde.micOuvert) return;
+  const attendre = setInterval(() => {
+    if (!vocalSalonActuel || vocalSalonActuel.code !== sauvegarde.code) return;
+    clearInterval(attendre);
+    vocalRouvrirMicroSilencieusement();
+  }, 150);
+  setTimeout(() => clearInterval(attendre), 8000);
+}
+
+/** Redemande le micro (déjà autorisé, donc sans nouvelle demande de permission dans l'immense
+ *  majorité des cas) après une reprise automatique, SANS émettre vocal:mute : le serveur a déjà
+ *  restitué le bon état ("mute" false, voir vocal:rejoindre côté serveur) — il ne s'agit que de
+ *  reconstituer la piste audio locale elle-même, perdue avec la page précédente. */
+async function vocalRouvrirMicroSilencieusement(){
+  const stream = await vocalDemanderMicro();
+  if (!stream) return;
+  stream.getAudioTracks().forEach(t => t.enabled = true);
+}
+
+/** Même problème qu'une reprise de partie côté jeu, mais pour le salon vocal : sans ça, une coupure
+ *  wifi/4G d'une seconde (très courante en mobilité) retirait silencieusement le joueur du salon
+ *  côté serveur pendant que son écran continuait d'afficher le salon comme si de rien n'était. */
+function resynchroniserSalonVocal(){
+  if (!vocalSalonActuel) return;
+  const code = vocalSalonActuel.code;
+  emitAvecDelai("vocal:rejoindre", { code }, (res) => {
+    if (!res?.ok){
+      vocalSalonActuel = null;
+      vocalMicOuvert = false;
+      $("vocalAudio").pause();
+      vocalFermerToutesLesConnexions();
+      majMicFlottant(pageAffichee);
+      return;
+    }
+    renderVocalSalon(res.salon);
+    vocalRevaliderMicroApresRetour();
+  });
+}
+
+socket.on("connect", () => {
+  resynchroniserSalonVocal();
+  vocalAutoRejoindreApresRechargement();
+});
+
+/* ---------- Personnalisation graphique (console admin) et serveur TURN — repris de index.html,
+   mais réduit à ce qui concerne cette page : couleurs/polices globales, éventuel TURN pour le
+   vocal, réactions personnalisées, et — spécifique au salon vocal — l'ordre des trois cases
+   (hôte/intervenants/auditeurs) et leurs couleurs propres si l'admin les a personnalisées. Tout ce
+   qui ne concerne que le jeu (pourboire, radio d'ambiance, classement d'accueil, liens
+   épinglés/externes...) n'a pas d'équivalent ici et n'est donc pas repris. */
+const POLICE_FALLBACK = {
+  affiche: "sans-serif",
+  corps: "system-ui, sans-serif",
+  etiquette: "'Inter', system-ui, sans-serif",
+};
+function appliquerThemeVocal(theme){
+  if (!theme) return;
+  try {
+    const racine = document.documentElement.style;
+    if (theme.couleurs) {
+      for (const [cle, valeur] of Object.entries(theme.couleurs)) {
+        if (/^#[0-9a-fA-F]{6}$/.test(valeur || "")) racine.setProperty(`--${cle}`, valeur);
+      }
+    }
+    if (theme.polices) {
+      for (const [role, nom] of Object.entries(theme.polices)) {
+        if (nom && POLICE_FALLBACK[role]) racine.setProperty(`--font-${role}`, `'${nom}', ${POLICE_FALLBACK[role]}`);
+      }
+    }
+    const ordreVocal = theme.ordre?.vocal;
+    if (Array.isArray(ordreVocal)) {
+      const conteneur = document.getElementById("vocalCasesWrapper");
+      ordreVocal.forEach(id => {
+        const el = conteneur?.querySelector(`[data-module="${id}"]`);
+        if (el) conteneur.appendChild(el);
+      });
+    }
+    const couleursVocal = theme.couleursCategories?.vocal;
+    if (couleursVocal) {
+      const el = document.getElementById("vocal");
+      for (const cle of ["beam", "teal"]) {
+        const v = couleursVocal[cle];
+        if (el && /^#[0-9a-fA-F]{6}$/.test(v || "")) el.style.setProperty(`--${cle}`, v);
+        else if (el) el.style.removeProperty(`--${cle}`);
+      }
+    }
+  } catch (e) {
+    console.error("Personnalisation graphique ignorée :", e);
+  }
+}
+fetch("/api/config").then(r => r.json()).then(c => {
+  appliquerThemeVocal(c.theme);
+  if (Array.isArray(c.reactions?.emojis) && c.reactions.emojis.length){
+    EMOJIS_REACTION = c.reactions.emojis;
+    construireBarreReactions("vocalEmojiBar", "vocal:reaction", () => vocalSalonActuel?.code);
+  }
+  if (Number.isFinite(c.reactions?.dureeAffichageMs)) REACTION_DUREE_AFFICHAGE_MS = c.reactions.dureeAffichageMs;
+  // Serveur TURN optionnel (voir server.js) : s'ajoute aux serveurs STUN pour les salons vocaux,
+  // utile quand la connexion directe échoue sur un réseau très restrictif.
+  if (c.turn && c.turn.urls) VOCAL_ICE_SERVERS.push(c.turn);
+}).catch(() => {});
+
+/* ==========================================================================
+   Vérification de connexion — spécifique à cette page indépendante.
+   Aucun accès anonyme : mêmes comptes que le jeu (voir /auth/x/login côté
+   auth-x.js, qui gère déjà ?retour= pour ramener ici après connexion).
+   ========================================================================== */
+(async () => {
+  let moi = null;
+  try {
+    const res = await fetch("/api/me", { credentials: "same-origin" });
+    if (res.ok) moi = await res.json();
+  } catch (e) {
+    console.error("Vérification de connexion : erreur réseau", e);
+  }
+
+  if (moi && moi.id) {
+    me = moi;
+    $("loginGate").classList.add("hidden");
+    $("vocal").classList.remove("hidden");
+    vocalMajBoutonPhotoReaction();
+    afficherVocalListe();
+    chargerSalonsVocauxOuverts();
+    return;
+  }
+
+  // Pas connecté (401) ou erreur réseau : écran de connexion, jamais le salon.
+  $("loginGateTitre").textContent = "Connectez-vous pour rejoindre le salon vocal";
+  $("loginGateTexte").textContent = "Ce salon vocal fait partie de MichBen Ciné Quizz — utilisez le même compte que pour le jeu (aucune inscription séparée nécessaire, mais une connexion reste obligatoire).";
+  $("loginGateAction").hidden = false;
+})();
+
+$("btnLoginVocal").onclick = () => { location.href = "/auth/x/login?retour=/vocal"; };
+
+/** Petite retouche de texte, uniquement : le bouton "← Retour au menu" est repris tel quel du
+ *  balisage du jeu principal (voir #vocal dans index.html) — son comportement (revenir à la liste
+ *  des salons sans quitter un salon déjà rejoint, voir show("menu") plus haut) reste identique,
+ *  mais "menu" n'a pas de sens sur cette page autonome, qui n'en a pas. On corrige seulement le
+ *  texte affiché, jamais le balisage ni le comportement. */
+$("btnVocalRetourMenu").textContent = "← Retour à la liste des salons";
+</script>
+</body>
+</html>
