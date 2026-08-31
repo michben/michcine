@@ -5,7 +5,7 @@
 <link rel="icon" href="/api/favicon">
 <link rel="apple-touch-icon" href="/api/favicon">
 <meta name="theme-color" content="#0A0C16">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Salon vocal — MichBen Ciné Quizz</title>
 <!--
   ==========================================================================
@@ -670,7 +670,10 @@
   #chatLog b{color:var(--beam);font-weight:700}
   #chatLog .sys{color:var(--ticket);font-size:13px}
   #chatForm{display:flex;gap:8px}
-  #chatForm input{padding:10px 12px;font-size:15px}
+  /* font-size >= 16px indispensable ici : en dessous, Safari sur iPhone zoome automatiquement toute
+     la page dès qu'on touche ce champ pour taper un message — c'est très probablement le "zoom
+     tout seul" signalé, pas un vrai pincement volontaire de l'utilisateur. */
+  #chatForm input{padding:10px 12px;font-size:16px}
   #chatForm button{padding:10px 14px}
   /* Discussion écrite propre à chaque salon vocal — pas flottante comme le chat de partie,
      intégrée directement dans la carte de l'écran du salon. */
@@ -1700,6 +1703,7 @@ function vocalFermerToutesLesConnexions(){
   if (vocalLocalStream){ vocalLocalStream.getTracks().forEach(t => t.stop()); vocalLocalStream = null; }
   vocalArreterVAD();
   vocalDesactiverMediaSession();
+  vocalLibererVeilleEcran();
   // On quitte vraiment le salon (par opposition à une coupure temporaire en cours de résync) :
   // plus la peine de se souvenir d'y revenir tout seul après une prochaine actualisation (voir
   // VOCAL_SALON_COURANT_CLE / la reprise automatique sur "connect" plus bas).
@@ -1834,6 +1838,30 @@ function vocalDesactiverMediaSession(){
     }
   } catch {}
 }
+
+/** Empêche l'écran de se verrouiller tout seul tant qu'on est dans un salon vocal (Screen Wake
+ *  Lock API) : la cause la plus fréquente d'un micro/son qui "s'arrête" est simplement que le
+ *  téléphone s'est mis en veille après quelques secondes d'inactivité — pas une vraie coupure
+ *  réseau. En gardant l'écran allumé, ce cas de figure ne se présente quasiment plus.
+ *  IMPORTANT — limite honnête : ceci ne fonctionne QUE tant que l'écran reste effectivement
+ *  allumé. Si la personne verrouille son téléphone elle-même (bouton power) ou change complètement
+ *  d'application, le navigateur relâche automatiquement ce verrou (comportement du système, pas
+ *  quelque chose qu'un site web puisse empêcher) : le son/micro peut alors être interrompu par le
+ *  système, exactement comme n'importe quel autre onglet de navigateur en arrière-plan — un
+ *  vrai fonctionnement "comme un appel téléphonique" derrière un écran verrouillé n'est possible
+ *  que pour une application native avec des autorisations système dédiées, pas pour un site web. */
+let vocalWakeLock = null;
+async function vocalDemanderVeilleEcran(){
+  if (vocalWakeLock || !("wakeLock" in navigator) || document.visibilityState !== "visible") return;
+  try {
+    vocalWakeLock = await navigator.wakeLock.request("screen");
+    vocalWakeLock.addEventListener("release", () => { vocalWakeLock = null; });
+  } catch {} // refusé (rare) ou API absente sur ce navigateur : sans conséquence, juste moins de protection
+}
+function vocalLibererVeilleEcran(){
+  try { vocalWakeLock?.release(); } catch {}
+  vocalWakeLock = null;
+}
 // Sur mobile, l'AudioContext utilisé pour la détection de voix (VAD) peut être suspendu par le
 // système quand l'onglet repasse en arrière-plan puis au premier plan : on le relance dès que
 // possible pour que l'anneau qui pulse continue de fonctionner (le son du salon lui-même, porté par
@@ -1845,6 +1873,10 @@ document.addEventListener("visibilitychange", () => {
   // Retour au premier plan (changement d'app, réveil de l'écran…) : vérifie que le micro n'a pas
   // été réellement coupé pendant l'absence (voir vocalRevaliderMicroApresRetour ci-dessous).
   if (document.visibilityState === "visible") vocalRevaliderMicroApresRetour();
+  // Le verrou anti-veille est automatiquement relâché par le navigateur dès que l'onglet passe en
+  // arrière-plan (comportement imposé par l'API) : on le redemande donc nous-mêmes dès le retour au
+  // premier plan, tant qu'on est toujours dans un salon vocal.
+  if (document.visibilityState === "visible" && vocalSalonActuel) vocalDemanderVeilleEcran();
 });
 
 /** Demande le micro au tout premier clic sur "activer mon micro" (geste utilisateur, indispensable
@@ -2085,6 +2117,10 @@ function renderVocalSalon(salon){
   if (!salon) return;
   vocalSalonActuel = salon;
   assurerPeersVocal(salon);
+  // Tant qu'on est dans un salon vocal, on essaie d'empêcher l'écran de se mettre en veille tout
+  // seul (voir vocalDemanderVeilleEcran) : c'est sans effet si le verrou est déjà pris, donc on peut
+  // se permettre d'appeler ça à chaque mise à jour du salon sans risque.
+  vocalDemanderVeilleEcran();
   $("vocalTitreSalon").textContent = salon.titre;
   $("vocalMarquee").textContent = salon.code;
 
@@ -2108,7 +2144,13 @@ function renderVocalSalon(salon){
   const peutParler = ["hote","cohote","intervenant"].includes(monRole);
 
   $("btnVocalMute").classList.toggle("hidden", !peutParler);
-  vocalMicOuvert = peutParler && !moi?.mute;
+  // !!vocalLocalStream est indispensable ici : sans lui, un cas rare (le serveur restitue un micro
+  // "ouvert" — voir vocalEtatRecent côté serveur — avant que le flux local n'ait fini d'être
+  // redemandé, ou que la demande échoue silencieusement) pouvait figer le bouton sur "Couper mon
+  // micro" alors qu'aucun micro n'a jamais été capté : cliquer dessus ne faisait alors plus rien du
+  // tout, car basculerMicroVocal() croyait le micro déjà ouvert. Tant qu'on n'a pas réellement de
+  // flux, le bouton doit rester sur "Activer", pour qu'un clic redemande bien le micro.
+  vocalMicOuvert = peutParler && !moi?.mute && !!vocalLocalStream;
   if (!vocalMicOuvert && vocalLocalStream) vocalLocalStream.getAudioTracks().forEach(t => t.enabled = false);
   else if (vocalMicOuvert && vocalLocalStream) vocalLocalStream.getAudioTracks().forEach(t => t.enabled = true);
   $("btnVocalMute").textContent = vocalMicOuvert ? "🔴 Couper mon micro" : "🎙️ Activer mon micro";
@@ -2182,7 +2224,10 @@ function vocalMajLectureRadioOuVideo(salon, modo){
     return;
   }
 
-  $("vocalRadioTexte").textContent = `🎶 En cours : ${media.titre} — cliquez ▶️ si la lecture ne démarre pas toute seule.`;
+  // Un emoji différent selon le type de contenu (musique/vidéo/YouTube — voir salon.radio.type côté
+  // serveur), pour qu'un coup d'œil suffise à savoir ce qui est diffusé sans lire tout le titre.
+  const emojiDiffusion = { youtube: "📺", video: "🎬" }[media.type] || "🎵";
+  $("vocalRadioTexte").textContent = `${emojiDiffusion} En cours : ${media.titre} — cliquez ▶️ si la lecture ne démarre pas toute seule.`;
 
   if (media.type === "youtube"){
     audio.pause(); audio.style.display = "none";
@@ -2988,6 +3033,12 @@ async function vocalRouvrirMicroSilencieusement(){
   const stream = await vocalDemanderMicro();
   if (!stream) return;
   stream.getAudioTracks().forEach(t => t.enabled = true);
+  // Le tout premier renderVocalSalon (juste après le rechargement) a forcément affiché le bouton
+  // micro sur "Activer" : à ce moment-là, vocalLocalStream n'existait pas encore (voir plus haut,
+  // vocalMicOuvert exige désormais un flux réel). Maintenant qu'on vient de l'obtenir, on relance
+  // renderVocalSalon pour que le bouton reflète enfin l'état réel — sinon il restait affiché comme
+  // fermé alors que le micro fonctionnait déjà, obligeant à cliquer une fois pour "corriger" l'affichage.
+  if (vocalSalonActuel) renderVocalSalon(vocalSalonActuel);
 }
 
 /** Même problème qu'une reprise de partie côté jeu, mais pour le salon vocal : sans ça, une coupure
@@ -3005,6 +3056,14 @@ function resynchroniserSalonVocal(){
       majMicFlottant(pageAffichee);
       return;
     }
+    // Côté serveur, CHAQUE vocal:rejoindre — même cette simple reprise après coupure — est traité
+    // comme "quitter puis revenir" : les AUTRES participants reçoivent donc vocal:rtc-peer-left et
+    // ferment leur connexion audio vers nous, alors que nos propres connexions vers eux restaient
+    // ouvertes de notre point de vue — des connexions "fantômes" à sens unique, cause probable du
+    // symptôme "le micro semble ouvert mais plus personne ne m'entend" après une coupure réseau. On
+    // les referme donc nous aussi (sans toucher au micro) : assurerPeersVocal, juste après dans
+    // renderVocalSalon, les recrée proprement avec tout le monde.
+    for (const peerId of [...vocalPeers.keys()]) vocalFermerPeer(peerId);
     renderVocalSalon(res.salon);
     vocalRevaliderMicroApresRetour();
   });
