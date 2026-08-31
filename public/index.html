@@ -18,6 +18,12 @@
     --online:#3DDC84; --onbright:#0A2015;
     --font-affiche:'Anton',sans-serif; --font-corps:'Inter',system-ui,sans-serif; --font-etiquette:'Oswald','Inter',system-ui,sans-serif; --font-code:'JetBrains Mono',monospace}
   *{box-sizing:border-box}
+  /* Depuis iOS 10, Safari ignore volontairement "user-scalable=no"/"maximum-scale=1" du <meta
+     viewport> (accessibilité imposée par Apple) : ça ne suffit donc plus, à soi seul, à empêcher le
+     pincement-zoom sur iPhone. "touch-action" est la propriété CSS que Safari respecte réellement :
+     en n'autorisant que les gestes de défilement (pan), le pincement à deux doigts n'a plus d'effet
+     de zoom. Complété plus bas par un blocage JS du double-tap et du geste natif "gesturestart".*/
+  html, body{touch-action:pan-x pan-y}
   body{margin:0;min-height:100vh;background:var(--ink);color:var(--chalk);
     font-family:var(--font-corps);overflow-x:hidden;
     background-image:radial-gradient(ellipse 80% 55% at 50% -10%, rgba(245,185,66,.16), transparent 70%)}
@@ -2148,6 +2154,24 @@ window.addEventListener("error", (e) => {
       <div class="row"><button id="btnQuitterPause" class="ghost">Quitter la partie</button></div>
     </div>
 
+<script>
+/** Blocage complet du zoom sur iPhone/iPad, en complément du <meta viewport> et de la règle CSS
+ *  "touch-action" ci-dessus. Deux gestes restent capables de zoomer même avec ces deux-là en place :
+ *  1) le pincement à deux doigts déclenche sur Safari/WebKit des événements "gesture*" propriétaires
+ *     (absents des autres navigateurs), qui zooment la page si on ne les bloque pas explicitement ;
+ *  2) le double-tap rapide au même endroit déclenche un zoom automatique sur la zone tapée.
+ *  Les deux sont neutralisés ici, site entier, sans toucher aux autres gestes tactiles normaux
+ *  (défilement, un seul tap, etc.) qui continuent de fonctionner normalement. */
+["gesturestart", "gesturechange", "gestureend"].forEach((evt) => {
+  document.addEventListener(evt, (e) => e.preventDefault(), { passive: false });
+});
+let vocalDernierTouchEnd = 0;
+document.addEventListener("touchend", (e) => {
+  const maintenant = Date.now();
+  if (maintenant - vocalDernierTouchEnd <= 350) e.preventDefault();
+  vocalDernierTouchEnd = maintenant;
+}, { passive: false });
+</script>
 <script src="/js/moteur.js"></script>
 <script>
 /* Dernier recours si le fichier local est lui aussi filtré. */
@@ -6179,6 +6203,7 @@ async function vocalDemanderMicro(){
       vocalLocalStream.getTracks().forEach(t => pc.addTrack(t, vocalLocalStream));
     vocalDemarrerVAD(vocalLocalStream);
     vocalActiverMediaSession();
+    vocalSurveillerPisteMicro(vocalLocalStream.getAudioTracks()[0]);
     $("vocalMicMsg").textContent = "";
   } catch {
     vocalMicIndisponible = true;
@@ -6186,6 +6211,27 @@ async function vocalDemanderMicro(){
     $("vocalMicMsg").className = "feedback bad";
   }
   return vocalLocalStream;
+}
+
+/** Sur iPhone (et certains autres navigateurs mobiles), changer d'application, verrouiller l'écran
+ *  ou revenir à l'écran d'accueil coupe automatiquement la captation du micro tant qu'on n'est pas
+ *  revenu sur l'onglet — c'est une protection de la vie privée imposée par le système d'exploitation
+ *  (comme pour la caméra), qu'aucun site web ne peut contourner : seule une vraie application native
+ *  avec les autorisations d'appel dédiées le peut, pas un site dans un navigateur. Le navigateur
+ *  signale ce cas précis via l'événement "mute" de la piste (à ne pas confondre avec le bouton
+ *  "couper mon micro" de la personne elle-même) — on l'écoute simplement pour prévenir clairement au
+ *  lieu de laisser un micro silencieux sans explication ; la piste repart généralement toute seule
+ *  ("unmute") dès le retour sur l'onglet, éventuellement aidée par vocalRevaliderMicroApresRetour. */
+function vocalSurveillerPisteMicro(piste){
+  if (!piste) return;
+  piste.onmute = () => {
+    if (!vocalMicOuvert) return; // la personne a déjà coupé son micro elle-même : rien à signaler
+    $("vocalMicMsg").textContent = "Micro mis en pause par votre téléphone (application en arrière-plan, écran verrouillé…) — reprendra automatiquement à votre retour.";
+    $("vocalMicMsg").className = "feedback bad";
+  };
+  piste.onunmute = () => {
+    if (vocalMicOuvert) { $("vocalMicMsg").textContent = ""; $("vocalMicMsg").className = "feedback"; }
+  };
 }
 
 /** Changer d'application, verrouiller l'écran ou mettre le téléphone en veille peut, sur certains
@@ -6197,12 +6243,21 @@ async function vocalDemanderMicro(){
  *  qui évite d'avoir à tout renégocier comme le ferait fermer/rouvrir chaque connexion. */
 async function vocalRevaliderMicroApresRetour(){
   if (!vocalSalonActuel || !vocalLocalStream) return;
-  const pisteActuelle = vocalLocalStream.getAudioTracks()[0];
-  if (pisteActuelle && pisteActuelle.readyState !== "ended") return; // toujours vivante, rien à faire
+  let pisteActuelle = vocalLocalStream.getAudioTracks()[0];
+  if (pisteActuelle && pisteActuelle.readyState !== "ended"){
+    if (!pisteActuelle.muted) return; // toujours vivante et active, rien à faire
+    // La piste existe encore mais reste "muted" (coupure système, voir vocalSurveillerPisteMicro) :
+    // on lui laisse un court instant pour repartir toute seule (cas le plus fréquent), sinon on force
+    // nous-mêmes une reprise ci-dessous plutôt que de laisser un micro silencieux indéfiniment.
+    await new Promise(r => setTimeout(r, 1200));
+    pisteActuelle = vocalLocalStream.getAudioTracks()[0];
+    if (pisteActuelle && pisteActuelle.readyState !== "ended" && !pisteActuelle.muted) return; // reparti tout seul
+  }
   try {
     const nouveauFlux = await navigator.mediaDevices.getUserMedia({ audio: true });
     const nouvellePiste = nouveauFlux.getAudioTracks()[0];
     nouvellePiste.enabled = vocalMicOuvert;
+    vocalSurveillerPisteMicro(nouvellePiste);
     for (const pc of vocalPeers.values()){
       const emetteur = pc.getSenders().find(s => s.track && s.track.kind === "audio");
       if (emetteur) emetteur.replaceTrack(nouvellePiste).catch(() => {});
@@ -6212,6 +6267,7 @@ async function vocalRevaliderMicroApresRetour(){
     vocalLocalStream.getTracks().forEach(t => t.stop());
     vocalLocalStream = nouveauFlux;
     vocalDemarrerVAD(vocalLocalStream);
+    if (vocalMicOuvert) { $("vocalMicMsg").textContent = ""; $("vocalMicMsg").className = "feedback"; }
   } catch {
     // Micro toujours indisponible (permission révoquée entretemps, appareil débranché…) : on ne
     // casse rien, l'indicateur visuel continue de fonctionner sans le son pour cette personne.
