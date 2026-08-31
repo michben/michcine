@@ -57,17 +57,6 @@
   button.danger{color:var(--ticket);border-color:rgba(228,88,110,.45)}
   button:disabled{opacity:.45;cursor:not-allowed;transform:none !important;box-shadow:none}
   .row{display:flex;gap:10px;margin-top:14px}.row>*{flex:1}
-  /* Rangée de contrôle de la radio du salon vocal (reculer / volume / avancer, 5 éléments) :
-     débordait sur petit écran et repassait à la ligne de façon inégale (le dernier bouton se
-     retrouvant seul sur sa propre ligne) — flex:0 0 auto sans gap ni padding resserrés au lieu
-     d'hériter des règles génériques de .row. */
-  .row.rangeeControlesRadio{flex-wrap:nowrap;gap:6px}
-  .rangeeControlesRadio>*{flex:0 0 auto;padding:10px 12px}
-  @media (max-width:420px){
-    .rangeeControlesRadio{gap:4px}
-    .rangeeControlesRadio>button{padding:10px 8px;font-size:13px}
-    .rangeeControlesRadio .volLabel{min-width:28px;font-size:12px}
-  }
   /* Radio d'ambiance : visible dès la page d'accueil, en haut de chaque écran, et jamais superposée à rien
      puisqu'elle suit le flux normal de la page (pas de position fixe). */
   .radioBar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:10px 0}
@@ -760,6 +749,17 @@
   background:rgba(237,232,220,.05);margin-bottom:8px;text-decoration:none;color:var(--chalk);
   transition:background .2s}
 .lienEpingleItem:hover{background:rgba(245,185,66,.12)}
+/* Menu d'emoji privé (clic sur la photo de profil d'un participant du salon vocal, voir
+   ouvrirMenuReactionPrivee) : mêmes codes visuels que les autres petites fenêtres du site
+   (popLienExterne, popLiensEpingles) pour rester cohérent. */
+#popReactionPrivee{position:fixed;inset:0;background:rgba(10,12,22,.72);display:grid;place-items:center;z-index:95;padding:18px}
+#popReactionPrivee .boite{background:var(--velvet);border:1px solid rgba(237,232,220,.14);border-radius:14px;
+  padding:24px;max-width:340px;width:100%;text-align:center;position:relative}
+#popReactionPrivee .close-btn{position:absolute;top:6px;right:10px;font-size:26px;cursor:pointer;color:var(--muted)}
+#popReactionPrivee .close-btn:hover{color:var(--chalk)}
+#popReactionPrivee h3{font-family:'Anton',sans-serif;text-transform:uppercase;letter-spacing:.03em;
+  font-size:17px;margin:8px 0 4px;font-weight:400;color:var(--chalk)}
+#popReactionPrivee .emojis{justify-content:center}
 .lienEpingleItem img{width:44px;height:44px;border-radius:8px;object-fit:cover;flex:0 0 auto;background:rgba(0,0,0,.2)}
 .lienEpingleItem .ic{width:44px;height:44px;border-radius:8px;flex:0 0 auto;display:grid;place-items:center;
   font-size:20px;background:rgba(245,185,66,.16)}
@@ -835,8 +835,9 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
   filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
 .vocalParticipant .vocalNom{font-size:11.5px;color:var(--chalk);line-height:1.2;word-break:break-word}
 .vocalParticipant .vocalRoleTag{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
-/* Voir le profil depuis le salon vocal (voir ouvrirJoueur, câblé dans renderVocalSalon) : curseur
-   et léger effet au survol/appui sur la carte d'un AUTRE participant, jamais sur la sienne. */
+/* Salon vocal, carte d'un AUTRE participant (jamais la sienne) : cliquer la carte ouvre son profil
+   (voir ouvrirJoueur), cliquer précisément sa photo ouvre plutôt un menu d'emoji privé (voir
+   ouvrirMenuReactionPrivee) — les deux zones sont cliquables, d'où le même curseur partout. */
 .vocalParticipant[data-userid]:not(.vocalParticipantMoi){cursor:pointer}
 .vocalParticipant[data-userid]:not(.vocalParticipantMoi):hover .vocalAvatarWrap,
 .vocalParticipant[data-userid]:not(.vocalParticipantMoi):active .vocalAvatarWrap{filter:brightness(1.18)}
@@ -1429,13 +1430,6 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
       <div class="card" id="vocalRadioCard">
         <p class="tag" style="margin:0 0 8px">📻 Radio & vidéo du salon</p>
         <p class="note" id="vocalRadioTexte" style="margin:0 0 10px">Aucune piste diffusée pour l'instant.</p>
-        <div class="row rangeeControlesRadio" style="margin:0 0 10px">
-          <button id="btnVocalRadioReculer" class="ghost" title="Reculer de 15 secondes">⏪ 15s</button>
-          <button id="btnVocalRadioVolMoins" class="ghost" title="Diminuer le volume">🔉➖</button>
-          <span id="vocalRadioVolLabel" class="volLabel" style="min-width:34px">50%</span>
-          <button id="btnVocalRadioVolPlus" class="ghost" title="Augmenter le volume">🔊➕</button>
-          <button id="btnVocalRadioAvancer" class="ghost" title="Avancer de 15 secondes">15s ⏩</button>
-        </div>
         <audio id="vocalAudio" style="width:100%;display:none" controls></audio>
         <video id="vocalVideo" style="width:100%;display:none;border-radius:10px;background:var(--ink)" controls playsinline></video>
         <div id="vocalYoutubeWrap" class="hidden" style="position:relative;width:100%;padding-top:56.25%;border-radius:10px;overflow:hidden;background:var(--ink)">
@@ -2015,6 +2009,19 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
     </div>
   </div>
 
+  <!-- Réaction emoji PRIVÉE dans un salon vocal : ouverte en cliquant sur la photo de profil d'un
+       participant (voir ouvrirMenuReactionPrivee). Contrairement à la barre de réactions habituelle
+       (#vocalEmojiBar), l'emoji choisi ici n'est vu que par la personne visée. -->
+  <div id="popReactionPrivee" class="hidden">
+    <div class="boite">
+      <span class="close-btn" id="reactionPriveeFermer">&times;</span>
+      <h3>Envoyer un emoji à <span id="reactionPriveeCible"></span></h3>
+      <p class="note" style="margin:0 0 10px">Reçu uniquement par cette personne, avec votre pseudo — personne d'autre dans le salon ne le verra.</p>
+      <div class="emojis" id="reactionPriveeBar"></div>
+      <p class="feedback" id="reactionPriveeMsg" style="margin-top:10px;min-height:1.2em"></p>
+    </div>
+  </div>
+
   <!-- BANDEAU COOKIES / VIE PRIVÉE : montré une seule fois à chaque compte (nouveau ou déjà
        existant), tant qu'il n'a jamais répondu (voir apresArriveeMenu(), user.cookiesReponse
        côté serveur). Ne redemande plus jamais une fois une réponse enregistrée, quelle qu'elle soit. -->
@@ -2331,6 +2338,12 @@ function construireBarreReactions(idBarre, evenement, obtenirCode){
       const maintenant = Date.now();
       if (maintenant - derniereEnvoyee < 700) return;   // évite le matraquage côté client aussi
       derniereEnvoyee = maintenant;
+      // Retour immédiat, sans attendre l'aller-retour serveur (jusqu'ici, la réaction n'apparaissait
+      // qu'une fois renvoyée par le serveur — sur une connexion un peu lente, ça donnait l'impression
+      // que le clic n'avait rien fait, et poussait à cliquer plusieurs fois). Le serveur ne nous la
+      // renvoie plus à nous-mêmes (voir vocal:reaction/reaction côté serveur) : il se charge juste de
+      // la relayer aux autres participants.
+      afficherReactionVolante(btn.dataset.emoji, me?.pseudo, null);
       socket.emit(evenement, { code, emoji: btn.dataset.emoji });
     };
   });
@@ -2341,6 +2354,7 @@ function construireBarreReactions(idBarre, evenement, obtenirCode){
     const maintenant = Date.now();
     if (maintenant - derniereEnvoyee < 700) return;
     derniereEnvoyee = maintenant;
+    afficherReactionVolante(null, me?.pseudo, me.photo);
     socket.emit(evenement, { code, photo: true });
   };
   vocalMajBoutonPhotoReaction();
@@ -2661,9 +2675,10 @@ function ajusterVolumeMusique(delta){
 $("btnMusiqueVolMoins").onclick = () => ajusterVolumeMusique(-0.1);
 $("btnMusiqueVolPlus").onclick = () => ajusterVolumeMusique(0.1);
 
-/** Volume de la radio du salon vocal (#vocalAudio) — distinct du volume de la radio d'ambiance de
- *  la page d'accueil (musiqueVolume ci-dessus) : chacun peut régler le sien sans affecter l'autre.
- *  Mêmes boutons ➖/➕ que pour la radio d'ambiance et la lecture à voix haute, pour rester cohérent. */
+/** Volume de la radio du salon vocal (#vocalAudio/#vocalVideo) — distinct du volume de la radio
+ *  d'ambiance de la page d'accueil (musiqueVolume ci-dessus) : chacun peut régler le sien sans
+ *  affecter l'autre. Réglable directement via les contrôles natifs du lecteur audio/vidéo (le
+ *  curseur de volume intégré du navigateur) — plus besoin de boutons ➖/➕ dédiés ici. */
 let vocalRadioVolume = (() => {
   const v = parseFloat(localStorage.getItem("michben_vocal_radio_volume"));
   return Number.isFinite(v) && v >= 0 && v <= 1 ? v : 0.5;
@@ -2679,20 +2694,8 @@ function majVolumeRadioVocal(){
   const video = $("vocalVideo");
   if (video) video.volume = vocalRadioVolume;
   if (vocalYoutubePlayer) { try { vocalYoutubePlayer.setVolume(Math.round(vocalRadioVolume * 100)); } catch {} }
-  const lbl = $("vocalRadioVolLabel");
-  if (lbl) lbl.textContent = Math.round(vocalRadioVolume * 100) + "%";
 }
 majVolumeRadioVocal();
-$("btnVocalRadioVolMoins").onclick = () => {
-  vocalRadioVolume = Math.max(0, Math.round((vocalRadioVolume - 0.1) * 10) / 10);
-  localStorage.setItem("michben_vocal_radio_volume", String(vocalRadioVolume));
-  majVolumeRadioVocal();
-};
-$("btnVocalRadioVolPlus").onclick = () => {
-  vocalRadioVolume = Math.min(1, Math.round((vocalRadioVolume + 0.1) * 10) / 10);
-  localStorage.setItem("michben_vocal_radio_volume", String(vocalRadioVolume));
-  majVolumeRadioVocal();
-};
 
 /** Blocs réductibles du salon vocal : ajoute un petit bouton bien visible (chevron ▾/▸, fond
  *  teinté) DANS le titre du bloc (voir .cardReductible / .traitReduction plus haut — en flux
@@ -6475,7 +6478,16 @@ function renderVocalSalon(salon){
   // jeu (voir ouvrirJoueur). Jamais sur sa propre carte (voir vocalParticipantMoi ci-dessus).
   $("vocalCasesWrapper").querySelectorAll(".vocalParticipant[data-userid]:not(.vocalParticipantMoi)").forEach(carte => {
     const p = salon.participants.find(x => x.userId === carte.dataset.userid);
-    if (p) carte.onclick = () => ouvrirJoueur(p.userId, p.pseudo, p.avatar, p.photo);
+    if (!p) return;
+    carte.onclick = () => ouvrirJoueur(p.userId, p.pseudo, p.avatar, p.photo);
+    // Cliquer précisément sur la photo de profil ouvre plutôt un petit menu d'emoji à envoyer en
+    // privé à cette personne (voir ouvrirMenuReactionPrivee, plus bas) — on arrête la propagation
+    // pour que ça n'ouvre pas EN PLUS la fiche du profil (comportement du reste de la carte).
+    const avatarWrap = carte.querySelector(".vocalAvatarWrap");
+    if (avatarWrap) {
+      avatarWrap.title = `Envoyer un emoji en privé à ${p.pseudo}`;
+      avatarWrap.onclick = (e) => { e.stopPropagation(); ouvrirMenuReactionPrivee(p.userId, p.pseudo); };
+    }
   });
   renderVocalChat(salon);
 
@@ -6678,24 +6690,6 @@ function vocalArreterYoutube(){
   if (vocalYoutubePlayer){ try { vocalYoutubePlayer.pauseVideo(); } catch {} }
 }
 
-/** Reculer/avancer de 15 secondes dans le contenu actuellement diffusé (radio ou vidéo) — une
- *  action purement locale à chaque appareil, comme le ferait n'importe quel lecteur, puisque la
- *  lecture n'est de toute façon pas relayée par le serveur (chacun charge le même contenu et se
- *  cale sur le temps écoulé, voir vocalSyncMedia). */
-function vocalSauterMedia(deltaSecondes){
-  if (!vocalSalonActuel?.radio) return;
-  if (vocalSalonActuel.radio.type === "youtube"){
-    if (!vocalYoutubePlayer) return;
-    try { vocalYoutubePlayer.seekTo(Math.max(0, vocalYoutubePlayer.getCurrentTime() + deltaSecondes), true); } catch {}
-    return;
-  }
-  const el = vocalSalonActuel.radio.type === "video" ? $("vocalVideo") : $("vocalAudio");
-  if (!el || el.style.display === "none") return;
-  try { el.currentTime = Math.max(0, (el.currentTime || 0) + deltaSecondes); } catch {}
-}
-$("btnVocalRadioReculer").onclick = () => vocalSauterMedia(-15);
-$("btnVocalRadioAvancer").onclick = () => vocalSauterMedia(15);
-
 /** Discussion écrite propre au salon vocal : un historique court (voir VOCAL_CHAT_HISTORIQUE_MAX
  *  côté serveur) est renvoyé à chaque mise à jour du salon, pour qu'un participant qui rejoint en
  *  cours de route retrouve un peu de contexte plutôt que de partir d'une page blanche. */
@@ -6735,6 +6729,43 @@ $("vocalChatInput").addEventListener("keydown", (e) => { if (e.key === "Enter") 
  *  que la barre de partie ci-dessus (voir construireBarreReactions). */
 construireBarreReactions("vocalEmojiBar", "vocal:reaction", () => vocalSalonActuel?.code);
 socket.on("vocal:reaction", ({ emoji, pseudo, photo }) => afficherReactionVolante(emoji, pseudo, photo));
+
+/** Menu d'emoji privé, ouvert en cliquant sur la photo de profil d'un participant du salon vocal
+ *  (voir renderVocalSalon, où le clic est câblé) : contrairement à la barre de réactions ci-dessus
+ *  (#vocalEmojiBar, vue par tout le salon), l'emoji envoyé ici n'est reçu que par la personne visée
+ *  — un petit clin d'œil discret plutôt qu'une réaction publique. Le serveur (vocal:reaction-privee)
+ *  joint toujours le pseudo de l'expéditeur, pour que le destinataire sache qui le lui envoie même
+ *  si personne d'autre ne le voit. */
+let vocalReactionPriveeCibleId = null;
+function ouvrirMenuReactionPrivee(userId, pseudo){
+  vocalReactionPriveeCibleId = userId;
+  $("reactionPriveeCible").textContent = pseudo;
+  $("reactionPriveeMsg").textContent = "";
+  $("reactionPriveeBar").innerHTML = EMOJIS_REACTION
+    .map(e => `<button type="button" data-emoji="${e}">${e}</button>`).join("");
+  $("reactionPriveeBar").querySelectorAll("[data-emoji]").forEach(btn => {
+    btn.onclick = () => {
+      if (!vocalSalonActuel || !vocalReactionPriveeCibleId) return;
+      socket.emit("vocal:reaction-privee", { code: vocalSalonActuel.code, cibleUserId: vocalReactionPriveeCibleId, emoji: btn.dataset.emoji });
+      $("reactionPriveeMsg").textContent = `${btn.dataset.emoji} envoyé en privé !`;
+      $("reactionPriveeMsg").className = "feedback good";
+      setTimeout(fermerMenuReactionPrivee, 700);
+    };
+  });
+  $("popReactionPrivee").classList.remove("hidden");
+}
+function fermerMenuReactionPrivee(){
+  $("popReactionPrivee").classList.add("hidden");
+  vocalReactionPriveeCibleId = null;
+}
+$("reactionPriveeFermer").onclick = fermerMenuReactionPrivee;
+$("popReactionPrivee").onclick = (e) => { if (e.target.id === "popReactionPrivee") fermerMenuReactionPrivee(); };
+
+/** Réception d'une réaction privée envoyée par quelqu'un d'autre (voir vocal:reaction-privee
+ *  côté serveur) : même effet volant que les réactions publiques, avec un petit "🔒" devant le
+ *  pseudo pour qu'on comprenne tout de suite que ça vient d'être reçu en privé, pas diffusé à
+ *  tout le salon. */
+socket.on("vocal:reaction-privee", ({ emoji, pseudo }) => afficherReactionVolante(emoji, `🔒 ${pseudo || ""}`, null));
 
 /** Don visible dans le salon vocal : quand un don (points, tickets, ou partie classée offerte —
  *  voir /api/points/donner et consorts, et ouvrirJoueur pour l'accès depuis ce salon) se fait entre
@@ -6965,17 +6996,39 @@ $("vocalReglageMonteeLibre").onchange = (e) => {
 // selon le son détecté (voir vocalDemarrerVAD), sans rien avoir à maintenir enfoncé.
 // Extrait en fonction partagée pour que le bouton du salon (#btnVocalMute) et le micro flottant
 // (#btnVocalMicFlottant, visible sur n'importe quelle page) fassent exactement la même chose.
+// vocalBasculeMicroEnCours : évite qu'un double-clic (ou plusieurs clics impatients, faute de
+// retour visuel assez rapide — voir plus bas) ne relance l'opération une deuxième fois par-dessus
+// la première alors qu'elle est encore en cours.
+let vocalBasculeMicroEnCours = false;
 async function basculerMicroVocal(){
-  if (!vocalSalonActuel) return;
-  const ouvrir = !vocalMicOuvert;
-  if (ouvrir){
-    const stream = await vocalDemanderMicro();
-    if (!stream) return; // micro refusé/indisponible : le message d'erreur est déjà affiché, on ne change rien côté serveur
-    stream.getAudioTracks().forEach(t => t.enabled = true);
-  } else if (vocalLocalStream) {
-    vocalLocalStream.getAudioTracks().forEach(t => t.enabled = false);
+  if (!vocalSalonActuel || vocalBasculeMicroEnCours) return;
+  vocalBasculeMicroEnCours = true;
+  // Retour visuel IMMÉDIAT dès le clic, avant même de savoir si le micro va s'ouvrir avec succès :
+  // sans ça, le bouton restait visuellement figé pendant tout le temps que prend la demande de
+  // permission au système + l'aller-retour serveur (souvent une bonne seconde, parfois plus sur
+  // mobile) — ce qui donnait l'impression que le clic n'avait rien fait, et poussait à cliquer
+  // plusieurs fois de suite (signalé par plusieurs joueurs). renderVocalSalon, déclenché par la
+  // mise à jour du salon que le serveur renvoie juste après, affichera de toute façon très vite le
+  // vrai texte définitif ; ceci n'est qu'un état transitoire le temps de cet aller-retour.
+  const boutons = [$("btnVocalMute"), $("btnVocalMicFlottant")].filter(b => b && !b.classList.contains("hidden"));
+  const libellesOrigine = boutons.map(b => b.textContent);
+  boutons.forEach(b => { b.disabled = true; b.textContent = "⏳ Un instant…"; });
+  try {
+    const ouvrir = !vocalMicOuvert;
+    if (ouvrir){
+      const stream = await vocalDemanderMicro();
+      if (!stream) return; // micro refusé/indisponible : le message d'erreur est déjà affiché, on ne change rien côté serveur
+      stream.getAudioTracks().forEach(t => t.enabled = true);
+    } else if (vocalLocalStream) {
+      vocalLocalStream.getAudioTracks().forEach(t => t.enabled = false);
+    }
+    socket.emit("vocal:mute", { code: vocalSalonActuel.code, mute: !ouvrir });
+  } finally {
+    // Filet de sécurité si, pour une raison quelconque, la mise à jour du salon par le serveur
+    // tardait ou n'arrivait jamais : on ne laisse jamais le bouton bloqué sur "Un instant…".
+    boutons.forEach((b, i) => { b.disabled = false; if (b.textContent === "⏳ Un instant…") b.textContent = libellesOrigine[i]; });
+    vocalBasculeMicroEnCours = false;
   }
-  socket.emit("vocal:mute", { code: vocalSalonActuel.code, mute: !ouvrir });
 }
 $("btnVocalMute").onclick = basculerMicroVocal;
 // #btnVocalMicFlottant est défini beaucoup plus bas dans la page (hors des <section>, pour rester
