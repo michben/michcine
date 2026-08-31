@@ -6365,7 +6365,12 @@ io.on("connection", (socket) => {
    *  `photo: true` : réaction spéciale qui envoie la photo de profil de l'expéditeur au lieu d'un
    *  emoji — jamais son URL fournie par le client (on lit toujours `user.photo`, la valeur du
    *  compte authentifié), pour qu'on ne puisse jamais faire apparaître la photo de quelqu'un
-   *  d'autre. Refusée en silence si le compte n'a pas de photo (rien à envoyer). */
+   *  d'autre. Refusée en silence si le compte n'a pas de photo (rien à envoyer).
+   *  N'est PAS renvoyée à l'expéditeur lui-même : le client affiche désormais sa propre réaction
+   *  immédiatement en local, dès le clic (voir construireBarreReactions dans public/index.html /
+   *  public/vocal.html) plutôt que d'attendre cet aller-retour serveur pour l'afficher — c'était la
+   *  cause du "il faut cliquer plusieurs fois pour avoir un retour" remonté par plusieurs joueurs.
+   *  La renvoyer quand même à l'expéditeur l'aurait affichée une seconde fois en double. */
   let derniereReactionVocale = 0;
   socket.on("vocal:reaction", ({ code, emoji, photo }) => {
     const salon = salonsVocaux.get(code);
@@ -6379,10 +6384,34 @@ io.on("connection", (socket) => {
       ? { photo: user.photo, pseudo: user.pseudo, avatar: user.avatar }
       : { emoji, pseudo: user.pseudo, avatar: user.avatar };
     for (const p of salon.participants.values()) {
-      if (p.userId !== user.id && estBloque(p.userId, user.id)) continue;
+      if (p.userId === user.id) continue; // déjà affichée en local par l'expéditeur, voir plus haut
+      if (estBloque(p.userId, user.id)) continue;
       const s = [...io.of("/").sockets.values()].find((sk) => sk.data.user?.id === p.userId);
       if (s) s.emit("vocal:reaction", payload);
     }
+  });
+
+  /** Réaction emoji PRIVÉE dans un salon vocal : contrairement à vocal:reaction (diffusée à tout
+   *  le monde), celle-ci n'est envoyée qu'à un seul destinataire choisi (cibleUserId) — pensée pour
+   *  un petit clin d'œil discret à quelqu'un sans que le reste du salon le voie. Déclenchée côté
+   *  client en cliquant sur la photo de profil d'un participant (voir ouvrirMenuReactionPrivee dans
+   *  public/index.html / public/vocal.html). Mêmes règles de sécurité que la réaction publique :
+   *  liste d'émojis validée contre REGLAGES.reactions.emojis, blocage respecté, et un anti-matraquage
+   *  séparé (propre à ce socket, comme derniereReactionVocale ci-dessus) pour qu'on ne puisse pas
+   *  harceler quelqu'un d'émojis privés en boucle. */
+  let derniereReactionVocalePrivee = 0;
+  socket.on("vocal:reaction-privee", ({ code, cibleUserId, emoji }) => {
+    const salon = salonsVocaux.get(code);
+    const moi = salon?.participants.get(user.id);
+    if (!salon || !moi || !cibleUserId || cibleUserId === user.id) return;
+    const cible = salon.participants.get(cibleUserId);
+    if (!cible) return; // le destinataire a peut-être déjà quitté le salon entretemps
+    if (!REGLAGES.reactions.emojis.includes(emoji)) return;
+    if (estBloque(cibleUserId, user.id)) return;
+    if (Date.now() - derniereReactionVocalePrivee < 700) return; // évite le matraquage
+    derniereReactionVocalePrivee = Date.now();
+    const s = [...io.of("/").sockets.values()].find((sk) => sk.data.user?.id === cibleUserId);
+    if (s) s.emit("vocal:reaction-privee", { emoji, pseudo: user.pseudo, avatar: user.avatar });
   });
 
   /** Invite un ami dans le salon vocal en cours — même principe que invite:send pour les parties,
@@ -6548,7 +6577,12 @@ io.on("connection", (socket) => {
    *  `photo: true` : réaction spéciale qui envoie la photo de profil de l'expéditeur au lieu d'un
    *  emoji — jamais son URL fournie par le client, toujours `user.photo` (le compte authentifié),
    *  pour qu'on ne puisse jamais faire apparaître la photo de quelqu'un d'autre. Refusée en
-   *  silence si le compte n'a pas de photo. */
+   *  silence si le compte n'a pas de photo.
+   *  socket.to (et non io.to) : n'est PAS renvoyée à l'expéditeur lui-même, qui affiche désormais sa
+   *  propre réaction immédiatement en local dès le clic (voir construireBarreReactions côté client)
+   *  plutôt que d'attendre cet aller-retour serveur — c'était la cause du "il faut cliquer plusieurs
+   *  fois pour avoir un retour" remonté par plusieurs joueurs. La lui renvoyer en plus l'aurait
+   *  affichée une seconde fois en double. */
   let derniereReaction = 0;
 
   socket.on("reaction", ({ code, emoji, photo }) => {
@@ -6559,7 +6593,7 @@ io.on("connection", (socket) => {
     if (!estPhoto && !REGLAGES.reactions.emojis.includes(emoji)) return;
     if (Date.now() - derniereReaction < 700) return;   // évite le matraquage
     derniereReaction = Date.now();
-    io.to(room.code).emit("reaction", estPhoto
+    socket.to(room.code).emit("reaction", estPhoto
       ? { photo: user.photo, pseudo: player.pseudo, avatar: player.avatar }
       : { emoji, pseudo: player.pseudo, avatar: player.avatar });
   });
