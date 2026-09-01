@@ -94,13 +94,17 @@ const httpServer = createServer(app);
  * bien les mêmes salons.
  */
 // maxHttpBufferSize : par défaut Socket.IO plafonne chaque message à 1 Mo, bien trop peu pour un
-// fichier audio envoyé en base64 depuis un salon vocal (voir vocal:radio-ajouter) — un fichier de
-// quelques Mo encodé en base64 grossit d'environ 37 %, et dépassait donc systématiquement cette
-// limite. Le paquet est alors rejeté avant même d'atteindre notre gestionnaire : le rappel (cb)
-// n'arrive jamais, et le client finit par afficher « le serveur ne répond pas » après le délai
-// de emitAvecDelai — alors que le serveur n'a en réalité jamais reçu la demande. Alignée sur la
-// limite déjà en place pour les images/musique par HTTP (voir express.json ci-dessus).
-const io = new Server(httpServer, { cors: { origin: "*" }, path: "/rt", maxHttpBufferSize: 15 * 1024 * 1024 });
+// fichier audio/vidéo envoyé en base64 depuis un salon vocal (voir vocal:radio-ajouter et
+// vocal:video-fichier) — un fichier encodé en base64 grossit d'environ 37 %, et dépassait donc
+// systématiquement une limite trop juste. Le paquet est alors rejeté avant même d'atteindre notre
+// gestionnaire : le rappel (cb) n'arrive jamais, et le client finit par afficher « le serveur ne
+// répond pas » après le délai de emitAvecDelai — alors que le serveur n'a en réalité jamais reçu
+// la demande. Calée sur la plus grosse limite réelle (vidéo, VIDEO_MAX_OCTETS = 160 Mo), avec une
+// bonne marge au-delà du +37 % de l'encodage base64 pour laisser de la place au reste du message
+// (titre, code du salon…). Attention : une limite aussi haute veut dire qu'un envoi à 160 Mo garde
+// temporairement ce fichier entier en mémoire côté serveur (une fois décodé) le temps de l'écrire
+// sur disque — acceptable pour un salon avec peu d'envois simultanés, à surveiller si l'usage grossit.
+const io = new Server(httpServer, { cors: { origin: "*" }, path: "/rt", maxHttpBufferSize: 230 * 1024 * 1024 });
 
 /* ------------------------------------------------------------------ */
 /* Configuration                                                       */
@@ -2668,7 +2672,7 @@ function fichierMusiqueExiste(piste) {
 // larges pour laisser la place à quelques secondes d'image en plus.
 const VIDEO_DIR = join(process.cwd(), "public", "videos");
 const VIDEO_EXT_AUTORISEES = ["mp4", "webm", "mov", "m4v", "ogg", "ogv"];
-const VIDEO_MAX_OCTETS = 15 * 1024 * 1024;
+const VIDEO_MAX_OCTETS = 160 * 1024 * 1024;
 
 // extraireIdYoutube (reconnaître un lien YouTube et en extraire l'identifiant) vit maintenant
 // exclusivement dans vocal-salon.js — seul le salon vocal en avait besoin.

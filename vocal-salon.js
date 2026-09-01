@@ -529,6 +529,19 @@ export function creerModuleVocalSalon({
       cb?.({ ok: true, piste: resultat.piste });
     });
 
+    /** Bascule la lecture en boucle du morceau audio en cours (voir la demande — remplace le
+     *  contrôle de vitesse et le téléchargement, retirés du lecteur, voir controlsList côté client) :
+     *  réservé à l'audio/la musique, jamais à la vidéo/YouTube/X, et contrôlé par l'hôte/les cohôtes
+     *  pour tout le salon, comme le reste de la diffusion (pas un réglage personnel par auditeur). */
+    socket.on("vocal:radio-boucle", ({ code }, cb) => {
+      const salon = salonsVocaux.get(code);
+      if (!salon || !estModoVocal(salon, user.id)) return cb?.({ ok: false });
+      if (!salon.radio || salon.radio.type !== "audio") return cb?.({ ok: false, error: "AUCUNE_MUSIQUE" });
+      salon.radio.boucle = !salon.radio.boucle;
+      diffuserVocal(salon);
+      cb?.({ ok: true, boucle: salon.radio.boucle });
+    });
+
     socket.on("vocal:video-youtube", ({ code, url, titre }, cb) => {
       const salon = salonsVocaux.get(code);
       if (!salon || !estModoVocal(salon, user.id)) return cb?.({ ok: false });
@@ -605,18 +618,28 @@ export function creerModuleVocalSalon({
       const message = String(texte || "").trim().slice(0, 300);
       if (!message) return cb?.({ ok: false, error: "VIDE" });
 
+      // "Envoyer comme emoji" (voir demande) : un simple affichage volant et éphémère, façon
+      // réaction (voir vocal:reaction juste plus bas) — jamais ajouté à l'historique écrit du
+      // tchat (voir la demande : pas besoin qu'il apparaisse dans le fil des messages). Réservé
+      // aux tout petits messages (quelques emojis/caractères) pour ne pas afficher un pavé de
+      // texte géant à l'écran. Le serveur ne le renvoie qu'aux AUTRES participants, exactement
+      // comme vocal:reaction : l'expéditeur l'affiche lui-même tout de suite, côté client.
+      if (enGrand === true && message.length <= 12) {
+        for (const p of salon.participants.values()) {
+          if (p.userId === user.id) continue;
+          if (estBloque(p.userId, user.id)) continue;
+          const s = [...io.of("/").sockets.values()].find((sk) => sk.data.user?.id === p.userId);
+          if (s) s.emit("vocal:message-en-grand", { texte: message, pseudo: user.pseudo });
+        }
+        return cb?.({ ok: true });
+      }
+
       const idTmdb = /^\d+$/.test(String(filmTmdbId || "")) ? String(filmTmdbId) : null;
-      // "Envoyer comme emoji" (voir demande) : le message s'affiche en grand, façon réaction volante,
-      // en plus d'apparaître normalement dans l'historique du chat — jamais à la place, pour qu'on
-      // puisse toujours le retrouver écrit si on a raté l'animation. Réservé aux tout petits messages
-      // (quelques emojis/caractères) pour ne pas afficher un pavé de texte géant à l'écran.
-      const messageEnGrand = enGrand === true && message.length <= 12;
 
       salon.chat = salon.chat || [];
       salon.chat.push({
         id: crypto.randomUUID(), userId: user.id, pseudo: user.pseudo,
         avatar: user.avatar, photo: user.photo || null, texte: message, at: Date.now(),
-        ...(messageEnGrand ? { enGrand: true } : {}),
         ...(idTmdb ? { filmTmdbId: idTmdb, filmTitre: String(filmTitre || "").trim().slice(0, 120),
                        filmPoster: String(filmPoster || "").trim().slice(0, 300) || null } : {}),
       });
