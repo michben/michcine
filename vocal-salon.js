@@ -177,12 +177,19 @@ export function creerModuleVocalSalon({
       if (!salon.participants.has(userId)) continue;
       const etaitHote = salon.hostId === userId;
       const participantSortant = salon.participants.get(userId);
-      if (involontaire) {
-        vocalEtatRecent.set(`${salon.code}:${userId}`, {
-          role: participantSortant.role, mute: participantSortant.mute,
-          mainLevee: Boolean(participantSortant.mainLevee), expire: Date.now() + VOCAL_SALON_VIDE_GRACE_MS(),
-        });
-      }
+      // Mémorise le rôle/micro juste avant de partir, qu'il s'agisse d'une vraie coupure OU d'un
+      // départ volontaire (bouton "Quitter") — avant, seule la coupure involontaire était mémorisée,
+      // et repartir volontairement puis revenir faisait retomber n'importe qui en simple auditeur,
+      // micro coupé, même un cohôte ou un intervenant (voir la demande : plusieurs joueurs
+      // remontaient ce problème). Le rôle et l'état du micro ne doivent jamais être coupés tout
+      // seuls par le système — seuls l'intéressé lui-même, un cohôte ou l'hôte doivent pouvoir agir
+      // dessus — donc les deux sont désormais restitués à l'identique en cas de retour, qu'on soit
+      // parti exprès ou pas, tant que le salon n'a pas eu le temps de se refermer (voir
+      // VOCAL_SALON_VIDE_GRACE_MS).
+      vocalEtatRecent.set(`${salon.code}:${userId}`, {
+        role: participantSortant.role, mute: participantSortant.mute,
+        mainLevee: Boolean(participantSortant.mainLevee), expire: Date.now() + VOCAL_SALON_VIDE_GRACE_MS(),
+      });
       salon.participants.delete(userId);
       salon.demandesMontee.delete(userId);
       socket.leave(`vocal:${salon.code}`);
@@ -310,6 +317,7 @@ export function creerModuleVocalSalon({
         invites: new Map(),
         radio: null,
         chat: [],
+        bannis: new Map(), // userId -> { pseudo, at } — voir vocal:bannir/vocal:debannir plus bas
         creeLe: Date.now(),
         prive: false,
         monteeLibre: getReglages().audio?.monteeLibreParDefaut === true,
@@ -327,6 +335,10 @@ export function creerModuleVocalSalon({
     socket.on("vocal:rejoindre", ({ code }, cb) => {
       const salon = salonsVocaux.get(code);
       if (!salon) return cb?.({ ok: false, error: "SALON_INTROUVABLE" });
+      // Un compte banni (voir vocal:bannir) ne peut revenir que si l'hôte ou un cohôte lève la
+      // restriction (vocal:debannir) — contrairement à une simple exclusion, qui n'empêche pas de
+      // revenir tout de suite après (voir la demande : les deux options doivent coexister).
+      if (salon.bannis?.has(user.id)) return cb?.({ ok: false, error: "BANNI" });
       if (user.role === "enfant" && !salon.compteEnfant) return cb?.({ ok: false, error: "ENFANT_MODE_ENFANT_UNIQUEMENT" });
       if (user.role !== "enfant" && salon.compteEnfant) return cb?.({ ok: false, error: "ADULTE_SALON_ENFANT_INTERDIT" });
       if (salon.participants.size >= MAX_PARTICIPANTS_VOCAL()) return cb?.({ ok: false, error: "SALON_COMPLET" });
@@ -489,6 +501,48 @@ export function creerModuleVocalSalon({
       io.to(`vocal:${salon.code}`).emit("vocal:rtc-peer-left", { userId });
       diffuserVocal(salon);
       cb?.({ ok: true });
+    });
+
+    /** Comme "Exclure" ci-dessus, mais en plus définitif : la personne visée ne peut plus revenir
+     *  dans CE salon tant que l'hôte ou un cohôte n'aura pas explicitement levé la restriction (voir
+     *  vocal:debannir) — contrairement à une simple exclusion, qu'un rien de rejoindre à nouveau
+     *  annule (voir la demande : les deux options doivent exister séparément). Portée limitée à ce
+     *  salon précis : un compte banni ici reste libre de créer ou rejoindre n'importe quel autre
+     *  salon vocal. */
+    socket.on("vocal:bannir", ({ code, userId }, cb) => {
+      const salon = salonsVocaux.get(code);
+      if (!salon || !estModoVocal(salon, user.id) || userId === user.id) return cb?.({ ok: false });
+      const cible = salon.participants.get(userId);
+      if (!cible || cible.role === "hote") return cb?.({ ok: false });
+      if (salon.hostId !== user.id && cible.role === "cohote") return cb?.({ ok: false });
+      salon.bannis.set(userId, { pseudo: cible.pseudo, at: Date.now() });
+      salon.participants.delete(userId);
+      salon.demandesMontee.delete(userId);
+      const socketCible = [...io.of("/").sockets.values()].find((s) => s.data.user?.id === userId);
+      if (socketCible) {
+        socketCible.leave(`vocal:${salon.code}`);
+        socketCible.emit("vocal:exclu", { code: salon.code, banni: true });
+      }
+      io.to(`vocal:${salon.code}`).emit("vocal:rtc-peer-left", { userId });
+      diffuserVocal(salon);
+      cb?.({ ok: true, bannis: [...salon.bannis.entries()].map(([id, v]) => ({ userId: id, pseudo: v.pseudo, at: v.at })) });
+    });
+
+    /** Lève un bannissement (voir vocal:bannir) : réservé à l'hôte/aux cohôtes, comme le bannissement
+     *  lui-même. Ne rejoint pas la personne automatiquement — elle peut simplement retenter. */
+    socket.on("vocal:debannir", ({ code, userId }, cb) => {
+      const salon = salonsVocaux.get(code);
+      if (!salon || !estModoVocal(salon, user.id)) return cb?.({ ok: false });
+      salon.bannis.delete(userId);
+      cb?.({ ok: true, bannis: [...salon.bannis.entries()].map(([id, v]) => ({ userId: id, pseudo: v.pseudo, at: v.at })) });
+    });
+
+    /** Liste des comptes actuellement bannis de ce salon (pseudo + date), pour l'écran de
+     *  modération de l'hôte/des cohôtes — jamais envoyée aux autres participants. */
+    socket.on("vocal:bannis-liste", ({ code }, cb) => {
+      const salon = salonsVocaux.get(code);
+      if (!salon || !estModoVocal(salon, user.id)) return cb?.({ ok: false });
+      cb?.({ ok: true, bannis: [...salon.bannis.entries()].map(([id, v]) => ({ userId: id, pseudo: v.pseudo, at: v.at })) });
     });
 
     socket.on("vocal:rtc-signal", ({ code, to, signal }) => {

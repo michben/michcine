@@ -4403,6 +4403,89 @@ app.get("/api/saison", (req, res) => {
   });
 });
 
+/* ---------- anniversaires : célébrités exclues + ajouts personnalisés (admin) --------------
+ * La liste des "célébrités nées ce jour" vient de Wikipédia (voir plus bas) et ne peut donc pas
+ * être éditée directement — mais l'admin doit pouvoir (voir la demande) retirer une personnalité
+ * qui ne l'intéresse pas (`exclus`), et surtout en AJOUTER d'autres de son cru — par exemple de
+ * vrais joueurs, pour leur faire un petit clin d'œil le jour de leur anniversaire, affiché au
+ * milieu des célébrités (`personnalises`). */
+const ANNIVERSAIRES_FILE = new URL("./anniversaires.json", import.meta.url);
+let anniversairesConfig = { personnalises: [], exclus: [] };
+const saveAnniversaires = () => sauver("anniversaires", anniversairesConfig, ANNIVERSAIRES_FILE);
+
+/** Compare deux noms sans tenir compte des accents, de la casse ni des espaces superflus, pour
+ *  qu'exclure "François Truffaut" fonctionne même tapé "francois truffaut" dans la console admin. */
+function normaliserNomAnniversaire(nom) {
+  return String(nom || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+}
+
+app.get("/api/admin/anniversaires", requireAdmin, (req, res) => {
+  res.json(anniversairesConfig);
+});
+
+app.post("/api/admin/anniversaires/personnalises", requireAdmin, (req, res) => {
+  const { nom, mois, jour, annee, description, photo, url } = req.body || {};
+  const m = Number(mois), j = Number(jour);
+  if (!nom || !String(nom).trim()) return res.status(400).json({ error: "CHAMPS_MANQUANTS" });
+  if (!Number.isInteger(m) || m < 1 || m > 12) return res.status(400).json({ error: "MOIS_INVALIDE" });
+  if (!Number.isInteger(j) || j < 1 || j > 31) return res.status(400).json({ error: "JOUR_INVALIDE" });
+  const id = anniversairesConfig.personnalises.reduce((max, a) => Math.max(max, a.id || 0), 0) + 1;
+  const entree = {
+    id, nom: String(nom).trim(), mois: m, jour: j,
+    annee: Number(annee) || null,
+    description: description ? String(description).trim().slice(0, 200) : "",
+    photo: photo ? String(photo).trim().slice(0, 300) : "",
+    url: url ? String(url).trim().slice(0, 300) : "",
+  };
+  anniversairesConfig.personnalises.push(entree);
+  saveAnniversaires();
+  res.json({ ok: true, entree });
+});
+
+app.put("/api/admin/anniversaires/personnalises/:id", requireAdmin, (req, res) => {
+  const entree = anniversairesConfig.personnalises.find((a) => a.id === Number(req.params.id));
+  if (!entree) return res.status(404).json({ error: "INTROUVABLE" });
+  const { nom, mois, jour, annee, description, photo, url } = req.body || {};
+  if (nom !== undefined) entree.nom = String(nom).trim();
+  if (mois !== undefined) { const m = Number(mois); if (Number.isInteger(m) && m >= 1 && m <= 12) entree.mois = m; }
+  if (jour !== undefined) { const j = Number(jour); if (Number.isInteger(j) && j >= 1 && j <= 31) entree.jour = j; }
+  if (annee !== undefined) entree.annee = Number(annee) || null;
+  if (description !== undefined) entree.description = String(description).trim().slice(0, 200);
+  if (photo !== undefined) entree.photo = String(photo).trim().slice(0, 300);
+  if (url !== undefined) entree.url = String(url).trim().slice(0, 300);
+  saveAnniversaires();
+  res.json({ ok: true, entree });
+});
+
+app.delete("/api/admin/anniversaires/personnalises/:id", requireAdmin, (req, res) => {
+  const avant = anniversairesConfig.personnalises.length;
+  anniversairesConfig.personnalises = anniversairesConfig.personnalises.filter((a) => a.id !== Number(req.params.id));
+  if (anniversairesConfig.personnalises.length === avant) return res.status(404).json({ error: "INTROUVABLE" });
+  saveAnniversaires();
+  res.json({ ok: true });
+});
+
+app.post("/api/admin/anniversaires/exclus", requireAdmin, (req, res) => {
+  const { nom } = req.body || {};
+  if (!nom || !String(nom).trim()) return res.status(400).json({ error: "CHAMPS_MANQUANTS" });
+  const cle = normaliserNomAnniversaire(nom);
+  if (anniversairesConfig.exclus.some((e) => normaliserNomAnniversaire(e.nom) === cle))
+    return res.status(409).json({ error: "DEJA_EXCLU" });
+  const id = anniversairesConfig.exclus.reduce((max, e) => Math.max(max, e.id || 0), 0) + 1;
+  const entree = { id, nom: String(nom).trim() };
+  anniversairesConfig.exclus.push(entree);
+  saveAnniversaires();
+  res.json({ ok: true, entree });
+});
+
+app.delete("/api/admin/anniversaires/exclus/:id", requireAdmin, (req, res) => {
+  const avant = anniversairesConfig.exclus.length;
+  anniversairesConfig.exclus = anniversairesConfig.exclus.filter((e) => e.id !== Number(req.params.id));
+  if (anniversairesConfig.exclus.length === avant) return res.status(404).json({ error: "INTROUVABLE" });
+  saveAnniversaires();
+  res.json({ ok: true });
+});
+
 app.get("/api/birthdays", async (req, res) => {
   try {
     let mm, dd;
@@ -4414,11 +4497,16 @@ app.get("/api/birthdays", async (req, res) => {
         mm = String(today.getMonth() + 1).padStart(2, '0');
         dd = String(today.getDate()).padStart(2, '0');
     }
-    const response = await fetch(`https://fr.wikipedia.org/api/rest_v1/feed/onthisday/births/${mm}/${dd}`);
-    if (!response.ok) return res.json({ actors: [] });
-    const data = await response.json();
-    
-    const actors = data.births.filter(b => {
+    // Une panne côté Wikipédia ne doit pas faire disparaître les ajouts personnalisés (voir plus
+    // bas) : on retombe simplement sur aucune célébrité plutôt que de tout arrêter net.
+    let data = { births: [] };
+    try {
+      const response = await fetch(`https://fr.wikipedia.org/api/rest_v1/feed/onthisday/births/${mm}/${dd}`);
+      if (response.ok) data = await response.json();
+    } catch {}
+
+    const exclus = new Set(anniversairesConfig.exclus.map((e) => normaliserNomAnniversaire(e.nom)));
+    const actors = (data.births || []).filter(b => {
       const text = (b.text || "").toLowerCase();
       return text.includes("acteur") || text.includes("actrice") || text.includes("réalisateur") || text.includes("cinéaste");
     }).map(b => {
@@ -4437,9 +4525,28 @@ app.get("/api/birthdays", async (req, res) => {
         thumbnail: page && page.thumbnail ? page.thumbnail.source : null,
         url,
       };
-    }).sort((a, b) => b.year - a.year);
-    
-    res.json({ actors: actors.slice(0, 15) });
+    })
+    // Retire les personnalités exclues par l'admin (voir la demande) — comparaison insensible aux
+    // accents/à la casse pour rester tolérant à la façon dont le nom a été tapé dans la console.
+    .filter((a) => !exclus.has(normaliserNomAnniversaire(a.name)))
+    .sort((a, b) => b.year - a.year);
+
+    // Ajouts personnalisés (voir la demande : un petit clin d'œil, par exemple pour un joueur) —
+    // ceux dont le jour/mois correspond à la date demandée, mis en tête pour bien se démarquer des
+    // célébrités et marqués `perso:true` pour un affichage distinct côté client.
+    const personnalises = anniversairesConfig.personnalises
+      .filter((p) => p.mois === Number(mm) && p.jour === Number(dd))
+      .map((p) => ({
+        name: p.nom,
+        year: p.annee || null,
+        age: p.annee ? (new Date().getFullYear() - p.annee) : null,
+        description: p.description || "Un petit clin d'œil de MichBen Ciné Quizz ! 🎉",
+        thumbnail: p.photo || null,
+        url: p.url || null,
+        perso: true,
+      }));
+
+    res.json({ actors: [...personnalises, ...actors.slice(0, Math.max(0, 15 - personnalises.length))] });
   } catch (err) {
     console.error("Erreur anniversaires:", err);
     res.json({ actors: [] });
@@ -6363,6 +6470,10 @@ if (!Array.isArray(suggestions)) suggestions = [];
 }
 citations = await charger("citations", CITATIONS_FILE, CITATIONS_DEFAUT);
 if (!Array.isArray(citations) || !citations.length) citations = CITATIONS_DEFAUT;
+anniversairesConfig = await charger("anniversaires", ANNIVERSAIRES_FILE, { personnalises: [], exclus: [] });
+if (!anniversairesConfig || typeof anniversairesConfig !== "object") anniversairesConfig = { personnalises: [], exclus: [] };
+if (!Array.isArray(anniversairesConfig.personnalises)) anniversairesConfig.personnalises = [];
+if (!Array.isArray(anniversairesConfig.exclus)) anniversairesConfig.exclus = [];
 questionBonusDuJour = await charger("questionBonusJour", QUESTION_BONUS_FILE, null);
 sondages = await charger("sondages", SONDAGES_FILE, []);
 if (!Array.isArray(sondages)) sondages = [];
