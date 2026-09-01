@@ -6,7 +6,7 @@
 <link rel="apple-touch-icon" href="/api/favicon">
 <meta name="theme-color" content="#0A0C16">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Salon vocal — MichBen Ciné Quizz</title>
+<title>Salon Audio — MichBen</title>
 <!--
   ==========================================================================
   PAGE INDÉPENDANTE DU SALON VOCAL (/vocal)
@@ -519,6 +519,16 @@
   .flyEmoji.flyDon .donLibelle{display:block;font-size:15px;color:var(--beam);font-weight:700;
     font-family:'Inter',sans-serif;margin-top:2px}
   .flyEmoji.flyDon small{color:var(--chalk)}
+  /* Compte à rebours "3, 2, 1…" avant qu'une vidéo démarre dans le salon vocal (voir demarreLe côté
+     serveur et vocalDemarrerCompteARebours) — repris du même esprit visuel que les réactions volantes
+     (.flyEmoji) ci-dessus, mais fixe et bien au centre pour qu'absolument personne ne le rate. */
+  #vocalCompteAReboursOverlay{position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:6px;pointer-events:none;background:rgba(10,9,14,.55)}
+  #vocalCompteAReboursOverlay .chiffre{font-size:min(28vw,140px);font-weight:800;line-height:1;
+    color:var(--beam);text-shadow:0 0 30px var(--beam);animation:vocalCompteAReboursPulse .9s ease}
+  #vocalCompteAReboursOverlay .libelle{font-size:16px;color:var(--chalk);font-family:'Inter',sans-serif;
+    text-align:center;padding:0 20px}
+  @keyframes vocalCompteAReboursPulse{ from{transform:scale(1.6);opacity:0} to{transform:scale(1);opacity:1} }
   @keyframes balade{
     0%{opacity:0;transform:translate(0,0) scale(.6) rotate(0deg)}
     12%{opacity:1;transform:translate(calc(var(--dx1) * .3),-40px) scale(calc(1.1 * var(--taille))) rotate(var(--rot1))}
@@ -995,14 +1005,21 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
 <body>
 <div class="wrap">
 
-  <a id="banner" href="/" title="Aller au jeu MichBen Ciné Quizz"><h1>MichBen <em>Salon vocal</em></h1></a>
+  <!-- Compte à rebours avant une vidéo dans le salon (voir vocalDemarrerCompteARebours) : hors de
+       toute section, au-dessus de tout, pour être visible quel que soit l'écran affiché. -->
+  <div id="vocalCompteAReboursOverlay" class="hidden">
+    <div class="chiffre" id="vocalCompteAReboursChiffre">3</div>
+    <div class="libelle" id="vocalCompteAReboursLibelle"></div>
+  </div>
+
+  <a id="banner" href="/" title="Aller à MichBen Ciné Quizz"><h1>🎧 Salon <em>Audio</em></h1></a>
 
   <!-- ===== Écran de connexion : affiché par défaut, masqué dès que /api/me confirme une session
        valide (voir le script de bas de page). Jamais d'accès anonyme : même système de comptes
        que le jeu (mêmes identifiants), voir /auth/x/login?retour=/vocal plus bas. ===== -->
   <div id="loginGate">
     <div class="card" style="max-width:460px;margin:40px auto 0;text-align:center">
-      <p class="tag">🎙️ Salon vocal — MichBen Ciné Quizz</p>
+      <p class="tag">🎧 Salon Audio</p>
       <h2 id="loginGateTitre">Connexion en cours…</h2>
       <p class="note" id="loginGateTexte">Vérification de votre session.</p>
       <div class="row" id="loginGateAction" hidden>
@@ -1064,39 +1081,36 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
           </div>
           <button class="ghost" id="btnVocalRadioAjouterToggle" style="margin-top:10px;font-size:13px">➕ Diffuser mon propre contenu (musique ou vidéo)</button>
           <div id="vocalRadioAjouter" class="hidden" style="margin-top:10px">
-            <p class="note" style="margin:0 0 4px"><b>🎵 Musique</b></p>
-            <p class="note" style="margin:0 0 8px">Un lien direct vers un fichier audio, ou un fichier envoyé depuis votre téléphone (mp3, wav, ogg, m4a — 8 Mo max). Rejoint la playlist commune et démarre aussitôt pour tout le salon.</p>
-            <input id="vocalRadioTitre" placeholder="Titre (facultatif)" maxlength="80" style="margin-bottom:8px">
-            <input id="vocalRadioLien" placeholder="https://exemple.com/musique.mp3" style="margin-bottom:8px">
+            <p class="note" style="margin:0 0 4px"><b>🎵🎬 Musique ou vidéo</b></p>
+            <p class="note" style="margin:0 0 8px">Un lien direct, ou un fichier envoyé depuis votre téléphone. Choisissez d'abord comment le diffuser :</p>
+            <div class="row" style="margin:0 0 10px;gap:18px">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;width:auto">
+                <input type="radio" name="vocalMediaType" id="vocalMediaTypeAudio" value="audio" checked style="width:auto">🎵 Audio</label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;width:auto">
+                <input type="radio" name="vocalMediaType" id="vocalMediaTypeVideo" value="video" style="width:auto">🎬 Vidéo</label>
+            </div>
+            <input id="vocalMediaTitre" placeholder="Titre (facultatif)" maxlength="80" style="margin-bottom:8px">
+            <input id="vocalMediaLien" placeholder="https://exemple.com/fichier" style="margin-bottom:8px">
             <p class="note" style="margin:4px 0;text-align:center;opacity:0.7">— ou —</p>
-            <input type="file" id="vocalRadioFichier" accept="audio/*" style="margin-bottom:8px">
-            <div class="row"><button id="btnVocalRadioEnvoyer">Diffuser ceci au salon</button></div>
-            <p class="feedback bad" id="vocalRadioAjouterMsg"></p>
+            <input type="file" id="vocalMediaFichier" style="margin-bottom:8px">
+            <div class="row"><button id="btnVocalMediaEnvoyer">Diffuser ceci au salon</button></div>
+            <p class="note" id="vocalMediaLimiteNote" style="margin:4px 0 0"></p>
+            <p class="feedback bad" id="vocalMediaAjouterMsg"></p>
 
-            <p class="note" style="margin:16px 0 4px;padding-top:12px;border-top:1px solid rgba(237,232,220,.12)"><b>🎬 Vidéo</b></p>
-            <p class="note" style="margin:0 0 8px">Cherchez une vidéo YouTube par mots-clés, collez un lien (YouTube ou fichier vidéo), ou envoyez un fichier depuis votre téléphone (mp4, webm, mov — 15 Mo max). L'écran apparaît ici même, pour tout le salon.</p>
-            <input id="vocalVideoTitre" placeholder="Titre (facultatif)" maxlength="80" style="margin-bottom:8px">
-
+            <p class="note" style="margin:16px 0 4px;padding-top:12px;border-top:1px solid rgba(237,232,220,.12)"><b>🔍 Vidéo YouTube</b></p>
             <div class="row" style="margin-bottom:8px">
               <input id="vocalYoutubeRechercheInput" placeholder="🔍 Chercher une vidéo YouTube…" style="flex:1">
               <button id="btnVocalYoutubeRechercheLancer" style="flex:0 0 auto">Chercher</button>
             </div>
             <p class="feedback" id="vocalYoutubeRechercheMsg" style="margin:0 0 8px"></p>
             <div id="vocalYoutubeRechercheListe"></div>
-
-            <p class="note" style="margin:8px 0;text-align:center;opacity:0.7">— ou collez un lien —</p>
+            <p class="note" style="margin:8px 0;text-align:center;opacity:0.7">— ou collez un lien YouTube —</p>
             <input id="vocalVideoYoutubeLien" placeholder="https://www.youtube.com/watch?v=..." style="margin-bottom:8px">
             <div class="row"><button id="btnVocalVideoYoutubeEnvoyer" class="ghost">▶️ Diffuser cette vidéo YouTube</button></div>
-            <p class="note" style="margin:8px 0;text-align:center;opacity:0.7">— ou —</p>
-            <input id="vocalVideoLien" placeholder="https://exemple.com/video.mp4" style="margin-bottom:8px">
-            <p class="note" style="margin:16px 0 4px;padding-top:12px;border-top:1px solid rgba(237,232,220,.12)"><b>🐦 Post X / Twitter</b></p>
-            <p class="note" style="margin:0 0 8px">Collez un lien vers un post X (twitter.com ou x.com) contenant une vidéo — il s'affiche ici même, pour tout le salon, exactement comme sur X. <b>Attention :</b> un « Space » (émission audio en direct de X) ne peut pas être diffusé ainsi — X ne permet à aucun site, y compris celui-ci, de faire écouter un Space autrement que depuis l'application ou le site X eux-mêmes. Seuls les posts (avec vidéo, image ou texte) fonctionnent ici.</p>
+
+            <p class="note" style="margin:16px 0 4px;padding-top:12px;border-top:1px solid rgba(237,232,220,.12)"><b>🐦 Post X</b></p>
             <input id="vocalTweetLien" placeholder="https://x.com/compte/status/…" style="margin-bottom:8px">
             <div class="row"><button id="btnVocalTweetEnvoyer" class="ghost">▶️ Diffuser ce post X</button></div>
-            <div class="row"><button id="btnVocalVideoLienEnvoyer" class="ghost">▶️ Diffuser ce lien vidéo</button></div>
-            <p class="note" style="margin:8px 0;text-align:center;opacity:0.7">— ou —</p>
-            <input type="file" id="vocalVideoFichier" accept="video/*" style="margin-bottom:8px">
-            <div class="row"><button id="btnVocalVideoFichierEnvoyer" class="ghost">▶️ Diffuser ce fichier vidéo</button></div>
             <p class="feedback bad" id="vocalVideoAjouterMsg"></p>
           </div>
         </div>
@@ -1153,7 +1167,11 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
       <div class="card">
         <p class="tag" style="margin:0 0 10px">💬 Discussion du salon</p>
         <div id="vocalChatMessages" class="vocalChatMessages"></div>
-        <div class="row" style="margin-top:10px">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:6px 0 0;font-size:13px;color:var(--muted)">
+          <input type="checkbox" id="vocalChatEnGrand" style="width:auto;margin:0">
+          😀 Envoyer en grand (comme un emoji) — court message uniquement
+        </label>
+        <div class="row" style="margin-top:6px">
           <input id="vocalChatInput" placeholder="Écrire un message…" maxlength="300" autocomplete="off" style="flex:1">
           <button id="btnVocalChatEnvoyer" style="flex:0 0 auto">➤</button>
         </div>
@@ -1855,7 +1873,7 @@ function vocalActiverMediaSession(){
   try {
     navigator.mediaSession.metadata = new MediaMetadata({
       title: "Salon vocal en cours",
-      artist: vocalSalonActuel?.titre || "MichBen Ciné Quizz",
+      artist: vocalSalonActuel?.titre || "MichBen Salon Audio",
     });
     navigator.mediaSession.playbackState = "playing";
     for (const action of ["play", "pause", "stop"]) {
@@ -2149,6 +2167,7 @@ $("btnVocalQuitter").onclick = () => {
   vocalSalonActuel = null;
   vocalMicOuvert = false;
   vocalDerniereSalleCode = null;
+  vocalAnnulerCompteARebours();
   $("vocalAudio").pause();
   vocalFermerToutesLesConnexions();
   afficherVocalListe();
@@ -2280,6 +2299,37 @@ function renderVocalSalon(salon){
   if (modo) renderConsoleVocal(salon, monRole);
 }
 
+/** Compte à rebours "3, 2, 1…" avant qu'une vidéo (lien/fichier, YouTube ou post X) démarre dans le
+ *  salon — voir demarreLe, mis dans le futur côté serveur pour les vidéos uniquement — jamais pour
+ *  l'audio, qui démarre toujours tout de suite. Bien visible à l'écran pour tout le monde, repris du
+ *  même esprit que les réactions volantes (.flyEmoji), mais fixe et au centre. Protégé contre les
+ *  répétitions : renderVocalSalon peut être appelé plusieurs fois pendant les 3 secondes (nouveau
+ *  message, nouveau participant…) sans jamais redémarrer le compte à rebours en cours tant que
+ *  demarreLe n'a pas changé. */
+let vocalCompteARebours = { demarreLe: null, timerId: null };
+function vocalAnnulerCompteARebours(){
+  if (vocalCompteARebours.timerId) clearInterval(vocalCompteARebours.timerId);
+  vocalCompteARebours = { demarreLe: null, timerId: null };
+  $("vocalCompteAReboursOverlay")?.classList.add("hidden");
+}
+function vocalDemarrerCompteARebours(demarreLe, titre, quandTermine){
+  if (vocalCompteARebours.demarreLe === demarreLe) return; // déjà en cours pour ce départ précis
+  vocalAnnulerCompteARebours();
+  vocalCompteARebours.demarreLe = demarreLe;
+  const overlay = $("vocalCompteAReboursOverlay"), chiffre = $("vocalCompteAReboursChiffre");
+  const tick = () => {
+    const restant = Math.ceil((demarreLe - Date.now()) / 1000);
+    if (restant <= 0) { vocalAnnulerCompteARebours(); quandTermine(); return; }
+    overlay.classList.remove("hidden");
+    chiffre.textContent = String(restant);
+    // Retirer/reposer l'animation force le navigateur à la rejouer à chaque chiffre affiché.
+    chiffre.style.animation = "none"; void chiffre.offsetWidth; chiffre.style.animation = "";
+    $("vocalCompteAReboursLibelle").textContent = `🎬 ${titre || "La vidéo"} va commencer…`;
+  };
+  tick();
+  vocalCompteARebours.timerId = setInterval(tick, 200);
+}
+
 /** Affiche, au même endroit (la carte "Radio & vidéo du salon"), le bon lecteur selon le type de
  *  contenu diffusé : <audio> pour une piste musicale, <video> pour un lien/fichier vidéo, ou le
  *  lecteur YouTube officiel pour une vidéo YouTube — un seul à la fois, synchronisé pour tout le
@@ -2291,6 +2341,7 @@ function vocalMajLectureRadioOuVideo(salon, modo){
   const media = salon.radio;
 
   if (!media){
+    vocalAnnulerCompteARebours();
     $("vocalRadioTexte").textContent = "Aucune piste diffusée pour l'instant.";
     audio.pause(); audio.style.display = "none"; audio.removeAttribute("src"); audio.dataset.url = "";
     video.pause(); video.style.display = "none"; video.removeAttribute("src"); video.dataset.url = "";
@@ -2301,6 +2352,21 @@ function vocalMajLectureRadioOuVideo(salon, modo){
     $("vocalRadioChoix").classList.toggle("hidden", !modo);
     return;
   }
+
+  // Vidéo (lien/fichier, YouTube ou post X) sur le point de démarrer : on affiche le compte à rebours
+  // et on n'affiche/charge rien du contenu lui-même tant qu'il n'est pas terminé (voir plus haut).
+  const estVideo = media.type === "youtube" || media.type === "video" || media.type === "twitter";
+  if (estVideo && media.demarreLe > Date.now()){
+    vocalDemarrerCompteARebours(media.demarreLe, media.titre, () => vocalMajLectureRadioOuVideo(salon, modo));
+    audio.pause(); audio.style.display = "none";
+    video.pause(); video.style.display = "none";
+    ytWrap.classList.add("hidden"); vocalArreterYoutube();
+    twWrap.classList.add("hidden"); vocalArreterTweet();
+    $("vocalRadioTexte").textContent = `⏳ ${media.titre} va démarrer…`;
+    $("vocalRadioChoix").classList.toggle("hidden", !modo);
+    return;
+  }
+  vocalAnnulerCompteARebours();
 
   // Un emoji différent selon le type de contenu (musique/vidéo/YouTube/post X — voir salon.radio.type
   // côté serveur), pour qu'un coup d'œil suffise à savoir ce qui est diffusé sans lire tout le titre.
@@ -2457,10 +2523,24 @@ function vocalArreterYoutube(){
 /** Discussion écrite propre au salon vocal : un historique court (voir VOCAL_CHAT_HISTORIQUE_MAX
  *  côté serveur) est renvoyé à chaque mise à jour du salon, pour qu'un participant qui rejoint en
  *  cours de route retrouve un peu de contexte plutôt que de partir d'une page blanche. */
+let vocalChatSalonCodeConnu = null;
+let vocalChatIdsConnus = new Set();
 function renderVocalChat(salon){
   const box = $("vocalChatMessages");
   if (!box) return;
   const messages = salon.chat || [];
+  // Détecte les nouveaux messages "envoyés en grand" (voir enGrand ci-dessus/côté serveur) pour les
+  // afficher volants façon réaction (afficherReactionVolante), en plus de la bulle normale ci-dessous
+  // — jamais en rejouant tout l'historique existant à la première connexion/un simple rafraîchissement.
+  if (vocalChatSalonCodeConnu !== salon.code) {
+    vocalChatSalonCodeConnu = salon.code;
+    vocalChatIdsConnus = new Set(messages.map(m => m.id));
+  } else {
+    for (const m of messages) {
+      if (m.enGrand && !vocalChatIdsConnus.has(m.id)) afficherReactionVolante(m.texte, m.pseudo, null);
+      vocalChatIdsConnus.add(m.id);
+    }
+  }
   const dejaEnBas = box.scrollTop + box.clientHeight >= box.scrollHeight - 20; // ne force pas le défilement si on relit plus haut
   box.innerHTML = messages.length
     ? messages.map(m => `<p>${m.photo ? `<img class="pfp" src="${esc(m.photo)}" alt="">` : `<span class="emoji">${esc(m.avatar || "🎬")}</span>`}
@@ -2481,8 +2561,11 @@ function envoyerMessageVocal(){
   const champ = $("vocalChatInput");
   const texte = champ.value.trim();
   if (!texte || !vocalSalonActuel) return;
+  const caseEnGrand = $("vocalChatEnGrand");
+  const enGrand = Boolean(caseEnGrand?.checked);
   champ.value = "";
-  socket.emit("vocal:chat-envoyer", { code: vocalSalonActuel.code, texte }, () => {});
+  if (caseEnGrand) caseEnGrand.checked = false;
+  socket.emit("vocal:chat-envoyer", { code: vocalSalonActuel.code, texte, enGrand }, () => {});
 }
 $("btnVocalChatEnvoyer").onclick = envoyerMessageVocal;
 $("vocalChatInput").addEventListener("keydown", (e) => { if (e.key === "Enter") envoyerMessageVocal(); });
@@ -2851,40 +2934,60 @@ function extraireExtensionFichier(fichier, parDefaut){
   return (CORRESPONDANCE_MIME_EXTENSION[sousType] || sousType || parDefaut).toLowerCase();
 }
 
-/** Ajout rapide d'une piste depuis le salon lui-même (lien direct ou fichier envoyé depuis le
- *  téléphone) — pas besoin de passer par la console admin. Réservé à l'hôte/aux cohôtes, comme
- *  la diffusion elle-même (voir estModoVocal côté serveur). Rejoint la playlist commune (voir
- *  /api/musique) et démarre aussitôt pour tout le salon, sans jamais passer par le micro — c'est
- *  cette lecture synchronisée en local sur chaque appareil (et non un relais audio par le micro,
- *  bien plus mauvais en qualité à cause du traitement vocal du navigateur) qui garde un son propre. */
+/** Diffusion de contenu personnel dans le salon (lien direct ou fichier envoyé depuis le téléphone)
+ *  — pas besoin de passer par la console admin. Réservé à l'hôte/aux cohôtes, comme la diffusion
+ *  elle-même (voir estModoVocal côté serveur). Un seul formulaire pour l'audio et la vidéo (à la
+ *  demande — plus deux formulaires quasi identiques à remplir séparément selon le type de contenu) :
+ *  le choix "Audio" rejoint la playlist commune (voir /api/musique) ; le choix "Vidéo" démarre
+ *  l'écran partagé — dans les deux cas, ça part pour tout le salon, sans jamais passer par le micro
+ *  (lecture synchronisée en local sur chaque appareil, bien meilleure qu'un relais audio par le
+ *  micro). */
+function vocalTypeMediaChoisi(){
+  return document.querySelector('input[name="vocalMediaType"]:checked')?.value === "video" ? "video" : "audio";
+}
+function vocalMajApparenceMedia(){
+  const video = vocalTypeMediaChoisi() === "video";
+  $("vocalMediaFichier").setAttribute("accept", video ? "video/*" : "audio/*");
+  $("vocalMediaLien").placeholder = video ? "https://exemple.com/video.mp4" : "https://exemple.com/musique.mp3";
+  $("vocalMediaLimiteNote").textContent = video
+    ? "Fichier vidéo : mp4, webm, mov, m4v, ogg, ogv — 15 Mo max."
+    : "Fichier audio : mp3, wav, ogg, opus, m4a, aac, flac, webm — 8 Mo max.";
+}
+document.querySelectorAll('input[name="vocalMediaType"]').forEach(r => r.addEventListener("change", vocalMajApparenceMedia));
+vocalMajApparenceMedia();
 $("btnVocalRadioAjouterToggle").onclick = () => $("vocalRadioAjouter").classList.toggle("hidden");
-$("btnVocalRadioEnvoyer").onclick = async () => {
+$("btnVocalMediaEnvoyer").onclick = async () => {
   if (!vocalSalonActuel) return;
-  const titre = $("vocalRadioTitre").value.trim();
-  const lien = $("vocalRadioLien").value.trim();
-  const fichierInput = $("vocalRadioFichier");
-  const msg = $("vocalRadioAjouterMsg");
+  const type = vocalTypeMediaChoisi();
+  const titre = $("vocalMediaTitre").value.trim();
+  const lien = $("vocalMediaLien").value.trim();
+  const fichierInput = $("vocalMediaFichier");
+  const msg = $("vocalMediaAjouterMsg");
   msg.textContent = "";
+  const limiteOctets = (type === "video" ? 15 : 8) * 1024 * 1024;
+  const evenement = type === "video" ? (fichierInput.files?.[0] ? "vocal:video-fichier" : "vocal:video-lien") : "vocal:radio-ajouter";
 
-  const envoyer = (payload) => emitAvecDelai("vocal:radio-ajouter", { code: vocalSalonActuel.code, titre, ...payload }, (res) => {
+  const envoyer = (payload) => emitAvecDelai(evenement, { code: vocalSalonActuel.code, titre, ...payload }, (res) => {
     if (!res?.ok) {
-      msg.textContent = res?.error === "FICHIER_TROP_LOURD" ? "Ce fichier dépasse 8 Mo — essayez un lien direct à la place."
+      msg.textContent = res?.error === "FICHIER_TROP_LOURD" ? `Ce fichier dépasse ${type === "video" ? 15 : 8} Mo — essayez un lien direct à la place.`
         : res?.error === "LIEN_INVALIDE" ? "Ce lien ne ressemble pas à une adresse valide (doit commencer par http:// ou https://)."
-        : res?.error === "FORMAT_NON_SUPPORTE" ? "Ce format de fichier audio n'est pas pris en charge. Formats acceptés : mp3, wav, ogg, opus, m4a, aac, flac, webm."
+        : res?.error === "FORMAT_NON_SUPPORTE" ? (type === "video"
+            ? "Ce format de vidéo n'est pas pris en charge. Formats acceptés : mp4, webm, mov, m4v, ogg, ogv — certaines vidéos filmées en HEVC (iPhone) ne se lisent pas non plus dans tous les navigateurs, même avec la bonne extension."
+            : "Ce format de fichier audio n'est pas pris en charge. Formats acceptés : mp3, wav, ogg, opus, m4a, aac, flac, webm.")
         : res?.error === "TIMEOUT" ? "Le serveur ne répond pas — vérifiez votre connexion et réessayez."
         : "Impossible de diffuser ce contenu.";
       return;
     }
     msg.textContent = "";
-    $("vocalRadioTitre").value = ""; $("vocalRadioLien").value = ""; fichierInput.value = "";
+    $("vocalMediaTitre").value = ""; $("vocalMediaLien").value = ""; fichierInput.value = "";
     $("vocalRadioAjouter").classList.add("hidden");
-    chargerMusiqueVocal();
+    if (type === "audio") chargerMusiqueVocal();
   });
 
   if (fichierInput.files?.[0]) {
     const fichier = fichierInput.files[0];
-    if (fichier.size > 8 * 1024 * 1024) { msg.textContent = "Ce fichier dépasse 8 Mo — essayez un lien direct à la place."; return; }
-    const ext = extraireExtensionFichier(fichier, "mp3");
+    if (fichier.size > limiteOctets) { msg.textContent = `Ce fichier dépasse ${type === "video" ? 15 : 8} Mo — essayez un lien direct à la place.`; return; }
+    const ext = extraireExtensionFichier(fichier, type === "video" ? "mp4" : "mp3");
     const lecteur = new FileReader();
     lecteur.onload = () => envoyer({ fichier: lecteur.result, ext });
     lecteur.onerror = () => { msg.textContent = "Impossible de lire ce fichier."; };
@@ -2896,9 +2999,8 @@ $("btnVocalRadioEnvoyer").onclick = async () => {
   }
 };
 
-/** Diffuse une vidéo YouTube, un lien vidéo direct, ou un fichier vidéo envoyé depuis le téléphone
- *  — même esprit que la musique juste au-dessus, mais chacun a sa propre validation (voir
- *  vocal:video-youtube/-lien/-fichier côté serveur) donc son propre message d'erreur. */
+/** Diffuse une vidéo YouTube (recherche ou lien) ou un post X — chacun a sa propre validation (voir
+ *  vocal:video-youtube/vocal:tweet-diffuser côté serveur) donc son propre message d'erreur. */
 function vocalMessageErreurVideo(res){
   return res?.error === "LIEN_YOUTUBE_INVALIDE" ? "Ce lien ne ressemble pas à une vidéo YouTube valide."
     : res?.error === "LIEN_TWEET_INVALIDE" ? "Ce lien ne ressemble pas à un post X/Twitter valide (doit être de la forme https://x.com/compte/status/1234…)."
@@ -2912,8 +3014,7 @@ function vocalMessageErreurVideo(res){
 function vocalApresEnvoiVideo(res, msg){
   if (!res?.ok) { msg.textContent = vocalMessageErreurVideo(res); return; }
   msg.textContent = "";
-  $("vocalVideoTitre").value = ""; $("vocalVideoYoutubeLien").value = "";
-  $("vocalVideoLien").value = ""; $("vocalVideoFichier").value = ""; $("vocalTweetLien").value = "";
+  $("vocalVideoYoutubeLien").value = ""; $("vocalTweetLien").value = "";
   $("vocalRadioAjouter").classList.add("hidden");
 }
 
@@ -2939,14 +3040,13 @@ function rendreResultatsRechercheYoutube(resultats){
     btn.onclick = () => {
       if (!vocalSalonActuel) return;
       const msg = $("vocalYoutubeRechercheMsg");
-      const titre = $("vocalVideoTitre").value.trim() || btn.dataset.videoTitre;
+      const titre = btn.dataset.videoTitre;
       msg.textContent = "Diffusion…";
       emitAvecDelai("vocal:video-youtube", { code: vocalSalonActuel.code, titre, url: `https://www.youtube.com/watch?v=${btn.dataset.videoId}` }, (res) => {
         if (!res?.ok) { msg.textContent = vocalMessageErreurVideo(res); return; }
         msg.textContent = "";
         liste.innerHTML = "";
         $("vocalYoutubeRechercheInput").value = "";
-        $("vocalVideoTitre").value = "";
         $("vocalRadioAjouter").classList.add("hidden");
       });
     };
@@ -2977,42 +3077,19 @@ $("vocalYoutubeRechercheInput").addEventListener("keydown", (e) => { if (e.key =
 
 $("btnVocalVideoYoutubeEnvoyer").onclick = () => {
   if (!vocalSalonActuel) return;
-  const titre = $("vocalVideoTitre").value.trim();
+  const titre = "";
   const url = $("vocalVideoYoutubeLien").value.trim();
   const msg = $("vocalVideoAjouterMsg");
   if (!url) { msg.textContent = "Indiquez un lien YouTube."; return; }
   emitAvecDelai("vocal:video-youtube", { code: vocalSalonActuel.code, titre, url }, (res) => vocalApresEnvoiVideo(res, msg));
 };
-$("btnVocalVideoLienEnvoyer").onclick = () => {
-  if (!vocalSalonActuel) return;
-  const titre = $("vocalVideoTitre").value.trim();
-  const url = $("vocalVideoLien").value.trim();
-  const msg = $("vocalVideoAjouterMsg");
-  if (!url) { msg.textContent = "Indiquez un lien vidéo."; return; }
-  emitAvecDelai("vocal:video-lien", { code: vocalSalonActuel.code, titre, url }, (res) => vocalApresEnvoiVideo(res, msg));
-};
 $("btnVocalTweetEnvoyer").onclick = () => {
   if (!vocalSalonActuel) return;
-  const titre = $("vocalVideoTitre").value.trim();
+  const titre = "";
   const url = $("vocalTweetLien").value.trim();
   const msg = $("vocalVideoAjouterMsg");
   if (!url) { msg.textContent = "Indiquez un lien vers un post X/Twitter."; return; }
   emitAvecDelai("vocal:tweet-diffuser", { code: vocalSalonActuel.code, titre, url }, (res) => vocalApresEnvoiVideo(res, msg));
-};
-$("btnVocalVideoFichierEnvoyer").onclick = () => {
-  if (!vocalSalonActuel) return;
-  const titre = $("vocalVideoTitre").value.trim();
-  const fichierInput = $("vocalVideoFichier");
-  const msg = $("vocalVideoAjouterMsg");
-  const fichier = fichierInput.files?.[0];
-  if (!fichier) { msg.textContent = "Choisissez un fichier vidéo."; return; }
-  if (fichier.size > 15 * 1024 * 1024) { msg.textContent = "Ce fichier dépasse 15 Mo — essayez un lien direct à la place."; return; }
-  const ext = extraireExtensionFichier(fichier, "mp4");
-  const lecteur = new FileReader();
-  lecteur.onload = () => emitAvecDelai("vocal:video-fichier", { code: vocalSalonActuel.code, titre, fichier: lecteur.result, ext },
-    (res) => vocalApresEnvoiVideo(res, msg));
-  lecteur.onerror = () => { msg.textContent = "Impossible de lire ce fichier."; };
-  lecteur.readAsDataURL(fichier);
 };
 
 socket.on("vocal:update", (salon) => {
@@ -3024,6 +3101,7 @@ socket.on("vocal:ferme", (info) => {
   vocalSalonActuel = null;
   vocalMicOuvert = false;
   vocalDerniereSalleCode = null;
+  vocalAnnulerCompteARebours();
   $("vocalAudio").pause();
   vocalFermerToutesLesConnexions();
   if (!$("vocal").classList.contains("hidden")){
@@ -3039,6 +3117,7 @@ socket.on("vocal:exclu", () => {
   vocalSalonActuel = null;
   vocalMicOuvert = false;
   vocalDerniereSalleCode = null;
+  vocalAnnulerCompteARebours();
   $("vocalAudio").pause();
   vocalFermerToutesLesConnexions();
   if (!$("vocal").classList.contains("hidden")){
@@ -3217,6 +3296,7 @@ function resynchroniserSalonVocal(){
     if (!res?.ok){
       vocalSalonActuel = null;
       vocalMicOuvert = false;
+      vocalAnnulerCompteARebours();
       $("vocalAudio").pause();
       vocalFermerToutesLesConnexions();
       majMicFlottant(pageAffichee);
@@ -3295,7 +3375,10 @@ fetch("/api/config").then(r => r.json()).then(c => {
   if (Number.isFinite(c.reactions?.dureeAffichageMs)) REACTION_DUREE_AFFICHAGE_MS = c.reactions.dureeAffichageMs;
   // Serveur TURN optionnel (voir server.js) : s'ajoute aux serveurs STUN pour les salons vocaux,
   // utile quand la connexion directe échoue sur un réseau très restrictif.
-  if (c.turn && c.turn.urls) VOCAL_ICE_SERVERS.push(c.turn);
+  // Toujours un tableau désormais (Cloudflare renvoie un STUN + un TURN en une seule fois) — on
+  // garde `c.turn.urls` en repli pour une ancienne forme (objet unique) au cas où.
+  if (Array.isArray(c.turn)) VOCAL_ICE_SERVERS.push(...c.turn);
+  else if (c.turn && c.turn.urls) VOCAL_ICE_SERVERS.push(c.turn);
 }).catch(() => {});
 
 /* Lien direct partagé (ex. /vocal?code=ZYLP, voir bouton "Copier le lien du salon") : le code est
@@ -3372,7 +3455,7 @@ const CODE_LIEN_PARTAGE_CLE = "vocalCodeLienPartage";
 
   // Pas connecté (401) ou erreur réseau : écran de connexion, jamais le salon.
   $("loginGateTitre").textContent = "Connectez-vous pour rejoindre le salon vocal";
-  $("loginGateTexte").textContent = "Ce salon vocal fait partie de MichBen Ciné Quizz — utilisez le même compte que pour le jeu (aucune inscription séparée nécessaire, mais une connexion reste obligatoire).";
+  $("loginGateTexte").textContent = "Ce Salon Audio utilise le même compte que MichBen Ciné Quizz (aucune inscription séparée nécessaire, mais une connexion reste obligatoire).";
   $("loginGateAction").hidden = false;
 })();
 

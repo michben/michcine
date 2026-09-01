@@ -544,15 +544,30 @@
 
     <div id="paneAudio" class="hidden">
       <div class="card">
-        <p class="tag">🔊 Serveur TURN (relais audio des salons vocaux)</p>
+        <p class="tag">🔊 Serveur TURN — Cloudflare (recommandé)</p>
         <p style="color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6">
           Sans serveur TURN, les salons vocaux utilisent uniquement un serveur STUN gratuit : cela
           suffit la plupart du temps, mais certains réseaux très restrictifs (wifi d'entreprise
           filtré, certaines box) empêchent malgré tout la connexion directe entre deux navigateurs
           — la personne concernée n'entend alors personne, même si les autres s'entendent bien
-          entre eux. Un serveur TURN relaie l'audio dans ce cas précis. Le fournisseur recommandé
-          (gratuit, sans carte bancaire, 500 Mo/mois) est <b>metered.ca</b> — voir le message
-          détaillé fourni avec cette mise à jour pour la marche à suivre pas à pas.
+          entre eux. Un serveur TURN relaie l'audio dans ce cas précis.
+          <b>Cloudflare</b> est désormais le fournisseur recommandé : <b>1000 Go gratuits par mois</b>
+          (largement plus que la plupart des concurrents gratuits, souvent limités à 500 Mo/mois),
+          renouvelés automatiquement — voir le message détaillé fourni avec cette mise à jour pour la
+          marche à suivre pas à pas (créer un compte Cloudflare, activer « Realtime TURN », copier
+          l'identifiant de clé et le jeton ci-dessous). Dès que ces deux champs sont remplis, ils
+          sont utilisés en priorité automatiquement — inutile de cocher quoi que ce soit d'autre.
+        </p>
+        <label>Identifiant de clé (Turn Key ID)</label>
+        <input id="audioCloudflareKeyId" placeholder="Copié depuis le tableau de bord Cloudflare">
+        <label style="margin-top:10px">Jeton d'API (API Token)</label>
+        <input id="audioCloudflareApiToken" type="password" placeholder="Copié depuis le tableau de bord Cloudflare">
+      </div>
+      <div class="card">
+        <p class="tag">🔊 Serveur TURN — autre fournisseur (repli manuel)</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6">
+          Uniquement utilisé si les champs Cloudflare ci-dessus sont vides. Pour un autre fournisseur
+          classique (comme metered.ca) fournissant un identifiant et un mot de passe fixes.
         </p>
         <label style="display:flex;align-items:center;gap:8px;margin:0 0 12px;cursor:pointer">
           <input type="checkbox" id="audioTurnActif" style="width:auto;cursor:pointer">
@@ -3106,6 +3121,8 @@ async function loadReports(){
     async function loadAudio(){
       await chargerReglages();
       const audio = reglages?.audio || {};
+      $("audioCloudflareKeyId").value = audio.cloudflareTurnKeyId || "";
+      $("audioCloudflareApiToken").value = audio.cloudflareTurnApiToken || "";
       $("audioTurnActif").checked = audio.turnActif === true;
       $("audioTurnUrl").value = audio.turnUrl || "";
       $("audioTurnUsername").value = audio.turnUsername || "";
@@ -3119,6 +3136,8 @@ async function loadReports(){
 
     $("btnAudioSave").onclick = async () => {
       const res = await api("/api/admin/audio", { method: "PUT", body: JSON.stringify({
+        cloudflareTurnKeyId: $("audioCloudflareKeyId").value,
+        cloudflareTurnApiToken: $("audioCloudflareApiToken").value,
         turnActif: $("audioTurnActif").checked,
         turnUrl: $("audioTurnUrl").value,
         turnUsername: $("audioTurnUsername").value,
