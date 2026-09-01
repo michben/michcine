@@ -211,6 +211,13 @@ const REGLAGES_DEFAUT = {
   // l'avenir sans avoir à ajouter de nouveaux réglages épars ailleurs.
   audio: {
     turnActif: false, turnUrl: "", turnUsername: "", turnCredential: "",
+    // Serveur TURN recommandé (voir obtenirIceServersCloudflare plus bas) : contrairement à
+    // turnUrl/turnUsername/turnCredential ci-dessus (un identifiant fixe, fourni une fois pour
+    // toutes par exemple par metered.ca), Cloudflare fonctionne avec une CLÉ (jamais transmise au
+    // navigateur) qui sert à fabriquer des identifiants TEMPORAIRES régulièrement renouvelés — plus
+    // sûr, et un forfait gratuit bien plus généreux (1000 Go/mois contre 500 Mo/mois chez la
+    // plupart des concurrents gratuits). Utilisé en priorité dès que ces deux champs sont remplis.
+    cloudflareTurnKeyId: "", cloudflareTurnApiToken: "",
     maxParticipantsVocal: 40, maxCohotesVocal: 3, fermetureGraceMinutes: 3,
     // Réglage par défaut appliqué à la CRÉATION d'un salon (l'hôte reste toujours libre de le
     // changer ensuite depuis sa propre console de modération) : à false, un auditeur doit passer
@@ -397,6 +404,11 @@ let empreinteAdmin = null;   // chargée au démarrage
 const TURN_URL = process.env.TURN_URL || "";
 const TURN_USERNAME = process.env.TURN_USERNAME || "";
 const TURN_CREDENTIAL = process.env.TURN_CREDENTIAL || "";
+// Voir REGLAGES.audio.cloudflareTurnKeyId/cloudflareTurnApiToken : même principe de valeur de
+// secours au tout premier démarrage que TURN_URL ci-dessus, pour permettre de les régler depuis
+// les variables d'environnement de Render plutôt que depuis la console admin, si préféré.
+const CLOUDFLARE_TURN_KEY_ID = process.env.CLOUDFLARE_TURN_KEY_ID || "";
+const CLOUDFLARE_TURN_API_TOKEN = process.env.CLOUDFLARE_TURN_API_TOKEN || "";
 
 const hacherAdmin = (mdp, sel = crypto.randomBytes(16).toString("hex")) =>
   `${sel}:${crypto.scryptSync(mdp, sel, 64).toString("hex")}`;
@@ -919,6 +931,18 @@ app.put("/api/admin/audio", requireAdmin, (req, res) => {
   if (typeof a.turnUrl === "string") REGLAGES.audio.turnUrl = a.turnUrl.trim().slice(0, 600);
   if (typeof a.turnUsername === "string") REGLAGES.audio.turnUsername = a.turnUsername.trim().slice(0, 120);
   if (typeof a.turnCredential === "string") REGLAGES.audio.turnCredential = a.turnCredential.trim().slice(0, 200);
+  // Cloudflare (recommandé, voir REGLAGES_DEFAUT.audio plus haut) : changer l'un ou l'autre de ces
+  // deux champs invalide immédiatement le cache d'identifiants temporaires en cours (voir
+  // obtenirIceServersCloudflare) pour qu'une clé corrigée reprenne effet tout de suite, sans
+  // attendre l'expiration naturelle du cache.
+  if (typeof a.cloudflareTurnKeyId === "string" && a.cloudflareTurnKeyId.trim().slice(0, 200) !== REGLAGES.audio.cloudflareTurnKeyId) {
+    REGLAGES.audio.cloudflareTurnKeyId = a.cloudflareTurnKeyId.trim().slice(0, 200);
+    cloudflareTurnCache = null;
+  }
+  if (typeof a.cloudflareTurnApiToken === "string" && a.cloudflareTurnApiToken.trim().slice(0, 400) !== REGLAGES.audio.cloudflareTurnApiToken) {
+    REGLAGES.audio.cloudflareTurnApiToken = a.cloudflareTurnApiToken.trim().slice(0, 400);
+    cloudflareTurnCache = null;
+  }
   REGLAGES.audio.maxParticipantsVocal = borneValeur(a.maxParticipantsVocal, 2, 200, REGLAGES.audio.maxParticipantsVocal);
   REGLAGES.audio.maxCohotesVocal = borneValeur(a.maxCohotesVocal, 1, 10, REGLAGES.audio.maxCohotesVocal);
   REGLAGES.audio.fermetureGraceMinutes = borneValeur(a.fermetureGraceMinutes, 1, 30, REGLAGES.audio.fermetureGraceMinutes);
@@ -4265,7 +4289,42 @@ app.get("/api/birthdays", async (req, res) => {
   }
 });
 
-app.get("/api/config", (_req, res) => res.json({
+/** Identifiants TURN Cloudflare, mis en cache en mémoire et renouvelés automatiquement bien avant
+ *  leur expiration — un identifiant Cloudflare est volontairement TEMPORAIRE (quelques heures),
+ *  contrairement à l'identifiant fixe d'un service comme metered.ca : on ne peut donc pas se
+ *  contenter de le lire depuis les réglages une fois pour toutes, il faut en refabriquer un
+ *  nouveau à la demande via l'API de Cloudflare (voir cloudflareTurnKeyId/cloudflareTurnApiToken).
+ *  `cloudflareTurnCache` est remis à `null` dès que l'admin change l'une de ces deux valeurs (voir
+ *  PUT /api/admin/audio) pour qu'une correction prenne effet immédiatement plutôt que de rester
+ *  bloquée sur d'anciens identifiants jusqu'à leur expiration naturelle. */
+let cloudflareTurnCache = null; // { iceServers, expireLe }
+const CLOUDFLARE_TURN_TTL_S = 6 * 60 * 60; // 6h : largement assez pour un salon vocal, renouvelé bien avant
+async function obtenirIceServersCloudflare() {
+  const keyId = REGLAGES.audio?.cloudflareTurnKeyId;
+  const apiToken = REGLAGES.audio?.cloudflareTurnApiToken;
+  if (!keyId || !apiToken) return null;
+  const maintenant = Date.now();
+  if (cloudflareTurnCache && cloudflareTurnCache.expireLe > maintenant) return cloudflareTurnCache.iceServers;
+  try {
+    const r = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${encodeURIComponent(keyId)}/credentials/generate-ice-servers`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ ttl: CLOUDFLARE_TURN_TTL_S }),
+    });
+    if (!r.ok) { console.error("Cloudflare TURN : identifiants refusés", r.status); return cloudflareTurnCache?.iceServers || null; }
+    const data = await r.json();
+    if (!Array.isArray(data.iceServers) || !data.iceServers.length) return cloudflareTurnCache?.iceServers || null;
+    // Marge de 5 minutes avant l'expiration réelle, pour ne jamais risquer de servir un identifiant
+    // qui expire en plein milieu d'un salon vocal déjà en cours de connexion.
+    cloudflareTurnCache = { iceServers: data.iceServers, expireLe: maintenant + (CLOUDFLARE_TURN_TTL_S - 300) * 1000 };
+    return cloudflareTurnCache.iceServers;
+  } catch (err) {
+    console.error("Cloudflare TURN : requête impossible", err.message);
+    return cloudflareTurnCache?.iceServers || null; // un identifiant périmé reste préférable à aucun
+  }
+}
+
+app.get("/api/config", async (_req, res) => res.json({
   tipUrl: CONFIG.TIP_URL, maxPlayers: CONFIG.MAX_PLAYERS, pointsParTicket: CONFIG.POINTS_PAR_TICKET, animationsAvancees: REGLAGES.animationsAvancees,
   afficherRadio: REGLAGES.afficherRadio,
   autoriserSpectateur: REGLAGES.autoriserSpectateur,
@@ -4273,14 +4332,19 @@ app.get("/api/config", (_req, res) => res.json({
   afficherClassementAccueil: REGLAGES.afficherClassementAccueil,
   theme: REGLAGES.theme,
   reactions: REGLAGES.reactions,
-  // Priorité au réglage fait depuis la console admin (onglet Audio) ; les variables d'environnement
-  // TURN_URL / TURN_USERNAME / TURN_CREDENTIAL ne servent plus que de valeur de secours au tout
-  // premier démarrage (voir l'initialisation de REGLAGES.audio plus bas dans ce fichier).
-  turn: (() => {
+  // Priorité à Cloudflare (voir obtenirIceServersCloudflare ci-dessus) dès qu'il est configuré —
+  // bien meilleur forfait gratuit. Sinon, réglage manuel fait depuis la console admin (onglet
+  // Audio) ; les variables d'environnement TURN_URL / TURN_USERNAME / TURN_CREDENTIAL ne servent
+  // plus que de valeur de secours au tout premier démarrage (voir plus bas dans ce fichier).
+  // Toujours envoyé sous forme de tableau (voir VOCAL_ICE_SERVERS côté client) — Cloudflare renvoie
+  // à la fois un serveur STUN et un serveur TURN en une seule fois, contrairement à l'ancien format.
+  turn: await (async () => {
+    const iceCloudflare = await obtenirIceServersCloudflare();
+    if (iceCloudflare) return iceCloudflare;
     if (!REGLAGES.audio?.turnActif || !REGLAGES.audio.turnUrl) return null;
     const urls = REGLAGES.audio.turnUrl.split(/[\n,]/).map((u) => u.trim()).filter(Boolean);
     if (!urls.length) return null;
-    return { urls: urls.length > 1 ? urls : urls[0], username: REGLAGES.audio.turnUsername, credential: REGLAGES.audio.turnCredential };
+    return [{ urls: urls.length > 1 ? urls : urls[0], username: REGLAGES.audio.turnUsername, credential: REGLAGES.audio.turnCredential }];
   })(),
   // Bouton teaser à côté du "?" (voir #btnLienExterne) : n'est envoyé au client que si l'admin l'a
   // activé et a bien renseigné un lien — sinon le bouton reste simplement masqué.
@@ -6183,6 +6247,10 @@ if (!REGLAGES.audio.turnUrl && TURN_URL) {
   REGLAGES.audio.turnUrl = TURN_URL;
   REGLAGES.audio.turnUsername = TURN_USERNAME;
   REGLAGES.audio.turnCredential = TURN_CREDENTIAL;
+}
+if (!REGLAGES.audio.cloudflareTurnKeyId && CLOUDFLARE_TURN_KEY_ID) {
+  REGLAGES.audio.cloudflareTurnKeyId = CLOUDFLARE_TURN_KEY_ID;
+  REGLAGES.audio.cloudflareTurnApiToken = CLOUDFLARE_TURN_API_TOKEN;
 }
 if (!REGLAGES.lienExterne || typeof REGLAGES.lienExterne !== "object")
   REGLAGES.lienExterne = structuredClone(REGLAGES_DEFAUT.lienExterne);

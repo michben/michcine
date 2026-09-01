@@ -35,6 +35,12 @@ export function creerModuleVocalSalon({
 }) {
   const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ"; // sans I, O, 0, 1 — ambigus à l'oral/à l'écrit
 
+  /** Délai (ms) entre le moment où une vidéo est choisie et le moment où elle démarre réellement
+   *  chez tout le monde : le temps d'afficher un compte à rebours "3, 2, 1…" bien visible à l'écran
+   *  (voir demarreLe plus bas et l'affichage côté client), pour que personne ne rate le début. Ne
+   *  s'applique qu'aux vidéos — la musique (audio) démarre toujours immédiatement. */
+  const COMPTE_A_REBOURS_VIDEO_MS = 3000;
+
   /** Reconnaît un lien YouTube sous ses formes les plus courantes et en extrait l'identifiant. */
   function extraireIdYoutube(url) {
     const s = String(url || "").trim();
@@ -529,8 +535,11 @@ export function creerModuleVocalSalon({
       const youtubeId = extraireIdYoutube(url);
       if (!youtubeId) return cb?.({ ok: false, error: "LIEN_YOUTUBE_INVALIDE" });
       salon.radio = {
+        // Une vidéo se lance après un compte à rebours (voir demarreLe et la note plus bas sur
+        // COMPTE_A_REBOURS_VIDEO_MS), affiché à tout le salon (contrairement à l'audio, immédiat) —
+        // pour que tout le monde ait le temps de regarder l'écran avant que ça commence.
         titre: String(titre || "").trim().slice(0, 80) || "Vidéo YouTube",
-        type: "youtube", youtubeId, demarreLe: Date.now(),
+        type: "youtube", youtubeId, demarreLe: Date.now() + COMPTE_A_REBOURS_VIDEO_MS,
       };
       diffuserVocal(salon);
       cb?.({ ok: true });
@@ -551,7 +560,7 @@ export function creerModuleVocalSalon({
       if (!tweetId) return cb?.({ ok: false, error: "LIEN_TWEET_INVALIDE" });
       salon.radio = {
         titre: String(titre || "").trim().slice(0, 80) || "Post X",
-        type: "twitter", tweetId, demarreLe: Date.now(),
+        type: "twitter", tweetId, demarreLe: Date.now() + COMPTE_A_REBOURS_VIDEO_MS,
       };
       diffuserVocal(salon);
       cb?.({ ok: true });
@@ -562,7 +571,7 @@ export function creerModuleVocalSalon({
       if (!salon || !estModoVocal(salon, user.id)) return cb?.({ ok: false });
       const lien = String(url || "").trim();
       if (!/^https?:\/\/\S+$/i.test(lien)) return cb?.({ ok: false, error: "LIEN_INVALIDE" });
-      salon.radio = { titre: String(titre || "").trim().slice(0, 80) || "Vidéo", type: "video", url: lien, demarreLe: Date.now() };
+      salon.radio = { titre: String(titre || "").trim().slice(0, 80) || "Vidéo", type: "video", url: lien, demarreLe: Date.now() + COMPTE_A_REBOURS_VIDEO_MS };
       diffuserVocal(salon);
       cb?.({ ok: true });
     });
@@ -582,13 +591,13 @@ export function creerModuleVocalSalon({
       catch { return cb?.({ ok: false, error: "ECRITURE_IMPOSSIBLE" }); }
       salon.radio = {
         titre: String(titre || "").trim().slice(0, 80) || "Vidéo",
-        type: "video", url: `/videos/${nomFichier}`, demarreLe: Date.now(),
+        type: "video", url: `/videos/${nomFichier}`, demarreLe: Date.now() + COMPTE_A_REBOURS_VIDEO_MS,
       };
       diffuserVocal(salon);
       cb?.({ ok: true });
     });
 
-    socket.on("vocal:chat-envoyer", ({ code, texte, filmTmdbId, filmTitre, filmPoster }, cb) => {
+    socket.on("vocal:chat-envoyer", ({ code, texte, filmTmdbId, filmTitre, filmPoster, enGrand }, cb) => {
       const salon = salonsVocaux.get(code);
       const moi = salon?.participants.get(user.id);
       if (!salon || !moi) return cb?.({ ok: false });
@@ -597,11 +606,17 @@ export function creerModuleVocalSalon({
       if (!message) return cb?.({ ok: false, error: "VIDE" });
 
       const idTmdb = /^\d+$/.test(String(filmTmdbId || "")) ? String(filmTmdbId) : null;
+      // "Envoyer comme emoji" (voir demande) : le message s'affiche en grand, façon réaction volante,
+      // en plus d'apparaître normalement dans l'historique du chat — jamais à la place, pour qu'on
+      // puisse toujours le retrouver écrit si on a raté l'animation. Réservé aux tout petits messages
+      // (quelques emojis/caractères) pour ne pas afficher un pavé de texte géant à l'écran.
+      const messageEnGrand = enGrand === true && message.length <= 12;
 
       salon.chat = salon.chat || [];
       salon.chat.push({
         id: crypto.randomUUID(), userId: user.id, pseudo: user.pseudo,
         avatar: user.avatar, photo: user.photo || null, texte: message, at: Date.now(),
+        ...(messageEnGrand ? { enGrand: true } : {}),
         ...(idTmdb ? { filmTmdbId: idTmdb, filmTitre: String(filmTitre || "").trim().slice(0, 120),
                        filmPoster: String(filmPoster || "").trim().slice(0, 300) || null } : {}),
       });
