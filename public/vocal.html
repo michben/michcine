@@ -865,8 +865,8 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
 #popReactionPrivee h3{font-family:'Anton',sans-serif;text-transform:uppercase;letter-spacing:.03em;
   font-size:17px;margin:8px 0 4px;font-weight:400;color:var(--chalk)}
 #popReactionPrivee .emojis{justify-content:center}
-#btnVocalMute,#btnVocalMicFlottant,#btnVocalLeverMain{transition:background .15s ease,color .15s ease}
-#btnVocalMute.micro-ouvert,#btnVocalMicFlottant.micro-ouvert,#btnVocalLeverMain.micro-ouvert{background:var(--teal);color:var(--onbright);border-color:var(--teal)}
+#btnVocalMute,#btnVocalMicFlottant,#btnVocalLeverMain,#btnVocalRadioBoucle{transition:background .15s ease,color .15s ease}
+#btnVocalMute.micro-ouvert,#btnVocalMicFlottant.micro-ouvert,#btnVocalLeverMain.micro-ouvert,#btnVocalRadioBoucle.micro-ouvert{background:var(--teal);color:var(--onbright);border-color:var(--teal)}
 #vocalDemandesListe .urowVocal,#vocalConsoleParticipants .urowVocal{display:flex;align-items:center;gap:10px;
   padding:10px 0;border-top:1px solid rgba(237,232,220,.1);flex-wrap:wrap}
 #vocalDemandesListe .urowVocal .qui,#vocalConsoleParticipants .urowVocal .qui{display:flex;align-items:center;gap:8px;flex:1 1 140px}
@@ -1065,7 +1065,10 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
       <div class="card" id="vocalRadioCard">
         <p class="tag" style="margin:0 0 8px">📻 Radio & vidéo du salon</p>
         <p class="note" id="vocalRadioTexte" style="margin:0 0 10px">Aucune piste diffusée pour l'instant.</p>
-        <audio id="vocalAudio" style="width:100%;display:none" controls></audio>
+        <audio id="vocalAudio" style="width:100%;display:none" controls controlsList="nodownload noplaybackrate"></audio>
+        <div class="row hidden" id="vocalRadioBoucleRow" style="margin:6px 0 0">
+          <button id="btnVocalRadioBoucle" class="ghost">🔁 Lire en boucle</button>
+        </div>
         <video id="vocalVideo" style="width:100%;display:none;border-radius:10px;background:var(--ink)" controls playsinline></video>
         <div id="vocalYoutubeWrap" class="hidden" style="position:relative;width:100%;padding-top:56.25%;border-radius:10px;overflow:hidden;background:var(--ink)">
           <div id="vocalYoutubePlayer" style="position:absolute;inset:0;width:100%;height:100%"></div>
@@ -2307,6 +2310,11 @@ function renderVocalSalon(salon){
  *  message, nouveau participant…) sans jamais redémarrer le compte à rebours en cours tant que
  *  demarreLe n'a pas changé. */
 let vocalCompteARebours = { demarreLe: null, timerId: null };
+/** Dès qu'une vidéo démarre vraiment (jamais pour l'audio/la musique, voir la demande), on fait
+ *  remonter tout le monde jusqu'à la carte "Radio & vidéo" pour que personne n'ait à chercher où
+ *  regarder — repéré par demarreLe pour ne défiler qu'une seule fois par nouvelle vidéo, jamais à
+ *  chaque nouveau rendu pendant qu'elle est déjà en cours (nouveau message, nouveau participant…). */
+let vocalDerniereVideoDefilee = null;
 function vocalAnnulerCompteARebours(){
   if (vocalCompteARebours.timerId) clearInterval(vocalCompteARebours.timerId);
   vocalCompteARebours = { demarreLe: null, timerId: null };
@@ -2349,6 +2357,7 @@ function vocalMajLectureRadioOuVideo(salon, modo){
     vocalArreterYoutube();
     twWrap.classList.add("hidden");
     vocalArreterTweet();
+    $("vocalRadioBoucleRow").classList.add("hidden");
     $("vocalRadioChoix").classList.toggle("hidden", !modo);
     return;
   }
@@ -2362,11 +2371,19 @@ function vocalMajLectureRadioOuVideo(salon, modo){
     video.pause(); video.style.display = "none";
     ytWrap.classList.add("hidden"); vocalArreterYoutube();
     twWrap.classList.add("hidden"); vocalArreterTweet();
+    $("vocalRadioBoucleRow").classList.add("hidden");
     $("vocalRadioTexte").textContent = `⏳ ${media.titre} va démarrer…`;
     $("vocalRadioChoix").classList.toggle("hidden", !modo);
     return;
   }
   vocalAnnulerCompteARebours();
+
+  // La vidéo démarre réellement (jamais l'audio — inutile pour de la musique/un simple son) : on
+  // fait remonter tout le monde jusqu'au lecteur, une seule fois pour cette diffusion précise.
+  if (estVideo && vocalDerniereVideoDefilee !== media.demarreLe) {
+    vocalDerniereVideoDefilee = media.demarreLe;
+    $("vocalRadioCard")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   // Un emoji différent selon le type de contenu (musique/vidéo/YouTube/post X — voir salon.radio.type
   // côté serveur), pour qu'un coup d'œil suffise à savoir ce qui est diffusé sans lire tout le titre.
@@ -2379,6 +2396,7 @@ function vocalMajLectureRadioOuVideo(salon, modo){
     twWrap.classList.add("hidden");
     vocalArreterTweet();
     ytWrap.classList.remove("hidden");
+    $("vocalRadioBoucleRow").classList.add("hidden");
     vocalChargerYoutube(media.youtubeId, media.demarreLe);
   } else if (media.type === "twitter"){
     audio.pause(); audio.style.display = "none";
@@ -2386,6 +2404,7 @@ function vocalMajLectureRadioOuVideo(salon, modo){
     ytWrap.classList.add("hidden");
     vocalArreterYoutube();
     twWrap.classList.remove("hidden");
+    $("vocalRadioBoucleRow").classList.add("hidden");
     vocalChargerTweet(media.tweetId);
   } else if (media.type === "video"){
     ytWrap.classList.add("hidden");
@@ -2394,6 +2413,7 @@ function vocalMajLectureRadioOuVideo(salon, modo){
     vocalArreterTweet();
     audio.pause(); audio.style.display = "none";
     video.style.display = "";
+    $("vocalRadioBoucleRow").classList.add("hidden");
     vocalSyncMedia(video, media, modo);
   } else {
     ytWrap.classList.add("hidden");
@@ -2402,6 +2422,11 @@ function vocalMajLectureRadioOuVideo(salon, modo){
     vocalArreterTweet();
     video.pause(); video.style.display = "none";
     audio.style.display = "";
+    // Lire en boucle (voir la demande) : réservé à l'audio/la musique, contrôlé par l'hôte/les
+    // cohôtes pour tout le salon (comme le reste de la diffusion), voir vocal:radio-boucle.
+    $("vocalRadioBoucleRow").classList.toggle("hidden", !modo);
+    $("btnVocalRadioBoucle").textContent = media.boucle ? "🔁 Boucle activée" : "🔁 Lire en boucle";
+    $("btnVocalRadioBoucle").classList.toggle("micro-ouvert", Boolean(media.boucle));
     vocalSyncMedia(audio, media, modo);
   }
   $("vocalRadioChoix").classList.toggle("hidden", !modo);
@@ -2435,6 +2460,9 @@ function vocalArreterTweet(){
  *  côté serveur) — factorisé ici car radio et vidéo (lien/fichier) suivent exactement le même
  *  principe : chaque appareil charge le même contenu et se resynchronise tout seul. */
 function vocalSyncMedia(el, media, modo){
+  // Lecture en boucle (voir btnVocalRadioBoucle, réservé à l'audio) : appliquée à chaque rendu, pas
+  // seulement au premier chargement, pour rester à jour dès que l'hôte/un cohôte la bascule.
+  el.loop = Boolean(media.boucle);
   if (el.dataset.url !== media.url){
     el.src = media.url;
     el.dataset.url = media.url;
@@ -2523,24 +2551,10 @@ function vocalArreterYoutube(){
 /** Discussion écrite propre au salon vocal : un historique court (voir VOCAL_CHAT_HISTORIQUE_MAX
  *  côté serveur) est renvoyé à chaque mise à jour du salon, pour qu'un participant qui rejoint en
  *  cours de route retrouve un peu de contexte plutôt que de partir d'une page blanche. */
-let vocalChatSalonCodeConnu = null;
-let vocalChatIdsConnus = new Set();
 function renderVocalChat(salon){
   const box = $("vocalChatMessages");
   if (!box) return;
   const messages = salon.chat || [];
-  // Détecte les nouveaux messages "envoyés en grand" (voir enGrand ci-dessus/côté serveur) pour les
-  // afficher volants façon réaction (afficherReactionVolante), en plus de la bulle normale ci-dessous
-  // — jamais en rejouant tout l'historique existant à la première connexion/un simple rafraîchissement.
-  if (vocalChatSalonCodeConnu !== salon.code) {
-    vocalChatSalonCodeConnu = salon.code;
-    vocalChatIdsConnus = new Set(messages.map(m => m.id));
-  } else {
-    for (const m of messages) {
-      if (m.enGrand && !vocalChatIdsConnus.has(m.id)) afficherReactionVolante(m.texte, m.pseudo, null);
-      vocalChatIdsConnus.add(m.id);
-    }
-  }
   const dejaEnBas = box.scrollTop + box.clientHeight >= box.scrollHeight - 20; // ne force pas le défilement si on relit plus haut
   box.innerHTML = messages.length
     ? messages.map(m => `<p>${m.photo ? `<img class="pfp" src="${esc(m.photo)}" alt="">` : `<span class="emoji">${esc(m.avatar || "🎬")}</span>`}
@@ -2562,9 +2576,13 @@ function envoyerMessageVocal(){
   const texte = champ.value.trim();
   if (!texte || !vocalSalonActuel) return;
   const caseEnGrand = $("vocalChatEnGrand");
-  const enGrand = Boolean(caseEnGrand?.checked);
+  const enGrand = Boolean(caseEnGrand?.checked) && texte.length <= 12;
   champ.value = "";
   if (caseEnGrand) caseEnGrand.checked = false;
+  // "Envoyer en grand" (voir demande) : un simple affichage volant, jamais ajouté au fil du tchat
+  // (voir vocal:chat-envoyer côté serveur, qui ne le renvoie qu'aux autres) — l'expéditeur le voit
+  // donc tout de suite lui-même ici, sans attendre l'aller-retour serveur, comme pour une réaction.
+  if (enGrand) afficherReactionVolante(texte, me?.pseudo, null);
   socket.emit("vocal:chat-envoyer", { code: vocalSalonActuel.code, texte, enGrand }, () => {});
 }
 $("btnVocalChatEnvoyer").onclick = envoyerMessageVocal;
@@ -2576,6 +2594,9 @@ $("vocalChatInput").addEventListener("keydown", (e) => { if (e.key === "Enter") 
  *  que la barre de partie ci-dessus (voir construireBarreReactions). */
 construireBarreReactions("vocalEmojiBar", "vocal:reaction", () => vocalSalonActuel?.code);
 socket.on("vocal:reaction", ({ emoji, pseudo, photo }) => afficherReactionVolante(emoji, pseudo, photo));
+// Message de tchat "envoyé en grand" (voir envoyerMessageVocal) : reçu par tout le monde SAUF
+// l'expéditeur (qui l'a déjà affiché lui-même, voir plus haut) — jamais ajouté au fil écrit.
+socket.on("vocal:message-en-grand", ({ texte, pseudo }) => afficherReactionVolante(texte, pseudo, null));
 
 /** Menu d'emoji privé, ouvert en cliquant sur la photo de profil d'un participant du salon vocal
  *  (voir renderVocalSalon, où le clic est câblé) : contrairement à la barre de réactions ci-dessus
@@ -2914,6 +2935,12 @@ $("btnVocalRadioArreter").onclick = () => {
   if (!vocalSalonActuel) return;
   socket.emit("vocal:radio", { code: vocalSalonActuel.code, pisteId: null }, () => {});
 };
+/** Bascule la lecture en boucle du morceau en cours (voir la demande — réservé à l'audio/la
+ *  musique) : contrôlé par l'hôte/les cohôtes pour tout le salon, comme le reste de la diffusion. */
+$("btnVocalRadioBoucle").onclick = () => {
+  if (!vocalSalonActuel) return;
+  socket.emit("vocal:radio-boucle", { code: vocalSalonActuel.code }, () => {});
+};
 
 /** Devine l'extension d'un fichier envoyé depuis le téléphone : d'abord depuis son nom, et
  *  seulement si celui-ci n'en contient aucune (arrive avec certains partages) depuis son vrai type
@@ -2950,7 +2977,7 @@ function vocalMajApparenceMedia(){
   $("vocalMediaFichier").setAttribute("accept", video ? "video/*" : "audio/*");
   $("vocalMediaLien").placeholder = video ? "https://exemple.com/video.mp4" : "https://exemple.com/musique.mp3";
   $("vocalMediaLimiteNote").textContent = video
-    ? "Fichier vidéo : mp4, webm, mov, m4v, ogg, ogv — 15 Mo max."
+    ? "Fichier vidéo : mp4, webm, mov, m4v, ogg, ogv — 160 Mo max."
     : "Fichier audio : mp3, wav, ogg, opus, m4a, aac, flac, webm — 8 Mo max.";
 }
 document.querySelectorAll('input[name="vocalMediaType"]').forEach(r => r.addEventListener("change", vocalMajApparenceMedia));
@@ -2964,12 +2991,12 @@ $("btnVocalMediaEnvoyer").onclick = async () => {
   const fichierInput = $("vocalMediaFichier");
   const msg = $("vocalMediaAjouterMsg");
   msg.textContent = "";
-  const limiteOctets = (type === "video" ? 15 : 8) * 1024 * 1024;
+  const limiteOctets = (type === "video" ? 160 : 8) * 1024 * 1024;
   const evenement = type === "video" ? (fichierInput.files?.[0] ? "vocal:video-fichier" : "vocal:video-lien") : "vocal:radio-ajouter";
 
   const envoyer = (payload) => emitAvecDelai(evenement, { code: vocalSalonActuel.code, titre, ...payload }, (res) => {
     if (!res?.ok) {
-      msg.textContent = res?.error === "FICHIER_TROP_LOURD" ? `Ce fichier dépasse ${type === "video" ? 15 : 8} Mo — essayez un lien direct à la place.`
+      msg.textContent = res?.error === "FICHIER_TROP_LOURD" ? `Ce fichier dépasse ${type === "video" ? 160 : 8} Mo — essayez un lien direct à la place.`
         : res?.error === "LIEN_INVALIDE" ? "Ce lien ne ressemble pas à une adresse valide (doit commencer par http:// ou https://)."
         : res?.error === "FORMAT_NON_SUPPORTE" ? (type === "video"
             ? "Ce format de vidéo n'est pas pris en charge. Formats acceptés : mp4, webm, mov, m4v, ogg, ogv — certaines vidéos filmées en HEVC (iPhone) ne se lisent pas non plus dans tous les navigateurs, même avec la bonne extension."
@@ -2986,7 +3013,7 @@ $("btnVocalMediaEnvoyer").onclick = async () => {
 
   if (fichierInput.files?.[0]) {
     const fichier = fichierInput.files[0];
-    if (fichier.size > limiteOctets) { msg.textContent = `Ce fichier dépasse ${type === "video" ? 15 : 8} Mo — essayez un lien direct à la place.`; return; }
+    if (fichier.size > limiteOctets) { msg.textContent = `Ce fichier dépasse ${type === "video" ? 160 : 8} Mo — essayez un lien direct à la place.`; return; }
     const ext = extraireExtensionFichier(fichier, type === "video" ? "mp4" : "mp3");
     const lecteur = new FileReader();
     lecteur.onload = () => envoyer({ fichier: lecteur.result, ext });
@@ -3005,7 +3032,7 @@ function vocalMessageErreurVideo(res){
   return res?.error === "LIEN_YOUTUBE_INVALIDE" ? "Ce lien ne ressemble pas à une vidéo YouTube valide."
     : res?.error === "LIEN_TWEET_INVALIDE" ? "Ce lien ne ressemble pas à un post X/Twitter valide (doit être de la forme https://x.com/compte/status/1234…)."
     : res?.error === "LIEN_INVALIDE" ? "Ce lien ne ressemble pas à une adresse valide (doit commencer par http:// ou https://)."
-    : res?.error === "FICHIER_TROP_LOURD" ? "Ce fichier dépasse 15 Mo — essayez un lien direct à la place."
+    : res?.error === "FICHIER_TROP_LOURD" ? "Ce fichier dépasse 160 Mo — essayez un lien direct à la place."
     : res?.error === "FORMAT_NON_SUPPORTE" ? "Ce format de vidéo n'est pas pris en charge. Formats acceptés : mp4, webm, mov, m4v, ogg, ogv — certaines vidéos filmées en HEVC (iPhone) ne se lisent pas non plus dans tous les navigateurs, même avec la bonne extension."
     : res?.error === "FICHIER_INVALIDE" ? "Impossible de lire ce fichier."
     : res?.error === "TIMEOUT" ? "Le serveur ne répond pas — vérifiez votre connexion et réessayez."
