@@ -830,9 +830,13 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
 .vocalParticipant .vocalAvatarWrap .emoji{font-size:30px;width:52px;height:52px;border-radius:50%;
   background:var(--card);display:flex;align-items:center;justify-content:center}
 /* L'anneau qui pulse autour de la photo quand la personne "parle" (aucun son réel transmis,
-   juste l'indicateur visuel demandé — façon talkie-walkie). */
+   juste l'indicateur visuel demandé — façon talkie-walkie). Désactivé par défaut (voir la demande :
+   jugé trop perturbant), réactivable depuis la console admin (onglet Audio) avec sa propre vitesse
+   — voir VOCAL_EFFET_PAROLE_ACTIF/--vocalParoleVitesse et carteParticipantVocal ci-dessous. Tant que
+   l'effet est désactivé, la classe .parle n'est même pas posée sur la carte : ce sélecteur ne
+   s'applique donc jamais. */
 .vocalParticipant.parle .vocalAvatarWrap::before{content:"";position:absolute;inset:-6px;border-radius:50%;
-  border:3px solid var(--teal);animation:vocalPulse 1.1s ease-out infinite}
+  border:3px solid var(--teal);animation:vocalPulse var(--vocalParoleVitesse,1.1s) ease-out infinite}
 .vocalParticipant.parle .vocalAvatarWrap::after{content:"";position:absolute;inset:-6px;border-radius:50%;
   border:3px solid var(--teal);opacity:.6}
 @keyframes vocalPulse{
@@ -1436,6 +1440,12 @@ function raisonDepuisMediaError(err){
  *  au chargement de /api/config si l'administration en a changé (voir plus bas). */
 let EMOJIS_REACTION = ["👋", "❤️", "💯", "🩸", "😂", "😭"];
 let REACTION_DUREE_AFFICHAGE_MS = 2300;
+// Anneau lumineux "qui parle" dans un salon vocal (voir carteParticipantVocal et REGLAGES.audio
+// côté serveur) : désactivé par défaut (voir la demande — jugé trop perturbant), réactivable
+// depuis la console admin (onglet Audio) avec sa propre vitesse. Valeurs de départ ci-dessous,
+// remplacées dès que /api/config répond, comme pour les réactions ci-dessus.
+let VOCAL_EFFET_PAROLE_ACTIF = false;
+let VOCAL_EFFET_PAROLE_VITESSE_MS = 1100;
 
 /** (Re)construit la barre d'emojis de réaction du salon vocal et rebranche ses clics — repris de
  *  index.html à l'identique, hormis l'appel pour la barre #emojiBar de la partie de quiz (qui
@@ -2185,7 +2195,10 @@ async function chargerMusiqueVocal(){
 }
 
 function carteParticipantVocal(p){
-  const parle = p.parle ? " parle" : "";
+  // L'anneau "qui parle" (voir VOCAL_EFFET_PAROLE_ACTIF, réglé depuis la console admin) : jugé trop
+  // perturbant, désactivé par défaut — la classe .parle n'est même pas posée quand c'est le cas,
+  // pour ne laisser aucune trace de l'effet dans le DOM.
+  const parle = (p.parle && VOCAL_EFFET_PAROLE_ACTIF) ? " parle" : "";
   const photo = p.photo
     ? `<img class="pfp" src="${esc(p.photo)}" alt="" onerror="this.remove()">`
     : `<div class="emoji">${esc(p.avatar || "🎬")}</div>`;
@@ -3400,6 +3413,12 @@ fetch("/api/config").then(r => r.json()).then(c => {
     construireBarreReactions("vocalEmojiBar", "vocal:reaction", () => vocalSalonActuel?.code);
   }
   if (Number.isFinite(c.reactions?.dureeAffichageMs)) REACTION_DUREE_AFFICHAGE_MS = c.reactions.dureeAffichageMs;
+  // Anneau "qui parle" (voir carteParticipantVocal) : réglage admin, désactivé par défaut. La
+  // vitesse est posée en variable CSS (voir @keyframes vocalPulse) pour s'appliquer sans avoir à
+  // toucher la feuille de style depuis le JS à chaque nouvelle carte participant.
+  VOCAL_EFFET_PAROLE_ACTIF = c.effetParole?.actif === true;
+  if (Number.isFinite(c.effetParole?.vitesseMs)) VOCAL_EFFET_PAROLE_VITESSE_MS = c.effetParole.vitesseMs;
+  document.documentElement.style.setProperty("--vocalParoleVitesse", `${VOCAL_EFFET_PAROLE_VITESSE_MS}ms`);
   // Serveur TURN optionnel (voir server.js) : s'ajoute aux serveurs STUN pour les salons vocaux,
   // utile quand la connexion directe échoue sur un réseau très restrictif.
   // Toujours un tableau désormais (Cloudflare renvoie un STUN + un TURN en une seule fois) — on
