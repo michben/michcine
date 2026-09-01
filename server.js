@@ -228,6 +228,14 @@ const REGLAGES_DEFAUT = {
     // par une demande explicite ("✋ Demander à intervenir") que l'hôte et les cohôtes reçoivent
     // et valident avant de pouvoir parler — jamais de montée automatique sans validation.
     monteeLibreParDefaut: false,
+    // Anneau lumineux qui pulse autour de la photo de qui parle dans un salon vocal (voir la classe
+    // CSS .vocalParticipant.parle côté client) : désactivé par défaut (jugé trop perturbant à
+    // l'usage), mais réactivable ici, avec sa propre vitesse — plus la valeur (en millisecondes) est
+    // basse, plus le mouvement de l'anneau est rapide. Bornée à l'enregistrement (voir PUT
+    // /api/admin/audio) entre 400 ms (très rapide) et 3000 ms (très lent) pour éviter un réglage
+    // illisible dans un sens comme dans l'autre.
+    effetParoleActif: false,
+    effetParoleVitesseMs: 1100,
   },
   // Petit bouton teaser (voir #btnLienExterne côté client, à côté du bouton "?") pour annoncer un
   // lien externe — pensé au départ pour un futur second jeu développé séparément. `cible` est une
@@ -951,6 +959,8 @@ app.put("/api/admin/audio", requireAdmin, (req, res) => {
   REGLAGES.audio.maxCohotesVocal = borneValeur(a.maxCohotesVocal, 1, 10, REGLAGES.audio.maxCohotesVocal);
   REGLAGES.audio.fermetureGraceMinutes = borneValeur(a.fermetureGraceMinutes, 1, 30, REGLAGES.audio.fermetureGraceMinutes);
   if (typeof a.monteeLibreParDefaut === "boolean") REGLAGES.audio.monteeLibreParDefaut = a.monteeLibreParDefaut;
+  if (typeof a.effetParoleActif === "boolean") REGLAGES.audio.effetParoleActif = a.effetParoleActif;
+  REGLAGES.audio.effetParoleVitesseMs = borneValeur(a.effetParoleVitesseMs, 400, 3000, REGLAGES.audio.effetParoleVitesseMs);
   sauver("reglages", REGLAGES);
   res.json({ ok: true, audio: REGLAGES.audio });
 });
@@ -4336,6 +4346,12 @@ app.get("/api/config", async (_req, res) => res.json({
   afficherClassementAccueil: REGLAGES.afficherClassementAccueil,
   theme: REGLAGES.theme,
   reactions: REGLAGES.reactions,
+  // Anneau lumineux "qui parle" dans un salon vocal (voir REGLAGES_DEFAUT.audio et la console
+  // admin, onglet Audio) : désactivé par défaut, réactivable avec sa propre vitesse.
+  effetParole: {
+    actif: REGLAGES.audio?.effetParoleActif === true,
+    vitesseMs: REGLAGES.audio?.effetParoleVitesseMs ?? 1100,
+  },
   // Priorité à Cloudflare (voir obtenirIceServersCloudflare ci-dessus) dès qu'il est configuré —
   // bien meilleur forfait gratuit. Sinon, réglage manuel fait depuis la console admin (onglet
   // Audio) ; les variables d'environnement TURN_URL / TURN_USERNAME / TURN_CREDENTIAL ne servent
