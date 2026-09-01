@@ -365,6 +365,28 @@
         <p class="tag" id="citCount">Citations enregistrées</p>
         <div id="citList"></div>
       </div>
+      <div class="card">
+        <p class="tag">🎁 Question bonus du jour</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6">
+          Une citation du stock ci-dessus, tirée automatiquement chaque jour à minuit — la même
+          pour tout le monde, avec 3 mauvais titres de films en plus du bon. Le bouton apparaît sur
+          l'accueil des joueurs. Un seul essai par jour et par joueur : trouver le bon film dans le
+          délai ci-dessous rapporte la récompense ; une mauvaise réponse, une réponse hors délai, ou
+          l'absence de réponse attend simplement le lendemain.
+        </p>
+        <label style="display:flex;align-items:center;gap:8px;margin:0 0 12px;cursor:pointer">
+          <input type="checkbox" id="qbActif" style="width:auto;cursor:pointer">
+          Activer la question bonus du jour
+        </label>
+        <label>Récompense si trouvée à temps (tickets)</label>
+        <input id="qbRecompense" type="number" min="10" max="100000">
+        <label style="margin-top:10px">Délai pour répondre (secondes)</label>
+        <input id="qbDelai" type="number" min="10" max="180">
+        <div class="row" style="margin-top:14px">
+          <button id="btnQbSave">Enregistrer</button>
+        </div>
+        <p class="msg" id="qbMsg"></p>
+      </div>
     </div>
 
     <div id="paneRoue" class="hidden">
@@ -607,19 +629,6 @@
           intervenir ») que l'hôte et les cohôtes reçoivent et valident. Ce réglage ne fixe que la
           valeur de départ — l'hôte d'un salon reste toujours libre de l'activer ou de le désactiver
           ensuite depuis sa propre console de modération, salon par salon.
-        </p>
-        <label style="display:flex;align-items:center;gap:8px;margin-top:14px;cursor:pointer">
-          <input type="checkbox" id="audioEffetParoleActif" style="width:auto;cursor:pointer">
-          Anneau lumineux autour de la photo de qui parle
-        </label>
-        <p style="color:var(--muted);font-size:13px;margin:8px 0 0;line-height:1.6">
-          Décoché par défaut (jugé trop perturbant à l'usage). Aucun son n'est réellement transmis —
-          c'est un simple indicateur visuel, façon talkie-walkie.
-        </p>
-        <label style="margin-top:10px">Vitesse de l'effet (millisecondes)</label>
-        <input id="audioEffetParoleVitesse" type="number" min="400" max="3000" step="100">
-        <p style="color:var(--muted);font-size:13px;margin:4px 0 0;line-height:1.6">
-          Entre 400 (très rapide) et 3000 (très lent). 1100 correspond au réglage d'origine.
         </p>
         <div class="row" style="margin-top:14px">
           <button id="btnAudioSave">Enregistrer l'espace audio</button>
@@ -2020,6 +2029,9 @@ async function chargerReglages(){
   $("rAutoriserSpectateur").checked = reglages.autoriserSpectateur === true;
   $("rAfficherAmisEnLigne").checked = reglages.afficherAmisEnLigne !== false;
   $("rAfficherClassementAccueil").checked = reglages.afficherClassementAccueil !== false;
+  $("qbActif").checked = reglages.questionBonusActif !== false;
+  $("qbRecompense").value = reglages.questionBonusRecompenseTickets ?? 150;
+  $("qbDelai").value = reglages.questionBonusDelaiSecondes ?? 45;
   renderLogosCinema();
 
   reactionsEmojisActuels = Array.isArray(reglages.reactions?.emojis) && reglages.reactions.emojis.length
@@ -2085,6 +2097,9 @@ async function enregistrerReglages(msgEl){
   corps.autoriserSpectateur = $("rAutoriserSpectateur").checked;
   corps.afficherAmisEnLigne = $("rAfficherAmisEnLigne").checked;
   corps.afficherClassementAccueil = $("rAfficherClassementAccueil").checked;
+  corps.questionBonusActif = $("qbActif").checked;
+  corps.questionBonusRecompenseTickets = Number($("qbRecompense").value);
+  corps.questionBonusDelaiSecondes = Number($("qbDelai").value);
   corps.reactions = { emojis: reactionsEmojisActuels, dureeAffichageMs: Number($("rReactionDuree").value) };
   corps.liensEpingles = liensEpinglesActuels;
   Object.assign(corps.indices.poster, {
@@ -2636,7 +2651,12 @@ async function loadReports(){
       if (!res.ok){ $("citCount").textContent = "Citations — échec du chargement."; return; }
       citations = await res.json();
       renderCitations();
+      // La question bonus du jour vit dans REGLAGES, chargé ici plutôt que sur son propre onglet
+      // puisque son seul réglage (au-delà d'activer/désactiver et la récompense) est le stock de
+      // citations ci-dessus.
+      await chargerReglages();
     }
+    $("btnQbSave").onclick = () => enregistrerReglages($("qbMsg"));
 
     function renderCitations() {
       $("citCount").textContent = `${citations.length} citation${citations.length>1?"s":""} — niveau 1 = la première, niveau 2 = la deuxième, etc.`;
@@ -3144,8 +3164,6 @@ async function loadReports(){
       $("audioMaxCohotes").value = audio.maxCohotesVocal ?? 3;
       $("audioGraceMinutes").value = audio.fermetureGraceMinutes ?? 3;
       $("audioMonteeLibreDefaut").checked = audio.monteeLibreParDefaut === true;
-      $("audioEffetParoleActif").checked = audio.effetParoleActif === true;
-      $("audioEffetParoleVitesse").value = audio.effetParoleVitesseMs ?? 1100;
       chargerSalonsVocauxAdmin();
     }
 
@@ -3161,8 +3179,6 @@ async function loadReports(){
         maxCohotesVocal: Number($("audioMaxCohotes").value),
         fermetureGraceMinutes: Number($("audioGraceMinutes").value),
         monteeLibreParDefaut: $("audioMonteeLibreDefaut").checked,
-        effetParoleActif: $("audioEffetParoleActif").checked,
-        effetParoleVitesseMs: Number($("audioEffetParoleVitesse").value),
       })});
       $("audioMsg").textContent = res.ok
         ? "Espace audio enregistré."
