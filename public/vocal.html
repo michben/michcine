@@ -1026,6 +1026,16 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
     <div class="libelle" id="vocalCompteAReboursLibelle"></div>
   </div>
 
+  <!-- MICRO FLOTTANT (voir la demande : toujours accessible, même en scrollant) : position fixe à
+       l'écran, donc jamais perdu de vue en descendant dans une page de salon qui peut être longue
+       (radio/vidéo, tchat, liste des participants, console de modération...) — contrairement au
+       bouton du haut du salon (#btnVocalMute), qui lui défile normalement avec la page. Voir
+       majMicFlottant(), appelée depuis renderVocalSalon(). -->
+  <button class="hidden" id="btnVocalMicFlottant"
+    style="position:fixed;left:14px;bottom:14px;z-index:999;padding:10px 16px;border-radius:999px;
+    box-shadow:0 6px 18px rgba(0,0,0,.35);font-size:14px"
+    title="Couper ou activer votre micro du salon vocal">🎙️</button>
+
   <a id="banner" href="/" title="Aller à MichBen Ciné Quizz"><h1>🎧 Salon <em>Audio</em></h1></a>
 
   <!-- ===== Écran de connexion : affiché par défaut, masqué dès que /api/me confirme une session
@@ -1385,7 +1395,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
  * Un élément absent ne doit jamais interrompre tout le script : on renvoie un objet inerte plutôt
  * que null. Repris tel quel de index.html — précieux ici aussi, puisque cette page ne reprend
  * volontairement qu'une partie du balisage du jeu (des boutons/éléments du jeu principal auxquels
- * du code copié fait encore référence, ex. #btnVocalMicFlottant, n'existent simplement pas ici).
+ * du code copié fait encore référence n'existent simplement pas ici).
  */
 const INERTE = {
   textContent: "", innerHTML: "", value: "", src: "", disabled: false,
@@ -3027,18 +3037,20 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 /** Affiche/masque et met à jour le micro flottant : visible dès qu'un rôle capable de parler
- *  (hôte/cohôte/intervenant) est actif dans un salon vocal, sur n'importe quelle page SAUF l'écran
- *  du salon lui-même (où #btnVocalMute fait déjà exactement le même travail — jamais les deux à la
- *  fois). Appelée à chaque changement de page (show()) et à chaque mise à jour du salon
- *  (renderVocalSalon()), pour ne jamais afficher un état de micro périmé. */
+ *  (hôte/cohôte/intervenant) est actif dans un salon vocal — y compris sur l'écran du salon
+ *  lui-même (voir la demande : toujours accessible, même en scrollant). #btnVocalMute (en haut du
+ *  salon) et #btnVocalMicFlottant (position fixe, jamais perdu de vue) peuvent donc désormais être
+ *  visibles tous les deux en même temps — un doublon assumé, préférable à un micro injoignable une
+ *  fois qu'on a descendu la page (radio/vidéo, tchat, participants...). Appelée à chaque
+ *  changement de page (show()) et à chaque mise à jour du salon (renderVocalSalon()), pour ne
+ *  jamais afficher un état de micro périmé. */
 function majMicFlottant(pageActuelle){
   const btn = $("btnVocalMicFlottant");
   if (!btn) return;
   const moi = vocalSalonActuel?.participants?.find?.(p => p.userId === me?.id);
   const peutParler = Boolean(moi && ["hote","cohote","intervenant"].includes(moi.role));
-  const visible = peutParler && pageActuelle !== "vocal";
-  btn.classList.toggle("hidden", !visible);
-  if (!visible) return;
+  btn.classList.toggle("hidden", !peutParler);
+  if (!peutParler) return;
   btn.textContent = vocalMicOuvert ? "🔴 Micro ouvert" : "🎙️ Micro coupé";
   btn.classList.toggle("micro-ouvert", vocalMicOuvert);
 }

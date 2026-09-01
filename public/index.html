@@ -7475,18 +7475,20 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 /** Affiche/masque et met à jour le micro flottant : visible dès qu'un rôle capable de parler
- *  (hôte/cohôte/intervenant) est actif dans un salon vocal, sur n'importe quelle page SAUF l'écran
- *  du salon lui-même (où #btnVocalMute fait déjà exactement le même travail — jamais les deux à la
- *  fois). Appelée à chaque changement de page (show()) et à chaque mise à jour du salon
- *  (renderVocalSalon()), pour ne jamais afficher un état de micro périmé. */
+ *  (hôte/cohôte/intervenant) est actif dans un salon vocal — y compris sur l'écran du salon
+ *  lui-même (voir la demande : toujours accessible, même en scrollant). #btnVocalMute (en haut du
+ *  salon) et #btnVocalMicFlottant (position fixe, jamais perdu de vue) peuvent donc désormais être
+ *  visibles tous les deux en même temps sur cet écran — un doublon assumé, préférable à un micro
+ *  injoignable une fois qu'on a descendu la page (radio/vidéo, tchat, participants...). Appelée à
+ *  chaque changement de page (show()) et à chaque mise à jour du salon (renderVocalSalon()), pour
+ *  ne jamais afficher un état de micro périmé. */
 function majMicFlottant(pageActuelle){
   const btn = $("btnVocalMicFlottant");
   if (!btn) return;
   const moi = vocalSalonActuel?.participants?.find?.(p => p.userId === me?.id);
   const peutParler = Boolean(moi && ["hote","cohote","intervenant"].includes(moi.role));
-  const visible = peutParler && pageActuelle !== "vocal";
-  btn.classList.toggle("hidden", !visible);
-  if (!visible) return;
+  btn.classList.toggle("hidden", !peutParler);
+  if (!peutParler) return;
   btn.textContent = vocalMicOuvert ? "🔴 Micro ouvert" : "🎙️ Micro coupé";
   btn.classList.toggle("micro-ouvert", vocalMicOuvert);
 }
@@ -9460,11 +9462,12 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
          seulement pendant une partie et seulement s'il y a au moins un spectateur. -->
     <div id="spectateursCorner" class="hidden"></div>
 
-    <!-- MICRO FLOTTANT : reste visible sur n'importe quelle page (menu, partie, profil…) tant que le
-         joueur a un rôle qui parle (hôte/cohôte/intervenant) dans un salon vocal actif — pour couper
-         ou réactiver son micro sans devoir revenir sur l'écran du salon. Masqué sur l'écran du salon
-         lui-même (le bouton #btnVocalMute y suffit déjà) pour ne jamais afficher les deux à la fois.
-         Voir majMicFlottant(), appelée depuis show() et renderVocalSalon(). -->
+    <!-- MICRO FLOTTANT : reste visible sur n'importe quelle page (menu, partie, profil, salon vocal
+         lui-même…) tant que le joueur a un rôle qui parle (hôte/cohôte/intervenant) dans un salon
+         vocal actif — position fixe à l'écran (voir le style ci-dessous), donc toujours accessible
+         même en scrollant dans une longue page de salon (voir la demande), sans devoir remonter
+         jusqu'au bouton #btnVocalMute en haut de l'écran. Voir majMicFlottant(), appelée depuis
+         show() et renderVocalSalon(). -->
     <button class="hidden" id="btnVocalMicFlottant"
       style="position:fixed;left:14px;bottom:14px;z-index:999;padding:10px 16px;border-radius:999px;
       box-shadow:0 6px 18px rgba(0,0,0,.35);font-size:14px"
