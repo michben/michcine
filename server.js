@@ -37,7 +37,9 @@ import { mountAuth, mountPasserelleEntrante, userFromCookie, addRankedPoints,
          roueTirsPubCycle, roueProchaineRechargePub,
          pepiteSlotsBonus, accorderPepiteSlotBonus,
          tourRoueBonusDisponible, accorderTourRoueBonus, consommerTourRoueBonus,
-         marquerCoffreReclame, nombreComptes } from "./auth-x.js";
+         marquerCoffreReclame, nombreComptes,
+         questionBonusEtat, questionBonusCommencer, questionBonusEnregistrerResultat,
+         questionBonusResoudreSiExpiree } from "./auth-x.js";
 
 const app = express();
 app.use(express.json({ limit: '25mb' })); // Limite augmentée pour l'upload d'images, de musique et de courtes vidéos
@@ -187,6 +189,14 @@ const REGLAGES_DEFAUT = {
     emojis: ["👋", "❤️", "💯", "🩸", "😂", "😭"],
     dureeAffichageMs: 2300,
   },
+  // Question bonus du jour (console admin, onglet Citations) : une citation du stock de citations
+  // ci-dessus, tirée automatiquement une fois par jour (la même pour tout le monde), avec 3 mauvais
+  // titres de films en plus du bon — voir assurerQuestionBonusDuJour et /api/question-bonus. Un
+  // seul essai par jour et par joueur : répondre juste ET à temps rapporte la récompense ci-dessous,
+  // tout le reste (mauvaise réponse, hors délai, ou pas de réponse du tout) attend le lendemain.
+  questionBonusActif: true,
+  questionBonusRecompenseTickets: 150,
+  questionBonusDelaiSecondes: 45,
   // Personnalisation graphique (console admin, onglet « Apparence ») : couleurs, polices et
   // ordre des modules du menu principal. Vide par défaut = apparence d'origine inchangée.
   theme: {
@@ -228,14 +238,6 @@ const REGLAGES_DEFAUT = {
     // par une demande explicite ("✋ Demander à intervenir") que l'hôte et les cohôtes reçoivent
     // et valident avant de pouvoir parler — jamais de montée automatique sans validation.
     monteeLibreParDefaut: false,
-    // Anneau lumineux qui pulse autour de la photo de qui parle dans un salon vocal (voir la classe
-    // CSS .vocalParticipant.parle côté client) : désactivé par défaut (jugé trop perturbant à
-    // l'usage), mais réactivable ici, avec sa propre vitesse — plus la valeur (en millisecondes) est
-    // basse, plus le mouvement de l'anneau est rapide. Bornée à l'enregistrement (voir PUT
-    // /api/admin/audio) entre 400 ms (très rapide) et 3000 ms (très lent) pour éviter un réglage
-    // illisible dans un sens comme dans l'autre.
-    effetParoleActif: false,
-    effetParoleVitesseMs: 1100,
   },
   // Petit bouton teaser (voir #btnLienExterne côté client, à côté du bouton "?") pour annoncer un
   // lien externe — pensé au départ pour un futur second jeu développé séparément. `cible` est une
@@ -761,6 +763,9 @@ app.put("/api/admin/reglages", requireAdmin, (req, res) => {
   if (typeof r.autoriserSpectateur === "boolean") REGLAGES.autoriserSpectateur = r.autoriserSpectateur;
   if (typeof r.afficherAmisEnLigne === "boolean") REGLAGES.afficherAmisEnLigne = r.afficherAmisEnLigne;
   if (typeof r.afficherClassementAccueil === "boolean") REGLAGES.afficherClassementAccueil = r.afficherClassementAccueil;
+  if (typeof r.questionBonusActif === "boolean") REGLAGES.questionBonusActif = r.questionBonusActif;
+  REGLAGES.questionBonusRecompenseTickets = borne(r.questionBonusRecompenseTickets, 10, 100000, REGLAGES.questionBonusRecompenseTickets);
+  REGLAGES.questionBonusDelaiSecondes = borne(r.questionBonusDelaiSecondes, 10, 180, REGLAGES.questionBonusDelaiSecondes);
   REGLAGES.ratioFilmsFrancaisMax = borne(r.ratioFilmsFrancaisMax, 0, 100, REGLAGES.ratioFilmsFrancaisMax);
   REGLAGES.animationsAvancees = r.animationsAvancees !== false;
   REGLAGES.coeurs           = borne(r.coeurs, 1, 10, REGLAGES.coeurs);
@@ -959,8 +964,6 @@ app.put("/api/admin/audio", requireAdmin, (req, res) => {
   REGLAGES.audio.maxCohotesVocal = borneValeur(a.maxCohotesVocal, 1, 10, REGLAGES.audio.maxCohotesVocal);
   REGLAGES.audio.fermetureGraceMinutes = borneValeur(a.fermetureGraceMinutes, 1, 30, REGLAGES.audio.fermetureGraceMinutes);
   if (typeof a.monteeLibreParDefaut === "boolean") REGLAGES.audio.monteeLibreParDefaut = a.monteeLibreParDefaut;
-  if (typeof a.effetParoleActif === "boolean") REGLAGES.audio.effetParoleActif = a.effetParoleActif;
-  REGLAGES.audio.effetParoleVitesseMs = borneValeur(a.effetParoleVitesseMs, 400, 3000, REGLAGES.audio.effetParoleVitesseMs);
   sauver("reglages", REGLAGES);
   res.json({ ok: true, audio: REGLAGES.audio });
 });
@@ -2641,6 +2644,146 @@ app.delete("/api/admin/citations/:id", requireAdmin, (req, res) => {
     if (citations.length === avant) return res.status(404).json({ error: "INTROUVABLE" });
     saveCitations();
     res.json({ ok: true });
+});
+
+/* ------------------------------------------------------------------ */
+/* Question bonus du jour                                              */
+/*                                                                      */
+/* Un bouton visible sur l'accueil : une citation du stock ci-dessus,   */
+/* tirée automatiquement (la même pour tout le monde, nouvelle chaque   */
+/* jour à minuit), avec 3 mauvais titres de films en plus du bon. Un    */
+/* seul essai par jour et par joueur, verrouillé dès qu'il commence :   */
+/* répondre juste ET dans le délai imparti rapporte des tickets ; tout  */
+/* le reste (mauvaise réponse, hors délai, ou pas de réponse) attend    */
+/* simplement le lendemain — jamais plus d'un jour à patienter.         */
+/* ------------------------------------------------------------------ */
+
+/** Jour courant pour la question bonus (minuit à minuit, heure du serveur) — plus simple que la
+ *  « journée de roue » (18h, heure de Paris, propre au fonctionnement de la roue) : une question
+ *  qui change une fois par jour à minuit suffit très bien ici. */
+function jourQuestionBonus(date = new Date()) {
+  return date.toISOString().slice(0, 10);
+}
+
+/** Mélange de Fisher-Yates, sans modifier le tableau reçu. */
+function melangerTableau(liste) {
+  const t = [...liste];
+  for (let i = t.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [t[i], t[j]] = [t[j], t[i]];
+  }
+  return t;
+}
+
+const QUESTION_BONUS_FILE = new URL("./question-bonus.json", import.meta.url);
+// { jour, citationId, texte, annee, propositions:[...4 titres mélangés...], bonneReponse }
+let questionBonusDuJour = null;
+const saveQuestionBonusDuJour = () => sauver("questionBonusJour", questionBonusDuJour, QUESTION_BONUS_FILE);
+
+/** Garantit la question du jour : tirée une seule fois par jour (minuit), la même pour tout le
+ *  monde, et surtout stable toute la journée — jamais recalculée à chaque appel, sinon les 4
+ *  propositions changeraient (d'ordre, voire de contenu) entre le moment où un joueur commence et
+ *  celui où il répond. */
+function assurerQuestionBonusDuJour() {
+  const jour = jourQuestionBonus();
+  if (questionBonusDuJour && questionBonusDuJour.jour === jour) return questionBonusDuJour;
+  if (!citations.length) { questionBonusDuJour = null; return null; }
+  // Un nombre qui avance d'un cran chaque jour (jours écoulés depuis l'epoch), pris modulo le stock
+  // de citations : tout le monde voit la même question le même jour, et elle change automatiquement
+  // à minuit sans jamais se répéter tant que le stock reste assez fourni.
+  const indexJour = Math.floor(Date.now() / 86400000);
+  const citation = citations[indexJour % citations.length];
+  const autresFilms = [...new Set(citations.map((c) => c.film).filter((f) => f && f !== citation.film))];
+  const distracteurs = melangerTableau(autresFilms).slice(0, 3);
+  // Filet de sécurité si le stock de citations n'a pas assez de titres différents (moins de 4) :
+  // complète avec des titres du catalogue de films, pour ne jamais bloquer la question faute de choix.
+  if (distracteurs.length < 3) {
+    for (const m of melangerTableau(movies)) {
+      if (distracteurs.length >= 3) break;
+      if (m.title && m.title !== citation.film && !distracteurs.includes(m.title)) distracteurs.push(m.title);
+    }
+  }
+  questionBonusDuJour = {
+    jour, citationId: citation.id, texte: citation.texte, annee: citation.annee || null,
+    propositions: melangerTableau([citation.film, ...distracteurs]),
+    bonneReponse: citation.film,
+  };
+  saveQuestionBonusDuJour();
+  return questionBonusDuJour;
+}
+
+/** État public pour l'accueil : jamais le bon titre avant d'avoir commencé (pas de fuite). */
+app.get("/api/question-bonus", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (!user) return;
+  const jour = jourQuestionBonus();
+  const delaiMs = borneValeur(REGLAGES.questionBonusDelaiSecondes, 10, 180, 45) * 1000;
+  const q = REGLAGES.questionBonusActif !== false ? assurerQuestionBonusDuJour() : null;
+  if (q) questionBonusResoudreSiExpiree(user.id, jour, delaiMs, q.bonneReponse);
+  const etat = questionBonusEtat(user.id, jour);
+  res.json({
+    actif: Boolean(q),
+    delaiSecondes: delaiMs / 1000,
+    recompenseTickets: borneValeur(REGLAGES.questionBonusRecompenseTickets, 10, 100000, 150),
+    disponible: Boolean(q) && !etat.dejaTente,
+    enCours: etat.enCours,
+    finDansMs: etat.enCours ? Math.max(0, delaiMs - (Date.now() - etat.debutTs)) : null,
+    resultat: etat.resultat,
+  });
+});
+
+app.post("/api/question-bonus/commencer", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (!user) return;
+  if (REGLAGES.questionBonusActif === false) return res.status(409).json({ error: "DESACTIVE" });
+  const q = assurerQuestionBonusDuJour();
+  if (!q) return res.status(409).json({ error: "AUCUNE_CITATION" });
+  const jour = jourQuestionBonus();
+  const delaiMs = borneValeur(REGLAGES.questionBonusDelaiSecondes, 10, 180, 45) * 1000;
+
+  // Une tentative laissée "en cours" sans jamais avoir été résolue (page fermée avant de répondre) :
+  // si le délai est dépassé, on la referme nous-mêmes en "perdu" avant de continuer — jamais de
+  // joueur bloqué "en cours" indéfiniment.
+  const resolueAuto = questionBonusResoudreSiExpiree(user.id, jour, delaiMs, q.bonneReponse);
+  if (resolueAuto) return res.status(409).json({ error: "DEJA_TENTE_AUJOURDHUI", resultat: resolueAuto.resultat });
+
+  const etat = questionBonusEtat(user.id, jour);
+  if (etat.dejaTente) return res.status(409).json({ error: "DEJA_TENTE_AUJOURDHUI", resultat: etat.resultat });
+
+  // Déjà commencée aujourd'hui, encore dans les temps (ex. la page a juste été rechargée) : on
+  // renvoie la MÊME question avec le temps qui reste, plutôt que de relancer un nouveau délai.
+  const debutTs = etat.enCours ? etat.debutTs : questionBonusCommencer(user.id, jour);
+
+  res.json({
+    ok: true, texte: q.texte, annee: q.annee, propositions: q.propositions,
+    delaiSecondes: delaiMs / 1000, finDansMs: Math.max(0, delaiMs - (Date.now() - debutTs)),
+  });
+});
+
+app.post("/api/question-bonus/repondre", (req, res) => {
+  const user = exigeCompte(req, res);
+  if (!user) return;
+  const q = assurerQuestionBonusDuJour();
+  if (!q) return res.status(409).json({ error: "AUCUNE_CITATION" });
+  const jour = jourQuestionBonus();
+  const delaiMs = borneValeur(REGLAGES.questionBonusDelaiSecondes, 10, 180, 45) * 1000;
+
+  const etat = questionBonusEtat(user.id, jour);
+  if (!etat.enCours) return res.status(409).json({ error: "AUCUNE_TENTATIVE_EN_COURS" });
+
+  const proposition = String(req.body?.proposition || "").trim();
+  const enTemps = (Date.now() - etat.debutTs) <= delaiMs;
+  const correct = Boolean(enTemps && proposition && proposition === q.bonneReponse);
+
+  let tickets = 0;
+  if (correct) {
+    tickets = borneValeur(REGLAGES.questionBonusRecompenseTickets, 10, 100000, 150);
+    grantCredits(user.id, tickets);
+    enregistrerTransaction(user.id, tickets, "credits", "Question bonus du jour");
+  }
+  const resultat = { gagne: correct, bonneReponse: q.bonneReponse, tickets, expire: !enTemps };
+  questionBonusEnregistrerResultat(user.id, jour, resultat);
+  res.json({ ok: true, ...resultat, credits: getCredits(user.id) });
 });
 
 /* ------------------------------------------------------------------ */
@@ -4346,12 +4489,6 @@ app.get("/api/config", async (_req, res) => res.json({
   afficherClassementAccueil: REGLAGES.afficherClassementAccueil,
   theme: REGLAGES.theme,
   reactions: REGLAGES.reactions,
-  // Anneau lumineux "qui parle" dans un salon vocal (voir REGLAGES_DEFAUT.audio et la console
-  // admin, onglet Audio) : désactivé par défaut, réactivable avec sa propre vitesse.
-  effetParole: {
-    actif: REGLAGES.audio?.effetParoleActif === true,
-    vitesseMs: REGLAGES.audio?.effetParoleVitesseMs ?? 1100,
-  },
   // Priorité à Cloudflare (voir obtenirIceServersCloudflare ci-dessus) dès qu'il est configuré —
   // bien meilleur forfait gratuit. Sinon, réglage manuel fait depuis la console admin (onglet
   // Audio) ; les variables d'environnement TURN_URL / TURN_USERNAME / TURN_CREDENTIAL ne servent
@@ -5973,7 +6110,9 @@ io.on("connection", (socket) => {
     if (!room || !player) return;
     const estPhoto = photo === true && Boolean(user.photo);
     if (!estPhoto && !REGLAGES.reactions.emojis.includes(emoji)) return;
-    if (Date.now() - derniereReaction < 700) return;   // évite le matraquage
+    // Anti-matraquage abaissé à 150ms (voir la demande : boutons de réaction beaucoup plus sensibles) —
+    // assez pour empêcher un flood, sans étouffer les clics rapprochés (combo) vus par les AUTRES joueurs.
+    if (Date.now() - derniereReaction < 150) return;
     derniereReaction = Date.now();
     socket.to(room.code).emit("reaction", estPhoto
       ? { photo: user.photo, pseudo: player.pseudo, avatar: player.avatar }
@@ -6224,6 +6363,7 @@ if (!Array.isArray(suggestions)) suggestions = [];
 }
 citations = await charger("citations", CITATIONS_FILE, CITATIONS_DEFAUT);
 if (!Array.isArray(citations) || !citations.length) citations = CITATIONS_DEFAUT;
+questionBonusDuJour = await charger("questionBonusJour", QUESTION_BONUS_FILE, null);
 sondages = await charger("sondages", SONDAGES_FILE, []);
 if (!Array.isArray(sondages)) sondages = [];
 playlisteMusique = await charger("musique", MUSIQUE_FILE, []);

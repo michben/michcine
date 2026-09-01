@@ -163,6 +163,54 @@ export function marquerRoueGratuiteUtilisee(userId, jour) {
   saveUsers();
 }
 
+/**
+ * Question bonus du jour (voir server.js, /api/question-bonus) : un seul essai par jour et par
+ * joueur, verrouillé dès qu'il commence (voir questionBonusCommencer) — répondre juste ET à temps
+ * rapporte des tickets ; tout le reste (mauvaise réponse, hors délai, ou pas de réponse du tout)
+ * attend simplement le lendemain, sans jamais bloquer le joueur plus d'un jour. `u.questionBonusJour`
+ * n'étant mis à jour qu'au moment de « commencer », un jour différent de celui demandé veut
+ * simplement dire « rien fait aujourd'hui » — donc disponible, que le dernier essai remonte à hier
+ * ou à jamais.
+ */
+export function questionBonusEtat(userId, jour) {
+  const u = users[userId];
+  if (!u || u.questionBonusJour !== jour) return { dejaTente: false, enCours: false, debutTs: null, resultat: null };
+  return {
+    dejaTente: Boolean(u.questionBonusResultat),
+    enCours: !u.questionBonusResultat,
+    debutTs: u.questionBonusDebutTs || null,
+    resultat: u.questionBonusResultat || null,
+  };
+}
+export function questionBonusCommencer(userId, jour) {
+  const u = users[userId];
+  if (!u) return null;
+  u.questionBonusJour = jour;
+  u.questionBonusDebutTs = Date.now();
+  u.questionBonusResultat = null;
+  saveUsers();
+  return u.questionBonusDebutTs;
+}
+export function questionBonusEnregistrerResultat(userId, jour, resultat) {
+  const u = users[userId];
+  if (!u || u.questionBonusJour !== jour) return;
+  u.questionBonusResultat = resultat;
+  saveUsers();
+}
+/** Si une tentative du jour a été commencée mais jamais résolue (le joueur a laissé filer le délai
+ *  sans jamais valider de réponse, ou a simplement fermé la page) : on la referme nous-mêmes en
+ *  « perdu, hors délai » dès qu'on la recroise, pour ne jamais laisser un joueur « en cours »
+ *  indéfiniment ni lui permettre de relancer un nouveau délai en rappelant « commencer ». */
+export function questionBonusResoudreSiExpiree(userId, jour, delaiMs, bonneReponse) {
+  const u = users[userId];
+  if (!u || u.questionBonusJour !== jour || u.questionBonusResultat) return null;
+  if (Date.now() - (u.questionBonusDebutTs || 0) <= delaiMs) return null; // encore dans les temps
+  const resultat = { gagne: false, bonneReponse, tickets: 0, expire: true };
+  u.questionBonusResultat = resultat;
+  saveUsers();
+  return { dejaTente: true, resultat };
+}
+
 const MAX_TIRS_PAYANTS_ROUE = 10;
 
 /** Nombre de tours payants déjà effectués aujourd'hui (remis à zéro à chaque nouvelle journée de roue). */

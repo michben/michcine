@@ -113,23 +113,18 @@ export function creerModuleVocalSalon({
     return code;
   }
 
-  /** Trie une liste de participants pour mettre en avant celui ou ceux qui parlent EN CE MOMENT
-   *  (détection de voix côté client, voir vocal:parler) : demande explicite pour que, dans un
-   *  salon avec beaucoup de monde, on repère tout de suite qui a la parole sans avoir à chercher
-   *  l'anneau qui pulse. Un participant muet ou silencieux garde sa place habituelle (tri stable,
-   *  donc aucun "sautillement" pour ceux qui ne parlent pas) ; il ne se déplace en tête que
-   *  lorsqu'il se met effectivement à parler, et perd cette place dès qu'il se tait. */
-  function trierParPriseDeParole(participants) {
-    return [...participants].sort((a, b) => (b.parle ? 1 : 0) - (a.parle ? 1 : 0));
-  }
-
   /** État public d'un salon vocal, envoyé à ses participants à chaque changement. */
   function publicVocal(salon) {
     return {
       code: salon.code,
       titre: salon.titre,
       hostId: salon.hostId,
-      participants: trierParPriseDeParole([...salon.participants.values()]).map((p) => ({
+      // Ordre stable (celui d'arrivée dans le salon, voir salon.participants — une Map conserve
+      // l'ordre d'insertion) : mettre en avant qui parle a été essayé, mais ça faisait sautiller
+      // toutes les cartes à chaque prise de parole, bien trop perturbant dans un salon animé (voir
+      // la demande). L'anneau qui pulse (voir .vocalParticipant.parle côté client) reste le seul
+      // indicateur visuel de qui parle — sans jamais déplacer personne.
+      participants: [...salon.participants.values()].map((p) => ({
         userId: p.userId, pseudo: p.pseudo, avatar: p.avatar, photo: p.photo,
         role: p.role, mute: p.mute, parle: p.parle, mainLevee: Boolean(p.mainLevee),
       })),
@@ -660,7 +655,9 @@ export function creerModuleVocalSalon({
       if (!salon || !moi) return;
       const estPhoto = photo === true && Boolean(user.photo);
       if (!estPhoto && !getReglages().reactions.emojis.includes(emoji)) return;
-      if (Date.now() - derniereReactionVocale < 700) return;
+      // Anti-matraquage abaissé à 150ms (voir la demande : boutons de réaction beaucoup plus sensibles) —
+      // assez pour empêcher un flood, sans étouffer les clics rapprochés (combo) vus par les AUTRES.
+      if (Date.now() - derniereReactionVocale < 150) return;
       derniereReactionVocale = Date.now();
       const payload = estPhoto
         ? { photo: user.photo, pseudo: user.pseudo, avatar: user.avatar }
@@ -682,7 +679,7 @@ export function creerModuleVocalSalon({
       if (!cible) return;
       if (!getReglages().reactions.emojis.includes(emoji)) return;
       if (estBloque(cibleUserId, user.id)) return;
-      if (Date.now() - derniereReactionVocalePrivee < 700) return;
+      if (Date.now() - derniereReactionVocalePrivee < 150) return;
       derniereReactionVocalePrivee = Date.now();
       const s = [...io.of("/").sockets.values()].find((sk) => sk.data.user?.id === cibleUserId);
       if (s) s.emit("vocal:reaction-privee", { emoji, pseudo: user.pseudo, avatar: user.avatar });
