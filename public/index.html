@@ -539,6 +539,16 @@
     box-shadow:0 20px 60px rgba(0,0,0,.7)}
   .boitePause .row{margin-top:12px}
   .grosChiffre{font-family:'JetBrains Mono',monospace;font-size:52px;color:var(--beam);margin:0 0 4px}
+  /* Compteur "convives" en haut du salon vocal (voir la demande : plus visible, plus design) —
+     tout le monde compte (hôte, cohôtes, intervenants ET auditeurs, voir renderVocalSalon), mis à
+     jour en temps réel à chaque vocal:update comme le reste de l'écran du salon. */
+  .vocalConvives{display:inline-flex;align-items:baseline;gap:10px;margin:2px 0 14px;padding:10px 26px;
+    border-radius:999px;background:linear-gradient(135deg,rgba(245,185,66,.18),rgba(228,88,110,.14));
+    border:1px solid rgba(245,185,66,.4);box-shadow:0 6px 20px rgba(0,0,0,.35)}
+  .vocalConvivesChiffre{font-family:var(--font-affiche);font-size:clamp(30px,7vw,42px);line-height:1;
+    color:var(--beam);text-shadow:0 0 18px rgba(245,185,66,.6)}
+  .vocalConvivesLabel{font-family:var(--font-etiquette);text-transform:uppercase;letter-spacing:.08em;
+    font-size:13px;color:var(--chalk)}
   #erreurJS{position:fixed;left:0;right:0;bottom:0;z-index:90;margin:0;padding:12px 16px;
     background:var(--ticket);color:#fff;font-size:13px;font-family:'JetBrains Mono',monospace;
     word-break:break-word}
@@ -1478,6 +1488,10 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
       <div class="card" style="text-align:center">
         <p class="tag" id="vocalTitreSalon" style="margin:0 0 4px">Salon</p>
         <div class="marquee" id="vocalMarquee" style="margin-bottom:10px"></div>
+        <div class="vocalConvives">
+          <span class="vocalConvivesChiffre" id="vocalConvivesChiffre">0</span>
+          <span class="vocalConvivesLabel">convive<span id="vocalConvivesS"></span></span>
+        </div>
         <div class="row" style="justify-content:center"><button class="ghost" id="btnVocalCopierLien">🔗 Copier le lien du salon</button></div>
         <p class="feedback" id="vocalCopierLienMsg" style="margin:6px 0 0"></p>
       </div>
@@ -1617,6 +1631,7 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
         </label>
         <div id="vocalDemandesListe"></div>
         <div id="vocalConsoleParticipants"></div>
+        <div id="vocalBannisListe"></div>
         <div class="row hidden" id="vocalFermerZone" style="margin-top:14px">
           <button class="ghost danger" id="btnVocalFermer">🔒 Fermer le salon pour tout le monde</button>
         </div>
@@ -6567,6 +6582,7 @@ function rejoindreSalonVocalParCode(code, { rester = false } = {}){
     if (!res?.ok){
       $("vocalErreur").textContent = res?.error === "SALON_COMPLET" ? "Ce salon est complet."
         : res?.error === "SALON_INTROUVABLE" ? "Aucun salon avec ce code."
+        : res?.error === "BANNI" ? "Vous avez été banni de ce salon — seuls l'hôte ou un cohôte peuvent lever ce bannissement."
         : res?.error === "TIMEOUT" ? "Le serveur ne répond pas — vérifiez votre connexion et réessayez."
         : "Impossible de rejoindre ce salon.";
       return;
@@ -6680,6 +6696,12 @@ function renderVocalSalon(salon){
   vocalDemanderVeilleEcran();
   $("vocalTitreSalon").textContent = salon.titre;
   $("vocalMarquee").textContent = salon.code;
+  // Nombre de convives (voir la demande) : TOUT le monde compte — hôte, cohôtes, intervenants ET
+  // auditeurs (salon.participants les contient déjà tous) — mis à jour en temps réel à chaque
+  // vocal:update, comme le reste de l'écran du salon.
+  const nbConvives = salon.participants.length;
+  $("vocalConvivesChiffre").textContent = nbConvives;
+  $("vocalConvivesS").textContent = nbConvives > 1 ? "s" : "";
 
   const hoteCohotes = salon.participants.filter(p => p.role === "hote" || p.role === "cohote");
   const intervenants = salon.participants.filter(p => p.role === "intervenant");
@@ -6952,10 +6974,24 @@ function vocalSyncMedia(el, media, modo){
         (modo ? " Essayez un autre lien ou fichier." : " Prévenez l'hôte du salon.");
     };
   } else {
-    const elapsed = Math.max(0, (Date.now() - media.demarreLe) / 1000);
-    if (el.readyState >= 1 && Math.abs((el.currentTime || 0) - elapsed) > 3) el.currentTime = elapsed;
+    // Ne resynchronise plus une lecture déjà TERMINÉE (sans boucle) : le temps écoulé depuis le
+    // démarrage (calculé sur l'horloge, qui ne s'arrête jamais toute seule) continuait de grandir
+    // bien au-delà de la durée réelle de la vidéo une fois celle-ci finie, et le forcer en currentTime
+    // ne faisait rien de grave en soi — mais l'appel à play() juste en dessous, lui, redémarre
+    // automatiquement une vidéo terminée depuis le tout début (comportement standard du navigateur) :
+    // à chaque nouveau rafraîchissement du salon (mic coupé, main levée, etc. — bien plus fréquent que
+    // la vidéo elle-même), la vidéo repartait donc de zéro puis se faisait aussitôt renvoyer vers la
+    // fin, d'où l'impression de vidéo qui bug, revient en arrière et rejoue sans cesse (voir la
+    // demande). Une fois terminée, elle doit rester sur sa dernière image, comme n'importe quel
+    // lecteur vidéo normal.
+    if (el.loop || !el.ended) {
+      const dureeConnue = Number.isFinite(el.duration) && el.duration > 0 ? el.duration : Infinity;
+      const elapsed = Math.min(Math.max(0, (Date.now() - media.demarreLe) / 1000), dureeConnue);
+      if (el.readyState >= 1 && Math.abs((el.currentTime || 0) - elapsed) > 3) el.currentTime = elapsed;
+    }
   }
-  el.play().catch(() => {}); // lecture auto parfois bloquée sans geste : les contrôles restent visibles pour lancer à la main
+  // Ne relance jamais une lecture déjà terminée (sans boucle) : play() la ferait repartir du début.
+  if (el.loop || !el.ended) el.play().catch(() => {}); // lecture auto parfois bloquée sans geste : les contrôles restent visibles pour lancer à la main
 }
 
 /** Vidéo YouTube : passe par l'API officielle (chargée à la demande, voir plus bas) puisqu'un lien
@@ -7054,15 +7090,28 @@ function envoyerMessageVocal(){
   const caseEnGrand = $("vocalChatEnGrand");
   const enGrand = Boolean(caseEnGrand?.checked) && texte.length <= 12;
   champ.value = "";
-  if (caseEnGrand) caseEnGrand.checked = false;
-  // "Envoyer en grand" (voir demande) : un simple affichage volant, jamais ajouté au fil du tchat
-  // (voir vocal:chat-envoyer côté serveur, qui ne le renvoie qu'aux autres) — l'expéditeur le voit
-  // donc tout de suite lui-même ici, sans attendre l'aller-retour serveur, comme pour une réaction.
+  // La case "envoyer en grand" reste cochée après l'envoi (voir la demande : gardée en mémoire) —
+  // avant, elle se décochait après chaque message, obligeant à la recocher à chaque fois si on
+  // voulait enchaîner plusieurs messages "en grand".
+  // "Envoyer en grand" : un simple affichage volant, jamais ajouté au fil du tchat (voir
+  // vocal:chat-envoyer côté serveur, qui ne le renvoie qu'aux autres) — l'expéditeur le voit donc
+  // tout de suite lui-même ici, sans attendre l'aller-retour serveur, comme pour une réaction.
   if (enGrand) afficherReactionVolante(texte, me?.pseudo, null);
   socket.emit("vocal:chat-envoyer", { code: vocalSalonActuel.code, texte, enGrand }, () => {});
 }
 $("btnVocalChatEnvoyer").onclick = envoyerMessageVocal;
 $("vocalChatInput").addEventListener("keydown", (e) => { if (e.key === "Enter") envoyerMessageVocal(); });
+// Préférence "envoyer en grand" mémorisée d'une visite à l'autre (voir la demande), sur le même
+// principe que les autres cases à cocher du jeu (ex : michben_lecture) — propre à cet appareil.
+{
+  const caseEnGrand = $("vocalChatEnGrand");
+  if (caseEnGrand) {
+    try { caseEnGrand.checked = localStorage.getItem("michben_vocal_chat_en_grand") === "1"; } catch {}
+    caseEnGrand.addEventListener("change", () => {
+      try { localStorage.setItem("michben_vocal_chat_en_grand", caseEnGrand.checked ? "1" : "0"); } catch {}
+    });
+  }
+}
 
 /** Réactions emoji publiques dans le salon vocal — même rendu volant que les réactions de partie
  *  (afficherReactionVolante), mais sous un événement dédié (vocal:reaction) pour ne jamais se
@@ -7253,8 +7302,13 @@ function renderConsoleVocal(salon, monRole){
         boutons.push(`<button class="ghost" data-nommer-cohote="${esc(p.userId)}">🎖️ Nommer cohôte</button>`);
       if (monRole === "hote" && p.role === "cohote")
         boutons.push(`<button class="ghost" data-retirer-cohote="${esc(p.userId)}">🎖️ Retirer cohôte</button>`);
-      if (p.role !== "hote" && (monRole === "hote" || p.role !== "cohote"))
+      if (p.role !== "hote" && (monRole === "hote" || p.role !== "cohote")) {
         boutons.push(`<button class="ghost danger" data-exclure="${esc(p.userId)}">🚪 Exclure</button>`);
+        // "Bannir" (voir la demande) : contrairement à "Exclure" (qui n'empêche pas de revenir tout
+        // de suite après), un compte banni ne peut plus rejoindre CE salon tant que l'hôte ou un
+        // cohôte ne l'aura pas explicitement débanni (voir vocalBannisChargesPour plus bas).
+        boutons.push(`<button class="ghost danger" data-bannir="${esc(p.userId)}">🚫 Bannir</button>`);
+      }
       return `<div class="urowVocal">
         <span class="qui">${p.photo ? `<img class="pfp" src="${esc(p.photo)}" alt="">` : esc(p.avatar||"🎬")} ${esc(p.pseudo)}
           <small style="color:var(--muted)">(${p.role})</small></span>
@@ -7273,6 +7327,41 @@ function renderConsoleVocal(salon, monRole){
   $("vocalConsole").querySelectorAll("[data-exclure]").forEach(b => b.onclick = () => {
     if (confirm("Exclure ce participant du salon ?"))
       socket.emit("vocal:exclure", { code: vocalSalonActuel.code, userId: b.dataset.exclure }, () => {});
+  });
+  $("vocalConsole").querySelectorAll("[data-bannir]").forEach(b => b.onclick = () => {
+    if (confirm("Bannir ce participant de ce salon ? Il ne pourra plus le rejoindre tant que vous (ou un cohôte) ne l'aurez pas débanni."))
+      socket.emit("vocal:bannir", { code: vocalSalonActuel.code, userId: b.dataset.bannir }, (res) => {
+        if (res?.ok) afficherBannisVocal(res.bannis || []);
+      });
+  });
+
+  // Liste des comptes bannis de ce salon : chargée une seule fois par salon (et non à chaque
+  // vocal:update, bien plus fréquent — voir vocalBannisChargesPour) puis tenue à jour directement
+  // depuis les accusés de réception de vocal:bannir/vocal:debannir (voir afficherBannisVocal).
+  if (vocalBannisChargesPour !== salon.code) {
+    vocalBannisChargesPour = salon.code;
+    socket.emit("vocal:bannis-liste", { code: salon.code }, (res) => {
+      if (res?.ok) afficherBannisVocal(res.bannis || []);
+    });
+  }
+}
+let vocalBannisChargesPour = null;
+/** Affiche la liste des comptes bannis de ce salon (voir vocal:bannir), avec un bouton pour lever
+ *  chaque bannissement — visible uniquement de l'hôte/des cohôtes (voir renderConsoleVocal). */
+function afficherBannisVocal(liste){
+  const zone = $("vocalBannisListe");
+  if (!zone) return;
+  zone.innerHTML = liste.length
+    ? `<p class="note" style="margin:10px 0 6px">🚫 Bannis de ce salon</p>` + liste.map(b => `
+      <div class="urowVocal">
+        <span class="qui">${esc(b.pseudo)}</span>
+        <button class="ghost" data-debannir="${esc(b.userId)}">↩️ Débannir</button>
+      </div>`).join("")
+    : "";
+  zone.querySelectorAll("[data-debannir]").forEach(btn => btn.onclick = () => {
+    socket.emit("vocal:debannir", { code: vocalSalonActuel.code, userId: btn.dataset.debannir }, (res) => {
+      if (res?.ok) afficherBannisVocal(res.bannis || []);
+    });
   });
 }
 
@@ -7616,7 +7705,7 @@ socket.on("vocal:ferme", (info) => {
     <small>${info?.raison === "FERME_PAR_HOTE" ? "L'hôte a fermé le salon."
       : info?.raison === "HOTE_PARTI" ? "L'hôte a quitté le salon." : "Le salon est vide."}</small></span>`);
 });
-socket.on("vocal:exclu", () => {
+socket.on("vocal:exclu", ({ banni } = {}) => {
   vocalSalonActuel = null;
   vocalMicOuvert = false;
   vocalDerniereSalleCode = null;
@@ -7628,7 +7717,11 @@ socket.on("vocal:exclu", () => {
     chargerSalonsVocauxOuverts();
   }
   majMicFlottant(pageAffichee);
-  bandeauNotif(`<span style="font-size:24px">🚪</span><span><b>Vous avez été exclu du salon vocal</b></span>`);
+  // Distingue un simple "Exclure" (peut revenir tout de suite) d'un "Bannir" (voir vocal:bannir
+  // côté serveur) — dans ce second cas, seuls l'hôte ou un cohôte peuvent lever la restriction.
+  bandeauNotif(banni
+    ? `<span style="font-size:24px">🚫</span><span><b>Vous avez été banni de ce salon vocal</b><small>Seuls l'hôte ou un cohôte peuvent lever ce bannissement.</small></span>`
+    : `<span style="font-size:24px">🚪</span><span><b>Vous avez été exclu du salon vocal</b></span>`);
 });
 
 /** Inviter des amis directement depuis le salon vocal, sans passer par l'écran Amis. */
@@ -9824,16 +9917,25 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
                         return;
                     }
                     
-                    document.getElementById("bdayList").innerHTML = data.actors.map(a => `
-                        <div class="bday-item"${a.url ? ` data-wiki="${esc(a.url)}" style="cursor:pointer" title="Voir la fiche Wikipédia"` : ""}>
-                            ${a.thumbnail ? `<img src="${a.thumbnail}" alt="">` : `<div style="width:50px;height:50px;border-radius:50%;background:#333;display:flex;align-items:center;justify-content:center;font-size:24px">🎬</div>`}
+                    // Les ajouts "perso" (voir la demande : exclure/ajouter des personnalités, dont des
+                    // joueurs pour un clin d'œil) reçoivent un liseré doré et un petit bandeau distinct,
+                    // pour ne jamais se confondre avec une vraie célébrité issue de Wikipédia.
+                    document.getElementById("bdayList").innerHTML = data.actors.map(a => {
+                        const styleExtra = a.perso
+                            ? "border-left-color:var(--beam);background:linear-gradient(135deg,rgba(245,185,66,.14),var(--card))"
+                            : (a.url ? "cursor:pointer" : "");
+                        const attrs = `${a.url ? ` data-wiki="${esc(a.url)}"` : ""}${styleExtra ? ` style="${styleExtra}"` : ""}${a.url ? ` title="Voir la fiche Wikipédia"` : ""}`;
+                        return `
+                        <div class="bday-item"${attrs}>
+                            ${a.thumbnail ? `<img src="${esc(a.thumbnail)}" alt="">` : `<div style="width:50px;height:50px;border-radius:50%;background:#333;display:flex;align-items:center;justify-content:center;font-size:24px">${a.perso ? "🎉" : "🎬"}</div>`}
                             <div class="info">
-                                <b>${a.name}${a.age != null ? ` <span style="color:var(--beam);font-weight:normal;font-size:13px">· ${a.age} ans</span>` : ""}</b>
-                                <small>${a.year} — ${a.description}</small>
+                                ${a.perso ? `<small style="color:var(--beam);font-weight:600;letter-spacing:.03em;text-transform:uppercase">🎉 Clin d'œil MichBen</small>` : ""}
+                                <b>${esc(a.name)}${a.age != null ? ` <span style="color:var(--beam);font-weight:normal;font-size:13px">· ${a.age} ans</span>` : ""}</b>
+                                <small>${a.year ? `${a.year} — ` : ""}${esc(a.description || "")}</small>
                                 ${a.url ? `<small style="color:var(--teal)">📖 Voir sur Wikipédia</small>` : ""}
                             </div>
-                        </div>
-                    `).join("");
+                        </div>`;
+                    }).join("");
                     document.getElementById("bdayList").querySelectorAll("[data-wiki]").forEach(el => {
                         el.addEventListener("click", () => window.open(el.dataset.wiki, "_blank", "noopener"));
                     });

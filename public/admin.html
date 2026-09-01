@@ -387,6 +387,40 @@
         </div>
         <p class="msg" id="qbMsg"></p>
       </div>
+      <div class="card">
+        <p class="tag">🎂 Anniversaires — célébrités & clins d'œil</p>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 12px;line-height:1.6">
+          Le bouton « Célébrités nées le… » de l'accueil vient de Wikipédia et ne se modifie pas
+          directement — mais vous pouvez retirer une personnalité qui ne vous intéresse pas, et
+          surtout en ajouter d'autres de votre cru (par exemple un joueur, pour lui faire un petit
+          clin d'œil affiché à sa vraie date d'anniversaire, au milieu des célébrités).
+        </p>
+        <p class="tag" style="font-size:13px;margin:14px 0 8px">➕ Ajouter un clin d'œil personnalisé</p>
+        <label for="anniNom">Nom (affiché tel quel)</label>
+        <input id="anniNom" placeholder="Ex : Kevin, notre meilleur joueur">
+        <div class="row">
+          <div style="flex:1"><label for="anniMois">Mois</label><input id="anniMois" type="number" min="1" max="12" placeholder="7"></div>
+          <div style="flex:1"><label for="anniJour">Jour</label><input id="anniJour" type="number" min="1" max="31" placeholder="14"></div>
+          <div style="flex:1"><label for="anniAnnee">Année (facultatif)</label><input id="anniAnnee" type="number" placeholder="1998"></div>
+        </div>
+        <label for="anniDescription">Petit mot (facultatif)</label>
+        <textarea id="anniDescription" rows="2" placeholder="Un petit mot affiché sous le nom — sinon un message par défaut sera utilisé."></textarea>
+        <label for="anniPhoto">Photo (URL, facultatif)</label>
+        <input id="anniPhoto" placeholder="https://...">
+        <label for="anniUrl">Lien (facultatif — sa fiche joueur, ses réseaux…)</label>
+        <input id="anniUrl" placeholder="https://...">
+        <div class="row" style="margin-top:14px"><button id="btnAnniAjouter">Ajouter ce clin d'œil</button></div>
+        <p class="msg" id="anniAjouterMsg"></p>
+        <div id="anniPersonnalisesListe" style="margin-top:14px"></div>
+
+        <p class="tag" style="font-size:13px;margin:20px 0 8px">🚫 Exclure une personnalité de Wikipédia</p>
+        <div class="row">
+          <input id="anniExclureNom" placeholder="Nom exact tel qu'il apparaît dans la liste" style="flex:2">
+          <button id="btnAnniExclure">Exclure</button>
+        </div>
+        <p class="msg" id="anniExclureMsg"></p>
+        <div id="anniExclusListe" style="margin-top:10px"></div>
+      </div>
     </div>
 
     <div id="paneRoue" class="hidden">
@@ -2655,6 +2689,9 @@ async function loadReports(){
       // puisque son seul réglage (au-delà d'activer/désactiver et la récompense) est le stock de
       // citations ci-dessus.
       await chargerReglages();
+      // Les anniversaires (clins d'œil personnalisés + exclusions Wikipédia) vivent eux aussi dans
+      // cet onglet, faute d'avoir un onglet dédié pour une si petite fonctionnalité.
+      await loadAnniversaires();
     }
     $("btnQbSave").onclick = () => enregistrerReglages($("qbMsg"));
 
@@ -2723,6 +2760,98 @@ async function loadReports(){
       } else {
         $("citFeedback").textContent = "Échec de l'ajout.";
         $("citFeedback").className = "msg err";
+      }
+    };
+
+    /* ---------- Anniversaires : clins d'œil personnalisés + exclusions Wikipédia ---------- */
+    let anniversairesConfig = { personnalises: [], exclus: [] };
+
+    async function loadAnniversaires() {
+      const res = await api("/api/admin/anniversaires");
+      if (!res.ok) return;
+      anniversairesConfig = await res.json();
+      renderAnniversaires();
+    }
+
+    function renderAnniversaires() {
+      const MOIS = ["", "janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
+      const perso = anniversairesConfig.personnalises || [];
+      $("anniPersonnalisesListe").innerHTML = perso.length
+        ? `<p class="tag" style="font-size:13px;margin:0 0 8px">Clins d'œil enregistrés</p>` + perso.map(a => `
+          <div class="item" data-anni-perso="${a.id}">
+            <div style="flex:1">
+              <b>${esc(a.nom)}</b>
+              <small style="color:var(--muted)"> — ${a.jour} ${MOIS[a.mois] || ""}${a.annee ? ` ${a.annee}` : ""}</small>
+              ${a.description ? `<div style="color:var(--muted);font-size:13px;margin-top:2px">${esc(a.description)}</div>` : ""}
+            </div>
+            <button class="ghost danger" data-del-anni="${a.id}">Supprimer</button>
+          </div>`).join("")
+        : `<p class="msg">Aucun clin d'œil personnalisé pour l'instant.</p>`;
+      $("anniPersonnalisesListe").querySelectorAll("[data-del-anni]").forEach(b => b.onclick = async () => {
+        if (!confirm("Supprimer ce clin d'œil personnalisé ?")) return;
+        const res = await api(`/api/admin/anniversaires/personnalises/${b.dataset.delAnni}`, { method:"DELETE" });
+        if (res.ok) loadAnniversaires(); else alert("Échec de la suppression.");
+      });
+
+      const exclus = anniversairesConfig.exclus || [];
+      $("anniExclusListe").innerHTML = exclus.length
+        ? `<p class="tag" style="font-size:13px;margin:0 0 8px">Personnalités exclues</p>` + exclus.map(e => `
+          <div class="item" data-anni-exclu="${e.id}">
+            <div style="flex:1"><b>${esc(e.nom)}</b></div>
+            <button class="ghost danger" data-del-exclu="${e.id}">Retirer l'exclusion</button>
+          </div>`).join("")
+        : `<p class="msg">Aucune exclusion pour l'instant.</p>`;
+      $("anniExclusListe").querySelectorAll("[data-del-exclu]").forEach(b => b.onclick = async () => {
+        const res = await api(`/api/admin/anniversaires/exclus/${b.dataset.delExclu}`, { method:"DELETE" });
+        if (res.ok) loadAnniversaires(); else alert("Échec du retrait.");
+      });
+    }
+
+    $("btnAnniAjouter").onclick = async () => {
+      const nom = $("anniNom").value.trim();
+      const mois = $("anniMois").value.trim();
+      const jour = $("anniJour").value.trim();
+      if (!nom || !mois || !jour) {
+        $("anniAjouterMsg").textContent = "Le nom, le mois et le jour sont obligatoires.";
+        $("anniAjouterMsg").className = "msg err";
+        return;
+      }
+      $("btnAnniAjouter").disabled = true;
+      const res = await api("/api/admin/anniversaires/personnalises", { method:"POST", body: JSON.stringify({
+        nom, mois, jour, annee: $("anniAnnee").value.trim(),
+        description: $("anniDescription").value.trim(), photo: $("anniPhoto").value.trim(), url: $("anniUrl").value.trim(),
+      })});
+      $("btnAnniAjouter").disabled = false;
+      if (res.ok) {
+        $("anniNom").value = ""; $("anniMois").value = ""; $("anniJour").value = ""; $("anniAnnee").value = "";
+        $("anniDescription").value = ""; $("anniPhoto").value = ""; $("anniUrl").value = "";
+        $("anniAjouterMsg").textContent = "Clin d'œil ajouté !";
+        $("anniAjouterMsg").className = "msg ok";
+        loadAnniversaires();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        $("anniAjouterMsg").textContent = err.error === "MOIS_INVALIDE" ? "Le mois doit être entre 1 et 12."
+          : err.error === "JOUR_INVALIDE" ? "Le jour doit être entre 1 et 31."
+          : "Échec de l'ajout.";
+        $("anniAjouterMsg").className = "msg err";
+      }
+    };
+
+    $("btnAnniExclure").onclick = async () => {
+      const nom = $("anniExclureNom").value.trim();
+      if (!nom) return;
+      $("btnAnniExclure").disabled = true;
+      const res = await api("/api/admin/anniversaires/exclus", { method:"POST", body: JSON.stringify({ nom }) });
+      $("btnAnniExclure").disabled = false;
+      if (res.ok) {
+        $("anniExclureNom").value = "";
+        $("anniExclureMsg").textContent = "Personnalité exclue.";
+        $("anniExclureMsg").className = "msg ok";
+        loadAnniversaires();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        $("anniExclureMsg").textContent = err.error === "DEJA_EXCLU" ? "Déjà exclue." : "Échec de l'exclusion.";
+        $("anniExclureMsg").className = "msg err";
       }
     };
 
