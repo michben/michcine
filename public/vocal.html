@@ -486,6 +486,16 @@
   .vocalBarreBas .vocalBarreRangee{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
   .vocalBarreBas .vocalBarreRangee button{flex:1 1 calc(50% - 8px);min-width:130px;font-size:14px;padding:12px 10px}
   #btnVocalReactionsToggle[aria-pressed="true"]{background:var(--card);border-color:var(--beam);color:var(--beam)}
+  /* "⋯ Plus" (voir la demande : regrouper/réduire les boutons secondaires de la barre du bas) : même
+     esprit que le menu "⋮ Actions" de la console de modération, mais s'ouvre vers le HAUT (bottom:100%)
+     puisqu'il est tout en bas de l'écran du salon — sans ça, le panneau sortirait de l'écran. */
+  .vocalBarreRangee .vocalPlusMenu{position:relative;flex:1 1 calc(50% - 8px);display:flex}
+  .vocalBarreRangee .vocalPlusMenu>button{width:100%}
+  .vocalPlusListe{position:absolute;left:0;bottom:calc(100% + 6px);z-index:50;min-width:210px;
+    display:flex;flex-direction:column;gap:6px;padding:10px;border-radius:12px;
+    background:linear-gradient(160deg,var(--card),var(--velvet));
+    border:1px solid rgba(245,185,66,.35);box-shadow:0 10px 28px rgba(0,0,0,.45)}
+  .vocalPlusListe button{width:100%;text-align:left;font-size:14px}
   /* Blocs réductibles du salon vocal (radio, console de modération) : un petit bouton cliquable
      dans le titre du bloc, à la demande d'un joueur — voir rendreBlocReductible() plus bas.
      Placé DANS le fil normal du titre (flex), jamais en position absolue par-dessus le reste du
@@ -836,6 +846,27 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
   html.ticker-actif.mode-enfant-actif .wrap{padding-top:70px}
 }
 /* --- Salon vocal (façon talkie-walkie) --- */
+/* Refonte couleurs du salon (voir la demande : "des dégradés de couleur en fond… beaucoup plus
+   design" + "trop sombre pour certains") : l'écran du salon reçoit un halo dégradé discret derrière
+   ses cartes (visible surtout dans les espaces entre elles) au lieu d'un aplat uniforme, et chaque
+   carte prend une légère teinte selon son rôle plutôt qu'un simple velours sombre partout — plus
+   vivant à l'œil, tout en restant dans la même palette que le reste du jeu (--beam/--ticket/--teal),
+   donc cohérent avec l'identité visuelle existante plutôt qu'un thème rapporté d'ailleurs. */
+#vocalSalon{
+  background:
+    radial-gradient(ellipse 60% 22% at 10% 2%, rgba(245,185,66,.14), transparent 60%),
+    radial-gradient(ellipse 55% 20% at 96% 14%, rgba(228,88,110,.12), transparent 60%),
+    radial-gradient(ellipse 55% 22% at 6% 55%, rgba(78,205,196,.11), transparent 60%),
+    radial-gradient(ellipse 55% 20% at 100% 90%, rgba(245,185,66,.10), transparent 60%);
+  border-radius:18px;padding:2px 0}
+#vocalSalon .card{background:linear-gradient(155deg,rgba(245,185,66,.055),rgba(228,88,110,.035) 55%,var(--velvet) 100%)}
+#vocalSalon .card[data-module="vocal-hote"]{background:linear-gradient(155deg,rgba(245,185,66,.12),var(--velvet) 65%)}
+#vocalSalon .card[data-module="vocal-intervenants"]{background:linear-gradient(155deg,rgba(78,205,196,.11),var(--velvet) 65%)}
+#vocalSalon .card[data-module="vocal-auditeurs"]{background:linear-gradient(155deg,rgba(124,129,155,.14),var(--velvet) 65%)}
+#vocalConsole{background:linear-gradient(155deg,rgba(228,88,110,.10),var(--velvet) 65%)}
+/* Petits libellés (rôle sous l'avatar, "(rôle)" dans la console, notes) : contraste un peu léger sur
+   fond très sombre pour certains écrans/certains yeux — éclaircis sans devenir criards. */
+#vocalSalon .note, #vocalSalon .qui small{color:#A9AFCC}
 .vocalGrille{display:flex;flex-wrap:wrap;gap:14px;justify-content:flex-start}
 .vocalGrille:empty::after{content:"Personne ici pour l'instant.";color:var(--muted);font-size:13px}
 .vocalParticipant{display:flex;flex-direction:column;align-items:center;gap:6px;width:74px;text-align:center}
@@ -861,7 +892,7 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
 .vocalParticipant .vocalMainLevee{position:absolute;top:-6px;left:-6px;font-size:18px;line-height:1;
   filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
 .vocalParticipant .vocalNom{font-size:11.5px;color:var(--chalk);line-height:1.2;word-break:break-word}
-.vocalParticipant .vocalRoleTag{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.vocalParticipant .vocalRoleTag{font-size:10.5px;color:#AAB1D1;font-weight:600;text-transform:uppercase;letter-spacing:.05em}
 /* Salon vocal, carte d'un AUTRE participant (jamais la sienne) : cliquer la carte ouvre son profil
    (voir ouvrirJoueur — un no-op sur cette page autonome, voir son commentaire), cliquer précisément
    sa photo ouvre plutôt un menu d'emoji privé (voir ouvrirMenuReactionPrivee) — les deux zones sont
@@ -884,6 +915,17 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
 #vocalDemandesListe .urowVocal,#vocalConsoleParticipants .urowVocal{display:flex;align-items:center;gap:10px;
   padding:10px 0;border-top:1px solid rgba(237,232,220,.1);flex-wrap:wrap}
 #vocalDemandesListe .urowVocal .qui,#vocalConsoleParticipants .urowVocal .qui{display:flex;align-items:center;gap:8px;flex:1 1 140px}
+/* Menu unique d'actions par participant (voir la demande : un seul bouton "⋮" plutôt que plusieurs
+   boutons côte à côte, pour la console de modération) — un petit panneau qui s'ouvre juste sous le
+   bouton, dans le style "carte" du reste du salon (dégradé + liseré doré, cohérent avec
+   .vocalConvives et le reste de la refonte couleurs). Un seul menu ouvert à la fois (voir
+   vocalMenuActionsOuvertPour côté script), fermé au clic en dehors. */
+.vocalActionsMenu{position:relative;margin-left:auto}
+.vocalActionsListe{position:absolute;right:0;top:calc(100% + 6px);z-index:50;min-width:190px;
+  display:flex;flex-direction:column;gap:6px;padding:10px;border-radius:12px;
+  background:linear-gradient(160deg,var(--card),var(--velvet));
+  border:1px solid rgba(245,185,66,.35);box-shadow:0 10px 28px rgba(0,0,0,.45)}
+.vocalActionsListe button{width:100%;text-align:left;font-size:13px;padding:8px 10px}
 /* --- LA FENÊTRE MODALE --- */
 /* Reprise avec les variables du thème (--ink/--velvet/--card/--chalk/--muted/--ticket/--teal) au
    lieu des gris/rouge/vert génériques d'origine (#1a1a1a, #e50914, #1db954…) qui donnaient
@@ -1161,12 +1203,41 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
           <button id="btnVocalDemander" class="ghost hidden">✋ Demander à intervenir</button>
           <button id="btnVocalBaisserMain" class="ghost hidden">✋ Baisser la main</button>
           <button id="btnVocalReactionsToggle" class="ghost" type="button" aria-pressed="false">👋 Réactions</button>
-          <button id="btnVocalRechercheFilm" class="ghost" type="button">🔍 Chercher un film</button>
+          <!-- "⋯ Plus" (voir la demande : regrouper les boutons, réduire les menus si besoin) :
+               regroupe les actions secondaires moins fréquentes (chercher un film, suivre un fil X)
+               derrière un seul bouton plutôt que de les aligner toutes côte à côte dans la barre. -->
+          <div class="vocalPlusMenu">
+            <button id="btnVocalPlusToggle" class="ghost" type="button">⋯ Plus</button>
+            <div class="vocalPlusListe hidden" id="vocalPlusListe">
+              <button id="btnVocalRechercheFilm" class="ghost" type="button">🔍 Chercher un film</button>
+              <button id="btnVocalSuivreX" class="ghost" type="button">🐦 Suivre un fil X</button>
+            </div>
+          </div>
           <button id="btnVocalQuitter" class="ghost danger">🚪 Quitter</button>
         </div>
         <p class="note" id="vocalDemandeEnvoyee" style="margin:10px 0 0;text-align:center" hidden>Votre demande a été envoyée à l'hôte.</p>
         <p class="feedback" id="vocalMicMsg" style="margin:8px 0 0;text-align:center"></p>
         <div id="vocalEmojiBar" class="emojis hidden" style="margin-top:14px"></div>
+      </div>
+
+      <!-- "Suivre un fil X" (voir la demande : rester dans le salon — micro compris — plutôt que de
+           devoir ouvrir l'appli X à côté) : panneau PERSONNEL (jamais partagé avec le reste du
+           salon, contrairement au "Post X" diffusé par l'hôte/les cohôtes dans la carte Radio & vidéo
+           plus haut) qui affiche un profil ou un post via l'embed officiel de X — voir
+           vocalChargerFilXPersonnel plus bas dans le script. -->
+      <div class="card hidden" id="vocalSuivreXCarte">
+        <p class="tag" style="margin:0 0 8px">🐦 Suivre un fil X</p>
+        <p class="note" style="margin:0 0 10px">Restez dans le salon — votre micro continue de fonctionner normalement — tout en suivant un
+          compte ou un post : collez un lien de profil (https://x.com/nom) ou d'un post
+          (https://x.com/nom/status/…). Affiché uniquement pour vous, jamais partagé avec le reste du salon.</p>
+        <div class="row">
+          <input id="vocalSuivreXLien" placeholder="https://x.com/..." autocomplete="off">
+          <button id="btnVocalSuivreXCharger" class="ghost" type="button" style="flex:0 0 auto">Suivre</button>
+        </div>
+        <p class="feedback" id="vocalSuivreXMsg" style="margin:8px 0 0"></p>
+        <div id="vocalSuivreXZone" style="margin-top:10px;max-height:520px;overflow-y:auto;display:flex;justify-content:center"></div>
+        <p class="note" style="margin:10px 0 0;font-size:12px;opacity:.75">Affiché directement par X — si X exige d'être connecté pour
+          voir certains contenus, l'affichage peut être limité de son côté ; ce n'est pas quelque chose que nous pouvons changer ici.</p>
       </div>
 
       <!-- Sons reçus des autres participants (WebRTC) — invisible, un <audio> par personne connectée.
@@ -2024,40 +2095,69 @@ function vocalSurveillerPisteMicro(piste){
  *  donc silencieusement (déjà autorisée, pas de nouvelle demande de permission dans l'immense
  *  majorité des cas) et on la substitue dans les connexions déjà ouvertes avec replaceTrack(),
  *  qui évite d'avoir à tout renégocier comme le ferait fermer/rouvrir chaque connexion. */
+// Évite deux tentatives de reprise en même temps (voir la demande : plusieurs déclencheurs
+// écoutent désormais le retour — visibilitychange, focus ET pageshow, voir plus bas — pour
+// rattraper le plus de cas possible d'app changée ; sans ce verrou, ils pourraient se marcher
+// dessus et redemander le micro deux fois de suite pour rien).
+let vocalRevalidationEnCours = false;
 async function vocalRevaliderMicroApresRetour(){
-  if (!vocalSalonActuel || !vocalLocalStream) return;
-  let pisteActuelle = vocalLocalStream.getAudioTracks()[0];
-  if (pisteActuelle && pisteActuelle.readyState !== "ended"){
-    if (!pisteActuelle.muted) return; // toujours vivante et active, rien à faire
-    // La piste existe encore mais reste "muted" (coupure système, voir vocalSurveillerPisteMicro) :
-    // on lui laisse un court instant pour repartir toute seule (cas le plus fréquent), sinon on force
-    // nous-mêmes une reprise ci-dessous plutôt que de laisser un micro silencieux indéfiniment.
-    await new Promise(r => setTimeout(r, 1200));
-    pisteActuelle = vocalLocalStream.getAudioTracks()[0];
-    if (pisteActuelle && pisteActuelle.readyState !== "ended" && !pisteActuelle.muted) return; // reparti tout seul
-  }
+  if (!vocalSalonActuel || !vocalLocalStream || vocalRevalidationEnCours) return;
+  vocalRevalidationEnCours = true;
   try {
-    const nouveauFlux = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const nouvellePiste = nouveauFlux.getAudioTracks()[0];
-    nouvellePiste.enabled = vocalMicOuvert;
-    vocalSurveillerPisteMicro(nouvellePiste);
-    for (const pc of vocalPeers.values()){
-      const emetteur = pc.getSenders().find(s => s.track && s.track.kind === "audio");
-      if (emetteur) emetteur.replaceTrack(nouvellePiste).catch(() => {});
-      else pc.addTrack(nouvellePiste, nouveauFlux);
+    let pisteActuelle = vocalLocalStream.getAudioTracks()[0];
+    if (pisteActuelle && pisteActuelle.readyState !== "ended"){
+      if (!pisteActuelle.muted) return; // toujours vivante et active, rien à faire
+      // La piste existe encore mais reste "muted" (coupure système, voir vocalSurveillerPisteMicro) :
+      // on lui laisse un court instant pour repartir toute seule (cas le plus fréquent), sinon on force
+      // nous-mêmes une reprise ci-dessous plutôt que de laisser un micro silencieux indéfiniment.
+      await new Promise(r => setTimeout(r, 1200));
+      pisteActuelle = vocalLocalStream.getAudioTracks()[0];
+      if (pisteActuelle && pisteActuelle.readyState !== "ended" && !pisteActuelle.muted) return; // reparti tout seul
     }
-    vocalArreterVAD();
-    vocalLocalStream.getTracks().forEach(t => t.stop());
-    vocalLocalStream = nouveauFlux;
-    vocalDemarrerVAD(vocalLocalStream);
-    if (vocalMicOuvert) { $("vocalMicMsg").textContent = ""; $("vocalMicMsg").className = "feedback"; }
-  } catch {
-    // Micro toujours indisponible (permission révoquée entretemps, appareil débranché…) : on ne
-    // casse rien, l'indicateur visuel continue de fonctionner sans le son pour cette personne.
-    $("vocalMicMsg").textContent = "Micro coupé par votre appareil/navigateur — réactivez-le avec le bouton ci-dessus.";
-    $("vocalMicMsg").className = "feedback bad";
+    try {
+      const nouveauFlux = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const nouvellePiste = nouveauFlux.getAudioTracks()[0];
+      nouvellePiste.enabled = vocalMicOuvert;
+      vocalSurveillerPisteMicro(nouvellePiste);
+      for (const pc of vocalPeers.values()){
+        const emetteur = pc.getSenders().find(s => s.track && s.track.kind === "audio");
+        if (emetteur) emetteur.replaceTrack(nouvellePiste).catch(() => {});
+        else pc.addTrack(nouvellePiste, nouveauFlux);
+      }
+      vocalArreterVAD();
+      vocalLocalStream.getTracks().forEach(t => t.stop());
+      vocalLocalStream = nouveauFlux;
+      vocalDemarrerVAD(vocalLocalStream);
+      // Confirmation rassurante (voir la demande : des joueurs signalaient le micro coupé sans
+      // savoir s'il allait revenir tout seul) plutôt qu'un simple retour au silence — visible
+      // quelques secondes, puis s'efface d'elle-même sans qu'il y ait à y toucher.
+      if (vocalMicOuvert) {
+        $("vocalMicMsg").textContent = "🎙️ Micro rétabli automatiquement.";
+        $("vocalMicMsg").className = "feedback";
+        setTimeout(() => { if ($("vocalMicMsg").textContent.includes("rétabli")) $("vocalMicMsg").textContent = ""; }, 4000);
+      }
+    } catch {
+      // Micro toujours indisponible (permission révoquée entretemps, appareil débranché…) : on ne
+      // casse rien, l'indicateur visuel continue de fonctionner sans le son pour cette personne.
+      $("vocalMicMsg").textContent = "Micro coupé par votre appareil/navigateur — réactivez-le avec le bouton ci-dessus.";
+      $("vocalMicMsg").className = "feedback bad";
+    }
+  } finally {
+    vocalRevalidationEnCours = false;
   }
 }
+// Deux déclencheurs supplémentaires en plus de "visibilitychange" (voir plus haut) pour rattraper
+// le plus de cas possible d'un retour après avoir changé d'application (WhatsApp, X/Twitter…) —
+// voir la demande : certains navigateurs mobiles ne redéclenchent pas toujours "visibilitychange"
+// de façon fiable selon la façon dont on revient (bouton retour du système, notification touchée,
+// bascule multitâche…), alors que "focus" et "pageshow" couvrent des cas légèrement différents.
+// vocalRevalidationEnCours ci-dessus évite qu'ils ne se déclenchent en double pour rien.
+window.addEventListener("focus", () => {
+  if (document.visibilityState === "visible") vocalRevaliderMicroApresRetour();
+});
+window.addEventListener("pageshow", () => {
+  if (document.visibilityState === "visible") vocalRevaliderMicroApresRetour();
+});
 
 function afficherVocalListe(){
   $("vocalListe").classList.remove("hidden");
@@ -2224,6 +2324,12 @@ async function chargerMusiqueVocal(){
   $("vocalRadioSelect").innerHTML = vocalMusiquePourRadio.map(p => `<option value="${esc(p.id)}">${esc(p.titre)}</option>`).join("");
 }
 
+/** Petit insigne pour reconnaître au premier coup d'œil les membres fondateurs (voir la demande —
+ *  identique à celui du jeu principal, index.html, qui ne partage pas son JS avec cette page
+ *  autonome). */
+const insigneFondateur = (j) => j?.fondateur
+  ? `<span class="badgeFondateur" title="Membre fondateur">🎖️</span>` : "";
+
 function carteParticipantVocal(p){
   const parle = p.parle ? " parle" : "";
   const photo = p.photo
@@ -2242,7 +2348,7 @@ function carteParticipantVocal(p){
   const micCoupe = p.mute && p.role !== "auditeur";
   return `<div class="vocalParticipant${parle}${cMoi}" data-userid="${esc(p.userId)}" title="${titreInfo}">
     <div class="vocalAvatarWrap">${photo}${micCoupe ? `<span class="vocalMute">🔇</span>` : ""}${p.mainLevee ? `<span class="vocalMainLevee">✋</span>` : ""}</div>
-    <span class="vocalNom">${esc(p.pseudo)}</span>
+    <span class="vocalNom">${esc(p.pseudo)} ${insigneFondateur(p)}</span>
     <span class="vocalRoleTag">${roleLabel}</span>
   </div>`;
 }
@@ -2507,6 +2613,70 @@ function vocalArreterTweet(){
   if (conteneur) conteneur.innerHTML = "";
 }
 
+/** "Suivre un fil X" personnel (voir la demande : pouvoir suivre un compte/un post X sans quitter
+ *  le salon — donc sans jamais couper son micro en changeant d'appli) — totalement indépendant du
+ *  "Post X" diffusé par l'hôte/les cohôtes à tout le salon (vocalChargerTweet ci-dessus) : celui-ci
+ *  n'est visible que par la personne qui l'a ouvert, jamais envoyé au serveur ni aux autres.
+ *  widgets.js n'est chargé qu'à la demande (au premier "Suivre" d'un PROFIL, jamais pour un simple
+ *  post) et une seule fois, quel que soit le nombre de fils suivis ensuite pendant la session. */
+let vocalSuivreXWidgetsChargement = null;
+function vocalChargerWidgetsX(){
+  if (window.twttr?.widgets) return Promise.resolve();
+  if (vocalSuivreXWidgetsChargement) return vocalSuivreXWidgetsChargement;
+  vocalSuivreXWidgetsChargement = new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "https://platform.twitter.com/widgets.js";
+    s.async = true;
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error("widgets.js indisponible"));
+    document.head.appendChild(s);
+  });
+  return vocalSuivreXWidgetsChargement;
+}
+async function vocalChargerFilXPersonnel(){
+  const lien = $("vocalSuivreXLien").value.trim();
+  const zone = $("vocalSuivreXZone");
+  const msg = $("vocalSuivreXMsg");
+  zone.innerHTML = "";
+  msg.textContent = "";
+  msg.className = "feedback";
+  if (!lien) return;
+  // Un lien de POST précis (…/status/12345) passe par l'embed officiel d'un post unique — la même
+  // technique fiable que pour le "Post X" diffusé au salon (vocalChargerTweet), simplement dans un
+  // conteneur personnel séparé. Sinon, on tente un lien de PROFIL (…/nomDuCompte) : le fil complet
+  // du compte, via le widget "timeline" officiel (voir vocalChargerWidgetsX).
+  const matchPost = lien.match(/(?:twitter|x)\.com\/[^\/?#]+\/status\/(\d+)/i);
+  const matchProfil = !matchPost && lien.match(/(?:twitter|x)\.com\/(\w{1,15})\/?(?:[?#].*)?$/i);
+  if (matchPost) {
+    const iframe = document.createElement("iframe");
+    iframe.src = `https://platform.twitter.com/embed/Tweet.html?id=${encodeURIComponent(matchPost[1])}&theme=dark&dnt=true`;
+    iframe.style.cssText = "width:100%;max-width:550px;min-height:420px;border:0";
+    iframe.setAttribute("loading", "lazy");
+    zone.appendChild(iframe);
+  } else if (matchProfil) {
+    msg.textContent = "Chargement du fil…";
+    try {
+      await vocalChargerWidgetsX();
+      const conteneur = document.createElement("div");
+      conteneur.style.width = "100%";
+      zone.appendChild(conteneur);
+      await window.twttr.widgets.createTimeline(
+        { sourceType: "profile", screenName: matchProfil[1] },
+        conteneur, { theme: "dark", chrome: "noheader nofooter noborders", height: 480 }
+      );
+      msg.textContent = "";
+    } catch {
+      // X peut limiter ou refuser l'affichage sans y être connecté soi-même dans ce navigateur —
+      // une limite posée par X, pas quelque chose que le salon puisse contourner.
+      msg.textContent = "Impossible de charger ce fil pour l'instant (X peut le limiter sans y être connecté) — réessayez plus tard, ou collez plutôt le lien d'un post précis.";
+      msg.className = "feedback bad";
+    }
+  } else {
+    msg.textContent = "Lien non reconnu — collez un lien de profil (x.com/nom) ou d'un post (x.com/nom/status/…).";
+    msg.className = "feedback bad";
+  }
+}
+
 /** Cale un <audio> ou <video> sur le temps écoulé depuis le début de la diffusion (voir demarreLe
  *  côté serveur) — factorisé ici car radio et vidéo (lien/fichier) suivent exactement le même
  *  principe : chaque appareil charge le même contenu et se resynchronise tout seul. */
@@ -2756,6 +2926,25 @@ $("btnVocalReactionsToggle").onclick = () => {
   $("btnVocalReactionsToggle").setAttribute("aria-pressed", String(!masque));
 };
 
+/** "⋯ Plus" (voir la demande : regrouper/réduire les boutons secondaires de la barre du bas) —
+ *  même principe que le menu "⋮ Actions" de la console de modération (fermé au clic en dehors,
+ *  câblé une seule fois ici). */
+$("btnVocalPlusToggle").onclick = (e) => {
+  e.stopPropagation();
+  $("vocalPlusListe").classList.toggle("hidden");
+};
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".vocalPlusMenu")) $("vocalPlusListe")?.classList.add("hidden");
+});
+
+/** "Suivre un fil X" (voir #vocalSuivreXCarte plus haut et vocalChargerFilXPersonnel plus bas). */
+$("btnVocalSuivreX").onclick = () => {
+  $("vocalPlusListe").classList.add("hidden");
+  $("vocalSuivreXCarte").classList.toggle("hidden");
+};
+$("btnVocalSuivreXCharger").onclick = vocalChargerFilXPersonnel;
+$("vocalSuivreXLien").addEventListener("keydown", (e) => { if (e.key === "Enter") vocalChargerFilXPersonnel(); });
+
 /** Recherche d'un film à proposer au salon (voir #btnVocalRechercheFilm) : soit une poignée de
  *  recherches prédéfinies (populaires, mieux notés…), soit une recherche libre par titre — les deux
  *  interrogent TMDB côté serveur (voir /api/tmdb/predefini et /api/tmdb/recherche) plutôt que le
@@ -2830,9 +3019,28 @@ $("btnVocalRechercheFilmLancer").onclick = () => {
   lancerRechercheFilmVocal(`/api/tmdb/recherche?q=${encodeURIComponent(q)}`);
 };
 $("vocalRechercheFilmInput").addEventListener("keydown", (e) => { if (e.key === "Enter") $("btnVocalRechercheFilmLancer").click(); });
-$("btnVocalRechercheFilm").onclick = () => $("vocalRechercheFilmModal").classList.add("active");
+$("btnVocalRechercheFilm").onclick = () => {
+  $("vocalPlusListe").classList.add("hidden");
+  $("vocalRechercheFilmModal").classList.add("active");
+};
 $("closeVocalRechercheFilmBtn").onclick = () => $("vocalRechercheFilmModal").classList.remove("active");
 $("vocalRechercheFilmModal").onclick = (e) => { if (e.target.id === "vocalRechercheFilmModal") $("vocalRechercheFilmModal").classList.remove("active"); };
+
+/** Menu d'actions actuellement ouvert dans la console de modération (userId visé, ou null) — voir
+ *  la demande : un seul bouton "⋮ Actions" par participant plutôt que plusieurs boutons côte à
+ *  côte. Mémorisé ici (et pas seulement dans le DOM) pour survivre à un rendu de la console
+ *  (vocal:update, très fréquent — un simple changement de micro ailleurs dans le salon suffit à en
+ *  déclencher un) : sans ça, le menu se refermerait tout seul avant même d'avoir pu cliquer sur une
+ *  action. */
+let vocalMenuActionsOuvertPour = null;
+// Clic n'importe où en dehors d'un menu ouvert : le referme. Câblé une seule fois ici (pas à
+// l'intérieur de renderConsoleVocal, qui est appelée à chaque vocal:update) pour ne jamais empiler
+// plusieurs écouteurs identiques sur document.
+document.addEventListener("click", (e) => {
+  if (!vocalMenuActionsOuvertPour || e.target.closest(".vocalActionsMenu")) return;
+  vocalMenuActionsOuvertPour = null;
+  $("vocalConsole")?.querySelectorAll(".vocalActionsListe").forEach(z => z.classList.add("hidden"));
+});
 
 function renderConsoleVocal(salon, monRole){
   // Ne touche pas au champ pendant que l'hôte/le cohôte est en train d'y taper, sinon chaque
@@ -2857,9 +3065,21 @@ function renderConsoleVocal(salon, monRole){
   const nbCohotes = salon.participants.filter(p => p.role === "cohote").length;
   $("vocalConsoleParticipants").innerHTML = `<p class="note" style="margin:10px 0 6px">Participants</p>` +
     salon.participants.filter(p => p.userId !== me?.id).map(p => {
+      // Toutes les actions de modération pour cette personne, regroupées derrière un seul bouton
+      // "⋮ Actions" (voir la demande) plutôt que plusieurs boutons côte à côte — beaucoup plus lisible
+      // dès qu'un salon a plus de 2-3 participants à modérer.
       const boutons = [];
-      if (p.role === "auditeur") boutons.push(`<button class="ghost" data-promouvoir="${esc(p.userId)}">⬆️ Intervenant</button>`);
-      if (p.role === "intervenant") boutons.push(`<button class="ghost" data-retrograder="${esc(p.userId)}">⬇️ Auditeur</button>`);
+      if (p.role === "auditeur") boutons.push(`<button class="ghost" data-promouvoir="${esc(p.userId)}">⬆️ Passer intervenant</button>`);
+      if (p.role === "intervenant") boutons.push(`<button class="ghost" data-retrograder="${esc(p.userId)}">⬇️ Repasser auditeur</button>`);
+      // Couper/réactiver le micro à distance (voir la demande et vocal:mute-participant côté
+      // serveur) : jamais sur l'hôte (seul maître de son propre micro), et un cohôte ne peut pas agir
+      // sur un autre cohôte (seul l'hôte le peut) — même logique que exclure/bannir plus bas. Un
+      // auditeur n'a par définition pas de micro à couper (voir micCoupe dans carteParticipantVocal).
+      if (["cohote", "intervenant"].includes(p.role) && (monRole === "hote" || p.role !== "cohote")) {
+        boutons.push(p.mute
+          ? `<button class="ghost" data-demute-part="${esc(p.userId)}">🔊 Réactiver son micro</button>`
+          : `<button class="ghost" data-mute-part="${esc(p.userId)}">🔇 Couper son micro</button>`);
+      }
       if (monRole === "hote" && p.role !== "hote" && p.role !== "cohote" && nbCohotes < 3)
         boutons.push(`<button class="ghost" data-nommer-cohote="${esc(p.userId)}">🎖️ Nommer cohôte</button>`);
       if (monRole === "hote" && p.role === "cohote")
@@ -2871,26 +3091,63 @@ function renderConsoleVocal(salon, monRole){
         // cohôte ne l'aura pas explicitement débanni (voir vocalBannisChargesPour plus bas).
         boutons.push(`<button class="ghost danger" data-bannir="${esc(p.userId)}">🚫 Bannir</button>`);
       }
+      const ouvert = vocalMenuActionsOuvertPour === p.userId;
       return `<div class="urowVocal">
-        <span class="qui">${p.photo ? `<img class="pfp" src="${esc(p.photo)}" alt="">` : esc(p.avatar||"🎬")} ${esc(p.pseudo)}
+        <span class="qui">${p.photo ? `<img class="pfp" src="${esc(p.photo)}" alt="">` : esc(p.avatar||"🎬")} ${esc(p.pseudo)} ${insigneFondateur(p)}
           <small style="color:var(--muted)">(${p.role})</small></span>
-        ${boutons.join("")}
+        ${boutons.length ? `<div class="vocalActionsMenu">
+          <button class="ghost" type="button" data-menu-toggle="${esc(p.userId)}">⋮ Actions</button>
+          <div class="vocalActionsListe${ouvert ? "" : " hidden"}" data-menu="${esc(p.userId)}">${boutons.join("")}</div>
+        </div>` : ""}
       </div>`;
     }).join("");
 
-  $("vocalConsole").querySelectorAll("[data-promouvoir]").forEach(b => b.onclick = () =>
-    socket.emit("vocal:promouvoir", { code: vocalSalonActuel.code, userId: b.dataset.promouvoir }, () => {}));
-  $("vocalConsole").querySelectorAll("[data-retrograder]").forEach(b => b.onclick = () =>
-    socket.emit("vocal:retrograder", { code: vocalSalonActuel.code, userId: b.dataset.retrograder }, () => {}));
-  $("vocalConsole").querySelectorAll("[data-nommer-cohote]").forEach(b => b.onclick = () =>
-    socket.emit("vocal:nommer-cohote", { code: vocalSalonActuel.code, userId: b.dataset.nommerCohote }, () => {}));
-  $("vocalConsole").querySelectorAll("[data-retirer-cohote]").forEach(b => b.onclick = () =>
-    socket.emit("vocal:retirer-cohote", { code: vocalSalonActuel.code, userId: b.dataset.retirerCohote }, () => {}));
+  // Un seul menu ouvert à la fois, dans toute la console — plus lisible qu'une pile de menus
+  // ouverts en même temps dans un long salon. Se referme aussi tout seul (voir le clic en dehors,
+  // câblé une seule fois au chargement de la page, plus bas).
+  $("vocalConsole").querySelectorAll("[data-menu-toggle]").forEach(b => b.onclick = (e) => {
+    e.stopPropagation();
+    const id = b.dataset.menuToggle;
+    const etaitOuvert = vocalMenuActionsOuvertPour === id;
+    $("vocalConsole").querySelectorAll(".vocalActionsListe").forEach(z => z.classList.add("hidden"));
+    vocalMenuActionsOuvertPour = etaitOuvert ? null : id;
+    if (!etaitOuvert) $("vocalConsole").querySelector(`.vocalActionsListe[data-menu="${CSS.escape(id)}"]`)?.classList.remove("hidden");
+  });
+  const fermerMenuActions = () => {
+    vocalMenuActionsOuvertPour = null;
+    $("vocalConsole").querySelectorAll(".vocalActionsListe").forEach(z => z.classList.add("hidden"));
+  };
+  $("vocalConsole").querySelectorAll("[data-promouvoir]").forEach(b => b.onclick = () => {
+    fermerMenuActions();
+    socket.emit("vocal:promouvoir", { code: vocalSalonActuel.code, userId: b.dataset.promouvoir }, () => {});
+  });
+  $("vocalConsole").querySelectorAll("[data-retrograder]").forEach(b => b.onclick = () => {
+    fermerMenuActions();
+    socket.emit("vocal:retrograder", { code: vocalSalonActuel.code, userId: b.dataset.retrograder }, () => {});
+  });
+  $("vocalConsole").querySelectorAll("[data-mute-part]").forEach(b => b.onclick = () => {
+    fermerMenuActions();
+    socket.emit("vocal:mute-participant", { code: vocalSalonActuel.code, userId: b.dataset.mutePart, mute: true }, () => {});
+  });
+  $("vocalConsole").querySelectorAll("[data-demute-part]").forEach(b => b.onclick = () => {
+    fermerMenuActions();
+    socket.emit("vocal:mute-participant", { code: vocalSalonActuel.code, userId: b.dataset.demutePart, mute: false }, () => {});
+  });
+  $("vocalConsole").querySelectorAll("[data-nommer-cohote]").forEach(b => b.onclick = () => {
+    fermerMenuActions();
+    socket.emit("vocal:nommer-cohote", { code: vocalSalonActuel.code, userId: b.dataset.nommerCohote }, () => {});
+  });
+  $("vocalConsole").querySelectorAll("[data-retirer-cohote]").forEach(b => b.onclick = () => {
+    fermerMenuActions();
+    socket.emit("vocal:retirer-cohote", { code: vocalSalonActuel.code, userId: b.dataset.retirerCohote }, () => {});
+  });
   $("vocalConsole").querySelectorAll("[data-exclure]").forEach(b => b.onclick = () => {
+    fermerMenuActions();
     if (confirm("Exclure ce participant du salon ?"))
       socket.emit("vocal:exclure", { code: vocalSalonActuel.code, userId: b.dataset.exclure }, () => {});
   });
   $("vocalConsole").querySelectorAll("[data-bannir]").forEach(b => b.onclick = () => {
+    fermerMenuActions();
     if (confirm("Bannir ce participant de ce salon ? Il ne pourra plus le rejoindre tant que vous (ou un cohôte) ne l'aurez pas débanni."))
       socket.emit("vocal:bannir", { code: vocalSalonActuel.code, userId: b.dataset.bannir }, (res) => {
         if (res?.ok) afficherBannisVocal(res.bannis || []);
