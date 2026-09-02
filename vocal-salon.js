@@ -127,6 +127,10 @@ export function creerModuleVocalSalon({
       participants: [...salon.participants.values()].map((p) => ({
         userId: p.userId, pseudo: p.pseudo, avatar: p.avatar, photo: p.photo,
         role: p.role, mute: p.mute, parle: p.parle, mainLevee: Boolean(p.mainLevee),
+        // Insigne fondateur (voir la demande) : simple reflet de user.fondateur au moment où la
+        // personne a rejoint/créé le salon (voir plus bas) — comme partout ailleurs dans le jeu
+        // (insigneFondateur côté client), affiché à côté du pseudo.
+        fondateur: Boolean(p.fondateur),
       })),
       demandesMontee: [...salon.demandesMontee],
       radio: salon.radio,
@@ -325,7 +329,7 @@ export function creerModuleVocalSalon({
       };
       salon.participants.set(user.id, {
         userId: user.id, pseudo: user.pseudo, avatar: user.avatar, photo: user.photo || null,
-        role: "hote", mute: true, parle: false,
+        role: "hote", mute: true, parle: false, fondateur: Boolean(user.fondateur),
       });
       salonsVocaux.set(code, salon);
       socket.join(`vocal:${code}`);
@@ -357,6 +361,7 @@ export function creerModuleVocalSalon({
         mute: etatEncoreValide ? etatRecent.mute : true,
         parle: false,
         mainLevee: etatEncoreValide ? etatRecent.mainLevee : false,
+        fondateur: Boolean(user.fondateur),
       });
       socket.join(`vocal:${salon.code}`);
       diffuserVocal(salon);
@@ -481,6 +486,26 @@ export function creerModuleVocalSalon({
       const cible = salon.participants.get(userId);
       if (!cible || cible.role !== "cohote") return cb?.({ ok: false });
       cible.role = "intervenant";
+      diffuserVocal(salon);
+      cb?.({ ok: true });
+    });
+
+    /** Coupe ou réactive à distance le micro d'un participant (voir la demande : « il y a que
+     *  l'utilisateur, le cohôte ou l'hôte qui peuvent couper le micro ») — jamais sur l'hôte
+     *  lui-même, qui reste seul maître de son propre micro, et un cohôte ne peut pas agir sur un
+     *  autre cohôte (seul l'hôte le peut), comme pour exclure/bannir ci-dessous. Se contente de
+     *  changer cible.mute : c'est le client de la personne visée qui applique l'effet réel (arrêt du
+     *  flux local) au prochain vocal:update, exactement comme quand elle bascule son propre micro
+     *  (voir vocalMicOuvert côté client) — jamais une coupure « en douce » qu'elle ne verrait pas.
+     *  Un auditeur n'a par définition pas de micro à couper, donc pas de cible possible non plus. */
+    socket.on("vocal:mute-participant", ({ code, userId, mute }, cb) => {
+      const salon = salonsVocaux.get(code);
+      if (!salon || !estModoVocal(salon, user.id) || userId === user.id) return cb?.({ ok: false });
+      const cible = salon.participants.get(userId);
+      if (!cible || !["cohote", "intervenant"].includes(cible.role)) return cb?.({ ok: false });
+      if (salon.hostId !== user.id && cible.role === "cohote") return cb?.({ ok: false });
+      cible.mute = Boolean(mute);
+      if (cible.mute) cible.parle = false;
       diffuserVocal(salon);
       cb?.({ ok: true });
     });
