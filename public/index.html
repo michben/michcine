@@ -42,6 +42,16 @@
   .volLabel{font-family:var(--font-code);font-weight:600;font-size:13px;color:var(--muted);text-align:center}
   label{display:block;font-family:var(--font-etiquette);font-weight:500;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
   input{width:100%;background:var(--card);border:1px solid rgba(237,232,220,.14);color:var(--chalk);border-radius:10px;padding:13px 14px;font:inherit;font-size:16px}
+  /* Curseur de volume (voir #vocalVolumeSlider) : la règle générale ci-dessus (fond/bordure/
+     padding épais, pensée pour du texte) rend un <input type="range"> illisible — on repart d'une
+     base neutre, propre sur tous les navigateurs. */
+  input[type="range"]{-webkit-appearance:none;appearance:none;background:transparent;border:0;padding:0;height:28px}
+  input[type="range"]::-webkit-slider-runnable-track{height:6px;border-radius:4px;background:rgba(237,232,220,.18)}
+  input[type="range"]::-moz-range-track{height:6px;border-radius:4px;background:rgba(237,232,220,.18)}
+  input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:22px;height:22px;
+    margin-top:-8px;border-radius:50%;background:var(--beam);border:2px solid var(--ink);cursor:pointer}
+  input[type="range"]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:var(--beam);
+    border:2px solid var(--ink);cursor:pointer}
   input:focus-visible,button:focus-visible{outline:2px solid var(--beam);outline-offset:2px}
   #joinCode{font-family:'JetBrains Mono',monospace;letter-spacing:.5em;text-transform:uppercase;font-size:20px}
   button{font:inherit;font-weight:700;border:0;border-radius:12px;padding:13px 18px;cursor:pointer;
@@ -204,6 +214,10 @@
     max-width:min(420px,88vw);pointer-events:none;animation:monteeNiveau 5s ease-out forwards}
   .vocalBienvenue b{display:block;font-family:'Anton',sans-serif;text-transform:uppercase;
     font-size:clamp(22px,6vw,34px);color:var(--teal);letter-spacing:.03em}
+  /* Même message "en grand", réutilisé pour annoncer QUI diffuse une vidéo/musique au salon (voir
+     la demande) — en or plutôt qu'en teal, pour rester visuellement distinct du message de
+     bienvenue à un nouvel auditeur, tout en gardant la même animation/structure. */
+  .vocalBienvenue.diffusion b{color:var(--beam)}
   /* Citation façon diapositive de cinéma : cadre sombre, perforations de
      pellicule sur les côtés, fenêtre surélevée pour la réplique, bandeau
      d'étiquette en dessous pour le film et l'anecdote. */
@@ -466,9 +480,14 @@
   .invitation span{display:flex;gap:8px}
   .invitation button{flex:1;padding:10px;font-size:14px}
   @keyframes descend{from{opacity:0;transform:translateX(-50%) translateY(-18px)}to{opacity:1;transform:translateX(-50%)}}
-  .emojis{display:flex;gap:6px;flex-wrap:wrap;margin-top:16px;justify-content:center}
+  .emojis{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:16px}
+  /* Zone de clic bien plus généreuse qu'avant (voir la demande : "boutons pas du tout sensibles
+     pour certains") — min-width/min-height forcent une cible tactile confortable (~44px, le
+     minimum recommandé) même quand l'emoji lui-même est petit, sans agrandir le texte affiché ni
+     casser la mise en page (l'emoji reste centré par place-items). Le "gap" est aussi élargi
+     ci-dessus pour éviter les taps sur le mauvais bouton voisin. */
   .emojis button{background:var(--card);border:1px solid rgba(237,232,220,.12);font-size:22px;
-    padding:8px 11px;line-height:1;min-height:0}
+    padding:8px 11px;line-height:1;min-width:46px;min-height:46px;display:grid;place-items:center}
   .emojis button:hover{border-color:var(--beam)}
   /* Petit retour visuel immédiat au clic (voir construireBarreReactions) : un bref "coup de pouce"
      visuel pour bien sentir que le clic a été pris en compte, y compris pour des clics très rapprochés. */
@@ -1553,6 +1572,16 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
       <div class="card" id="vocalRadioCard">
         <p class="tag" style="margin:0 0 8px">📻 Radio & vidéo du salon</p>
         <p class="note" id="vocalRadioTexte" style="margin:0 0 10px">Aucune piste diffusée pour l'instant.</p>
+        <!-- Réglage du son PERSONNEL (voir la demande : "un bouton pour régler le son des vidéos que
+             l'on diffuse") — indépendant du curseur natif du lecteur, souvent trop petit ou masqué
+             selon le navigateur/téléphone, et commun à l'audio, la vidéo ET YouTube (voir
+             majVolumeRadioVocal côté script) : un seul réglage, toujours au même endroit. Propre à
+             chaque auditeur, sans effet sur les autres. -->
+        <div class="row" id="vocalVolumeRow" style="align-items:center;gap:10px;margin:0 0 12px">
+          <span aria-hidden="true">🔉</span>
+          <input type="range" id="vocalVolumeSlider" min="0" max="100" step="5" style="flex:1" aria-label="Volume de la vidéo ou musique diffusée dans ce salon">
+          <span aria-hidden="true">🔊</span>
+        </div>
         <audio id="vocalAudio" style="width:100%;display:none" controls controlsList="nodownload noplaybackrate"></audio>
         <div class="row hidden" id="vocalRadioBoucleRow" style="margin:6px 0 0">
           <button id="btnVocalRadioBoucle" class="ghost">🔁 Lire en boucle</button>
@@ -2336,11 +2365,21 @@ window.addEventListener("error", (e) => {
 ["gesturestart", "gesturechange", "gestureend"].forEach((evt) => {
   document.addEventListener(evt, (e) => e.preventDefault(), { passive: false });
 });
-let vocalDernierTouchEnd = 0;
+// IMPORTANT (voir la demande : boutons/emojis "pas du tout sensibles pour certains") — cette
+// détection ne doit bloquer QUE un vrai double-tap au même endroit (le geste qui zoome), jamais
+// deux taps rapprochés dans le temps mais à des endroits différents : la version précédente ne
+// comparait que l'horloge, sans la position, et annulait donc aussi bien le second tap d'un
+// utilisateur qui enchaînait vite deux boutons DIFFÉRENTS (deux emojis, ou "lever la main" puis
+// "couper le micro") — le clic ne partait jamais, l'app semblait "ne pas réagir". Un vrai
+// double-tap-zoom retape quasiment au même pixel ; deux taps sur deux boutons distincts, non.
+let vocalDernierTouch = { temps: 0, x: 0, y: 0 };
 document.addEventListener("touchend", (e) => {
   const maintenant = Date.now();
-  if (maintenant - vocalDernierTouchEnd <= 350) e.preventDefault();
-  vocalDernierTouchEnd = maintenant;
+  const t = e.changedTouches?.[0];
+  const x = t?.clientX ?? 0, y = t?.clientY ?? 0;
+  const memeEndroit = Math.abs(x - vocalDernierTouch.x) < 30 && Math.abs(y - vocalDernierTouch.y) < 30;
+  if (maintenant - vocalDernierTouch.temps <= 350 && memeEndroit) e.preventDefault();
+  vocalDernierTouch = { temps: maintenant, x, y };
 }, { passive: false });
 </script>
 <script src="/js/moteur.js"></script>
@@ -2849,10 +2888,13 @@ function ajusterVolumeMusique(delta){
 $("btnMusiqueVolMoins").onclick = () => ajusterVolumeMusique(-0.1);
 $("btnMusiqueVolPlus").onclick = () => ajusterVolumeMusique(0.1);
 
-/** Volume de la radio du salon vocal (#vocalAudio/#vocalVideo) — distinct du volume de la radio
- *  d'ambiance de la page d'accueil (musiqueVolume ci-dessus) : chacun peut régler le sien sans
- *  affecter l'autre. Réglable directement via les contrôles natifs du lecteur audio/vidéo (le
- *  curseur de volume intégré du navigateur) — plus besoin de boutons ➖/➕ dédiés ici. */
+/** Volume de la radio du salon vocal (#vocalAudio/#vocalVideo/YouTube) — distinct du volume de la
+ *  radio d'ambiance de la page d'accueil (musiqueVolume ci-dessus) : chacun peut régler le sien
+ *  sans affecter l'autre. Un curseur dédié (#vocalVolumeSlider, voir la demande : "un bouton pour
+ *  régler le son des vidéos que l'on diffuse") s'ajoute désormais aux contrôles natifs du lecteur
+ *  — ceux-ci restent parfois minuscules, masqués ou peu fiables selon le navigateur/téléphone
+ *  (en particulier pour l'intégration YouTube, dont le curseur de volume n'est pas toujours
+ *  accessible sur mobile). Un seul réglage, visible au même endroit, quel que soit ce qui est diffusé. */
 let vocalRadioVolume = (() => {
   const v = parseFloat(localStorage.getItem("michben_vocal_radio_volume"));
   return Number.isFinite(v) && v >= 0 && v <= 1 ? v : 0.5;
@@ -2868,8 +2910,23 @@ function majVolumeRadioVocal(){
   const video = $("vocalVideo");
   if (video) video.volume = vocalRadioVolume;
   if (vocalYoutubePlayer) { try { vocalYoutubePlayer.setVolume(Math.round(vocalRadioVolume * 100)); } catch {} }
+  const curseur = $("vocalVolumeSlider");
+  // Ne touche pas le curseur pendant que le doigt/la souris est dessus (voir son propre écouteur
+  // "input" plus bas) : sinon un simple rafraîchissement du salon (mic coupé, main levée...) — bien
+  // plus fréquent qu'un vrai changement de volume — le ferait sauter sous le doigt de l'utilisateur.
+  if (curseur && document.activeElement !== curseur) curseur.value = Math.round(vocalRadioVolume * 100);
 }
 majVolumeRadioVocal();
+$("vocalVolumeSlider")?.addEventListener("input", (e) => {
+  vocalRadioVolume = Math.min(1, Math.max(0, Number(e.target.value) / 100));
+  try { localStorage.setItem("michben_vocal_radio_volume", String(vocalRadioVolume)); } catch {}
+  majVolumeRadioVocal();
+});
+// Fin naturelle de la piste/vidéo diffusée dans le salon vocal (voir vocalSignalerFinDiffusion, plus
+// bas) : ni "loop" (relancé tout seul par le navigateur, "ended" ne se déclenche alors jamais) ni un
+// simple changement de source (readyState remis à zéro) ne déclenchent cet événement à tort.
+$("vocalAudio")?.addEventListener("ended", () => vocalSignalerFinDiffusion());
+$("vocalVideo")?.addEventListener("ended", () => vocalSignalerFinDiffusion());
 
 /** Blocs réductibles du salon vocal : ajoute un petit bouton bien visible (chevron ▾/▸, fond
  *  teinté) DANS le titre du bloc (voir .cardReductible / .traitReduction plus haut — en flux
@@ -6963,6 +7020,36 @@ function vocalDemarrerCompteARebours(demarreLe, titre, quandTermine){
   vocalCompteARebours.timerId = setInterval(tick, 200);
 }
 
+/** Un seul et même message "en grand" (voir .vocalBienvenue/.vocalBienvenue.diffusion) que celui du
+ *  nouvel auditeur, mais coloré en or et annonçant qui diffuse quoi — voir vocalMajLectureRadioOuVideo. */
+let vocalDerniereDiffusionAnnoncee = null; // demarreLe de la dernière diffusion déjà annoncée
+function vocalAfficherAnnonceDiffusion(media){
+  const emoji = { youtube: "📺", video: "🎬", twitter: "🐦" }[media.type] || "🎵";
+  const verbe = media.type === "twitter" ? "diffuse un post X" : (media.type === "audio" ? "diffuse de la musique" : "diffuse une vidéo");
+  const el = document.createElement("div");
+  el.className = "vocalBienvenue diffusion";
+  el.innerHTML = `<b>${emoji} ${esc(media.diffuseurPseudo)} ${verbe} !</b><span class="note">${esc(media.titre)}</span>`;
+  document.body.append(el);
+  setTimeout(() => el.remove(), 5000);
+}
+
+/** true si JE suis hôte/cohôte du salon actuel — tenu à jour à chaque rendu (voir
+ *  vocalMajLectureRadioOuVideo), et relu par vocalSignalerFinDiffusion() quand la lecture se
+ *  termine naturellement, pour savoir si je suis autorisé à arrêter la diffusion pour tout le monde. */
+let vocalEstModoRadio = false;
+/** Arrête la diffusion pour tout le salon quand elle se termine TOUTE SEULE (fin de vidéo/piste,
+ *  voir les écouteurs "ended"/onStateChange plus bas) — voir la demande : "beaucoup trop de problème
+ *  à la fin de la vidéo qui refuse de s'arrêter". Avant, rien ne prévenait jamais le serveur qu'une
+ *  diffusion était terminée : elle restait "active" indéfiniment (salon.radio non vidé) tant que
+ *  l'hôte ne cliquait pas lui-même sur "⏹️ Arrêter" — ce qui, en plus, resynchronisait sans cesse
+ *  d'anciens lecteurs (voir vocalChargerYoutube) à chaque rafraîchissement du salon. Seuls l'hôte/un
+ *  cohôte peuvent le faire (voir estModoVocal côté serveur) : les autres participants ne tentent
+ *  rien, en attendant que la lecture se termine aussi de leur côté (à la synchronisation près). */
+function vocalSignalerFinDiffusion(){
+  if (!vocalEstModoRadio || !vocalSalonActuel?.code) return;
+  socket.emit("vocal:radio", { code: vocalSalonActuel.code, pisteId: null }, () => {});
+}
+
 /** Affiche, au même endroit (la carte "Radio & vidéo du salon"), le bon lecteur selon le type de
  *  contenu diffusé : <audio> pour une piste musicale, <video> pour un lien/fichier vidéo, ou le
  *  lecteur YouTube officiel pour une vidéo YouTube — un seul à la fois, synchronisé pour tout le
@@ -6972,6 +7059,21 @@ function vocalMajLectureRadioOuVideo(salon, modo){
   audio.volume = vocalRadioVolume; // au cas où l'élément aurait été recréé/réinitialisé entretemps
   video.volume = vocalRadioVolume;
   const media = salon.radio;
+  // Seul l'hôte/un cohôte peut arrêter la diffusion pour tout le salon (voir estModoVocal côté
+  // serveur) — mémorisé ici pour que vocalSignalerFinDiffusion() (déclenché par l'événement "ended"
+  // du lecteur, bien plus bas) sache s'il a le droit de le faire au moment où la lecture se termine.
+  vocalEstModoRadio = modo;
+
+  // Message "en grand" annonçant qui diffuse quoi (voir la demande : "un message [...] qui décrit en
+  // gros qui diffuse la vidéo") — une seule fois par diffusion, jamais reproduit à chaque simple
+  // rafraîchissement du salon (mic coupé, main levée...), bien plus fréquent que le lancement d'une
+  // vidéo. "Fraîche" = démarrée il y a moins de 8s (large marge après le compte à rebours de 3s des
+  // vidéos) : sans ce garde-fou, un participant qui rejoint EN COURS de diffusion verrait aussi
+  // surgir l'annonce, comme si elle venait tout juste de démarrer.
+  if (media && media.diffuseurPseudo && vocalDerniereDiffusionAnnoncee !== media.demarreLe){
+    vocalDerniereDiffusionAnnoncee = media.demarreLe;
+    if (Date.now() - media.demarreLe < 8000) vocalAfficherAnnonceDiffusion(media);
+  }
 
   if (!media){
     vocalAnnulerCompteARebours();
@@ -7224,8 +7326,14 @@ function vocalChargerYoutube(youtubeId, demarreLe){
   }
   const debut = Math.max(0, Math.floor((Date.now() - demarreLe) / 1000));
   if (vocalYoutubePlayer && vocalYoutubeIdActuel === youtubeId){
-    // Déjà la bonne vidéo en cours : on ne fait que se recaler si l'écart devient trop visible.
+    // Déjà terminée : ne pas la resynchroniser/relancer (voir vocalSignalerFinDiffusion, qui va de
+    // toute façon arrêter la diffusion pour tout le salon dans l'instant qui suit) — sans ce garde-
+    // fou, chaque rafraîchissement du salon (mic coupé, main levée...) recalait la lecture sur un
+    // temps écoulé bien au-delà de la durée réelle et relançait playVideo(), ce qui pouvait faire
+    // repartir ou re-sauter la vidéo juste avant que l'arrêt automatique ne prenne effet (voir la
+    // demande : "beaucoup trop de problème à la fin de la vidéo qui refuse de s'arrêter").
     try {
+      if (vocalYoutubePlayer.getPlayerState() === YT.PlayerState.ENDED) return;
       const t = vocalYoutubePlayer.getCurrentTime();
       if (Math.abs(t - debut) > 4) vocalYoutubePlayer.seekTo(debut, true);
       vocalYoutubePlayer.playVideo();
@@ -7242,7 +7350,13 @@ function vocalChargerYoutube(youtubeId, demarreLe){
   vocalYoutubePlayer = new YT.Player("vocalYoutubePlayer", {
     videoId: youtubeId,
     playerVars: { start: debut, autoplay: 1, playsinline: 1 },
-    events: { onReady: (e) => { try { e.target.setVolume(Math.round(vocalRadioVolume * 100)); e.target.playVideo(); } catch {} } },
+    events: {
+      onReady: (e) => { try { e.target.setVolume(Math.round(vocalRadioVolume * 100)); e.target.playVideo(); } catch {} },
+      // Fin naturelle de la vidéo YouTube (voir vocalSignalerFinDiffusion) — enregistré une seule
+      // fois à la création du lecteur, mais reste valable pour toutes les vidéos chargées ensuite
+      // via loadVideoById (l'instance du lecteur, elle, n'est jamais recréée — voir plus haut).
+      onStateChange: (e) => { if (e.data === YT.PlayerState.ENDED) vocalSignalerFinDiffusion(); },
+    },
   });
 }
 function vocalArreterYoutube(){

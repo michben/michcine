@@ -597,7 +597,7 @@ export function creerModuleVocalSalon({
       const piste = getPlaylisteMusique().find((p) => p.id === pisteId);
       if (!piste) return cb?.({ ok: false, error: "PISTE_INTROUVABLE" });
       if (!fichierMusiqueExiste(piste)) return cb?.({ ok: false, error: "FICHIER_INTROUVABLE" });
-      salon.radio = { titre: piste.titre, url: piste.url, type: "audio", demarreLe: Date.now() };
+      salon.radio = { titre: piste.titre, url: piste.url, type: "audio", demarreLe: Date.now(), diffuseurPseudo: user.pseudo };
       diffuserVocal(salon);
       cb?.({ ok: true });
     });
@@ -607,7 +607,7 @@ export function creerModuleVocalSalon({
       if (!salon || !estModoVocal(salon, user.id)) return cb?.({ ok: false });
       const resultat = ajouterPisteMusique({ titre, url, fichier, ext });
       if (resultat.error) return cb?.({ ok: false, error: resultat.error });
-      salon.radio = { titre: resultat.piste.titre, url: resultat.piste.url, type: "audio", demarreLe: Date.now() };
+      salon.radio = { titre: resultat.piste.titre, url: resultat.piste.url, type: "audio", demarreLe: Date.now(), diffuseurPseudo: user.pseudo };
       diffuserVocal(salon);
       cb?.({ ok: true, piste: resultat.piste });
     });
@@ -635,7 +635,7 @@ export function creerModuleVocalSalon({
         // COMPTE_A_REBOURS_VIDEO_MS), affiché à tout le salon (contrairement à l'audio, immédiat) —
         // pour que tout le monde ait le temps de regarder l'écran avant que ça commence.
         titre: String(titre || "").trim().slice(0, 80) || "Vidéo YouTube",
-        type: "youtube", youtubeId, demarreLe: Date.now() + COMPTE_A_REBOURS_VIDEO_MS,
+        type: "youtube", youtubeId, demarreLe: Date.now() + COMPTE_A_REBOURS_VIDEO_MS, diffuseurPseudo: user.pseudo,
       };
       diffuserVocal(salon);
       cb?.({ ok: true });
@@ -656,7 +656,7 @@ export function creerModuleVocalSalon({
       if (!tweetId) return cb?.({ ok: false, error: "LIEN_TWEET_INVALIDE" });
       salon.radio = {
         titre: String(titre || "").trim().slice(0, 80) || "Post X",
-        type: "twitter", tweetId, demarreLe: Date.now() + COMPTE_A_REBOURS_VIDEO_MS,
+        type: "twitter", tweetId, demarreLe: Date.now() + COMPTE_A_REBOURS_VIDEO_MS, diffuseurPseudo: user.pseudo,
       };
       diffuserVocal(salon);
       cb?.({ ok: true });
@@ -667,7 +667,7 @@ export function creerModuleVocalSalon({
       if (!salon || !estModoVocal(salon, user.id)) return cb?.({ ok: false });
       const lien = String(url || "").trim();
       if (!/^https?:\/\/\S+$/i.test(lien)) return cb?.({ ok: false, error: "LIEN_INVALIDE" });
-      salon.radio = { titre: String(titre || "").trim().slice(0, 80) || "Vidéo", type: "video", url: lien, demarreLe: Date.now() + COMPTE_A_REBOURS_VIDEO_MS };
+      salon.radio = { titre: String(titre || "").trim().slice(0, 80) || "Vidéo", type: "video", url: lien, demarreLe: Date.now() + COMPTE_A_REBOURS_VIDEO_MS, diffuseurPseudo: user.pseudo };
       diffuserVocal(salon);
       cb?.({ ok: true });
     });
@@ -687,7 +687,7 @@ export function creerModuleVocalSalon({
       catch { return cb?.({ ok: false, error: "ECRITURE_IMPOSSIBLE" }); }
       salon.radio = {
         titre: String(titre || "").trim().slice(0, 80) || "Vidéo",
-        type: "video", url: `/videos/${nomFichier}`, demarreLe: Date.now() + COMPTE_A_REBOURS_VIDEO_MS,
+        type: "video", url: `/videos/${nomFichier}`, demarreLe: Date.now() + COMPTE_A_REBOURS_VIDEO_MS, diffuseurPseudo: user.pseudo,
       };
       diffuserVocal(salon);
       cb?.({ ok: true });
