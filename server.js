@@ -4122,7 +4122,13 @@ app.get("/api/youtube/recherche", async (req, res) => {
   const q = String(req.query.q || "").trim().slice(0, 80);
   if (q.length < 2) return res.status(400).json({ ok: false, error: "TROP_COURT", resultats: [] });
   try {
-    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=12&safeSearch=moderate&q=${encodeURIComponent(q)}&key=${youtubeKey}`;
+    // videoEmbeddable=true (voir la demande : "le lecteur YouTube [...] ne diffuse pas toutes les
+    // vidéos") : demande à Google de ne renvoyer que des vidéos que le propriétaire autorise à lire
+    // sur un site tiers comme celui-ci — sans ce filtre, la recherche proposait aussi des vidéos
+    // dont l'intégration est bloquée, qui ne pouvaient alors jamais se lancer une fois choisies,
+    // sans qu'on comprenne pourquoi. Un lien collé directement (hors recherche) n'a pas ce filtre
+    // et reste donc géré côté client (voir onError du lecteur, dans index.html/vocal.html).
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoEmbeddable=true&maxResults=12&safeSearch=moderate&q=${encodeURIComponent(q)}&key=${youtubeKey}`;
     const r = await fetch(url);
     if (!r.ok) {
       const data = await r.json().catch(() => null);

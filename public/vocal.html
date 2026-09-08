@@ -232,6 +232,23 @@
      la demande) — en or plutôt qu'en teal, pour rester visuellement distinct du message de
      bienvenue à un nouvel auditeur, tout en gardant la même animation/structure. */
   .vocalBienvenue.diffusion b{color:var(--beam)}
+  /* Image envoyée depuis le tchat (voir la demande : "il apparait et reste figé quelque seconde et
+     puis disparait") : contrairement aux réactions/emojis qui se baladent sur l'écran (.flyEmoji),
+     celle-ci reste bien fixe/statique le temps de l'afficher — plus proche d'une vraie photo qu'on
+     montre à quelqu'un que d'une animation. Centrée, au-dessus du clavier virtuel sur mobile. */
+  @keyframes vocalImageApparition{
+    0%{opacity:0;transform:translate(-50%,-50%) scale(.85)}
+    8%{opacity:1;transform:translate(-50%,-50%) scale(1)}
+    88%{opacity:1}
+    100%{opacity:0}}
+  .vocalImageEphemere{position:fixed;left:50%;top:46%;transform:translate(-50%,-50%);z-index:87;
+    text-align:center;pointer-events:none;max-width:min(320px,80vw);
+    animation:vocalImageApparition 4.5s ease-out forwards}
+  .vocalImageEphemere img{display:block;max-width:100%;max-height:52vh;border-radius:14px;
+    box-shadow:0 14px 38px rgba(0,0,0,.55);border:2px solid rgba(237,232,220,.25)}
+  .vocalImageEphemere b{display:block;margin-top:8px;font-family:'Anton',sans-serif;
+    text-transform:uppercase;font-size:clamp(15px,3.6vw,19px);color:var(--beam);letter-spacing:.02em;
+    text-shadow:0 2px 6px rgba(0,0,0,.6)}
   /* Citation façon diapositive de cinéma : cadre sombre, perforations de
      pellicule sur les côtés, fenêtre surélevée pour la réplique, bandeau
      d'étiquette en dessous pour le film et l'anecdote. */
@@ -739,6 +756,17 @@
   .vocalChatMessages .emoji{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;
     background:var(--card);font-size:13px;flex:0 0 auto}
   .vocalChatMessages b{color:var(--beam);font-weight:700}
+  /* Lisibilité du salon vocal (voir la demande : "faire un effort sur le design et la police de
+     caractère plus gras plus grand [...] pour les nouveaux qui découvrent") : texte un peu plus
+     grand/gras que le reste du site, réservé au salon (voir la portée #vocalSalon) pour ne pas
+     changer le style du jeu de quiz lui-même. Les libellés de section ("📻 Radio & vidéo du salon",
+     "💬 Discussion du salon"...) ressortent aussi mieux pour qu'un nouvel arrivant repère plus vite
+     à quoi sert chaque bloc de la page. */
+  #vocalSalon .note{font-size:14.5px;font-weight:500;color:var(--chalk);opacity:.85;line-height:1.5}
+  #vocalSalon .tag{font-size:12.5px;font-weight:600;letter-spacing:.2em}
+  #vocalSalon .vocalChatMessages{font-size:15.5px}
+  #vocalSalon .vocalChatMessages b{font-weight:800}
+  #vocalSalon .feedback{font-weight:600}
   /* Film proposé dans le tchat du salon (voir #btnVocalRechercheFilm / renderVocalChat) : affiche
      et le lien direct vers sa fiche/bande-annonce, plutôt que devoir le rechercher soi-même pour
      savoir de quel film il s'agit. */
@@ -1147,6 +1175,15 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
     </div>
 
     <div id="vocalSalon" class="hidden">
+      <!-- Repère rapide pour un nouvel arrivant qui découvre le salon (voir la demande : "à jour
+           l'ergonomie de l'interface du salon, plus simple, pour les nouveaux qui découvrent") —
+           affiché une seule fois par appareil (voir michben_vocal_premiers_pas_vu côté script),
+           jamais reproduit ensuite pour ne pas gêner les habitués. -->
+      <div class="card hidden" id="vocalPremiersPasCard" style="text-align:center">
+        <p class="tag" style="margin:0 0 8px">👋 Nouveau ici ?</p>
+        <p class="note" style="margin:0 0 12px">🎙️ Ouvrez votre micro pour parler aux autres — 📻 diffusez une musique ou une vidéo pour tout le salon — 💬 discutez par écrit juste en dessous</p>
+        <button class="ghost" type="button" id="btnVocalPremiersPasFermer" style="font-size:13px">J'ai compris</button>
+      </div>
       <div class="card" style="text-align:center">
         <p class="tag" id="vocalTitreSalon" style="margin:0 0 4px">Salon</p>
         <div class="marquee" id="vocalMarquee" style="margin-bottom:10px"></div>
@@ -1311,8 +1348,15 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
         </label>
         <div class="row" style="margin-top:6px">
           <input id="vocalChatInput" placeholder="Écrire un message…" maxlength="300" autocomplete="off" style="flex:1">
+          <!-- Envoi d'image éphémère depuis le tchat (voir la demande : "importer des images png
+               jpeg [...] qui puisse apparaitre comme les messages, de façon éphémère") : un simple
+               bouton qui ouvre le sélecteur de fichier natif du téléphone/ordinateur, jamais un
+               champ de saisie visible en permanence — voir vocalChatImage plus bas côté script. -->
+          <input type="file" id="vocalChatImageFichier" accept="image/png,image/jpeg" class="hidden">
+          <button type="button" id="btnVocalChatImage" class="ghost" style="flex:0 0 auto" aria-label="Envoyer une image">🖼️</button>
           <button id="btnVocalChatEnvoyer" style="flex:0 0 auto">➤</button>
         </div>
+        <p class="feedback bad" id="vocalChatImageMsg" style="margin:6px 0 0"></p>
       </div>
 
       <div class="card hidden" id="vocalConsole">
@@ -1694,12 +1738,26 @@ let vocalRadioVolume = (() => {
   return Number.isFinite(v) && v >= 0 && v <= 1 ? v : 0.5;
 })();
 let vocalYoutubePlayer = null;
+/** Applique le réglage de volume courant (vocalRadioVolume) à un lecteur YouTube — factorisé car
+ *  utilisé à trois endroits (curseur déplacé, lecteur prêt, nouvelle vidéo qui démarre). Un détail
+ *  important de l'API YouTube (voir la demande : "toujours un problème avec le bouton volume,
+ *  surtout [...] YouTube") : setVolume() seul NE SUFFIT PAS si le lecteur est en sourdine — ce qui
+ *  arrive automatiquement, sans aucun événement pour nous prévenir, quand le navigateur bloque la
+ *  lecture automatique avec son (politique très répandue sur mobile). Sans l'appel explicite à
+ *  unMute()/mute() ci-dessous, le curseur de volume semblait "ne rien faire" alors qu'il changeait
+ *  bien la valeur — le lecteur restait juste muet malgré tout. */
+function vocalAppliquerVolumeYoutube(player){
+  try {
+    player.setVolume(Math.round(vocalRadioVolume * 100));
+    if (vocalRadioVolume > 0) player.unMute(); else player.mute();
+  } catch {}
+}
 function majVolumeRadioVocal(){
   const audio = $("vocalAudio");
   if (audio) audio.volume = vocalRadioVolume;
   const video = $("vocalVideo");
   if (video) video.volume = vocalRadioVolume;
-  if (vocalYoutubePlayer) { try { vocalYoutubePlayer.setVolume(Math.round(vocalRadioVolume * 100)); } catch {} }
+  if (vocalYoutubePlayer) vocalAppliquerVolumeYoutube(vocalYoutubePlayer);
   const curseur = $("vocalVolumeSlider");
   // Ne touche pas le curseur pendant que le doigt/la souris est dessus (voir son propre écouteur
   // "input" plus bas) : sinon un simple rafraîchissement du salon (mic coupé, main levée...) — bien
@@ -1746,6 +1804,23 @@ function rendreBlocReductible(idCarte, cleStockage){
 }
 rendreBlocReductible("vocalRadioCard", "michben_vocal_radio_reduit");
 rendreBlocReductible("vocalConsole", "michben_vocal_console_reduit");
+
+/** Repère "premiers pas" pour un nouvel arrivant (voir #vocalPremiersPasCard et la demande : "à jour
+ *  l'ergonomie de l'interface du salon, plus simple, pour les nouveaux qui découvrent") — affiché
+ *  une seule fois par appareil, jamais reproduit ensuite (voir renderVocalSalon, qui ne consulte ce
+ *  réglage qu'à la toute première fois qu'un salon s'affiche pendant cette session). */
+let vocalPremiersPasVerifie = false;
+function vocalAfficherPremiersPasSiBesoin(){
+  if (vocalPremiersPasVerifie) return;
+  vocalPremiersPasVerifie = true;
+  let dejaVu = false;
+  try { dejaVu = localStorage.getItem("michben_vocal_premiers_pas_vu") === "1"; } catch {}
+  $("vocalPremiersPasCard")?.classList.toggle("hidden", dejaVu);
+}
+$("btnVocalPremiersPasFermer")?.addEventListener("click", () => {
+  $("vocalPremiersPasCard")?.classList.add("hidden");
+  try { localStorage.setItem("michben_vocal_premiers_pas_vu", "1"); } catch {}
+});
 
 /** Voir le profil d'un participant (photo, stats, actions de don...) : dans le jeu principal, ceci
  *  ouvre une fiche joueur complète (#popJoueur) avec tout un système de gestion d'amis (demander,
@@ -2472,6 +2547,7 @@ function carteParticipantVocal(p){
 function renderVocalSalon(salon){
   if (!salon) return;
   vocalSalonActuel = salon;
+  vocalAfficherPremiersPasSiBesoin();
   assurerPeersVocal(salon);
   // Tant qu'on est dans un salon vocal, on essaie d'empêcher l'écran de se mettre en veille tout
   // seul (voir vocalDemanderVeilleEcran) : c'est sans effet si le verrou est déjà pris, donc on peut
@@ -2668,7 +2744,10 @@ function vocalMajLectureRadioOuVideo(salon, modo){
 
   if (!media){
     vocalAnnulerCompteARebours();
-    $("vocalRadioTexte").textContent = "Aucune piste diffusée pour l'instant.";
+    $("vocalRadioTexte").textContent =
+      (vocalDerniereErreurLecture && Date.now() - vocalDerniereErreurLecture.quand < VOCAL_ERREUR_LECTURE_AFFICHAGE_MS)
+        ? vocalDerniereErreurLecture.texte
+        : "Aucune piste diffusée pour l'instant.";
     audio.pause(); audio.style.display = "none"; audio.removeAttribute("src"); audio.dataset.url = "";
     video.pause(); video.style.display = "none"; video.removeAttribute("src"); video.dataset.url = "";
     ytWrap.classList.add("hidden");
@@ -2891,6 +2970,12 @@ function vocalSyncMedia(el, media, modo){
  *  écoulé que pour la radio/vidéo (voir demarreLe), transposé aux méthodes de cette API. */
 let vocalYoutubeApiChargee = false, vocalYoutubeApiPrete = false;
 let vocalYoutubeIdActuel = null, vocalYoutubeIdEnAttente = null;
+/** Dernière erreur de lecture (YouTube introuvable/non intégrable...), affichée quelques secondes
+ *  même une fois la diffusion arrêtée automatiquement (voir onError plus bas) — sans ça, le message
+ *  d'erreur était aussitôt écrasé par "Aucune piste diffusée pour l'instant." dès que la diffusion
+ *  s'arrêtait, et personne ne comprenait pourquoi la vidéo n'était jamais partie. */
+let vocalDerniereErreurLecture = null; // { texte, quand }
+const VOCAL_ERREUR_LECTURE_AFFICHAGE_MS = 6000;
 function vocalChargerApiYoutubeSiBesoin(){
   if (vocalYoutubeApiChargee) return;
   vocalYoutubeApiChargee = true;
@@ -2928,6 +3013,7 @@ function vocalChargerYoutube(youtubeId, demarreLe){
       const t = vocalYoutubePlayer.getCurrentTime();
       if (Math.abs(t - debut) > 4) vocalYoutubePlayer.seekTo(debut, true);
       vocalYoutubePlayer.playVideo();
+      vocalAppliquerVolumeYoutube(vocalYoutubePlayer);
     } catch {}
     return;
   }
@@ -2942,11 +3028,43 @@ function vocalChargerYoutube(youtubeId, demarreLe){
     videoId: youtubeId,
     playerVars: { start: debut, autoplay: 1, playsinline: 1 },
     events: {
-      onReady: (e) => { try { e.target.setVolume(Math.round(vocalRadioVolume * 100)); e.target.playVideo(); } catch {} },
+      onReady: (e) => { try { vocalAppliquerVolumeYoutube(e.target); e.target.playVideo(); } catch {} },
       // Fin naturelle de la vidéo YouTube (voir vocalSignalerFinDiffusion) — enregistré une seule
       // fois à la création du lecteur, mais reste valable pour toutes les vidéos chargées ensuite
       // via loadVideoById (l'instance du lecteur, elle, n'est jamais recréée — voir plus haut).
-      onStateChange: (e) => { if (e.data === YT.PlayerState.ENDED) vocalSignalerFinDiffusion(); },
+      // PLAYING : réapplique le volume/la sourdine à CHAQUE nouvelle vidéo qui démarre réellement —
+      // pas seulement à la création du lecteur — car l'autoplay avec son peut être bloqué par le
+      // navigateur pour n'importe quelle vidéo chargée ensuite via loadVideoById, pas seulement la
+      // toute première (voir la demande : "toujours un problème avec le bouton volume, surtout
+      // [...] YouTube", et vocalAppliquerVolumeYoutube ci-dessus pour le détail du problème).
+      onStateChange: (e) => {
+        if (e.data === YT.PlayerState.ENDED) vocalSignalerFinDiffusion();
+        if (e.data === YT.PlayerState.PLAYING) vocalAppliquerVolumeYoutube(e.target);
+      },
+      // Erreur de lecture (voir la demande : "le lecteur YouTube [...] ne diffuse pas toute les
+      // vidéos") : certaines vidéos ne peuvent structurellement pas être lues ailleurs que sur
+      // YouTube (intégration désactivée par le propriétaire) ou n'existent plus/sont privées — sans
+      // ce message, la vidéo restait simplement figée sans aucune explication, et la diffusion ne
+      // se terminait jamais toute seule (l'événement "ENDED" ne peut pas se produire pour une vidéo
+      // qui n'a jamais pu démarrer). Un moteur de recherche filtré (voir /api/youtube/recherche
+      // côté serveur) réduit déjà ce risque pour les vidéos choisies via la recherche, mais pas pour
+      // un lien collé directement.
+      onError: (e) => {
+        const libelles = { 2: "identifiant de vidéo invalide", 5: "erreur de lecture de ce navigateur",
+          100: "vidéo introuvable, privée ou supprimée",
+          101: "le propriétaire de la vidéo interdit sa lecture ailleurs que sur YouTube",
+          150: "le propriétaire de la vidéo interdit sa lecture ailleurs que sur YouTube" };
+        const raison = libelles[e.data] || "erreur inconnue";
+        vocalDerniereErreurLecture = {
+          texte: `⚠️ Cette vidéo YouTube n'a pas pu être lue (${raison}).`
+            + (vocalEstModoRadio ? " Choisissez-en une autre." : " Prévenez l'hôte du salon."),
+          quand: Date.now(),
+        };
+        $("vocalRadioTexte").textContent = vocalDerniereErreurLecture.texte;
+        // Seul l'hôte/un cohôte libère le salon (voir vocalSignalerFinDiffusion) — sinon cette
+        // vidéo resterait bloquée "en cours de diffusion" pour tout le monde indéfiniment.
+        vocalSignalerFinDiffusion();
+      },
     },
   });
 }
@@ -3017,6 +3135,66 @@ $("vocalChatInput").addEventListener("keydown", (e) => { if (e.key === "Enter") 
     });
   }
 }
+
+/** Affiche une image envoyée depuis le tchat (voir la demande : "importer des images png jpeg
+ *  [...] qui puisse apparaitre comme les messages, de façon éphémère [...] fait également apparait
+ *  le nom d'utilisateur qui envoi l'image") — contrairement aux réactions volantes (.flyEmoji), elle
+ *  reste bien fixe le temps de l'affichage (voir .vocalImageEphemere), avant de disparaître toute
+ *  seule (voir setTimeout ci-dessous, calé sur la durée de l'animation CSS). Jamais ajoutée au fil
+ *  écrit du tchat : uniquement ce court aperçu, comme une photo qu'on montre à l'oral. */
+const VOCAL_IMAGE_EPHEMERE_DUREE_MS = 4500;
+function afficherImageEphemereVocal(donnees, mime, pseudo){
+  const el = document.createElement("div");
+  el.className = "vocalImageEphemere";
+  el.innerHTML = `<img src="data:${esc(mime)};base64,${donnees}" alt="Image envoyée par ${esc(pseudo || "")}">
+    <b>${esc(pseudo || "")}</b>`;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), VOCAL_IMAGE_EPHEMERE_DUREE_MS);
+}
+socket.on("vocal:chat-image-recue", ({ donnees, mime, pseudo }) => afficherImageEphemereVocal(donnees, mime, pseudo));
+
+/** Envoi d'une image (PNG/JPEG) depuis le tchat (voir #btnVocalChatImage/#vocalChatImageFichier) :
+ *  lue directement dans le navigateur (FileReader), jamais uploadée nulle part avant l'envoi — le
+ *  serveur ne fait que la retransmettre aux autres, sans jamais la stocker (voir vocal:chat-image
+ *  côté serveur). Limite generouse mais raisonnable (5 Mo) pour rester une vraie photo de téléphone
+ *  sans pouvoir noyer le salon avec un fichier énorme. */
+const VOCAL_IMAGE_MAX_OCTETS = 5 * 1024 * 1024;
+$("btnVocalChatImage")?.addEventListener("click", () => $("vocalChatImageFichier")?.click());
+$("vocalChatImageFichier")?.addEventListener("change", (e) => {
+  const msg = $("vocalChatImageMsg");
+  const fichier = e.target.files?.[0];
+  e.target.value = ""; // permet de renvoyer immédiatement le même fichier une seconde fois si besoin
+  if (!fichier || !vocalSalonActuel) return;
+  if (!["image/png", "image/jpeg"].includes(fichier.type)) {
+    if (msg) msg.textContent = "⚠️ Seules les images PNG ou JPEG sont acceptées.";
+    return;
+  }
+  if (fichier.size > VOCAL_IMAGE_MAX_OCTETS) {
+    if (msg) msg.textContent = "⚠️ Image trop lourde (5 Mo maximum) — essayez une photo un peu plus compressée.";
+    return;
+  }
+  if (msg) msg.textContent = "";
+  const ext = fichier.type === "image/png" ? "png" : "jpg";
+  const lecteur = new FileReader();
+  lecteur.onload = () => {
+    // data:image/png;base64,XXXX — seule la partie après la virgule est envoyée (le mime est déjà
+    // connu côté serveur/client via `ext`/`fichier.type`, pas besoin de la répéter dans les données).
+    const donnees = String(lecteur.result || "").split(",")[1] || "";
+    if (!donnees) return;
+    // L'expéditeur la voit lui-même tout de suite (voir envoyerMessageVocal, même principe pour
+    // "envoyer en grand") : pas besoin d'attendre l'aller-retour serveur pour afficher sa propre image.
+    afficherImageEphemereVocal(donnees, fichier.type, me?.pseudo);
+    socket.emit("vocal:chat-image", { code: vocalSalonActuel.code, donnees, ext }, (r) => {
+      if (r?.ok === false && msg) {
+        const libelles = { TROP_LOURD: "Image trop lourde pour le serveur.",
+          FORMAT_NON_SUPPORTE: "Format d'image non supporté.",
+          TROP_RAPIDE: "Attendez quelques secondes avant d'envoyer une nouvelle image." };
+        msg.textContent = `⚠️ ${libelles[r.error] || "Envoi impossible."} (les autres participants ne l'ont pas reçue.)`;
+      }
+    });
+  };
+  lecteur.readAsDataURL(fichier);
+});
 
 /** Réactions emoji publiques dans le salon vocal — même rendu volant que les réactions de partie
  *  (afficherReactionVolante), mais sous un événement dédié (vocal:reaction) pour ne jamais se

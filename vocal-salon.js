@@ -41,6 +41,17 @@ export function creerModuleVocalSalon({
    *  s'applique qu'aux vidéos — la musique (audio) démarre toujours immédiatement. */
   const COMPTE_A_REBOURS_VIDEO_MS = 3000;
 
+  /** Image envoyée depuis le tchat du salon (voir la demande : "importer des images png jpeg [...]
+   *  qui puisse apparaitre comme les messages, de façon éphémère") — jamais écrite sur le disque du
+   *  serveur ni ajoutée à l'historique du tchat (voir vocal:chat-image plus bas) : contrairement à
+   *  la musique/vidéo diffusée, qui doit rester synchronisée et disponible pour tout le monde tant
+   *  que la diffusion dure, une image de tchat n'est vue qu'une poignée de secondes puis n'a plus
+   *  aucune utilité — pas besoin de la stocker, juste de la retransmettre une fois. 5 Mo (taille
+   *  réelle du fichier) est largement suffisant pour une photo de téléphone tout en restant léger à
+   *  faire transiter par le serveur vers chaque participant du salon. */
+  const IMAGE_MAX_OCTETS = 5 * 1024 * 1024;
+  const IMAGE_EXT_MIME = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg" };
+
   /** Reconnaît un lien YouTube sous ses formes les plus courantes et en extrait l'identifiant. */
   function extraireIdYoutube(url) {
     const s = String(url || "").trim();
@@ -732,6 +743,40 @@ export function creerModuleVocalSalon({
         if (p.userId !== user.id && estBloque(p.userId, user.id)) continue;
         const s = [...io.of("/").sockets.values()].find((sk) => sk.data.user?.id === p.userId);
         if (s) s.emit("vocal:update", publicVocal(salon));
+      }
+      cb?.({ ok: true });
+    });
+
+    /** Image PNG/JPEG envoyée depuis le tchat (voir la demande, et IMAGE_MAX_OCTETS/IMAGE_EXT_MIME
+     *  plus haut) : affichage éphémère façon "envoyer en grand" (voir vocal:chat-envoyer juste
+     *  au-dessus) — jamais stockée, jamais ajoutée à l'historique écrit, montrée une seule fois à
+     *  tout le salon (sauf blocages) avec le pseudo de l'expéditeur. */
+    let derniereImageVocale = 0;
+    socket.on("vocal:chat-image", ({ code, donnees, ext }, cb) => {
+      const salon = salonsVocaux.get(code);
+      const moi = salon?.participants.get(user.id);
+      if (!salon || !moi) return cb?.({ ok: false });
+
+      // Anti-matraquage : une image toutes les 4s maximum par personne — bien plus lourd à
+      // transmettre qu'un simple emoji (voir l'anti-matraquage de vocal:reaction plus bas), sans
+      // quoi le salon serait vite noyé sous les images.
+      if (Date.now() - derniereImageVocale < 4000) return cb?.({ ok: false, error: "TROP_RAPIDE" });
+
+      const mime = IMAGE_EXT_MIME[String(ext || "").toLowerCase()];
+      if (!mime) return cb?.({ ok: false, error: "FORMAT_NON_SUPPORTE" });
+      const brut = String(donnees || "");
+      // Une image encodée en base64 grossit d'environ 37 % : ce plafond sur la CHAÎNE reçue reste
+      // donc volontairement un peu plus large que IMAGE_MAX_OCTETS (la taille réelle du fichier).
+      if (!brut || brut.length > Math.ceil(IMAGE_MAX_OCTETS * 1.4)) return cb?.({ ok: false, error: "TROP_LOURD" });
+      derniereImageVocale = Date.now();
+
+      // Le serveur ne la renvoie qu'aux AUTRES participants — exactement comme "envoyer en grand" :
+      // l'expéditeur l'affiche lui-même tout de suite, côté client, dès que le fichier est choisi.
+      for (const p of salon.participants.values()) {
+        if (p.userId === user.id) continue;
+        if (estBloque(p.userId, user.id)) continue;
+        const s = [...io.of("/").sockets.values()].find((sk) => sk.data.user?.id === p.userId);
+        if (s) s.emit("vocal:chat-image-recue", { donnees: brut, mime, pseudo: user.pseudo });
       }
       cb?.({ ok: true });
     });
