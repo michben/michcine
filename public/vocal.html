@@ -211,6 +211,13 @@
     8%{opacity:1;transform:translateX(-50%) scale(1.1)}14%{transform:translateX(-50%) scale(1)}
     88%{opacity:1;transform:translateX(-50%) translateY(0)}
     100%{opacity:0;transform:translateX(-50%) translateY(-24px)}}
+  /* Message de bienvenue "en grand" pour un nouvel arrivant dans le salon vocal (voir la demande) —
+     même animation que .montee (montée de niveau), en teal plutôt qu'en or pour rester dans les
+     couleurs du salon vocal plutôt que celles du jeu. */
+  .vocalBienvenue{position:fixed;left:50%;top:11%;transform:translateX(-50%);z-index:86;text-align:center;
+    max-width:min(420px,88vw);pointer-events:none;animation:monteeNiveau 5s ease-out forwards}
+  .vocalBienvenue b{display:block;font-family:'Anton',sans-serif;text-transform:uppercase;
+    font-size:clamp(22px,6vw,34px);color:var(--teal);letter-spacing:.03em}
   /* Citation façon diapositive de cinéma : cadre sombre, perforations de
      pellicule sur les côtés, fenêtre surélevée pour la réplique, bandeau
      d'étiquette en dessous pour le film et l'anecdote. */
@@ -1340,7 +1347,12 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
       </div>
     </div>
   </div>
-    <!-- MODALE BANDE-ANNONCE : ouverte au clic sur un film des « Sorties de la semaine ». -->
+    <!-- MODALE FICHE FILM : ouverte au clic sur un film, que ce soit depuis « Sorties de la semaine »,
+         une recherche, ou une suggestion partagée dans le tchat du salon vocal (voir la demande :
+         "voir la fiche complète, plus simple" — avant, ce même bouton "🎬 Voir la fiche" n'ouvrait en
+         réalité qu'une bande-annonce sans affiche ni synopsis, malgré son nom). Affiche affiche +
+         année + synopsis dès que connus (voir ouvrirTrailer), puis la bande-annonce juste en dessous
+         — un seul clic, un seul endroit, pour tout voir. -->
     <div class="modal-overlay" id="trailerModal">
         <div class="modal-content">
             <div class="modal-header" style="border-bottom-color: var(--ticket);">
@@ -1348,6 +1360,13 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
                 <button class="close-btn" id="closeTrailerBtn">&times;</button>
             </div>
             <div class="modal-body" style="padding:0">
+                <div id="trailerFiche" class="hidden" style="display:flex;gap:12px;padding:14px;align-items:flex-start">
+                    <img id="trailerFichePoster" alt="" style="width:84px;height:126px;object-fit:cover;border-radius:8px;flex:0 0 auto;background:var(--card)">
+                    <div style="min-width:0">
+                        <p class="note" id="trailerFicheAnnee" style="margin:0 0 6px;font-size:12px;opacity:.75"></p>
+                        <p class="note" id="trailerFicheSynopsis" style="margin:0;font-size:14px;line-height:1.5"></p>
+                    </div>
+                </div>
                 <div style="position:relative;width:100%;padding-top:56.25%;background:var(--ink)">
                     <iframe id="trailerFrame" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0" allow="autoplay; encrypted-media" allowfullscreen title="Bande-annonce"></iframe>
                 </div>
@@ -1691,6 +1710,10 @@ const trailerFrame = document.getElementById("trailerFrame");
 const trailerMsg = document.getElementById("trailerMsg");
 const trailerTitreEl = document.getElementById("trailerTitre");
 const closeTrailerBtn = document.getElementById("closeTrailerBtn");
+const trailerFiche = document.getElementById("trailerFiche");
+const trailerFichePoster = document.getElementById("trailerFichePoster");
+const trailerFicheAnnee = document.getElementById("trailerFicheAnnee");
+const trailerFicheSynopsis = document.getElementById("trailerFicheSynopsis");
 function fermerTrailer(){
   trailerModal.classList.remove("active");
   trailerFrame.src = "";
@@ -1699,7 +1722,18 @@ async function ouvrirTrailer(tmdbId, titre){
   trailerTitreEl.textContent = `🎬 ${titre || "Bande-annonce"}`;
   trailerMsg.textContent = "Recherche de la bande-annonce…";
   trailerFrame.src = "";
+  trailerFiche.classList.add("hidden");
   trailerModal.classList.add("active");
+  // Bande-annonce et fiche (affiche/année/synopsis) sont demandées en parallèle — voir la demande :
+  // le même bouton "🎬 Voir la fiche" doit ouvrir une vraie fiche complète, pas seulement une vidéo.
+  fetch(`/api/movies/${encodeURIComponent(tmdbId)}/details`).then(r => r.ok ? r.json() : null).then(d => {
+    if (!d || !d.title) return;
+    trailerFiche.classList.remove("hidden");
+    trailerFichePoster.style.display = d.poster ? "" : "none";
+    if (d.poster) trailerFichePoster.src = d.poster;
+    trailerFicheAnnee.textContent = d.annee ? `📅 ${d.annee}` : "";
+    trailerFicheSynopsis.textContent = d.synopsis || "Aucun synopsis disponible.";
+  }).catch(() => {});
   try {
     const res = await fetch(`/api/movies/${encodeURIComponent(tmdbId)}/trailer`);
     const data = await res.json();
@@ -2854,6 +2888,19 @@ socket.on("vocal:reaction", ({ emoji, pseudo, photo }) => afficherReactionVolant
 // Message de tchat "envoyé en grand" (voir envoyerMessageVocal) : reçu par tout le monde SAUF
 // l'expéditeur (qui l'a déjà affiché lui-même, voir plus haut) — jamais ajouté au fil écrit.
 socket.on("vocal:message-en-grand", ({ texte, pseudo }) => afficherReactionVolante(texte, pseudo, null));
+
+/** Message de bienvenue "en grand" pour un nouvel auditeur qui vient tout juste de rejoindre le
+ *  salon (voir la demande : "éclabousse sur l'écran de tous les utilisateurs") — le serveur ne
+ *  l'envoie qu'aux participants du salon concerné (voir vocal:rejoindre), et seulement pour un vrai
+ *  nouvel arrivant, jamais pour l'hôte qui revient ou quelqu'un qui rejoint après une brève coupure.
+ *  Repris du même esprit que l'annonce de montée de niveau (annoncerNiveau), voir .vocalBienvenue. */
+socket.on("vocal:nouvel-arrivant", ({ pseudo }) => {
+  const el = document.createElement("div");
+  el.className = "vocalBienvenue";
+  el.innerHTML = `<b>🎉 Bienvenue ${esc(pseudo)} !</b><span class="note">vient de rejoindre le salon</span>`;
+  document.body.append(el);
+  setTimeout(() => el.remove(), 5000);
+});
 
 /** Menu d'emoji privé, ouvert en cliquant sur la photo de profil d'un participant du salon vocal
  *  (voir renderVocalSalon, où le clic est câblé) : contrairement à la barre de réactions ci-dessus

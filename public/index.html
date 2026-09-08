@@ -197,6 +197,13 @@
     8%{opacity:1;transform:translateX(-50%) scale(1.1)}14%{transform:translateX(-50%) scale(1)}
     88%{opacity:1;transform:translateX(-50%) translateY(0)}
     100%{opacity:0;transform:translateX(-50%) translateY(-24px)}}
+  /* Message de bienvenue "en grand" pour un nouvel arrivant dans le salon vocal (voir la demande) —
+     même animation que .montee (montée de niveau), en teal plutôt qu'en or pour rester dans les
+     couleurs du salon vocal plutôt que celles du jeu. */
+  .vocalBienvenue{position:fixed;left:50%;top:11%;transform:translateX(-50%);z-index:86;text-align:center;
+    max-width:min(420px,88vw);pointer-events:none;animation:monteeNiveau 5s ease-out forwards}
+  .vocalBienvenue b{display:block;font-family:'Anton',sans-serif;text-transform:uppercase;
+    font-size:clamp(22px,6vw,34px);color:var(--teal);letter-spacing:.03em}
   /* Citation façon diapositive de cinéma : cadre sombre, perforations de
      pellicule sur les côtés, fenêtre surélevée pour la réplique, bandeau
      d'étiquette en dessous pour le film et l'anecdote. */
@@ -829,7 +836,7 @@ html.mode-enfant-actif .wrap{padding-top:48px}
 #tickerBanniere .tickerContenu.dev{color:var(--ticket)}
 #tickerBanniere .tickerContenu.roue,#tickerBanniere .tickerContenu.equipe,
 #tickerBanniere .tickerContenu.partage,#tickerBanniere .tickerContenu.sondage,
-#tickerBanniere .tickerContenu.classement{color:var(--beam)}
+#tickerBanniere .tickerContenu.classement,#tickerBanniere .tickerContenu.nouveaufilm{color:var(--beam)}
 #tickerBanniere .tickerContenu.bienvenue{color:var(--teal)}
 #tickerBanniere .tickerContenu.cliquable{cursor:pointer}
 #tickerBanniere .tickerPfp{width:18px;height:18px;border-radius:50%;object-fit:cover;flex:0 0 auto}
@@ -1502,7 +1509,12 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
 
   <!-- SALON VOCAL (façon talkie-walkie : pas de son réel, un indicateur visuel de qui parle) -->
   <section id="vocal" class="hidden">
-    <button class="ghost" id="btnVocalRetourMenu" style="margin-bottom:14px">← Retour au menu</button>
+    <!-- Le salon vocal est maintenant la page d'accueil du site (voir la demande : "je souhaite bien
+         séparer la partie salon et le jeu [...] le salon vocal devient la première page [...] et le
+         jeu juste via un bouton") — ce bouton, toujours visible en haut de cette page (liste des
+         salons comme salon déjà rejoint), est donc le seul et unique chemin mis en avant vers le jeu,
+         volontairement stylé comme une invitation plutôt que comme un simple retour en arrière. -->
+    <button id="btnVocalRetourMenu" style="margin-bottom:14px">🎮 Jouer au Quiz</button>
 
     <div id="vocalListe">
       <h2>🎙️ Salons vocaux</h2>
@@ -2990,6 +3002,9 @@ try { state.kidMode = localStorage.getItem("kidMode") === "1"; } catch {}
 /* ---------- Bandeau défilant (annonces développeur, félicitations, messages de bienvenue) ---------- */
 // Message de bienvenue par défaut : complété avec le nombre de comptes une fois connu (voir initTicker).
 let tickerNbJoueurs = null;
+// Nombre total de films du catalogue, pour la rotation du bandeau (voir la demande : "le nombre
+// de joueur, et le nombre de film total") — complété une fois connu, voir initTicker.
+let tickerNbFilms = null;
 // Top 5 du classement de la saison, rafraîchi périodiquement (voir rafraichirClassementTicker) —
 // pas de fondateur/spécial ici, juste ce qu'affiche déjà le classement dans board.
 let classementSaisonTicker = [];
@@ -3013,6 +3028,11 @@ const messagesAccueilTicker = () => {
     { texte: "Salam à tous, bon film et bonne chance à la roue ! 🍿", type: "bienvenue" },
     { texte: "Merci de faire vivre MichBen Ciné Quizz chaque jour ! ❤️", type: "bienvenue" },
   ];
+  // Compteurs (nombre de joueurs inscrits, nombre de films au catalogue) — voir la demande.
+  // Affichés seulement une fois les totaux connus (voir initTicker), pour ne jamais montrer
+  // un chiffre à zéro ou manquant le temps que la requête réponde.
+  if (tickerNbJoueurs) base.push({ texte: `🧑‍🤝‍🧑 Nous sommes déjà ${tickerNbJoueurs} joueurs inscrits sur MichBen Ciné Quizz !`, type: "bienvenue" });
+  if (tickerNbFilms) base.push({ texte: `🎬 ${tickerNbFilms} films vous attendent dans le catalogue du jeu !`, type: "bienvenue" });
   // Battles de films en cours : pourcentages glissés dans la même rotation. sondagesActifs
   // (défini plus bas dans ce script) est tenu à jour en temps réel par la diffusion socket
   // "sondage:maj" à chaque vote — ces chiffres sont donc toujours ceux de l'instant présent,
@@ -3101,6 +3121,8 @@ async function initTicker(){
   } catch {}
   fetch("/api/joueurs/total", { credentials: "same-origin" }).then(r => r.ok ? r.json() : null)
     .then(d => { if (d && d.total) tickerNbJoueurs = d.total; }).catch(() => {});
+  fetch("/api/movies/total", { credentials: "same-origin" }).then(r => r.ok ? r.json() : null)
+    .then(d => { if (d && d.total) tickerNbFilms = d.total; }).catch(() => {});
   rafraichirClassementTicker();
   // Toutes les 5 minutes : largement assez pour un classement, qui ne bouge pas partie par partie.
   setInterval(rafraichirClassementTicker, 5 * 60 * 1000);
@@ -3226,6 +3248,19 @@ const RESTAURATION_PAGE = {
   exchange: () => $("btnExchange").click(),
   quetes: () => $("btnQuetes").click(),
 };
+/** Page par défaut à l'arrivée sur le site (connexion, choix du pseudo terminé, reconnexion du
+ *  socket…) : reprend la dernière page mémorisée si elle existe (RESTAURATION_PAGE, ex. un joueur
+ *  qui avait laissé son tableau de bord ouvert), sinon atterrit sur le salon vocal — devenu la page
+ *  d'accueil du site — plutôt que sur le menu du jeu (voir la demande : "je souhaite bien séparer
+ *  la partie salon et le jeu [...] le salon vocal devient la première page [...] vraiment mis en
+ *  évidence et le jeu juste via un bouton"). Le jeu reste à une seule pression de bouton, voir
+ *  #btnVocalRetourMenu ("🎮 Jouer au Quiz"), toujours visible en haut du salon. */
+function allerPageParDefaut(){
+  let derniere = null;
+  try { derniere = sessionStorage.getItem(DERNIERE_PAGE_CLE); } catch {}
+  if (derniere && RESTAURATION_PAGE[derniere]) RESTAURATION_PAGE[derniere]();
+  else $("btnVocal").click();
+}
 /** Photo du joueur si l'administration lui en a attribué une, émoji sinon. */
 const vignette = (j) => j?.photo
   ? `<img class="pfp" src="${esc(j.photo)}" alt="" onerror="this.remove()">`
@@ -3716,7 +3751,7 @@ async function loadSession(){
       (["moderateur","admin"].includes(me.role) ? `<span class="badge-role">${esc(me.role)}</span>` : "");
     $("btnModeration").classList.toggle("hidden", !["moderateur","admin"].includes(me.role));
     appliquerRole();
-    show("menu");
+    allerPageParDefaut();
     apresArriveeMenu();
   } catch (e) {
     $("diag").textContent = `Contact du serveur impossible : ${e.message}`;
@@ -3860,7 +3895,7 @@ $("btnValider").onclick = async () => {
   socket.disconnect().connect();
   if (!me.pseudoChosen) return firstVisit();
   $("hello").textContent = `Bonjour ${me.pseudo}`;
-  show("menu");
+  allerPageParDefaut();
   apresArriveeMenu();
 };
 
@@ -3911,7 +3946,7 @@ async function authMail(chemin){
   $("hello").textContent = `Bonjour ${me.pseudo}`;
   majBadgeAmis();
   appliquerRole();
-  show("menu");
+  allerPageParDefaut();
   apresArriveeMenu();
 }
 $("btnMailConnexion").onclick = () => authMail("connexion");
@@ -3941,7 +3976,7 @@ async function authEnfant(){
   $("hello").textContent = `Bonjour ${me.pseudo}`;
   majBadgeAmis();
   appliquerRole();
-  show("menu");
+  allerPageParDefaut();
   apresArriveeMenu();
 }
 $("btnCcConnexion").onclick = authEnfant;
@@ -4304,7 +4339,7 @@ $("btnValiderCode").onclick = async () => {
   socket.disconnect().connect();
   if (!me.pseudoChosen) return firstVisit();
   $("hello").textContent = `Bonjour ${me.pseudo}`;
-  show("menu");
+  allerPageParDefaut();
 };
 
 $("btnCodeLogout").onclick = async () => {
@@ -7287,6 +7322,20 @@ socket.on("vocal:reaction", ({ emoji, pseudo, photo }) => afficherReactionVolant
 // l'expéditeur (qui l'a déjà affiché lui-même, voir plus haut) — jamais ajouté au fil écrit.
 socket.on("vocal:message-en-grand", ({ texte, pseudo }) => afficherReactionVolante(texte, pseudo, null));
 
+/** Message de bienvenue "en grand" pour un nouvel auditeur qui vient tout juste de rejoindre le
+ *  salon (voir la demande : "éclabousse sur l'écran de tous les utilisateurs") — le serveur ne
+ *  l'envoie qu'aux participants du salon concerné (voir vocal:rejoindre), et seulement pour un vrai
+ *  nouvel arrivant, jamais pour l'hôte qui revient ou quelqu'un qui rejoint après une brève coupure.
+ *  Repris du même esprit que l'annonce de montée de niveau (annoncerNiveau) : un texte qui surgit en
+ *  grand puis s'efface tout seul, sans jamais bloquer l'écran (pointer-events:none, voir .vocalBienvenue). */
+socket.on("vocal:nouvel-arrivant", ({ pseudo }) => {
+  const el = document.createElement("div");
+  el.className = "vocalBienvenue";
+  el.innerHTML = `<b>🎉 Bienvenue ${esc(pseudo)} !</b><span class="note">vient de rejoindre le salon</span>`;
+  document.body.append(el);
+  setTimeout(() => el.remove(), 5000);
+});
+
 /** Menu d'emoji privé, ouvert en cliquant sur la photo de profil d'un participant du salon vocal
  *  (voir renderVocalSalon, où le clic est câblé) : contrairement à la barre de réactions ci-dessus
  *  (#vocalEmojiBar, vue par tout le salon), l'emoji envoyé ici n'est reçu que par la personne visée
@@ -8485,7 +8534,11 @@ $("btnSaveProfile").onclick = async () => {
   $("hello").textContent = `Bonjour ${me.pseudo}`;
   if (premiere){
     socket.disconnect().connect();   // la session portait l'ancien profil sans pseudo
-    show("menu");
+    // Le salon vocal est la page d'accueil du site (voir la demande sur la séparation salon/jeu) :
+    // on va directement à #btnVocal plutôt que par allerPageParDefaut(), qui consulterait à tort la
+    // page "profile" mémorisée par firstVisit() un instant plus tôt pour le choix du pseudo — un
+    // tout nouveau joueur n'a par définition rien de légitime à reprendre.
+    $("btnVocal").click();
     // Bandeau cookies puis tutoriel d'accueil (3 écrans) pour un tout nouveau joueur : affichés
     // une seule fois chacun, juste après le choix du pseudo, avant qu'il ne se lance dans sa
     // première partie. Le manuel complet (rulesModal) reste disponible à tout moment via le
@@ -9294,10 +9347,7 @@ socket.on("connect", () => {
     // Une partie en cours (state.code retrouvé depuis sessionStorage, voir plus haut) est
     // reprise par resynchroniserSalon() juste en dessous, qui vérifie que le salon existe
     // toujours côté serveur — on ne force donc pas une autre page dans ce cas.
-    let derniere = null;
-    try { derniere = sessionStorage.getItem(DERNIERE_PAGE_CLE); } catch {}
-    if (!state.code && derniere && RESTAURATION_PAGE[derniere]) RESTAURATION_PAGE[derniere]();
-    else if (!state.code) show("menu");
+    if (!state.code) allerPageParDefaut();
   }
   resynchroniserSalon();
   resynchroniserSalonVocal();
@@ -9519,7 +9569,12 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
         </div>
     </div>
 
-    <!-- MODALE BANDE-ANNONCE : ouverte au clic sur un film des « Sorties de la semaine ». -->
+    <!-- MODALE FICHE FILM : ouverte au clic sur un film, que ce soit depuis « Sorties de la semaine »,
+         une recherche, ou une suggestion partagée dans le tchat du salon vocal (voir la demande :
+         "voir la fiche complète, plus simple" — avant, ce même bouton "🎬 Voir la fiche" n'ouvrait en
+         réalité qu'une bande-annonce sans affiche ni synopsis, malgré son nom). Affiche affiche +
+         année + synopsis dès que connus (voir ouvrirTrailer), puis la bande-annonce juste en dessous
+         — un seul clic, un seul endroit, pour tout voir. -->
     <div class="modal-overlay" id="trailerModal">
         <div class="modal-content">
             <div class="modal-header" style="border-bottom-color: var(--ticket);">
@@ -9527,6 +9582,13 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
                 <button class="close-btn" id="closeTrailerBtn">&times;</button>
             </div>
             <div class="modal-body" style="padding:0">
+                <div id="trailerFiche" class="hidden" style="display:flex;gap:12px;padding:14px;align-items:flex-start">
+                    <img id="trailerFichePoster" alt="" style="width:84px;height:126px;object-fit:cover;border-radius:8px;flex:0 0 auto;background:var(--card)">
+                    <div style="min-width:0">
+                        <p class="note" id="trailerFicheAnnee" style="margin:0 0 6px;font-size:12px;opacity:.75"></p>
+                        <p class="note" id="trailerFicheSynopsis" style="margin:0;font-size:14px;line-height:1.5"></p>
+                    </div>
+                </div>
                 <div style="position:relative;width:100%;padding-top:56.25%;background:var(--ink)">
                     <iframe id="trailerFrame" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0" allow="autoplay; encrypted-media" allowfullscreen title="Bande-annonce"></iframe>
                 </div>
@@ -9886,11 +9948,27 @@ const rankHtml = players => [...players].sort((a,b) => b.score-a.score)
             trailerFrame.src = "";   // coupe la lecture dès la fermeture
         }
 
+        const trailerFiche = document.getElementById("trailerFiche");
+        const trailerFichePoster = document.getElementById("trailerFichePoster");
+        const trailerFicheAnnee = document.getElementById("trailerFicheAnnee");
+        const trailerFicheSynopsis = document.getElementById("trailerFicheSynopsis");
         async function ouvrirTrailer(tmdbId, titre){
             trailerTitreEl.textContent = `🎬 ${titre || "Bande-annonce"}`;
             trailerMsg.textContent = "Recherche de la bande-annonce…";
             trailerFrame.src = "";
+            trailerFiche.classList.add("hidden");
             trailerModal.classList.add("active");
+            // Bande-annonce et fiche (affiche/année/synopsis) sont demandées en parallèle — voir
+            // la demande : le même bouton "🎬 Voir la fiche" (dans le tchat du salon vocal comme
+            // ailleurs) doit ouvrir une vraie fiche complète, pas seulement une vidéo.
+            fetch(`/api/movies/${encodeURIComponent(tmdbId)}/details`).then(r => r.ok ? r.json() : null).then(d => {
+                if (!d || !d.title) return; // fiche indisponible (pas de clé TMDB, film introuvable…) : la vidéo seule reste utilisable
+                trailerFiche.classList.remove("hidden");
+                trailerFichePoster.style.display = d.poster ? "" : "none";
+                if (d.poster) trailerFichePoster.src = d.poster;
+                trailerFicheAnnee.textContent = d.annee ? `📅 ${d.annee}` : "";
+                trailerFicheSynopsis.textContent = d.synopsis || "Aucun synopsis disponible.";
+            }).catch(() => {});
             try {
                 const res = await fetch(`/api/movies/${encodeURIComponent(tmdbId)}/trailer`);
                 const data = await res.json();

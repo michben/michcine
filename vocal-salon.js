@@ -365,6 +365,15 @@ export function creerModuleVocalSalon({
       });
       socket.join(`vocal:${salon.code}`);
       diffuserVocal(salon);
+      // Message de bienvenue "en grand" pour tout le salon (voir la demande) — seulement pour un
+      // VRAI nouvel arrivant, jamais pour l'hôte qui reprend son salon ni pour quelqu'un qui revient
+      // après une coupure/un départ volontaire récent (etatEncoreValide) : ces deux cas ne sont pas
+      // de "nouveaux auditeurs", juste une reprise, et n'ont donc pas à re-déclencher la fanfare.
+      if (!redevientHote && !etatEncoreValide) {
+        io.to(`vocal:${salon.code}`).emit("vocal:nouvel-arrivant", {
+          pseudo: user.pseudo, avatar: user.avatar, photo: user.photo || null,
+        });
+      }
       cb?.({ ok: true, salon: publicVocal(salon) });
     });
 

@@ -1041,7 +1041,7 @@ function createSession(res, user) {
 
 /* ---------- routes ---------- */
 
-export function mountAuth(app) {
+export function mountAuth(app, { onNouvelInscrit } = {}) {
   const sansSecret = ({ motDePasse, code, codeExpire, codeEssais, ...reste }) => reste;
 
   app.get("/api/me", (req, res) => {
@@ -1107,6 +1107,11 @@ export function mountAuth(app) {
     );
     if (taken) return res.status(409).json({ error: "PSEUDO_TAKEN" });
 
+    // Pas encore de pseudo avant cet appel = vraie toute première inscription (et non un
+    // changement de pseudo ultérieur) — c'est ce cas précis qui doit déclencher le message de
+    // bienvenue dans le bandeau (voir la demande : "quand un nouvel inscrit nous a rejoins").
+    const premiereFois = !user.pseudoChosen;
+
     user.pseudo = pseudo;
     user.pseudoChosen = true;
     // la photo n'est pas modifiable ici : seule l'administration la définit
@@ -1115,6 +1120,7 @@ export function mountAuth(app) {
     // amis puissent le regarder en direct (en plus du réglage global de l'administrateur).
     if (typeof req.body.partageJeu === "boolean") user.partageJeu = req.body.partageJeu;
     saveUsers();
+    if (premiereFois) onNouvelInscrit?.(user);
     res.json(sansSecret(user));
   });
 

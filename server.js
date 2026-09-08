@@ -86,7 +86,15 @@ app.get("/js/moteur.js", (_req, res) => {
 // définie par le module vocal-salon.js lui-même (voir plus bas, creerModuleVocalSalon) — le salon
 // vocal étant désormais totalement autonome, jusqu'à posséder sa propre route.
 
-mountAuth(app);                       // /auth/x/login, /auth/x/callback, /api/me, /api/leaderboard
+mountAuth(app, {
+  // Message de bienvenue dans le bandeau du haut pour un VRAI nouvel inscrit (voir la demande :
+  // "quand un nouvel inscrit nous a rejoins, [...] un message dans le bandeau en haut qui circule
+  // avec un message de bienvenue"). auth-x.js ne connaît pas diffuserAnnonce (définie plus bas dans
+  // ce fichier) : on lui passe donc ce petit crochet plutôt que de créer une dépendance circulaire.
+  onNouvelInscrit: (user) => {
+    diffuserAnnonce(`🎉 Bienvenue à ${user.pseudo}, qui vient de nous rejoindre !`, "bienvenue");
+  },
+});                       // /auth/x/login, /auth/x/callback, /api/me, /api/leaderboard
 mountPasserelleEntrante(app, () => REGLAGES.passerelleEntrante);   // /auth/michben/retour
 const httpServer = createServer(app);
 /**
@@ -1262,6 +1270,16 @@ app.post("/api/admin/movies/tmdb-kids-importer", requireAdmin, (req, res) => {
     ajoutes++;
   }
   saveMovies();
+  // Annonce dans le bandeau du haut — voir la demande sur les nouveaux films ajoutés. On ne
+  // dérange le bandeau que s'il y a vraiment quelque chose de nouveau à annoncer.
+  if (ajoutes > 0) {
+    diffuserAnnonce(
+      ajoutes === 1
+        ? "🎬 Un nouveau film jeunesse vient d'être ajouté au jeu !"
+        : `🎬 ${ajoutes} nouveaux films jeunesse viennent d'être ajoutés au jeu !`,
+      "nouveaufilm"
+    );
+  }
   res.json({ ajoutes, ignores, total: movies.length });
 });
 
@@ -1372,6 +1390,15 @@ app.post("/api/admin/movies/tmdb-pays-importer", requireAdmin, (req, res) => {
     ajoutes++;
   }
   saveMovies();
+  // Annonce dans le bandeau du haut — voir la demande sur les nouveaux films ajoutés.
+  if (ajoutes > 0) {
+    diffuserAnnonce(
+      ajoutes === 1
+        ? "🎬 Un nouveau film vient d'être ajouté au jeu !"
+        : `🎬 ${ajoutes} nouveaux films viennent d'être ajoutés au jeu !`,
+      "nouveaufilm"
+    );
+  }
   res.json({ ajoutes, ignores, total: movies.length });
 });
 
@@ -1461,6 +1488,9 @@ app.post("/api/movies", requireAdmin, (req, res) => {
   movie.id = Math.max(0, ...movies.map((m) => m.id)) + 1;
   movies.push(movie);
   saveMovies();
+  // Annonce dans le bandeau du haut (voir la demande : "quand il y aura des nouveaux films qui
+  // sont rajoutés, tu peux l'afficher dans le bandeau").
+  diffuserAnnonce(`🎬 Nouveau film ajouté au jeu : « ${movie.title} » !`, "nouveaufilm");
   res.status(201).json(movie);
 });
 
@@ -4157,6 +4187,39 @@ app.get("/api/movies/:id/trailer", async (req, res) => {
   } catch (err) {
     console.error("Erreur bande-annonce:", err);
     res.status(500).json({ error: "INTERNAL_ERROR", key: null });
+  }
+});
+
+/** Fiche complète d'un film (affiche/année/synopsis) — voir la demande : le bouton "🎬 Voir la
+ *  fiche" (dans le tchat du salon vocal comme ailleurs dans le jeu) n'ouvrait jusqu'ici qu'une
+ *  bande-annonce, sans rien d'autre, malgré son nom. Le français est tenté en premier, avec repli
+ *  sur l'anglais si TMDB n'a pas de synopsis en français pour ce film (même logique que pour la
+ *  bande-annonce ci-dessus) — jamais un repli sur un titre anglais si le français est disponible. */
+app.get("/api/movies/:id/details", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: "ID_INVALIDE" });
+    const tmdbKey = REGLAGES.tmdbApiKey;
+    if (!tmdbKey) return res.json({ error: "NO_KEY" });
+
+    const chercherDetails = async (langue) => {
+      const r = await fetch(`https://api.themoviedb.org/3/movie/${id}?api_key=${tmdbKey}&language=${langue}`);
+      if (!r.ok) return null;
+      return r.json();
+    };
+    const fr = await chercherDetails("fr-FR");
+    if (!fr) return res.json({ error: "INTROUVABLE" });
+    const en = !fr.overview ? await chercherDetails("en-US") : null;
+    const d = fr.overview ? fr : (en || fr);
+    res.json({
+      title: fr.title || d.title || "",
+      synopsis: d.overview || "",
+      annee: (d.release_date || "").slice(0, 4) || null,
+      poster: d.poster_path ? `https://image.tmdb.org/t/p/w200${d.poster_path}` : null,
+    });
+  } catch (err) {
+    console.error("Erreur fiche film:", err);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
   }
 });
 
