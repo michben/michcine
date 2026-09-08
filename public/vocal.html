@@ -1858,14 +1858,24 @@ let vocalDerniereSalleCode = null;
 
 /* ----- Son réel entre les joueurs (WebRTC, connexion directe pair-à-pair) -----
  * Le serveur ne fait que relayer les messages de négociation ("vocal:rtc-signal") — le son ne
- * transite jamais par lui. Sans service de relais payant (TURN), la connexion directe échoue
- * parfois sur les réseaux les plus restrictifs : dans ce cas, seul l'indicateur visuel (anneau qui
- * pulse) continue de fonctionner pour la personne concernée, le reste du salon n'est pas affecté.
- * Pas de bouton "maintenir pour parler" : un seul bouton ouvre ou ferme le micro, et l'anneau qui
- * pulse se déclenche tout seul quand du son est réellement détecté (voir vocalDemarrerVAD). */
+ * transite jamais par lui, la connexion audio elle-même se fait directement entre deux navigateurs.
+ * Un simple serveur STUN (ci-dessous) suffit à établir cette connexion directe dans l'immense
+ * majorité des cas — mais PAS quand l'un des deux côtés est derrière un réseau trop restrictif (NAT
+ * "symétrique", wifi d'entreprise filtré, certaines box/4G) : dans ce cas précis, seul un serveur de
+ * RELAIS (TURN) permet encore de faire passer le son, en le faisant transiter par ce relais plutôt
+ * qu'en direct. Voir la demande : "j'ai des problèmes avec d'autres joueurs qui ne m'entendent pas"
+ * — exactement le symptôme d'un manque de TURN (ça marche avec certains participants, pas d'autres,
+ * selon le réseau de chacun). On ajoute donc ici un relais TURN gratuit (openrelay.metered.ca,
+ * public, sans compte à créer) en complément des STUN — utilisé seulement en dernier recours, quand
+ * la connexion directe échoue, jamais à la place. Ce relais gratuit reste best-effort (débit/
+ * disponibilité non garantis à grande échelle) : si le problème persiste malgré tout pour beaucoup
+ * de monde, un service TURN payant dédié (Twilio, Xirsys...) serait la suite logique. */
 const VOCAL_ICE_SERVERS = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
+  { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
+  { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
+  { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" },
 ];
 let vocalPeers = new Map();       // userId -> RTCPeerConnection
 let vocalLocalStream = null;      // notre micro, demandé au tout premier clic sur "activer mon micro"
@@ -1875,19 +1885,35 @@ let vocalVadFrame = null;
 let vocalAudioCtx = null;
 let vocalEtatPeers = new Map();   // userId -> état ICE de la connexion vers ce participant
 
-/** Recalcule si TOUTES les connexions vers les autres participants sont en échec (le symptôme
- *  précis d'un réseau trop restrictif pour établir la moindre connexion directe : "je n'entends
- *  personne mais les autres s'entendent très bien") et affiche/efface un message clair en
- *  conséquence — sans ça, cet échec est totalement silencieux pour la personne concernée. */
+/** Recalcule l'état des connexions directes vers les autres participants et affiche/efface un
+ *  message clair en conséquence — sans ça, un échec (total ou partiel) reste totalement silencieux
+ *  pour la personne concernée. Deux cas bien distincts (voir la demande : "j'ai des problèmes avec
+ *  d'autres joueurs qui ne m'entendent pas") :
+ *  - ÉCHEC TOTAL : aucune connexion ne passe (le symptôme d'un réseau trop restrictif chez SOI :
+ *    "je n'entends personne mais les autres s'entendent très bien entre eux").
+ *  - ÉCHEC PARTIEL : au moins une connexion échoue mais pas toutes (le symptôme d'un réseau trop
+ *    restrictif chez UN PARTICIPANT PRÉCIS, pas chez soi — avant, ce cas ne déclenchait AUCUN
+ *    message, ce qui le rendait invisible : on ne pouvait pas savoir que "certains" ne
+ *    m'entendaient pas sans que personne ne le signale). Un serveur de relais (TURN, voir
+ *    VOCAL_ICE_SERVERS) réduit déjà la fréquence des deux cas ; les tentatives de reprise
+ *    automatiques (restartIce, voir vocalCreerPeer) continuent en tâche de fond dans les deux cas. */
 function vocalMajBanniereConnexion(){
   const msg = $("vocalMicMsg");
   if (!msg) return;
   const etats = [...vocalEtatPeers.values()];
-  const enEchecTotal = etats.length > 0 && etats.every(e => e === "failed" || e === "disconnected" || e === "closed");
+  const enEchec = (e) => e === "failed" || e === "disconnected" || e === "closed";
+  const nbEnEchec = etats.filter(enEchec).length;
+  const enEchecTotal = etats.length > 0 && nbEnEchec === etats.length;
+  const enEchecPartiel = !enEchecTotal && nbEnEchec > 0;
+  const messagePrecedentEtaitUneAlerte = msg.textContent.startsWith("⚠️ Connexion audio impossible")
+    || msg.textContent.startsWith("⚠️ Le son ne passe pas");
   if (enEchecTotal){
     msg.textContent = "⚠️ Connexion audio impossible avec les autres participants — probablement un réseau trop restrictif (wifi d'entreprise, certaines box). Essayez avec un autre réseau (4G/5G par exemple) si le problème persiste.";
     msg.className = "feedback bad";
-  } else if (msg.textContent.startsWith("⚠️ Connexion audio impossible")){
+  } else if (enEchecPartiel){
+    msg.textContent = `⚠️ Le son ne passe pas avec ${nbEnEchec > 1 ? `${nbEnEchec} participants` : "un participant"} — probablement un réseau trop restrictif de son côté (ou du vôtre), pas un problème avec votre micro. La connexion continue d'être retentée automatiquement.`;
+    msg.className = "feedback bad";
+  } else if (messagePrecedentEtaitUneAlerte){
     msg.textContent = "";
     msg.className = "feedback";
   }
