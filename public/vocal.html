@@ -257,27 +257,31 @@
   .vocalImageEphemere b{display:block;margin-top:8px;font-family:'Anton',sans-serif;
     text-transform:uppercase;font-size:clamp(15px,3.6vw,19px);color:var(--beam);letter-spacing:.02em;
     text-shadow:0 2px 6px rgba(0,0,0,.6)}
-  /* Étape 1, commune aux deux effets : montée seule, rapide — reste figée sur sa dernière image
+  /* Étape 1, commune aux deux effets : montée seule, VOLONTAIREMENT LENTE (voir la demande : "la
+     photo monte trop rapidement [...] réduit la vitesse") — reste figée sur sa dernière image
      (forwards) une fois arrivée en haut, le temps que le script attende les 3 secondes d'affichage
-     avant de déclencher l'une des deux disparitions ci-dessous. */
+     avant de déclencher l'une des deux disparitions ci-dessous. Le point d'arrivée (-46vh, au lieu
+     de -78vh avant) a aussi été redescendu nettement : à -78vh la photo dépassait le haut de l'écran
+     et se retrouvait coupée une fois arrivée en haut (voir la demande) — -46vh laisse une bonne
+     marge visible même pour une photo à la hauteur maximale (voir max-height:38vh ci-dessus). */
   @keyframes vocalImageMontee{
     0%{opacity:0;transform:translateX(-50%) translateY(0) scale(.7)}
     15%{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}
-    100%{opacity:1;transform:translateX(-50%) translateY(-78vh) scale(1)}}
-  .vocalImageEphemere--montee{animation:vocalImageMontee 1.8s cubic-bezier(.22,.61,.36,1) forwards}
+    100%{opacity:1;transform:translateX(-50%) translateY(-46vh) scale(1)}}
+  .vocalImageEphemere--montee{animation:vocalImageMontee 4s cubic-bezier(.22,.61,.36,1) forwards}
   /* Étape 2, effet 1 : "bulle qui éclate" — grossit brusquement en s'effaçant, comme un éclatement.
-     Reprend exactement là où la montée s'est arrêtée (même position/échelle en 0%) pour ne jamais
-     donner l'impression d'un saut. */
+     Reprend exactement là où la montée s'est arrêtée (même position/échelle en 0%, voir -46vh
+     ci-dessus) pour ne jamais donner l'impression d'un saut. */
   @keyframes vocalImageEclateBulle{
-    0%{opacity:1;transform:translateX(-50%) translateY(-78vh) scale(1)}
-    55%{opacity:1;transform:translateX(-50%) translateY(-80vh) scale(1.15)}
-    100%{opacity:0;transform:translateX(-50%) translateY(-82vh) scale(1.75)}}
+    0%{opacity:1;transform:translateX(-50%) translateY(-46vh) scale(1)}
+    55%{opacity:1;transform:translateX(-50%) translateY(-48vh) scale(1.15)}
+    100%{opacity:0;transform:translateX(-50%) translateY(-50vh) scale(1.75)}}
   .vocalImageEphemere--bulle{animation:vocalImageEclateBulle 1.2s cubic-bezier(.22,.61,.36,1) forwards}
   /* Étape 2, effet 2 : "brouillard" — se dissout progressivement dans un flou, comme une brume. */
   @keyframes vocalImageDissoutBrouillard{
-    0%{opacity:1;filter:blur(0px);transform:translateX(-50%) translateY(-78vh) scale(1)}
-    40%{opacity:1;filter:blur(2px);transform:translateX(-50%) translateY(-79vh) scale(1.03)}
-    100%{opacity:0;filter:blur(20px);transform:translateX(-50%) translateY(-81vh) scale(1.15)}}
+    0%{opacity:1;filter:blur(0px);transform:translateX(-50%) translateY(-46vh) scale(1)}
+    40%{opacity:1;filter:blur(2px);transform:translateX(-50%) translateY(-47vh) scale(1.03)}
+    100%{opacity:0;filter:blur(20px);transform:translateX(-50%) translateY(-49vh) scale(1.15)}}
   .vocalImageEphemere--brouillard{animation:vocalImageDissoutBrouillard 1.4s cubic-bezier(.22,.61,.36,1) forwards}
   /* Citation façon diapositive de cinéma : cadre sombre, perforations de
      pellicule sur les côtés, fenêtre surélevée pour la réplique, bandeau
@@ -1219,22 +1223,13 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
         <p class="note" style="margin:0 0 12px">🎙️ Ouvrez votre micro pour parler aux autres — 📻 diffusez une musique ou une vidéo pour tout le salon — 💬 discutez par écrit juste en dessous</p>
         <button class="ghost" type="button" id="btnVocalPremiersPasFermer" style="font-size:13px">J'ai compris</button>
       </div>
-      <div class="card" style="text-align:center">
-        <p class="tag" id="vocalTitreSalon" style="margin:0 0 4px">Salon</p>
-        <div class="marquee" id="vocalMarquee" style="margin-bottom:10px"></div>
-        <div class="vocalConvives">
-          <span class="vocalConvivesChiffre" id="vocalConvivesChiffre">0</span>
-          <span class="vocalConvivesLabel">convive<span id="vocalConvivesS"></span></span>
-        </div>
-        <div class="row" style="justify-content:center"><button class="ghost" id="btnVocalCopierLien">🔗 Copier le lien du salon</button></div>
-        <p class="feedback" id="vocalCopierLienMsg" style="margin:6px 0 0"></p>
-      </div>
 
-      <!-- Cases participants (hôte/cohôtes, intervenants, auditeurs) remontées tout en haut du
-           salon, juste sous le titre — AVANT même la radio/vidéo (voir la demande : "hôte, cohôtes
-           et les intervenants, également auditeur, tout en haut de la page, ensuite tu peux
-           rajouter la radio") — pour voir tout de suite qui est présent sans avoir à faire défiler
-           toute la page jusqu'en bas. Reste une enveloppe dédiée aux trois cases réordonnables (voir
+      <!-- Cases participants (hôte/cohôtes, intervenants, auditeurs) tout en haut du salon — avant
+           même la radio/vidéo (voir la demande : "à la place en haut je veux voir le Hôte et
+           cohôtes et ensuite garde l'ordre avec les intervenants et les auditeurs" — le bloc
+           titre/code du salon, qui occupait cette place avant, a été déplacé tout en bas de la page,
+           voir plus bas) — pour voir tout de suite qui est présent sans avoir à faire défiler toute
+           la page jusqu'en bas. Reste une enveloppe dédiée aux trois cases réordonnables (voir
            theme.ordre.vocal et appliquerTheme) : en limitant la réorganisation à cette enveloppe
            plutôt qu'à tout #vocalSalon, les cases ne risquent jamais de se retrouver déplacées après
            la console de modération ou le tchat. -->
@@ -1436,6 +1431,21 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
       <div class="card" style="text-align:center">
         <div class="row" style="justify-content:center"><button class="ghost" id="btnVocalInviter">🎙️ Inviter des amis</button></div>
       </div>
+
+      <!-- Bloc titre/code du salon (pour le partager) : descendu tout en bas de la page (voir la
+           demande : "le bloc du haut avec le nom du salon et le code pour le partager doit être en
+           bas, tout en bas") — à la place, en haut de page, on retrouve directement les cases
+           participants (hôte/cohôtes, intervenants, auditeurs), voir plus haut. -->
+      <div class="card" style="text-align:center">
+        <p class="tag" id="vocalTitreSalon" style="margin:0 0 4px">Salon</p>
+        <div class="marquee" id="vocalMarquee" style="margin-bottom:10px"></div>
+        <div class="vocalConvives">
+          <span class="vocalConvivesChiffre" id="vocalConvivesChiffre">0</span>
+          <span class="vocalConvivesLabel">convive<span id="vocalConvivesS"></span></span>
+        </div>
+        <div class="row" style="justify-content:center"><button class="ghost" id="btnVocalCopierLien">🔗 Copier le lien du salon</button></div>
+        <p class="feedback" id="vocalCopierLienMsg" style="margin:6px 0 0"></p>
+      </div>
     </div>
   </section>
   <div class="modal-overlay" id="inviterVocalModal">
@@ -1445,7 +1455,7 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
         <button class="close-btn" id="closeInviterVocalBtn">&times;</button>
       </div>
       <div class="modal-body">
-        <p class="note" style="margin-top:0">Invitez un ami en ligne à rejoindre ce salon vocal — code <b id="inviterVocalCode"></b>. Vous pouvez aussi copier un lien à envoyer par SMS, WhatsApp, Messenger… (le bouton « 🔗 Copier le lien du salon » en haut de la page).</p>
+        <p class="note" style="margin-top:0">Invitez un ami en ligne à rejoindre ce salon vocal — code <b id="inviterVocalCode"></b>. Vous pouvez aussi copier un lien à envoyer par SMS, WhatsApp, Messenger… (le bouton « 🔗 Copier le lien du salon » tout en bas de la page).</p>
         <div id="inviterVocalListe"></div>
         <p class="feedback" id="inviterVocalMsg"></p>
       </div>
@@ -3306,17 +3316,19 @@ function vocalCreerMinuteurPausable(callback, delaiMs){
  *  affichée 3 secondes [...] quand un utilisateur touche la photo elle puisse se figer jusqu'à temps
  *  qu'il relâche le doigt de son écran pour qu'elle disparaisse [...] si personne n'a appuyé la
  *  photo disparait, pour tout le monde sauf pour ceux qui ont encore le doigt sur l'écran") — part
- *  du bas de l'écran, remonte bien en évidence tout en haut, RAPIDEMENT (voir .vocalImageEphemere,
- *  visible pour tout le salon : hôte, cohôtes, intervenants ET auditeurs, sans distinction), reste
- *  affichée là-haut 3 secondes, puis disparaît selon l'un des deux effets (bulle qui éclate /
- *  brouillard qui dissout), choisi au hasard à chaque envoi. À tout moment de cette séquence — pendant
- *  la montée, la pause en haut, ou même la disparition — un doigt (ou un clic) posé sur LA PHOTO
- *  elle-même la fige entièrement (l'animation ET le minuteur, voir vocalCreerMinuteurPausable) tant
- *  qu'il n'est pas relâché ; chaque personne dans le salon a sa propre photo affichée sur son propre
- *  écran (jamais synchronisé entre participants), donc figer la sienne n'affecte jamais celle des
- *  autres. Jamais ajoutée au fil écrit du tchat : uniquement ce court aperçu, comme une photo qu'on
- *  montre à l'oral. */
-const VOCAL_IMAGE_MONTEE_MS = 1800;
+ *  du bas de l'écran, remonte bien en évidence, tout en douceur (voir la demande suivante : "la
+ *  photo monte trop rapidement [...] réduit la vitesse également" — montée volontairement ralentie,
+ *  et son point d'arrivée redescendu pour ne plus être coupée en haut de l'écran, voir
+ *  .vocalImageEphemere ci-dessus), visible pour tout le salon : hôte, cohôtes, intervenants ET
+ *  auditeurs, sans distinction, reste affichée là-haut 3 secondes, puis disparaît selon l'un des deux
+ *  effets (bulle qui éclate / brouillard qui dissout), choisi au hasard à chaque envoi. À tout moment
+ *  de cette séquence — pendant la montée, la pause en haut, ou même la disparition — un doigt (ou un
+ *  clic) posé sur LA PHOTO elle-même la fige entièrement (l'animation ET le minuteur, voir
+ *  vocalCreerMinuteurPausable) tant qu'il n'est pas relâché ; chaque personne dans le salon a sa
+ *  propre photo affichée sur son propre écran (jamais synchronisé entre participants), donc figer la
+ *  sienne n'affecte jamais celle des autres. Jamais ajoutée au fil écrit du tchat : uniquement ce
+ *  court aperçu, comme une photo qu'on montre à l'oral. */
+const VOCAL_IMAGE_MONTEE_MS = 4000;
 const VOCAL_IMAGE_PAUSE_HAUT_MS = 3000;
 const VOCAL_IMAGE_DUREE_DISPARITION_MS = { bulle: 1200, brouillard: 1400 };
 function afficherImageEphemereVocal(donnees, mime, pseudo){
@@ -3970,6 +3982,13 @@ document.querySelectorAll('input[name="vocalMediaType"]').forEach(r => r.addEven
 vocalMajApparenceMedia();
 $("btnVocalRadioAjouterToggle").onclick = () => $("vocalRadioAjouter").classList.toggle("hidden");
 $("btnVocalMediaEnvoyer").onclick = async () => {
+  const bouton = $("btnVocalMediaEnvoyer");
+  // Voir la demande : "règle aussi la sensibilité pour la diffusion d'une vidéo [...] bloque le
+  // bouton si plusieurs appuis" — un appui pendant qu'un envoi précédent est encore en cours (gros
+  // fichier en train d'être lu/envoyé, connexion lente…) déclenchait plusieurs diffusions à la
+  // suite. Un seul appui suffit désormais : le bouton se bloque immédiatement et se débloque dès
+  // que la réponse (succès, erreur, ou délai dépassé) arrive.
+  if (bouton.disabled) return;
   if (!vocalSalonActuel) return;
   const type = vocalTypeMediaChoisi();
   const titre = $("vocalMediaTitre").value.trim();
@@ -3981,6 +4000,7 @@ $("btnVocalMediaEnvoyer").onclick = async () => {
   const evenement = type === "video" ? (fichierInput.files?.[0] ? "vocal:video-fichier" : "vocal:video-lien") : "vocal:radio-ajouter";
 
   const envoyer = (payload) => emitAvecDelai(evenement, { code: vocalSalonActuel.code, titre, ...payload }, (res) => {
+    bouton.disabled = false;
     if (!res?.ok) {
       msg.textContent = res?.error === "FICHIER_TROP_LOURD" ? `Ce fichier dépasse ${type === "video" ? 160 : 8} Mo — essayez un lien direct à la place.`
         : res?.error === "LIEN_INVALIDE" ? "Ce lien ne ressemble pas à une adresse valide (doit commencer par http:// ou https://)."
@@ -3999,12 +4019,14 @@ $("btnVocalMediaEnvoyer").onclick = async () => {
   if (fichierInput.files?.[0]) {
     const fichier = fichierInput.files[0];
     if (fichier.size > limiteOctets) { msg.textContent = `Ce fichier dépasse ${type === "video" ? 160 : 8} Mo — essayez un lien direct à la place.`; return; }
+    bouton.disabled = true;
     const ext = extraireExtensionFichier(fichier, type === "video" ? "mp4" : "mp3");
     const lecteur = new FileReader();
     lecteur.onload = () => envoyer({ fichier: lecteur.result, ext });
-    lecteur.onerror = () => { msg.textContent = "Impossible de lire ce fichier."; };
+    lecteur.onerror = () => { bouton.disabled = false; msg.textContent = "Impossible de lire ce fichier."; };
     lecteur.readAsDataURL(fichier);
   } else if (lien) {
+    bouton.disabled = true;
     envoyer({ url: lien });
   } else {
     msg.textContent = "Indiquez un lien ou choisissez un fichier.";
@@ -4048,14 +4070,23 @@ function rendreResultatsRechercheYoutube(resultats){
         </div>
       </div>
     </div>`).join("");
+  // Un seul appui suffit, et bloque les autres résultats pendant la diffusion (voir la demande sur
+  // la sensibilité du bouton de diffusion, plus haut) — sans ça, appuyer plusieurs fois (sur le même
+  // résultat ou un autre) déclenchait plusieurs diffusions à la suite.
   liste.querySelectorAll("[data-video-id]").forEach(btn => {
     btn.onclick = () => {
-      if (!vocalSalonActuel) return;
+      if (!vocalSalonActuel || btn.disabled) return;
+      const tousLesBoutons = liste.querySelectorAll("[data-video-id]");
+      tousLesBoutons.forEach(b => b.disabled = true);
       const msg = $("vocalYoutubeRechercheMsg");
       const titre = btn.dataset.videoTitre;
       msg.textContent = "Diffusion…";
       emitAvecDelai("vocal:video-youtube", { code: vocalSalonActuel.code, titre, url: `https://www.youtube.com/watch?v=${btn.dataset.videoId}` }, (res) => {
-        if (!res?.ok) { msg.textContent = vocalMessageErreurVideo(res); return; }
+        if (!res?.ok) {
+          tousLesBoutons.forEach(b => b.disabled = false);
+          msg.textContent = vocalMessageErreurVideo(res);
+          return;
+        }
         msg.textContent = "";
         liste.innerHTML = "";
         $("vocalYoutubeRechercheInput").value = "";
@@ -4088,20 +4119,35 @@ $("btnVocalYoutubeRechercheLancer").onclick = lancerRechercheYoutubeVocal;
 $("vocalYoutubeRechercheInput").addEventListener("keydown", (e) => { if (e.key === "Enter") lancerRechercheYoutubeVocal(); });
 
 $("btnVocalVideoYoutubeEnvoyer").onclick = () => {
+  const bouton = $("btnVocalVideoYoutubeEnvoyer");
+  if (bouton.disabled) return;
   if (!vocalSalonActuel) return;
   const titre = "";
   const url = $("vocalVideoYoutubeLien").value.trim();
   const msg = $("vocalVideoAjouterMsg");
   if (!url) { msg.textContent = "Indiquez un lien YouTube."; return; }
-  emitAvecDelai("vocal:video-youtube", { code: vocalSalonActuel.code, titre, url }, (res) => vocalApresEnvoiVideo(res, msg));
+  // Un seul appui suffit, bloqué pendant l'envoi (voir la demande : "bloque le bouton si plusieurs
+  // appuis" — plusieurs diffusions lancées coup sur coup faisaient réapparaître le compte à rebours
+  // en boucle chez les autres participants).
+  bouton.disabled = true;
+  emitAvecDelai("vocal:video-youtube", { code: vocalSalonActuel.code, titre, url }, (res) => {
+    bouton.disabled = false;
+    vocalApresEnvoiVideo(res, msg);
+  });
 };
 $("btnVocalTweetEnvoyer").onclick = () => {
+  const bouton = $("btnVocalTweetEnvoyer");
+  if (bouton.disabled) return;
   if (!vocalSalonActuel) return;
   const titre = "";
   const url = $("vocalTweetLien").value.trim();
   const msg = $("vocalVideoAjouterMsg");
   if (!url) { msg.textContent = "Indiquez un lien vers un post X/Twitter."; return; }
-  emitAvecDelai("vocal:tweet-diffuser", { code: vocalSalonActuel.code, titre, url }, (res) => vocalApresEnvoiVideo(res, msg));
+  bouton.disabled = true;
+  emitAvecDelai("vocal:tweet-diffuser", { code: vocalSalonActuel.code, titre, url }, (res) => {
+    bouton.disabled = false;
+    vocalApresEnvoiVideo(res, msg);
+  });
 };
 
 socket.on("vocal:update", (salon) => {
