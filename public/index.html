@@ -218,23 +218,39 @@
      la demande) — en or plutôt qu'en teal, pour rester visuellement distinct du message de
      bienvenue à un nouvel auditeur, tout en gardant la même animation/structure. */
   .vocalBienvenue.diffusion b{color:var(--beam)}
-  /* Image envoyée depuis le tchat (voir la demande : "il apparait et reste figé quelque seconde et
-     puis disparait") : contrairement aux réactions/emojis qui se baladent sur l'écran (.flyEmoji),
-     celle-ci reste bien fixe/statique le temps de l'afficher — plus proche d'une vraie photo qu'on
-     montre à quelqu'un que d'une animation. Centrée, au-dessus du clavier virtuel sur mobile. */
-  @keyframes vocalImageApparition{
-    0%{opacity:0;transform:translate(-50%,-50%) scale(.85)}
-    8%{opacity:1;transform:translate(-50%,-50%) scale(1)}
-    88%{opacity:1}
-    100%{opacity:0}}
-  .vocalImageEphemere{position:fixed;left:50%;top:46%;transform:translate(-50%,-50%);z-index:87;
-    text-align:center;pointer-events:none;max-width:min(320px,80vw);
-    animation:vocalImageApparition 4.5s ease-out forwards}
-  .vocalImageEphemere img{display:block;max-width:100%;max-height:52vh;border-radius:14px;
+  /* Image envoyée depuis le tchat (voir la demande : "la photo doit pouvoir bouger, elle part du
+     bas pour remonter tout en haut, avec un effet quand elle disparaît, comme une bulle qui éclate
+     ou encore comme un brouillard qui la fait disparaître, un effet aléatoire à chaque fois qu'une
+     photo est diffusée") : part du bas de l'écran, remonte bien en évidence tout en haut (au-dessus
+     de tout le reste — voir le z-index), puis disparaît selon l'un des deux effets ci-dessous,
+     choisi au hasard à chaque envoi (voir afficherImageEphemereVocal côté script, qui pose la
+     classe --bulle ou --brouillard). Un léger décalage horizontal aléatoire est posé en ligne (voir
+     le style "left" côté script) pour que deux photos envoyées à la suite ne se superposent pas
+     exactement au même endroit. */
+  .vocalImageEphemere{position:fixed;bottom:6%;transform:translateX(-50%);z-index:90;
+    text-align:center;pointer-events:none;max-width:min(280px,72vw)}
+  .vocalImageEphemere img{display:block;max-width:100%;max-height:38vh;border-radius:14px;
     box-shadow:0 14px 38px rgba(0,0,0,.55);border:2px solid rgba(237,232,220,.25)}
   .vocalImageEphemere b{display:block;margin-top:8px;font-family:'Anton',sans-serif;
     text-transform:uppercase;font-size:clamp(15px,3.6vw,19px);color:var(--beam);letter-spacing:.02em;
     text-shadow:0 2px 6px rgba(0,0,0,.6)}
+  /* Effet 1 : "bulle qui éclate" — monte, puis grossit brusquement en s'effaçant, comme un éclatement. */
+  @keyframes vocalImageMonteeBulle{
+    0%{opacity:0;transform:translateX(-50%) translateY(0) scale(.7)}
+    10%{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}
+    55%{opacity:1;transform:translateX(-50%) translateY(-72vh) scale(1)}
+    80%{opacity:1;transform:translateX(-50%) translateY(-79vh) scale(1.08)}
+    92%{opacity:.85;transform:translateX(-50%) translateY(-81vh) scale(1.4)}
+    100%{opacity:0;transform:translateX(-50%) translateY(-83vh) scale(1.75)}}
+  .vocalImageEphemere--bulle{animation:vocalImageMonteeBulle 5.5s cubic-bezier(.22,.61,.36,1) forwards}
+  /* Effet 2 : "brouillard" — monte, puis se dissout progressivement dans un flou, comme une brume. */
+  @keyframes vocalImageMonteeBrouillard{
+    0%{opacity:0;filter:blur(0px);transform:translateX(-50%) translateY(0) scale(.85)}
+    10%{opacity:1;filter:blur(0px);transform:translateX(-50%) translateY(0) scale(1)}
+    55%{opacity:1;filter:blur(0px);transform:translateX(-50%) translateY(-72vh) scale(1)}
+    78%{opacity:1;filter:blur(2px);transform:translateX(-50%) translateY(-77vh) scale(1.04)}
+    100%{opacity:0;filter:blur(20px);transform:translateX(-50%) translateY(-85vh) scale(1.2)}}
+  .vocalImageEphemere--brouillard{animation:vocalImageMonteeBrouillard 5.5s cubic-bezier(.22,.61,.36,1) forwards}
   /* Citation façon diapositive de cinéma : cadre sombre, perforations de
      pellicule sur les côtés, fenêtre surélevée pour la réplique, bandeau
      d'étiquette en dessous pour le film et l'anecdote. */
@@ -966,6 +982,11 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
   background:linear-gradient(160deg,var(--card),var(--velvet));
   border:1px solid rgba(245,185,66,.35);box-shadow:0 10px 28px rgba(0,0,0,.45)}
 .vocalActionsListe button{width:100%;text-align:left;font-size:13px;padding:8px 10px}
+/* Mêmes boutons d'action que .vocalActionsListe ci-dessus, mais affichés directement à plat (pas en
+   popover flottant) dans le menu qui s'ouvre au clic sur une photo de profil (voir #popReactionPrivee
+   et la demande : "il suffit de cliquer sur sa photo de profil, un menu apparaît"). */
+.vocalActionsListeDirecte{display:flex;flex-direction:column;gap:6px;margin:0 0 14px}
+.vocalActionsListeDirecte button{width:100%;text-align:left;font-size:13px;padding:9px 12px}
 /* --- LA FENÊTRE MODALE --- */
 /* Reprise avec les variables du thème (--ink/--velvet/--card/--chalk/--muted/--ticket/--teal) au
    lieu des gris/rouge/vert génériques d'origine (#1a1a1a, #e50914, #1db954…) qui donnaient
@@ -1619,6 +1640,12 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
           <input type="range" id="vocalVolumeSlider" min="0" max="100" step="5" style="flex:1" aria-label="Volume de la vidéo ou musique diffusée dans ce salon">
           <span aria-hidden="true">🔊</span>
         </div>
+        <!-- Sur iPhone/iPad, iOS ignore volontairement le réglage de volume fait en JavaScript (seuls
+             les boutons physiques du téléphone comptent) : ce curseur reste quand même utile pour
+             couper/rétablir le son (voir majVolumeRadioVocal côté script) — on le précise pour éviter
+             toute confusion (voir la demande : "pour les boutons de volumes cela ne fonctionne
+             toujours pas"). -->
+        <p class="note hidden" id="vocalVolumeNoteIos" style="margin:0 0 12px">📱 Sur iPhone/iPad, seul le bouton physique de volume du téléphone règle le son — ce curseur permet ici surtout de couper/rétablir le son.</p>
         <audio id="vocalAudio" style="width:100%;display:none" controls controlsList="nodownload noplaybackrate"></audio>
         <div class="row hidden" id="vocalRadioBoucleRow" style="margin:6px 0 0">
           <button id="btnVocalRadioBoucle" class="ghost">🔁 Lire en boucle</button>
@@ -1630,10 +1657,13 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
         <div id="vocalTweetWrap" class="hidden" style="width:100%;max-height:520px;overflow-y:auto;border-radius:10px;background:var(--ink);padding:4px 0">
           <div id="vocalTweetPlayer" style="display:flex;justify-content:center"></div>
         </div>
+        <!-- Le sélecteur "choisir un titre du catalogue" (avec ▶️ Diffuser) a été retiré à la
+             demande (certains titres du catalogue s'affichaient sans titre, et cette façon de
+             diffuser n'était pas utilisée) : "diffuser mon propre contenu" ci-dessous (lien/fichier/
+             YouTube/tweet) reste la seule façon de lancer une diffusion. "⏹️ Arrêter" reste seul ici
+             — c'est le bouton général pour stopper la diffusion en cours, quel que soit son type. -->
         <div id="vocalRadioChoix" class="hidden">
-          <select id="vocalRadioSelect"></select>
           <div class="row">
-            <button id="btnVocalRadioDiffuser" class="ghost">▶️ Diffuser</button>
             <button id="btnVocalRadioArreter" class="ghost">⏹️ Arrêter</button>
           </div>
           <button class="ghost" id="btnVocalRadioAjouterToggle" style="margin-top:10px;font-size:13px">➕ Diffuser mon propre contenu (musique ou vidéo)</button>
@@ -1764,7 +1794,7 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
                bouton qui ouvre le sélecteur de fichier natif du téléphone/ordinateur, jamais un
                champ de saisie visible en permanence — voir vocalChatImage plus bas côté script. -->
           <input type="file" id="vocalChatImageFichier" accept="image/png,image/jpeg" class="hidden">
-          <button type="button" id="btnVocalChatImage" class="ghost" style="flex:0 0 auto" aria-label="Envoyer une image">🖼️</button>
+          <button type="button" id="btnVocalChatImage" class="ghost" style="flex:0 0 auto" aria-label="Envoyer une image">📷</button>
           <button id="btnVocalChatEnvoyer" style="flex:0 0 auto">➤</button>
         </div>
         <p class="feedback bad" id="vocalChatImageMsg" style="margin:6px 0 0"></p>
@@ -2246,14 +2276,18 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
     </div>
   </div>
 
-  <!-- Réaction emoji PRIVÉE dans un salon vocal : ouverte en cliquant sur la photo de profil d'un
-       participant (voir ouvrirMenuReactionPrivee). Contrairement à la barre de réactions habituelle
-       (#vocalEmojiBar), l'emoji choisi ici n'est vu que par la personne visée. -->
+  <!-- Menu ouvert en cliquant sur la photo de profil d'un participant du salon vocal (voir
+       ouvrirMenuReactionPrivee et la demande : "il suffit de cliquer sur sa photo de profil, un
+       menu apparaît, plus besoin de cliquer sur Action") : regroupe désormais les actions de
+       modération possibles sur cette personne (si on est hôte/cohôte — voir #reactionPriveeActions
+       et construireBoutonsActionsVocal) ET l'envoi d'un emoji en privé, jamais vu par le reste du
+       salon (contrairement à la barre de réactions habituelle, #vocalEmojiBar). -->
   <div id="popReactionPrivee" class="hidden">
     <div class="boite">
       <span class="close-btn" id="reactionPriveeFermer">&times;</span>
-      <h3>Envoyer un emoji à <span id="reactionPriveeCible"></span></h3>
-      <p class="note" style="margin:0 0 10px">Reçu uniquement par cette personne, avec votre pseudo — personne d'autre dans le salon ne le verra.</p>
+      <h3>Actions pour <span id="reactionPriveeCible"></span></h3>
+      <div class="vocalActionsListeDirecte hidden" id="reactionPriveeActions"></div>
+      <p class="note" style="margin:0 0 10px">😀 Emoji privé, reçu uniquement par cette personne avec votre pseudo — personne d'autre dans le salon ne le verra.</p>
       <div class="emojis" id="reactionPriveeBar"></div>
       <p class="feedback" id="reactionPriveeMsg" style="margin-top:10px;min-height:1.2em"></p>
     </div>
@@ -2962,17 +2996,29 @@ function vocalAppliquerVolumeYoutube(player){
     if (vocalRadioVolume > 0) player.unMute(); else player.mute();
   } catch {}
 }
+// iOS (iPhone/iPad) ignore VOLONTAIREMENT tout réglage de volume fait par un site/une appli en
+// JavaScript sur <audio>/<video> (seuls les boutons physiques du téléphone contrôlent le volume
+// réel — restriction d'Apple, pas un bug d'ici) : `.volume` y reste toujours à 1, quoi qu'on lui
+// assigne. En revanche `.muted` (couper/rétablir le son), lui, reste bien pris en compte partout, y
+// compris sur iOS. Pour que le curseur continue à servir à quelque chose de réel sur iPhone/iPad
+// (au moins couper le son), on bascule aussi `.muted` selon que le volume choisi est à 0 ou non, en
+// plus de `.volume` (voir la demande : "pour les boutons de volumes cela ne fonctionne toujours
+// pas" — sur ordinateur/Android, .volume seul suffit déjà et continue de fonctionner normalement).
+const VOCAL_EST_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent || "");
 function majVolumeRadioVocal(){
+  const estCoupe = vocalRadioVolume <= 0;
   const audio = $("vocalAudio");
-  if (audio) audio.volume = vocalRadioVolume;
+  if (audio) { audio.volume = vocalRadioVolume; audio.muted = estCoupe; }
   const video = $("vocalVideo");
-  if (video) video.volume = vocalRadioVolume;
+  if (video) { video.volume = vocalRadioVolume; video.muted = estCoupe; }
   if (vocalYoutubePlayer) vocalAppliquerVolumeYoutube(vocalYoutubePlayer);
   const curseur = $("vocalVolumeSlider");
   // Ne touche pas le curseur pendant que le doigt/la souris est dessus (voir son propre écouteur
   // "input" plus bas) : sinon un simple rafraîchissement du salon (mic coupé, main levée...) — bien
   // plus fréquent qu'un vrai changement de volume — le ferait sauter sous le doigt de l'utilisateur.
   if (curseur && document.activeElement !== curseur) curseur.value = Math.round(vocalRadioVolume * 100);
+  const noteIos = $("vocalVolumeNoteIos");
+  if (noteIos) noteIos.classList.toggle("hidden", !VOCAL_EST_IOS);
 }
 majVolumeRadioVocal();
 $("vocalVolumeSlider")?.addEventListener("input", (e) => {
@@ -6333,7 +6379,6 @@ function renderSondages(){
 
 /* ---------- Salon vocal ---------- */
 let vocalSalonActuel = null;   // dernier état reçu du serveur (payload publicVocal), ou null si pas dans un salon
-let vocalMusiquePourRadio = []; // catalogue /api/musique, chargé une seule fois pour le sélecteur radio
 
 /** Signal sonore discret pour hôte/cohôte/intervenant : prévient sans avoir à garder l'œil rivé sur
  *  l'écran qu'un nouvel auditeur vient d'arriver, ou qu'une demande d'intervention vient d'être
@@ -6862,7 +6907,6 @@ $("btnVocalCreer").onclick = () => {
         : "Impossible d'ouvrir un salon pour l'instant.";
       return;
     }
-    chargerMusiqueVocal();
     renderVocalSalon(res.salon);
     afficherVocalSalonVue();
   });
@@ -6881,7 +6925,6 @@ function rejoindreSalonVocalParCode(code, { rester = false } = {}){
       return;
     }
     $("vocalErreur").textContent = "";
-    chargerMusiqueVocal();
     renderVocalSalon(res.salon);
     // rester: true (bannière de retour cliquée en pleine partie) : la connexion audio se fait
     // en arrière-plan, sans changer d'écran ni afficher de notification qui interromprait la
@@ -6950,11 +6993,6 @@ $("btnVocalQuitter").onclick = () => {
   majMicFlottant(pageAffichee);
 };
 
-async function chargerMusiqueVocal(){
-  if (vocalMusiquePourRadio.length) return; // déjà chargé, inutile de le refaire à chaque ouverture
-  vocalMusiquePourRadio = await fetch("/api/musique").then(r => r.ok ? r.json() : []).catch(() => []);
-  $("vocalRadioSelect").innerHTML = vocalMusiquePourRadio.map(p => `<option value="${esc(p.id)}">${esc(p.titre)}</option>`).join("");
-}
 
 function carteParticipantVocal(p){
   const parle = p.parle ? " parle" : "";
@@ -7003,6 +7041,11 @@ function renderVocalSalon(salon){
   $("vocalListeHote").innerHTML = hoteCohotes.map(carteParticipantVocal).join("");
   $("vocalListeIntervenants").innerHTML = intervenants.map(carteParticipantVocal).join("");
   $("vocalListeAuditeurs").innerHTML = auditeurs.map(carteParticipantVocal).join("");
+
+  const moi = salon.participants.find(p => p.userId === me?.id);
+  const monRole = moi?.role || null;
+  const nbCohotes = salon.participants.filter(p => p.role === "cohote").length;
+
   // Voir le profil d'un participant depuis le salon vocal (photo, stats, et — si on est amis — les
   // actions de don) : un clic sur sa carte ouvre la même fiche joueur que partout ailleurs dans le
   // jeu (voir ouvrirJoueur). Jamais sur sa propre carte (voir vocalParticipantMoi ci-dessus).
@@ -7010,19 +7053,19 @@ function renderVocalSalon(salon){
     const p = salon.participants.find(x => x.userId === carte.dataset.userid);
     if (!p) return;
     carte.onclick = () => ouvrirJoueur(p.userId, p.pseudo, p.avatar, p.photo);
-    // Cliquer précisément sur la photo de profil ouvre plutôt un petit menu d'emoji à envoyer en
-    // privé à cette personne (voir ouvrirMenuReactionPrivee, plus bas) — on arrête la propagation
-    // pour que ça n'ouvre pas EN PLUS la fiche du profil (comportement du reste de la carte).
+    // Cliquer précisément sur la photo de profil ouvre plutôt un menu regroupant à la fois les
+    // actions de modération possibles sur cette personne (si on est hôte/cohôte, voir la demande :
+    // "il suffit de cliquer sur sa photo de profil, un menu apparaît, plus besoin de cliquer sur
+    // Action") ET l'envoi d'un emoji en privé (voir ouvrirMenuReactionPrivee, plus bas) — on arrête
+    // la propagation pour que ça n'ouvre pas EN PLUS la fiche du profil (comportement du reste de
+    // la carte).
     const avatarWrap = carte.querySelector(".vocalAvatarWrap");
     if (avatarWrap) {
-      avatarWrap.title = `Envoyer un emoji en privé à ${p.pseudo}`;
-      avatarWrap.onclick = (e) => { e.stopPropagation(); ouvrirMenuReactionPrivee(p.userId, p.pseudo); };
+      avatarWrap.title = `Actions pour ${p.pseudo}`;
+      avatarWrap.onclick = (e) => { e.stopPropagation(); ouvrirMenuReactionPrivee(p, monRole, nbCohotes); };
     }
   });
   renderVocalChat(salon);
-
-  const moi = salon.participants.find(p => p.userId === me?.id);
-  const monRole = moi?.role || null;
   const peutParler = ["hote","cohote","intervenant"].includes(monRole);
 
   $("btnVocalMute").classList.toggle("hidden", !peutParler);
@@ -7572,14 +7615,22 @@ $("vocalChatInput").addEventListener("keydown", (e) => { if (e.key === "Enter") 
 
 /** Affiche une image envoyée depuis le tchat (voir la demande : "importer des images png jpeg
  *  [...] qui puisse apparaitre comme les messages, de façon éphémère [...] fait également apparait
- *  le nom d'utilisateur qui envoi l'image") — contrairement aux réactions volantes (.flyEmoji), elle
- *  reste bien fixe le temps de l'affichage (voir .vocalImageEphemere), avant de disparaître toute
- *  seule (voir setTimeout ci-dessous, calé sur la durée de l'animation CSS). Jamais ajoutée au fil
- *  écrit du tchat : uniquement ce court aperçu, comme une photo qu'on montre à l'oral. */
-const VOCAL_IMAGE_EPHEMERE_DUREE_MS = 4500;
+ *  le nom d'utilisateur qui envoi l'image [...] la photo doit pouvoir bouger, elle part du bas pour
+ *  remonter tout en haut, avec un effet quand elle disparait, comme une bulle qui éclate ou encore
+ *  comme un brouillard qui la fait disparaitre, un effet aléatoire à chaque fois") — part du bas de
+ *  l'écran, remonte bien en évidence tout en haut (voir .vocalImageEphemere, visible pour tout le
+ *  salon : hôte, cohôtes, intervenants ET auditeurs, sans distinction), puis disparaît selon l'un
+ *  des deux effets (bulle qui éclate / brouillard qui dissout), choisi au hasard à chaque envoi.
+ *  Jamais ajoutée au fil écrit du tchat : uniquement ce court aperçu, comme une photo qu'on montre
+ *  à l'oral. */
+const VOCAL_IMAGE_EPHEMERE_DUREE_MS = 5500;
 function afficherImageEphemereVocal(donnees, mime, pseudo){
   const el = document.createElement("div");
-  el.className = "vocalImageEphemere";
+  const effet = Math.random() < 0.5 ? "bulle" : "brouillard";
+  el.className = `vocalImageEphemere vocalImageEphemere--${effet}`;
+  // Léger décalage horizontal aléatoire : deux photos envoyées à la suite ne montent pas
+  // exactement au même endroit (voir la demande : "un effet aléatoire à chaque fois").
+  el.style.left = (32 + Math.random() * 36) + "%";
   el.innerHTML = `<img src="data:${esc(mime)};base64,${donnees}" alt="Image envoyée par ${esc(pseudo || "")}">
     <b>${esc(pseudo || "")}</b>`;
   document.body.appendChild(el);
@@ -7654,17 +7705,29 @@ socket.on("vocal:nouvel-arrivant", ({ pseudo }) => {
   setTimeout(() => el.remove(), 5000);
 });
 
-/** Menu d'emoji privé, ouvert en cliquant sur la photo de profil d'un participant du salon vocal
- *  (voir renderVocalSalon, où le clic est câblé) : contrairement à la barre de réactions ci-dessus
- *  (#vocalEmojiBar, vue par tout le salon), l'emoji envoyé ici n'est reçu que par la personne visée
- *  — un petit clin d'œil discret plutôt qu'une réaction publique. Le serveur (vocal:reaction-privee)
- *  joint toujours le pseudo de l'expéditeur, pour que le destinataire sache qui le lui envoie même
- *  si personne d'autre ne le voit. */
+/** Menu ouvert en cliquant sur la photo de profil d'un participant du salon vocal (voir
+ *  renderVocalSalon, où le clic est câblé) — voir la demande : "il suffit de cliquer sur sa photo de
+ *  profil, un menu apparaît, plus besoin de cliquer sur Action, le menu est maintenant à côté d'un
+ *  [...] bouton emoji qui inclut déjà tout les emoji mis en place". Regroupe désormais DEUX choses :
+ *  1. Les actions de modération possibles sur cette personne (voir construireBoutonsActionsVocal) —
+ *     rien ne s'affiche pour un simple auditeur qui clique sur quelqu'un d'autre, ou si aucune
+ *     action n'est possible sur cette personne précise (ex : sur l'hôte). Mêmes boutons, mêmes
+ *     autorisations, que la console de modération — jamais dupliqués séparément.
+ *  2. L'envoi d'un emoji en privé (barre du bas, déjà présente avant ce changement) : contrairement à
+ *     la barre de réactions publique (#vocalEmojiBar, vue par tout le salon), reçu uniquement par la
+ *     personne visée — un petit clin d'œil discret. Le serveur (vocal:reaction-privee) joint
+ *     toujours le pseudo de l'expéditeur, pour que le destinataire sache qui le lui envoie même si
+ *     personne d'autre ne le voit. */
 let vocalReactionPriveeCibleId = null;
-function ouvrirMenuReactionPrivee(userId, pseudo){
-  vocalReactionPriveeCibleId = userId;
-  $("reactionPriveeCible").textContent = pseudo;
+function ouvrirMenuReactionPrivee(p, monRole, nbCohotes){
+  vocalReactionPriveeCibleId = p.userId;
+  $("reactionPriveeCible").textContent = p.pseudo;
   $("reactionPriveeMsg").textContent = "";
+  const zoneActions = $("reactionPriveeActions");
+  const boutons = (monRole === "hote" || monRole === "cohote") ? construireBoutonsActionsVocal(p, monRole, nbCohotes) : [];
+  zoneActions.innerHTML = boutons.join("");
+  zoneActions.classList.toggle("hidden", boutons.length === 0);
+  cablerActionsVocal(zoneActions, fermerMenuReactionPrivee);
   $("reactionPriveeBar").innerHTML = EMOJIS_REACTION
     .map(e => `<button type="button" data-emoji="${e}">${e}</button>`).join("");
   $("reactionPriveeBar").querySelectorAll("[data-emoji]").forEach(btn => {
@@ -7841,6 +7904,80 @@ document.addEventListener("click", (e) => {
   $("vocalConsole")?.querySelectorAll(".vocalActionsListe").forEach(z => z.classList.add("hidden"));
 });
 
+/** Construit les boutons d'action de modération disponibles pour UN participant précis, vus par
+ *  quelqu'un ayant CE rôle — factorisé pour être utilisé à la fois dans la console de modération
+ *  (renderConsoleVocal, plus bas) et dans le nouveau menu qui s'ouvre directement en cliquant sur la
+ *  photo de profil (voir ouvrirMenuReactionPrivee et la demande : "il suffit de cliquer sur sa
+ *  photo de profil, un menu apparaît, plus besoin de cliquer sur Action") — la même logique
+ *  d'autorisation ne doit jamais être dupliquée à deux endroits différents, au risque de finir par
+ *  diverger et d'ouvrir une action à quelqu'un qui ne devrait pas y avoir accès. */
+function construireBoutonsActionsVocal(p, monRole, nbCohotes){
+  const boutons = [];
+  if (p.role === "auditeur") boutons.push(`<button class="ghost" data-promouvoir="${esc(p.userId)}">⬆️ Passer intervenant</button>`);
+  if (p.role === "intervenant") boutons.push(`<button class="ghost" data-retrograder="${esc(p.userId)}">⬇️ Repasser auditeur</button>`);
+  // Couper/réactiver le micro à distance : jamais sur l'hôte (seul maître de son propre micro), et
+  // un cohôte ne peut pas agir sur un autre cohôte (seul l'hôte le peut) — même logique
+  // qu'exclure/bannir plus bas. Un auditeur n'a par définition pas de micro à couper.
+  if (["cohote", "intervenant"].includes(p.role) && (monRole === "hote" || p.role !== "cohote")) {
+    boutons.push(p.mute
+      ? `<button class="ghost" data-demute-part="${esc(p.userId)}">🔊 Réactiver son micro</button>`
+      : `<button class="ghost" data-mute-part="${esc(p.userId)}">🔇 Couper son micro</button>`);
+  }
+  if (monRole === "hote" && p.role !== "hote" && p.role !== "cohote" && nbCohotes < 3)
+    boutons.push(`<button class="ghost" data-nommer-cohote="${esc(p.userId)}">🎖️ Nommer cohôte</button>`);
+  if (monRole === "hote" && p.role === "cohote")
+    boutons.push(`<button class="ghost" data-retirer-cohote="${esc(p.userId)}">🎖️ Retirer cohôte</button>`);
+  if (p.role !== "hote" && (monRole === "hote" || p.role !== "cohote")) {
+    boutons.push(`<button class="ghost danger" data-exclure="${esc(p.userId)}">🚪 Exclure</button>`);
+    // "Bannir" : contrairement à "Exclure" (qui n'empêche pas de revenir tout de suite après), un
+    // compte banni ne peut plus rejoindre CE salon tant que l'hôte ou un cohôte ne l'aura pas
+    // explicitement débanni (voir vocalBannisChargesPour plus bas).
+    boutons.push(`<button class="ghost danger" data-bannir="${esc(p.userId)}">🚫 Bannir</button>`);
+  }
+  return boutons;
+}
+/** Câble les clics de tous les boutons d'action de modération présents dans `racine` (voir
+ *  construireBoutonsActionsVocal ci-dessus) — factorisé pour fonctionner aussi bien dans la console
+ *  que dans le nouveau menu du clic sur la photo. `apresAction` s'exécute juste avant chaque envoi
+ *  (referme le menu concerné, quel qu'il soit — console ou nouveau menu). */
+function cablerActionsVocal(racine, apresAction){
+  racine.querySelectorAll("[data-promouvoir]").forEach(b => b.onclick = () => {
+    apresAction();
+    socket.emit("vocal:promouvoir", { code: vocalSalonActuel.code, userId: b.dataset.promouvoir }, () => {});
+  });
+  racine.querySelectorAll("[data-retrograder]").forEach(b => b.onclick = () => {
+    apresAction();
+    socket.emit("vocal:retrograder", { code: vocalSalonActuel.code, userId: b.dataset.retrograder }, () => {});
+  });
+  racine.querySelectorAll("[data-mute-part]").forEach(b => b.onclick = () => {
+    apresAction();
+    socket.emit("vocal:mute-participant", { code: vocalSalonActuel.code, userId: b.dataset.mutePart, mute: true }, () => {});
+  });
+  racine.querySelectorAll("[data-demute-part]").forEach(b => b.onclick = () => {
+    apresAction();
+    socket.emit("vocal:mute-participant", { code: vocalSalonActuel.code, userId: b.dataset.demutePart, mute: false }, () => {});
+  });
+  racine.querySelectorAll("[data-nommer-cohote]").forEach(b => b.onclick = () => {
+    apresAction();
+    socket.emit("vocal:nommer-cohote", { code: vocalSalonActuel.code, userId: b.dataset.nommerCohote }, () => {});
+  });
+  racine.querySelectorAll("[data-retirer-cohote]").forEach(b => b.onclick = () => {
+    apresAction();
+    socket.emit("vocal:retirer-cohote", { code: vocalSalonActuel.code, userId: b.dataset.retirerCohote }, () => {});
+  });
+  racine.querySelectorAll("[data-exclure]").forEach(b => b.onclick = () => {
+    apresAction();
+    if (confirm("Exclure ce participant du salon ?"))
+      socket.emit("vocal:exclure", { code: vocalSalonActuel.code, userId: b.dataset.exclure }, () => {});
+  });
+  racine.querySelectorAll("[data-bannir]").forEach(b => b.onclick = () => {
+    apresAction();
+    if (confirm("Bannir ce participant de ce salon ? Il ne pourra plus le rejoindre tant que vous (ou un cohôte) ne l'aurez pas débanni."))
+      socket.emit("vocal:bannir", { code: vocalSalonActuel.code, userId: b.dataset.bannir }, (res) => {
+        if (res?.ok) afficherBannisVocal(res.bannis || []);
+      });
+  });
+}
 function renderConsoleVocal(salon, monRole){
   // Ne touche pas au champ pendant que l'hôte/le cohôte est en train d'y taper, sinon chaque
   // vocal:update (déclenché par n'importe quel autre événement du salon) effacerait sa saisie.
@@ -7866,30 +8003,9 @@ function renderConsoleVocal(salon, monRole){
     salon.participants.filter(p => p.userId !== me?.id).map(p => {
       // Toutes les actions de modération pour cette personne, regroupées derrière un seul bouton
       // "⋮ Actions" (voir la demande) plutôt que plusieurs boutons côte à côte — beaucoup plus lisible
-      // dès qu'un salon a plus de 2-3 participants à modérer.
-      const boutons = [];
-      if (p.role === "auditeur") boutons.push(`<button class="ghost" data-promouvoir="${esc(p.userId)}">⬆️ Passer intervenant</button>`);
-      if (p.role === "intervenant") boutons.push(`<button class="ghost" data-retrograder="${esc(p.userId)}">⬇️ Repasser auditeur</button>`);
-      // Couper/réactiver le micro à distance (voir la demande et vocal:mute-participant côté
-      // serveur) : jamais sur l'hôte (seul maître de son propre micro), et un cohôte ne peut pas agir
-      // sur un autre cohôte (seul l'hôte le peut) — même logique que exclure/bannir plus bas. Un
-      // auditeur n'a par définition pas de micro à couper (voir micCoupe dans carteParticipantVocal).
-      if (["cohote", "intervenant"].includes(p.role) && (monRole === "hote" || p.role !== "cohote")) {
-        boutons.push(p.mute
-          ? `<button class="ghost" data-demute-part="${esc(p.userId)}">🔊 Réactiver son micro</button>`
-          : `<button class="ghost" data-mute-part="${esc(p.userId)}">🔇 Couper son micro</button>`);
-      }
-      if (monRole === "hote" && p.role !== "hote" && p.role !== "cohote" && nbCohotes < 3)
-        boutons.push(`<button class="ghost" data-nommer-cohote="${esc(p.userId)}">🎖️ Nommer cohôte</button>`);
-      if (monRole === "hote" && p.role === "cohote")
-        boutons.push(`<button class="ghost" data-retirer-cohote="${esc(p.userId)}">🎖️ Retirer cohôte</button>`);
-      if (p.role !== "hote" && (monRole === "hote" || p.role !== "cohote")) {
-        boutons.push(`<button class="ghost danger" data-exclure="${esc(p.userId)}">🚪 Exclure</button>`);
-        // "Bannir" (voir la demande) : contrairement à "Exclure" (qui n'empêche pas de revenir tout
-        // de suite après), un compte banni ne peut plus rejoindre CE salon tant que l'hôte ou un
-        // cohôte ne l'aura pas explicitement débanni (voir vocalBannisChargesPour plus bas).
-        boutons.push(`<button class="ghost danger" data-bannir="${esc(p.userId)}">🚫 Bannir</button>`);
-      }
+      // dès qu'un salon a plus de 2-3 participants à modérer. Voir construireBoutonsActionsVocal
+      // (juste au-dessus) : même liste que le nouveau menu du clic sur la photo de profil.
+      const boutons = construireBoutonsActionsVocal(p, monRole, nbCohotes);
       const ouvert = vocalMenuActionsOuvertPour === p.userId;
       return `<div class="urowVocal">
         <span class="qui">${p.photo ? `<img class="pfp" src="${esc(p.photo)}" alt="">` : esc(p.avatar||"🎬")} ${esc(p.pseudo)} ${insigneFondateur(p)}
@@ -7916,42 +8032,9 @@ function renderConsoleVocal(salon, monRole){
     vocalMenuActionsOuvertPour = null;
     $("vocalConsole").querySelectorAll(".vocalActionsListe").forEach(z => z.classList.add("hidden"));
   };
-  $("vocalConsole").querySelectorAll("[data-promouvoir]").forEach(b => b.onclick = () => {
-    fermerMenuActions();
-    socket.emit("vocal:promouvoir", { code: vocalSalonActuel.code, userId: b.dataset.promouvoir }, () => {});
-  });
-  $("vocalConsole").querySelectorAll("[data-retrograder]").forEach(b => b.onclick = () => {
-    fermerMenuActions();
-    socket.emit("vocal:retrograder", { code: vocalSalonActuel.code, userId: b.dataset.retrograder }, () => {});
-  });
-  $("vocalConsole").querySelectorAll("[data-mute-part]").forEach(b => b.onclick = () => {
-    fermerMenuActions();
-    socket.emit("vocal:mute-participant", { code: vocalSalonActuel.code, userId: b.dataset.mutePart, mute: true }, () => {});
-  });
-  $("vocalConsole").querySelectorAll("[data-demute-part]").forEach(b => b.onclick = () => {
-    fermerMenuActions();
-    socket.emit("vocal:mute-participant", { code: vocalSalonActuel.code, userId: b.dataset.demutePart, mute: false }, () => {});
-  });
-  $("vocalConsole").querySelectorAll("[data-nommer-cohote]").forEach(b => b.onclick = () => {
-    fermerMenuActions();
-    socket.emit("vocal:nommer-cohote", { code: vocalSalonActuel.code, userId: b.dataset.nommerCohote }, () => {});
-  });
-  $("vocalConsole").querySelectorAll("[data-retirer-cohote]").forEach(b => b.onclick = () => {
-    fermerMenuActions();
-    socket.emit("vocal:retirer-cohote", { code: vocalSalonActuel.code, userId: b.dataset.retirerCohote }, () => {});
-  });
-  $("vocalConsole").querySelectorAll("[data-exclure]").forEach(b => b.onclick = () => {
-    fermerMenuActions();
-    if (confirm("Exclure ce participant du salon ?"))
-      socket.emit("vocal:exclure", { code: vocalSalonActuel.code, userId: b.dataset.exclure }, () => {});
-  });
-  $("vocalConsole").querySelectorAll("[data-bannir]").forEach(b => b.onclick = () => {
-    fermerMenuActions();
-    if (confirm("Bannir ce participant de ce salon ? Il ne pourra plus le rejoindre tant que vous (ou un cohôte) ne l'aurez pas débanni."))
-      socket.emit("vocal:bannir", { code: vocalSalonActuel.code, userId: b.dataset.bannir }, (res) => {
-        if (res?.ok) afficherBannisVocal(res.bannis || []);
-      });
-  });
+  // Voir cablerActionsVocal (plus haut) : mêmes gestionnaires que le nouveau menu du clic sur la
+  // photo de profil, factorisés pour ne jamais diverger entre les deux.
+  cablerActionsVocal($("vocalConsole"), fermerMenuActions);
 
   // Liste des comptes bannis de ce salon : chargée une seule fois par salon (et non à chaque
   // vocal:update, bien plus fréquent — voir vocalBannisChargesPour) puis tenue à jour directement
@@ -8111,11 +8194,6 @@ function majMicFlottant(pageActuelle){
   btn.classList.toggle("micro-ouvert", vocalMicOuvert);
 }
 
-$("btnVocalRadioDiffuser").onclick = () => {
-  const pisteId = $("vocalRadioSelect").value;
-  if (!pisteId || !vocalSalonActuel) return;
-  socket.emit("vocal:radio", { code: vocalSalonActuel.code, pisteId }, () => {});
-};
 $("btnVocalRadioArreter").onclick = () => {
   if (!vocalSalonActuel) return;
   socket.emit("vocal:radio", { code: vocalSalonActuel.code, pisteId: null }, () => {});
@@ -8193,7 +8271,6 @@ $("btnVocalMediaEnvoyer").onclick = async () => {
     msg.textContent = "";
     $("vocalMediaTitre").value = ""; $("vocalMediaLien").value = ""; fichierInput.value = "";
     $("vocalRadioAjouter").classList.add("hidden");
-    if (type === "audio") chargerMusiqueVocal();
   });
 
   if (fichierInput.files?.[0]) {
@@ -8480,7 +8557,6 @@ $("btnVocalEquipe").onclick = () => {
       setTimeout(() => { $("btnVocalEquipe").textContent = libelleInitial; }, 2500);
       return;
     }
-    chargerMusiqueVocal();
     renderVocalSalon(res.salon);
     $("btnVocalEquipe").textContent = res.invites
       ? `✅ ${res.invites} joueur${res.invites > 1 ? "s" : ""} invité${res.invites > 1 ? "s" : ""}`
