@@ -1627,6 +1627,29 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
         <p class="feedback" id="vocalCopierLienMsg" style="margin:6px 0 0"></p>
       </div>
 
+      <!-- Cases participants (hôte/cohôtes, intervenants, auditeurs) remontées tout en haut du
+           salon, juste sous le titre — AVANT même la radio/vidéo (voir la demande : "hôte, cohôtes
+           et les intervenants, également auditeur, tout en haut de la page, ensuite tu peux
+           rajouter la radio") — pour voir tout de suite qui est présent sans avoir à faire défiler
+           toute la page jusqu'en bas. Reste une enveloppe dédiée aux trois cases réordonnables (voir
+           theme.ordre.vocal et appliquerTheme) : en limitant la réorganisation à cette enveloppe
+           plutôt qu'à tout #vocalSalon, les cases ne risquent jamais de se retrouver déplacées après
+           la console de modération ou le tchat. -->
+      <div id="vocalCasesWrapper">
+        <div class="card" data-module="vocal-hote">
+          <p class="tag" style="margin:0 0 10px">🎤 Hôte & cohôtes</p>
+          <div id="vocalListeHote" class="vocalGrille"></div>
+        </div>
+        <div class="card" data-module="vocal-intervenants">
+          <p class="tag" style="margin:0 0 10px">🗣️ Intervenants</p>
+          <div id="vocalListeIntervenants" class="vocalGrille"></div>
+        </div>
+        <div class="card" data-module="vocal-auditeurs">
+          <p class="tag" style="margin:0 0 10px">👂 Auditeurs</p>
+          <div id="vocalListeAuditeurs" class="vocalGrille"></div>
+        </div>
+      </div>
+
       <div class="card" id="vocalRadioCard">
         <p class="tag" style="margin:0 0 8px">📻 Radio & vidéo du salon</p>
         <p class="note" id="vocalRadioTexte" style="margin:0 0 10px">Aucune piste diffusée pour l'instant.</p>
@@ -1707,9 +1730,8 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
            empilées : micro / demande d'intervention / réactions (repliées, voir #vocalEmojiBar) /
            recherche d'un film / quitter, toujours dans le flux normal de la page (jamais en position
            fixe, voir la note sur .radioBar plus haut) pour ne jamais chevaucher le clavier mobile ou
-           le chat. Remontée juste sous la radio du salon et juste au-dessus des cases participants
-           (hôte/intervenants/auditeurs), à la demande d'un joueur : plus rapide à atteindre qu'après
-           avoir fait défiler toute la liste des participants. -->
+           le chat. Juste sous la radio du salon (les cases participants, elles, sont maintenant tout
+           en haut de la page — voir #vocalCasesWrapper, plus haut, et la demande). -->
       <div class="card vocalBarreBas" id="vocalBarreBas">
         <div class="vocalBarreRangee">
           <button id="btnVocalMute" class="hidden">🎙️ Activer mon micro</button>
@@ -1758,24 +1780,6 @@ html.ticker-actif.mode-enfant-actif .wrap{padding-top:78px}
            position:absolute + taille 0 plutôt que display:none : certains navigateurs mobiles sont
            moins fiables pour lire un <audio> totalement retiré du rendu. -->
       <div id="vocalAudioDistant" style="position:absolute;width:0;height:0;overflow:hidden"></div>
-
-      <!-- Enveloppe dédiée aux trois cases réordonnables (voir theme.ordre.vocal et appliquerTheme) :
-           en limitant la réorganisation à cette enveloppe plutôt qu'à tout #vocalSalon, les cases ne
-           risquent jamais de se retrouver déplacées après la console de modération ou le tchat. -->
-      <div id="vocalCasesWrapper">
-        <div class="card" data-module="vocal-hote">
-          <p class="tag" style="margin:0 0 10px">🎤 Hôte & cohôtes</p>
-          <div id="vocalListeHote" class="vocalGrille"></div>
-        </div>
-        <div class="card" data-module="vocal-intervenants">
-          <p class="tag" style="margin:0 0 10px">🗣️ Intervenants</p>
-          <div id="vocalListeIntervenants" class="vocalGrille"></div>
-        </div>
-        <div class="card" data-module="vocal-auditeurs">
-          <p class="tag" style="margin:0 0 10px">👂 Auditeurs</p>
-          <div id="vocalListeAuditeurs" class="vocalGrille"></div>
-        </div>
-      </div>
 
       <!-- Remontée juste sous les auditeurs (à la demande d'un joueur) : plus rapide à atteindre
            qu'après avoir fait défiler toute la console de modération, qui n'est de toute façon
@@ -2998,27 +3002,85 @@ function vocalAppliquerVolumeYoutube(player){
 }
 // iOS (iPhone/iPad) ignore VOLONTAIREMENT tout réglage de volume fait par un site/une appli en
 // JavaScript sur <audio>/<video> (seuls les boutons physiques du téléphone contrôlent le volume
-// réel — restriction d'Apple, pas un bug d'ici) : `.volume` y reste toujours à 1, quoi qu'on lui
-// assigne. En revanche `.muted` (couper/rétablir le son), lui, reste bien pris en compte partout, y
-// compris sur iOS. Pour que le curseur continue à servir à quelque chose de réel sur iPhone/iPad
-// (au moins couper le son), on bascule aussi `.muted` selon que le volume choisi est à 0 ou non, en
-// plus de `.volume` (voir la demande : "pour les boutons de volumes cela ne fonctionne toujours
-// pas" — sur ordinateur/Android, .volume seul suffit déjà et continue de fonctionner normalement).
+// réel — restriction d'Apple, pas un bug d'ici) : `.volume` y reste TOUJOURS au maximum, quoi qu'on
+// lui assigne — aucune variation possible avec ce seul réglage (voir la demande : "il n y a pas du
+// tout de variation du son qui vient de la video"). La seule vraie façon de contourner ça est l'API
+// Web Audio : brancher le son sur un potentiomètre logiciel (un GainNode) posé APRÈS le lecteur,
+// plutôt que de demander au lecteur lui-même de baisser le son — ce qu'iOS refuse d'écouter, mais
+// le résultat sonore qui sort ensuite du GainNode, lui, est bien réel. Voir vocalAssurerGainReel
+// ci-dessous : on ne branche ce montage QUE pour nos propres fichiers hébergés ici (uploadés depuis
+// le téléphone/l'ordinateur, voir vocalUrlMemeOrigine) — jamais pour un lien externe collé par
+// l'hôte, car cette technique exige que le serveur distant autorise explicitement le partage
+// cross-origin (CORS), ce qu'on ne peut pas garantir pour un site quelconque : mieux vaut garder
+// l'ancien réglage limité (.muted) sur ces liens-là plutôt que risquer un son totalement coupé sur
+// un lien externe qui fonctionnait très bien avant.
 const VOCAL_EST_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent || "");
+// Nom distinct de "vocalAudioCtx" (déjà utilisé plus bas pour analyser le niveau du micro, avec un
+// cycle de vie très différent — ouvert/fermé à chaque activation du micro) : celui-ci, au contraire,
+// doit rester ouvert en permanence pendant toute la durée du salon.
+let vocalVolumeCtx = null;
+function vocalObtenirVolumeCtx(){
+  if (vocalVolumeCtx) return vocalVolumeCtx;
+  try { vocalVolumeCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { return null; }
+  return vocalVolumeCtx;
+}
+// Un AudioContext démarre "suspendu" tant qu'aucun geste (clic/toucher) n'a eu lieu sur la page —
+// même règle que le blocage de la lecture automatique avec son. On profite de n'importe quel geste
+// pour tenter de le relancer, sans jamais rien bloquer si ça échoue : le temps qu'une vidéo démarre,
+// l'utilisateur a de toute façon presque toujours déjà cliqué pour rejoindre/créer le salon.
+["pointerdown", "click", "touchstart", "keydown"].forEach(type => document.addEventListener(type, () => {
+  if (vocalVolumeCtx && vocalVolumeCtx.state === "suspended") vocalVolumeCtx.resume().catch(() => {});
+}, { passive: true }));
+function vocalUrlMemeOrigine(url){
+  try { return new URL(url, location.href).origin === location.origin; } catch { return false; }
+}
+/** Branche (une seule fois par élément, et seulement quand c'est utile/possible) le montage Web
+ *  Audio décrit ci-dessus. Retourne le GainNode à utiliser pour LE VRAI réglage de volume, ou null
+ *  si on doit se contenter du réglage classique (.volume/.muted) — voir majVolumeRadioVocal. */
+function vocalAssurerGainReel(el){
+  if (el.__vocalGain) return el.__vocalGain;
+  if (el.__vocalGainImpossible) return null;
+  if (!VOCAL_EST_IOS || !el.dataset.url || !vocalUrlMemeOrigine(el.dataset.url)) return null;
+  const ctx = vocalObtenirVolumeCtx();
+  if (!ctx) return null;
+  try {
+    const source = ctx.createMediaElementSource(el);
+    const gain = ctx.createGain();
+    source.connect(gain);
+    gain.connect(ctx.destination);
+    el.__vocalGain = gain;
+    return gain;
+  } catch {
+    el.__vocalGainImpossible = true;
+    return null;
+  }
+}
 function majVolumeRadioVocal(){
   const estCoupe = vocalRadioVolume <= 0;
-  const audio = $("vocalAudio");
-  if (audio) { audio.volume = vocalRadioVolume; audio.muted = estCoupe; }
-  const video = $("vocalVideo");
-  if (video) { video.volume = vocalRadioVolume; video.muted = estCoupe; }
+  [$("vocalAudio"), $("vocalVideo")].forEach(el => {
+    if (!el) return;
+    const gain = vocalAssurerGainReel(el);
+    if (gain) {
+      // Le vrai réglage se fait maintenant sur le GainNode (efficace même sur iOS) : l'élément
+      // lui-même reste à plein volume/jamais coupé, tout le travail se fait juste après lui.
+      gain.gain.value = vocalRadioVolume;
+      el.volume = 1; el.muted = false;
+    } else {
+      el.volume = vocalRadioVolume; el.muted = estCoupe;
+    }
+  });
   if (vocalYoutubePlayer) vocalAppliquerVolumeYoutube(vocalYoutubePlayer);
   const curseur = $("vocalVolumeSlider");
   // Ne touche pas le curseur pendant que le doigt/la souris est dessus (voir son propre écouteur
   // "input" plus bas) : sinon un simple rafraîchissement du salon (mic coupé, main levée...) — bien
   // plus fréquent qu'un vrai changement de volume — le ferait sauter sous le doigt de l'utilisateur.
   if (curseur && document.activeElement !== curseur) curseur.value = Math.round(vocalRadioVolume * 100);
+  // La note ne s'affiche que si on doit encore se contenter du réglage limité (lien externe sur
+  // iPhone/iPad) — dès que le vrai réglage (GainNode) est actif, le curseur fonctionne normalement,
+  // plus besoin de prévenir de quoi que ce soit.
   const noteIos = $("vocalVolumeNoteIos");
-  if (noteIos) noteIos.classList.toggle("hidden", !VOCAL_EST_IOS);
+  const gainActifQuelquePart = Boolean($("vocalAudio")?.__vocalGain || $("vocalVideo")?.__vocalGain);
+  if (noteIos) noteIos.classList.toggle("hidden", !VOCAL_EST_IOS || gainActifQuelquePart);
 }
 majVolumeRadioVocal();
 $("vocalVolumeSlider")?.addEventListener("input", (e) => {
@@ -7201,8 +7263,7 @@ function vocalSignalerFinDiffusion(){
  *  monde sur le temps écoulé depuis le début de la diffusion (voir demarreLe côté serveur). */
 function vocalMajLectureRadioOuVideo(salon, modo){
   const audio = $("vocalAudio"), video = $("vocalVideo"), ytWrap = $("vocalYoutubeWrap"), twWrap = $("vocalTweetWrap");
-  audio.volume = vocalRadioVolume; // au cas où l'élément aurait été recréé/réinitialisé entretemps
-  video.volume = vocalRadioVolume;
+  majVolumeRadioVocal(); // au cas où l'élément aurait été recréé/réinitialisé entretemps
   const media = salon.radio;
   // Seul l'hôte/un cohôte peut arrêter la diffusion pour tout le salon (voir estModoVocal côté
   // serveur) — mémorisé ici pour que vocalSignalerFinDiffusion() (déclenché par l'événement "ended"
@@ -7405,6 +7466,10 @@ function vocalSyncMedia(el, media, modo){
   if (el.dataset.url !== media.url){
     el.src = media.url;
     el.dataset.url = media.url;
+    // Nouveau contenu = nouvelle origine possible (fichier hébergé ici ou lien externe) : on
+    // ré-évalue tout de suite si le vrai réglage de volume (GainNode, voir vocalAssurerGainReel)
+    // s'applique à CE contenu précis, plutôt que d'attendre le prochain geste sur le curseur.
+    majVolumeRadioVocal();
     // Poser currentTime avant que le navigateur ait pu lire les métadonnées (durée, format) échoue
     // souvent en silence : on attend ce signal plutôt que de le tenter tout de suite, pour rester
     // synchronisé avec les autres sans empêcher la lecture de démarrer.
