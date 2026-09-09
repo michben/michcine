@@ -221,36 +221,50 @@
   /* Image envoyée depuis le tchat (voir la demande : "la photo doit pouvoir bouger, elle part du
      bas pour remonter tout en haut, avec un effet quand elle disparaît, comme une bulle qui éclate
      ou encore comme un brouillard qui la fait disparaître, un effet aléatoire à chaque fois qu'une
-     photo est diffusée") : part du bas de l'écran, remonte bien en évidence tout en haut (au-dessus
-     de tout le reste — voir le z-index), puis disparaît selon l'un des deux effets ci-dessous,
-     choisi au hasard à chaque envoi (voir afficherImageEphemereVocal côté script, qui pose la
-     classe --bulle ou --brouillard). Un léger décalage horizontal aléatoire est posé en ligne (voir
-     le style "left" côté script) pour que deux photos envoyées à la suite ne se superposent pas
-     exactement au même endroit. */
+     photo est diffusée [...] réduit le temps qu'elle met pour arriver au bout de l'écran et avant
+     d'arriver à la fin laisse la photo affichée 3 secondes [...] quand un utilisateur touche la
+     photo elle puisse se figer jusqu'à temps qu'il relâche le doigt de son écran") : part du bas de
+     l'écran, remonte bien en évidence tout en haut (au-dessus de tout le reste — voir le z-index),
+     RESTE affichée là-haut quelques secondes (marquée par JS, voir vocalCreerMinuteurPausable et
+     afficherImageEphemereVocal côté script), puis disparaît selon l'un des deux effets ci-dessous,
+     choisi au hasard à chaque envoi. Un doigt (ou un clic) posé sur la photo la fige entièrement —
+     montée, pause ou disparition, peu importe le moment — jusqu'au relâchement. Un léger décalage
+     horizontal aléatoire est posé en ligne (voir le style "left" côté script) pour que deux photos
+     envoyées à la suite ne se superposent pas exactement au même endroit. */
   .vocalImageEphemere{position:fixed;bottom:6%;transform:translateX(-50%);z-index:90;
     text-align:center;pointer-events:none;max-width:min(280px,72vw)}
+  /* Seule la photo elle-même (pas la marge autour, ni le pseudo en dessous) réagit au doigt/à la
+     souris — le reste du calque reste "pointer-events:none" pour ne jamais gêner un bouton qui se
+     trouverait dessous pendant que la photo le traverse en montant. touch-action:none empêche le
+     geste de faire défiler la page au lieu de figer la photo sur mobile. */
   .vocalImageEphemere img{display:block;max-width:100%;max-height:38vh;border-radius:14px;
-    box-shadow:0 14px 38px rgba(0,0,0,.55);border:2px solid rgba(237,232,220,.25)}
+    box-shadow:0 14px 38px rgba(0,0,0,.55);border:2px solid rgba(237,232,220,.25);
+    pointer-events:auto;touch-action:none;cursor:pointer}
   .vocalImageEphemere b{display:block;margin-top:8px;font-family:'Anton',sans-serif;
     text-transform:uppercase;font-size:clamp(15px,3.6vw,19px);color:var(--beam);letter-spacing:.02em;
     text-shadow:0 2px 6px rgba(0,0,0,.6)}
-  /* Effet 1 : "bulle qui éclate" — monte, puis grossit brusquement en s'effaçant, comme un éclatement. */
-  @keyframes vocalImageMonteeBulle{
+  /* Étape 1, commune aux deux effets : montée seule, rapide — reste figée sur sa dernière image
+     (forwards) une fois arrivée en haut, le temps que le script attende les 3 secondes d'affichage
+     avant de déclencher l'une des deux disparitions ci-dessous. */
+  @keyframes vocalImageMontee{
     0%{opacity:0;transform:translateX(-50%) translateY(0) scale(.7)}
-    10%{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}
-    55%{opacity:1;transform:translateX(-50%) translateY(-72vh) scale(1)}
-    80%{opacity:1;transform:translateX(-50%) translateY(-79vh) scale(1.08)}
-    92%{opacity:.85;transform:translateX(-50%) translateY(-81vh) scale(1.4)}
-    100%{opacity:0;transform:translateX(-50%) translateY(-83vh) scale(1.75)}}
-  .vocalImageEphemere--bulle{animation:vocalImageMonteeBulle 5.5s cubic-bezier(.22,.61,.36,1) forwards}
-  /* Effet 2 : "brouillard" — monte, puis se dissout progressivement dans un flou, comme une brume. */
-  @keyframes vocalImageMonteeBrouillard{
-    0%{opacity:0;filter:blur(0px);transform:translateX(-50%) translateY(0) scale(.85)}
-    10%{opacity:1;filter:blur(0px);transform:translateX(-50%) translateY(0) scale(1)}
-    55%{opacity:1;filter:blur(0px);transform:translateX(-50%) translateY(-72vh) scale(1)}
-    78%{opacity:1;filter:blur(2px);transform:translateX(-50%) translateY(-77vh) scale(1.04)}
-    100%{opacity:0;filter:blur(20px);transform:translateX(-50%) translateY(-85vh) scale(1.2)}}
-  .vocalImageEphemere--brouillard{animation:vocalImageMonteeBrouillard 5.5s cubic-bezier(.22,.61,.36,1) forwards}
+    15%{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}
+    100%{opacity:1;transform:translateX(-50%) translateY(-78vh) scale(1)}}
+  .vocalImageEphemere--montee{animation:vocalImageMontee 1.8s cubic-bezier(.22,.61,.36,1) forwards}
+  /* Étape 2, effet 1 : "bulle qui éclate" — grossit brusquement en s'effaçant, comme un éclatement.
+     Reprend exactement là où la montée s'est arrêtée (même position/échelle en 0%) pour ne jamais
+     donner l'impression d'un saut. */
+  @keyframes vocalImageEclateBulle{
+    0%{opacity:1;transform:translateX(-50%) translateY(-78vh) scale(1)}
+    55%{opacity:1;transform:translateX(-50%) translateY(-80vh) scale(1.15)}
+    100%{opacity:0;transform:translateX(-50%) translateY(-82vh) scale(1.75)}}
+  .vocalImageEphemere--bulle{animation:vocalImageEclateBulle 1.2s cubic-bezier(.22,.61,.36,1) forwards}
+  /* Étape 2, effet 2 : "brouillard" — se dissout progressivement dans un flou, comme une brume. */
+  @keyframes vocalImageDissoutBrouillard{
+    0%{opacity:1;filter:blur(0px);transform:translateX(-50%) translateY(-78vh) scale(1)}
+    40%{opacity:1;filter:blur(2px);transform:translateX(-50%) translateY(-79vh) scale(1.03)}
+    100%{opacity:0;filter:blur(20px);transform:translateX(-50%) translateY(-81vh) scale(1.15)}}
+  .vocalImageEphemere--brouillard{animation:vocalImageDissoutBrouillard 1.4s cubic-bezier(.22,.61,.36,1) forwards}
   /* Citation façon diapositive de cinéma : cadre sombre, perforations de
      pellicule sur les côtés, fenêtre surélevée pour la réplique, bandeau
      d'étiquette en dessous pour le film et l'anecdote. */
@@ -2986,17 +3000,30 @@ let vocalRadioVolume = (() => {
 // déclarée plus bas dans le script lèverait une erreur (zone morte temporelle) à ce tout premier
 // appel, ce qui casserait l'exécution de tout le reste du script.
 let vocalYoutubePlayer = null;
-/** Applique le réglage de volume courant (vocalRadioVolume) à un lecteur YouTube — factorisé car
- *  utilisé à trois endroits (curseur déplacé, lecteur prêt, nouvelle vidéo qui démarre). Un détail
- *  important de l'API YouTube (voir la demande : "toujours un problème avec le bouton volume,
- *  surtout [...] YouTube") : setVolume() seul NE SUFFIT PAS si le lecteur est en sourdine — ce qui
- *  arrive automatiquement, sans aucun événement pour nous prévenir, quand le navigateur bloque la
- *  lecture automatique avec son (politique très répandue sur mobile). Sans l'appel explicite à
- *  unMute()/mute() ci-dessous, le curseur de volume semblait "ne rien faire" alors qu'il changeait
- *  bien la valeur — le lecteur restait juste muet malgré tout. */
+/** Le curseur (#vocalVolumeSlider) reste linéaire, plus simple à manipuler — mais le son RÉELLEMENT
+ *  appliqué suit maintenant une courbe (voir la demande : "on souhaite vraiment pouvoir le mettre
+ *  encore plus bas, réduit en 50 pourcent la possibilité de diminuer le son sans qu'il soit coupé
+ *  totalement") : l'oreille humaine perçoit le volume de façon logarithmique, pas linéaire — avec un
+ *  réglage purement linéaire, la moitié du curseur sonnait déjà presque aussi fort qu'à fond, sans
+ *  laisser de place pour un son discret mais encore audible. En mettant le réglage au carré, à
+ *  mi-curseur le son réel appliqué est deux fois plus faible (0.5² = 0.25) qu'avec un réglage
+ *  linéaire — et encore bien plus bas dans le dernier quart du curseur, là où on veut justement
+ *  pouvoir descendre "encore plus bas" sans couper le son complètement. */
+function vocalVolumeReelle(v){
+  const b = Math.max(0, Math.min(1, v));
+  return b * b;
+}
+/** Applique le réglage de volume courant (vocalRadioVolume, via vocalVolumeReelle ci-dessus) à un
+ *  lecteur YouTube — factorisé car utilisé à trois endroits (curseur déplacé, lecteur prêt, nouvelle
+ *  vidéo qui démarre). Un détail important de l'API YouTube (voir la demande : "toujours un problème
+ *  avec le bouton volume, surtout [...] YouTube") : setVolume() seul NE SUFFIT PAS si le lecteur est
+ *  en sourdine — ce qui arrive automatiquement, sans aucun événement pour nous prévenir, quand le
+ *  navigateur bloque la lecture automatique avec son (politique très répandue sur mobile). Sans
+ *  l'appel explicite à unMute()/mute() ci-dessous, le curseur de volume semblait "ne rien faire"
+ *  alors qu'il changeait bien la valeur — le lecteur restait juste muet malgré tout. */
 function vocalAppliquerVolumeYoutube(player){
   try {
-    player.setVolume(Math.round(vocalRadioVolume * 100));
+    player.setVolume(Math.round(vocalVolumeReelle(vocalRadioVolume) * 100));
     if (vocalRadioVolume > 0) player.unMute(); else player.mute();
   } catch {}
 }
@@ -3057,16 +3084,17 @@ function vocalAssurerGainReel(el){
 }
 function majVolumeRadioVocal(){
   const estCoupe = vocalRadioVolume <= 0;
+  const volumeReel = vocalVolumeReelle(vocalRadioVolume);
   [$("vocalAudio"), $("vocalVideo")].forEach(el => {
     if (!el) return;
     const gain = vocalAssurerGainReel(el);
     if (gain) {
       // Le vrai réglage se fait maintenant sur le GainNode (efficace même sur iOS) : l'élément
       // lui-même reste à plein volume/jamais coupé, tout le travail se fait juste après lui.
-      gain.gain.value = vocalRadioVolume;
+      gain.gain.value = volumeReel;
       el.volume = 1; el.muted = false;
     } else {
-      el.volume = vocalRadioVolume; el.muted = estCoupe;
+      el.volume = volumeReel; el.muted = estCoupe;
     }
   });
   if (vocalYoutubePlayer) vocalAppliquerVolumeYoutube(vocalYoutubePlayer);
@@ -7678,28 +7706,92 @@ $("vocalChatInput").addEventListener("keydown", (e) => { if (e.key === "Enter") 
   }
 }
 
+/** Petit minuteur qui se met en pause/reprend sur commande (voir vocalCreerMinuteurPausable ci-
+ *  dessous) — un setTimeout() classique ne sait pas faire ça : une fois lancé, impossible de le
+ *  "geler" en gardant le temps restant en mémoire. Sert uniquement à la photo éphémère du tchat, pour
+ *  qu'un doigt posé dessus suspende vraiment le compte à rebours (voir la demande : "quand un
+ *  utilisateur touche la photo elle puisse se figer jusqu'à temps qu'il relâche le doigt"), plutôt
+ *  que de simplement geler l'animation à l'écran pendant que le minuteur continue en coulisses. */
+function vocalCreerMinuteurPausable(callback, delaiMs){
+  let debut = Date.now();
+  let restant = delaiMs;
+  let handle = setTimeout(callback, restant);
+  return {
+    pause(){
+      if (handle === null) return;
+      clearTimeout(handle);
+      handle = null;
+      restant = Math.max(0, restant - (Date.now() - debut));
+    },
+    reprendre(){
+      if (handle !== null) return;
+      debut = Date.now();
+      handle = setTimeout(callback, restant);
+    },
+  };
+}
 /** Affiche une image envoyée depuis le tchat (voir la demande : "importer des images png jpeg
  *  [...] qui puisse apparaitre comme les messages, de façon éphémère [...] fait également apparait
  *  le nom d'utilisateur qui envoi l'image [...] la photo doit pouvoir bouger, elle part du bas pour
  *  remonter tout en haut, avec un effet quand elle disparait, comme une bulle qui éclate ou encore
- *  comme un brouillard qui la fait disparaitre, un effet aléatoire à chaque fois") — part du bas de
- *  l'écran, remonte bien en évidence tout en haut (voir .vocalImageEphemere, visible pour tout le
- *  salon : hôte, cohôtes, intervenants ET auditeurs, sans distinction), puis disparaît selon l'un
- *  des deux effets (bulle qui éclate / brouillard qui dissout), choisi au hasard à chaque envoi.
- *  Jamais ajoutée au fil écrit du tchat : uniquement ce court aperçu, comme une photo qu'on montre
- *  à l'oral. */
-const VOCAL_IMAGE_EPHEMERE_DUREE_MS = 5500;
+ *  comme un brouillard qui la fait disparaitre, un effet aléatoire à chaque fois [...] réduit le
+ *  temps qu'elle met pour arriver au bout de l'écran et avant d'arriver à la fin laisse la photo
+ *  affichée 3 secondes [...] quand un utilisateur touche la photo elle puisse se figer jusqu'à temps
+ *  qu'il relâche le doigt de son écran pour qu'elle disparaisse [...] si personne n'a appuyé la
+ *  photo disparait, pour tout le monde sauf pour ceux qui ont encore le doigt sur l'écran") — part
+ *  du bas de l'écran, remonte bien en évidence tout en haut, RAPIDEMENT (voir .vocalImageEphemere,
+ *  visible pour tout le salon : hôte, cohôtes, intervenants ET auditeurs, sans distinction), reste
+ *  affichée là-haut 3 secondes, puis disparaît selon l'un des deux effets (bulle qui éclate /
+ *  brouillard qui dissout), choisi au hasard à chaque envoi. À tout moment de cette séquence — pendant
+ *  la montée, la pause en haut, ou même la disparition — un doigt (ou un clic) posé sur LA PHOTO
+ *  elle-même la fige entièrement (l'animation ET le minuteur, voir vocalCreerMinuteurPausable) tant
+ *  qu'il n'est pas relâché ; chaque personne dans le salon a sa propre photo affichée sur son propre
+ *  écran (jamais synchronisé entre participants), donc figer la sienne n'affecte jamais celle des
+ *  autres. Jamais ajoutée au fil écrit du tchat : uniquement ce court aperçu, comme une photo qu'on
+ *  montre à l'oral. */
+const VOCAL_IMAGE_MONTEE_MS = 1800;
+const VOCAL_IMAGE_PAUSE_HAUT_MS = 3000;
+const VOCAL_IMAGE_DUREE_DISPARITION_MS = { bulle: 1200, brouillard: 1400 };
 function afficherImageEphemereVocal(donnees, mime, pseudo){
   const el = document.createElement("div");
   const effet = Math.random() < 0.5 ? "bulle" : "brouillard";
-  el.className = `vocalImageEphemere vocalImageEphemere--${effet}`;
+  el.className = "vocalImageEphemere vocalImageEphemere--montee";
   // Léger décalage horizontal aléatoire : deux photos envoyées à la suite ne montent pas
   // exactement au même endroit (voir la demande : "un effet aléatoire à chaque fois").
   el.style.left = (32 + Math.random() * 36) + "%";
   el.innerHTML = `<img src="data:${esc(mime)};base64,${donnees}" alt="Image envoyée par ${esc(pseudo || "")}">
     <b>${esc(pseudo || "")}</b>`;
   document.body.appendChild(el);
-  setTimeout(() => el.remove(), VOCAL_IMAGE_EPHEMERE_DUREE_MS);
+
+  // "minuteurActif" pointe toujours vers l'étape en cours (montée puis pause en haut puis
+  // disparition) : figer/relâcher agissent donc toujours sur la bonne étape, quel que soit le
+  // moment où le doigt se pose sur la photo.
+  let minuteurActif = null;
+  const img = el.querySelector("img");
+  const figer = (e) => {
+    e?.preventDefault();
+    el.style.animationPlayState = "paused";
+    minuteurActif?.pause();
+  };
+  const relacher = () => {
+    el.style.animationPlayState = "running";
+    minuteurActif?.reprendre();
+  };
+  img?.addEventListener("pointerdown", figer);
+  img?.addEventListener("pointerup", relacher);
+  img?.addEventListener("pointercancel", relacher);
+  img?.addEventListener("pointerleave", relacher);
+
+  minuteurActif = vocalCreerMinuteurPausable(() => {
+    // La montée est terminée (ou a fini d'être figée) : la photo reste affichée telle quelle en
+    // haut de l'écran (voir "forwards" sur .vocalImageEphemere--montee) pendant ce délai, avant de
+    // passer à l'effet de disparition choisi au hasard au tout début.
+    minuteurActif = vocalCreerMinuteurPausable(() => {
+      el.classList.remove("vocalImageEphemere--montee");
+      el.classList.add(`vocalImageEphemere--${effet}`);
+      minuteurActif = vocalCreerMinuteurPausable(() => el.remove(), VOCAL_IMAGE_DUREE_DISPARITION_MS[effet]);
+    }, VOCAL_IMAGE_PAUSE_HAUT_MS);
+  }, VOCAL_IMAGE_MONTEE_MS);
 }
 socket.on("vocal:chat-image-recue", ({ donnees, mime, pseudo }) => afficherImageEphemereVocal(donnees, mime, pseudo));
 
